@@ -90,7 +90,7 @@ export default function LoginPage() {
             <div className="mb-6">
               <div className="w-full max-w-[450px] h-[160px] mb-2">
                 <img 
-                  src="/logo_final.png" 
+                  src="/Robotek Logo.png" 
                   alt="Robotek Logo" 
                   className="w-full h-full object-contain object-left"
                 />

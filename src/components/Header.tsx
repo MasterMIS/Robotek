@@ -14,21 +14,33 @@ import ThemeToggle from "./ThemeToggle";
 export default function Header() {
   const { data: session } = useSession();
 
+  const getNormalizedImageUrl = (url: string) => {
+    if (!url) return "";
+    if (url.includes("drive.google.com") || url.includes("docs.google.com")) {
+      const match = url.match(/[?&]id=([^&]+)/) || url.match(/\/d\/([^/]+)/);
+      if (match && match[1]) {
+        return `https://drive.google.com/thumbnail?sz=w200&id=${match[1]}`;
+      }
+    }
+    return url;
+  };
+
   return (
     <header 
       style={{ 
         background: 'var(--header-bg)',
         borderBottom: '1px solid var(--panel-border)'
       }}
-      className="h-14 backdrop-blur-md flex items-center justify-between px-6 sticky top-0 z-10 transition-all duration-300 shadow-sm"
+      className="h-14 flex items-center justify-between px-6 sticky top-0 z-10 transition-all duration-300"
     >
       {/* Left Section: Welcome Message */}
       <div className="flex flex-col">
         <h1 className="text-xl font-black text-gray-900 dark:text-zinc-100 leading-none">
-          HI, {session?.user?.name?.split(" ")[0].toUpperCase() || "USER"}
+          HI, {session?.user?.name?.toUpperCase() || session?.user?.email?.split("@")[0].toUpperCase() || "USER"}
         </h1>
         <p className="text-[10px] font-black text-[#CE2029] dark:text-[#FFD500] uppercase tracking-wider mt-1">
-          WELCOME BACK TO ROBOTEK ERP
+          {/* @ts-ignore */}
+          {session?.user?.role || "SYSTEM ACCESS"} — WELCOME BACK
         </p>
       </div>
 
@@ -53,16 +65,15 @@ export default function Header() {
         <div className="flex items-center gap-1.5">
           <div className="w-8.5 h-8.5 rounded-xl overflow-hidden shadow-sm border border-orange-100 ring-2 ring-[#FFD500]/20">
             {session?.user?.image ? (
-              <Image 
-                src={session.user.image} 
+              <img 
+                src={getNormalizedImageUrl(session.user.image)} 
                 alt="Profile" 
-                width={34} 
-                height={34} 
                 className="object-cover w-full h-full"
+                referrerPolicy="no-referrer"
               />
             ) : (
-              <div className="w-full h-full bg-[#FFD500] flex items-center justify-center text-[#CE2029] font-black text-sm uppercase">
-                {session?.user?.name?.[0] || session?.user?.email?.[0] || "U"}
+              <div className="w-full h-full bg-[#FFD500] flex items-center justify-center text-[#CE2029] font-black text-xs uppercase">
+                {session?.user?.name?.substring(0, 2) || session?.user?.email?.substring(0, 2) || "UR"}
               </div>
             )}
           </div>

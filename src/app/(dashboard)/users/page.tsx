@@ -9,8 +9,14 @@ import {
   XMarkIcon,
   MagnifyingGlassIcon,
   ChevronLeftIcon,
-  ChevronRightIcon
+  ChevronRightIcon,
+  ChevronUpIcon,
+  ChevronDownIcon,
+  ArrowDownTrayIcon
 } from "@heroicons/react/24/outline";
+import PremiumDatePicker from "@/components/PremiumDatePicker";
+import ActionStatusModal from "@/components/ActionStatusModal";
+import ConfirmModal from "@/components/ConfirmModal";
 
 export default function UsersPage() {
   const [users, setUsers] = useState<User[]>([]);
@@ -18,6 +24,9 @@ export default function UsersPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const [sortConfig, setSortConfig] = useState<{ key: keyof User; direction: 'asc' | 'desc' } | null>(null);
+  const [selectedImage, setSelectedImage] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
 
   const [formData, setFormData] = useState<Partial<User>>({
     id: "",
@@ -30,6 +39,15 @@ export default function UsersPage() {
     image_url: "",
     dob: "",
   });
+
+  // Action Status States
+  const [actionStatus, setActionStatus] = useState<'loading' | 'success' | 'error'>('loading');
+  const [actionMessage, setActionMessage] = useState("");
+  const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
+
+  // Confirmation states
+  const [isConfirmOpen, setIsConfirmOpen] = useState(false);
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchUsers();
@@ -50,19 +68,34 @@ export default function UsersPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Show loading
+    setActionStatus('loading');
+    setActionMessage(editingUser ? "Updating user profile..." : "Creating new user...");
+    setIsStatusModalOpen(true);
+
     const method = editingUser ? "PUT" : "POST";
     const url = editingUser ? `/api/users/${editingUser.id}` : "/api/users";
+
+    const payload = new FormData();
+    payload.append("userData", JSON.stringify(formData));
+    if (selectedImage) {
+      payload.append("image", selectedImage);
+    }
 
     try {
       const res = await fetch(url, {
         method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData),
+        body: payload,
       });
 
       if (res.ok) {
+        setIsStatusModalOpen(false); // Close loader immediately
+        
         setIsModalOpen(false);
         setEditingUser(null);
+        setSelectedImage(null);
+        setImagePreview(null);
         setFormData({
           id: "",
           username: "",
@@ -75,26 +108,105 @@ export default function UsersPage() {
           dob: "",
         });
         fetchUsers();
+      } else {
+        throw new Error("Failed to save user");
       }
     } catch (error) {
-      console.error("Failed to save user:", error);
+      setIsStatusModalOpen(false); // Close loader on error too
+      alert("Something went wrong while saving. Please try again.");
     }
   };
 
   const handleEdit = (user: User) => {
     setEditingUser(user);
-    setFormData(user);
+    setFormData({
+      ...user,
+      dob: formatDatePickerValue(user.dob || "")
+    });
+    setImagePreview(user.image_url || null);
     setIsModalOpen(true);
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this user?")) return;
+  const getNormalizedImageUrl = (url: string) => {
+    if (!url) return "";
+    // If it's a Google Drive link, normalize to the thumbnail format
+    if (url.includes("drive.google.com") || url.includes("docs.google.com")) {
+      // Extract ID from various formats: ?id=..., /d/..., or etc.
+      const match = url.match(/[?&]id=([^&]+)/) || url.match(/\/d\/([^/]+)/) || url.match(/id=([^&]+)/);
+      if (match && match[1]) {
+        return `https://drive.google.com/thumbnail?sz=w600&id=${match[1]}`;
+      }
+    }
+    return url;
+  };
+
+  const formatDatePickerValue = (dateStr: string) => {
+    if (!dateStr) return "";
+    // If it's already YYYY-MM-DD, return as is
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return dateStr;
+    // If it's DD/MM/YYYY, convert to YYYY-MM-DD
+    const parts = dateStr.split("/");
+    if (parts.length === 3) {
+      const [day, month, year] = parts;
+      return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+    }
+    return dateStr;
+  };
+
+  const handleExport = () => {
+    const headers = ["ID", "Username", "Email", "Phone", "Role", "DOB", "Coordinates"];
+    const rows = sortedUsers.map(u => [
+      u.id,
+      u.username,
+      u.email,
+      u.phone || "",
+      u.role_name || "USER",
+      u.dob || "",
+      u.late_long || ""
+    ]);
+
+    const csvContent = [
+      headers.join(","),
+      ...rows.map(row => row.map(val => `"${val}"`).join(","))
+    ].join("\n");
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `users_export_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleDeleteClick = (id: string) => {
+    setPendingDeleteId(id);
+    setIsConfirmOpen(true);
+  };
+
+  const performDelete = async () => {
+    if (!pendingDeleteId) return;
+
+    // Show loading
+    setActionStatus('loading');
+    setActionMessage("Removing user from system...");
+    setIsStatusModalOpen(true);
 
     try {
-      const res = await fetch(`/api/users/${id}`, { method: "DELETE" });
-      if (res.ok) fetchUsers();
+      const res = await fetch(`/api/users/${pendingDeleteId}`, { method: "DELETE" });
+      if (res.ok) {
+        setIsStatusModalOpen(false); // Close loader immediately
+        fetchUsers();
+      } else {
+        throw new Error("Delete failed");
+      }
     } catch (error) {
-      console.error("Failed to delete user:", error);
+      setIsStatusModalOpen(false); // Close loader on error too
+      alert("Failed to delete user. Please try again.");
+    } finally {
+      setPendingDeleteId(null);
     }
   };
 
@@ -104,62 +216,50 @@ export default function UsersPage() {
     )
   );
 
+  const handleSort = (key: keyof User) => {
+    let direction: 'asc' | 'desc' = 'asc';
+    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc';
+    }
+    setSortConfig({ key, direction });
+  };
+
+  const sortedUsers = [...filteredUsers].sort((a, b) => {
+    if (!sortConfig) return 0;
+    const { key, direction } = sortConfig;
+    const aValue = a[key] || "";
+    const bValue = b[key] || "";
+    
+    if (aValue < bValue) return direction === 'asc' ? -1 : 1;
+    if (aValue > bValue) return direction === 'asc' ? 1 : -1;
+    return 0;
+  });
+
+  const SortIcon = ({ column }: { column: keyof User }) => {
+    if (sortConfig?.key !== column) return <div className="w-3 h-3 ml-1 opacity-20" />;
+    return sortConfig.direction === 'asc' ? 
+      <ChevronUpIcon className="w-3 h-3 ml-1 text-[#FFD500]" /> : 
+      <ChevronDownIcon className="w-3 h-3 ml-1 text-[#FFD500]" />;
+  };
+
   return (
     <div className="space-y-4">
-      {/* Refined Header & Control Section */}
-      <div 
-        style={{ backgroundColor: 'var(--panel-bg)' }}
-        className="p-4 rounded-2xl border border-orange-100/50 dark:border-white/5 flex flex-col md:flex-row md:items-center justify-between gap-4 transition-all duration-500 shadow-sm"
-      >
-        <div className="flex items-center gap-6">
-          <div>
-            <h1 className="text-2xl font-black text-gray-900 dark:text-white tracking-tight">Users</h1>
-            <p className="text-gray-500 dark:text-slate-300 font-bold text-[10px] uppercase tracking-wider">System Access Control</p>
-          </div>
-          
-          {/* Integrated Stats */}
-          <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-white/50 dark:bg-navy-900/50 rounded-xl border border-gray-100 dark:border-white/5">
-            <p className="text-[8px] text-gray-400 dark:text-slate-400 font-black uppercase tracking-widest">Total</p>
-            <p className="text-sm font-black text-gray-900 dark:text-white">{users.length}</p>
-          </div>
+      {/* Standalone Title Row */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 px-1">
+        <div>
+          <h1 className="text-2xl font-black text-gray-900 dark:text-white tracking-tight">Users</h1>
+          <p className="text-gray-500 dark:text-slate-300 font-bold text-[10px] uppercase tracking-wider">System Access Control</p>
         </div>
-
-        <div className="flex flex-wrap items-center gap-3">
-          {/* Search Input - Now in the Control Row */}
-          <div className="relative group min-w-[200px]">
-            <MagnifyingGlassIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-[#FFD500] transition-colors" />
-            <input
-              type="text"
-              placeholder="Search users..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 bg-white dark:bg-navy-950 border border-gray-100 dark:border-navy-700/50 rounded-xl focus:border-[#FFD500] outline-none font-bold text-[13px] text-gray-700 dark:text-white transition-all shadow-sm"
-            />
-          </div>
-
-          {/* Pagination Controls */}
-          <div className="flex items-center gap-4 px-3 py-1.5 bg-white/50 dark:bg-navy-900/50 rounded-xl border border-gray-100 dark:border-white/5">
-            <div className="flex items-center gap-2">
-              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">P. 1/1</p>
-              <div className="flex gap-0.5">
-                <button className="p-1 text-gray-400 hover:text-black dark:hover:text-white hover:bg-orange-50 dark:hover:bg-white/5 rounded-md transition-all">
-                  <ChevronLeftIcon className="w-4 h-4" />
-                </button>
-                <button className="p-1 text-gray-400 hover:text-black dark:hover:text-white hover:bg-orange-50 dark:hover:bg-white/5 rounded-md transition-all">
-                  <ChevronRightIcon className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-            <div className="h-4 w-[1px] bg-gray-200 dark:bg-white/10 hidden sm:block" />
-            <div className="hidden sm:flex items-center gap-2">
-              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Show</label>
-              <select className="bg-transparent border-none p-0 text-[10px] font-bold outline-none dark:text-white cursor-pointer">
-                <option>10</option>
-                <option>25</option>
-              </select>
-            </div>
-          </div>
-
+        
+        <div className="flex items-center gap-3">
+          <button
+            onClick={handleExport}
+            className="flex items-center justify-center gap-2 bg-white dark:bg-navy-800 border-2 border-[#003875] dark:border-[#FFD500] text-[#003875] dark:text-[#FFD500] px-4 py-2 rounded-xl font-black transition-all shadow-sm active:scale-95 uppercase tracking-widest text-[10px] hover:bg-[#003875]/5 dark:hover:bg-[#FFD500]/5"
+          >
+            <ArrowDownTrayIcon className="w-4 h-4" />
+            Export
+          </button>
+          
           <button
             onClick={() => {
               setEditingUser(null);
@@ -176,7 +276,7 @@ export default function UsersPage() {
               });
               setIsModalOpen(true);
             }}
-            className="flex items-center gap-2 bg-[#003875] dark:bg-[#FFD500] hover:bg-[#002855] dark:hover:bg-[#FFC000] text-white dark:text-black px-4 py-2.5 rounded-xl font-black transition-all shadow-lg active:scale-95 uppercase tracking-widest text-[10px]"
+            className="flex items-center justify-center gap-2 bg-[#003875] dark:bg-[#FFD500] hover:bg-[#002855] dark:hover:bg-[#FFC000] text-white dark:text-black px-4 py-2 rounded-xl font-black transition-all shadow-lg active:scale-95 uppercase tracking-widest text-[10px]"
           >
             <PlusIcon className="w-4 h-4" />
             Add User
@@ -184,38 +284,101 @@ export default function UsersPage() {
         </div>
       </div>
 
-      {/* Table Section */}
       <div 
-        style={{ backgroundColor: 'var(--panel-card)' }}
-        className="overflow-x-auto rounded-2xl border border-orange-100/30 dark:border-zinc-800/50 shadow-sm transition-colors duration-500"
+        style={{ borderColor: 'var(--panel-border)' }}
+        className="rounded-2xl border overflow-hidden shadow-sm transition-all duration-500"
       >
-        <table className="w-full text-left border-collapse table-auto">
-          <thead>
-            <tr className="bg-[#FFFBF0]/50 dark:bg-navy-800/30 text-gray-400 dark:text-slate-400">
-              <th className="px-4 py-2.5 text-[9px] font-black uppercase tracking-widest border-b border-orange-100/20 dark:border-zinc-800/50">ID</th>
-              <th className="px-4 py-2.5 text-[9px] font-black uppercase tracking-widest border-b border-orange-100/20 dark:border-zinc-800/50">Details</th>
-              <th className="px-4 py-2.5 text-[9px] font-black uppercase tracking-widest border-b border-orange-100/20 dark:border-zinc-800/50">Contact</th>
-              <th className="px-4 py-2.5 text-[9px] font-black uppercase tracking-widest border-b border-orange-100/20 dark:border-zinc-800/50">Role</th>
-              <th className="px-4 py-2.5 text-[9px] font-black uppercase tracking-widest border-b border-orange-100/20 dark:border-zinc-800/50 text-right">Actions</th>
-            </tr>
-          </thead>
+        {/* Integrated Control Bar */}
+        <div 
+          style={{ 
+            backgroundColor: 'var(--panel-card)',
+            borderBottom: '1px solid var(--panel-border)'
+          }}
+          className="p-3 flex flex-col md:flex-row md:items-center justify-between gap-4"
+        >
+          <div className="relative group flex-1 max-w-sm">
+            <MagnifyingGlassIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-[#FFD500] transition-colors" />
+            <input
+              type="text"
+              placeholder="Search database..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-10 pr-4 py-1.5 bg-gray-50 dark:bg-navy-900 border border-gray-100 dark:border-navy-700/50 rounded-lg focus:border-[#FFD500] outline-none font-bold text-[13px] text-gray-700 dark:text-white transition-all shadow-sm"
+            />
+          </div>
+
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Page 1 of 1</p>
+              <div className="flex gap-0.5">
+                <button className="p-1 text-gray-400 hover:text-black dark:hover:text-white hover:bg-white dark:hover:bg-white/5 rounded-md transition-all">
+                  <ChevronLeftIcon className="w-4 h-4" />
+                </button>
+                <button className="p-1 text-gray-400 hover:text-black dark:hover:text-white hover:bg-white dark:hover:bg-white/5 rounded-md transition-all">
+                  <ChevronRightIcon className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+            <div className="h-4 w-[1px] bg-gray-200 dark:bg-white/10" />
+            <div className="flex items-center gap-2">
+              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Show</label>
+              <select className="bg-transparent border-none p-0 text-[10px] font-bold outline-none dark:text-white cursor-pointer">
+                <option>10</option>
+                <option>25</option>
+                <option>50</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        {/* Table Section - Direct continuation of controls */}
+        <div 
+          style={{ backgroundColor: 'var(--panel-card)' }}
+          className="overflow-x-auto transition-colors duration-500"
+        >
+          <table className="w-full text-left border-collapse table-auto">
+            <thead>
+              <tr 
+                className="bg-[#003875] dark:bg-navy-950 text-white dark:text-slate-200"
+              >
+                <th onClick={() => handleSort('id')} className="px-4 py-3 text-[9px] font-black uppercase tracking-widest cursor-pointer hover:bg-white/5 transition-colors">
+                  <div className="flex items-center">ID <SortIcon column="id" /></div>
+                </th>
+                <th onClick={() => handleSort('username')} className="px-4 py-3 text-[9px] font-black uppercase tracking-widest cursor-pointer hover:bg-white/5 transition-colors">
+                  <div className="flex items-center">Details <SortIcon column="username" /></div>
+                </th>
+                <th onClick={() => handleSort('phone')} className="px-4 py-3 text-[9px] font-black uppercase tracking-widest cursor-pointer hover:bg-white/5 transition-colors">
+                  <div className="flex items-center">Contact <SortIcon column="phone" /></div>
+                </th>
+                <th onClick={() => handleSort('role_name')} className="px-4 py-3 text-[9px] font-black uppercase tracking-widest cursor-pointer hover:bg-white/5 transition-colors">
+                  <div className="flex items-center">Role <SortIcon column="role_name" /></div>
+                </th>
+                <th onClick={() => handleSort('dob')} className="px-4 py-3 text-[9px] font-black uppercase tracking-widest cursor-pointer hover:bg-white/5 transition-colors">
+                  <div className="flex items-center">DOB <SortIcon column="dob" /></div>
+                </th>
+                <th onClick={() => handleSort('late_long')} className="px-4 py-3 text-[9px] font-black uppercase tracking-widest cursor-pointer hover:bg-white/5 transition-colors">
+                  <div className="flex items-center">Coordinates <SortIcon column="late_long" /></div>
+                </th>
+                <th className="px-4 py-3 text-[9px] font-black uppercase tracking-widest text-right">Actions</th>
+              </tr>
+            </thead>
           <tbody className="divide-y divide-orange-50/30">
             {isLoading ? (
               <tr>
-                <td colSpan={5} className="px-4 py-10 text-center">
+                <td colSpan={7} className="px-4 py-10 text-center">
                   <div className="w-6 h-6 border-2 border-gray-100 border-t-[#FFD500] rounded-full animate-spin mx-auto mb-2" />
                   <p className="text-gray-400 font-bold uppercase tracking-widest text-[8px]">Syncing...</p>
                 </td>
               </tr>
-            ) : filteredUsers.length === 0 ? (
+            ) : sortedUsers.length === 0 ? (
               <tr>
-                <td colSpan={5} className="px-4 py-10 text-center">
+                <td colSpan={7} className="px-4 py-10 text-center">
                   <p className="text-xs text-gray-400 font-bold uppercase tracking-widest">No entries found</p>
                 </td>
               </tr>
             ) : (
-              filteredUsers.map((user) => (
-                <tr key={user.id} className="hover:bg-orange-50/10 transition-colors group">
+              sortedUsers.map((user) => (
+                <tr key={user.id} className="hover:bg-orange-50/10 border-b border-gray-100 dark:border-white/5 last:border-0 transition-colors group">
                   <td className="px-4 py-2">
                     <span className="font-mono text-[10px] text-gray-400 font-bold">{user.id}</span>
                   </td>
@@ -223,10 +386,19 @@ export default function UsersPage() {
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 rounded-lg bg-gray-50 dark:bg-zinc-800 overflow-hidden border border-gray-100 dark:border-zinc-700 flex-shrink-0">
                         {user.image_url ? (
-                          <img src={user.image_url} alt={user.username} className="w-full h-full object-cover" />
+                          <img 
+                            src={getNormalizedImageUrl(user.image_url)} 
+                            alt={user.username} 
+                            className="w-full h-full object-cover"
+                            referrerPolicy="no-referrer"
+                            onError={(e) => {
+                              // Fallback if image fails to load - use 2 letters
+                              (e.target as HTMLImageElement).src = `https://ui-avatars.com/api/?name=${encodeURIComponent(user.username)}&background=random&color=fff&length=2`;
+                            }}
+                          />
                         ) : (
-                          <div className="w-full h-full flex items-center justify-center font-black text-gray-200 dark:text-zinc-600 text-sm">
-                            {user.username?.[0]?.toUpperCase()}
+                          <div className="w-full h-full flex items-center justify-center font-black text-gray-400 dark:text-zinc-500 text-[10px]">
+                            {user.username?.substring(0, 2).toUpperCase()}
                           </div>
                         )}
                       </div>
@@ -244,19 +416,27 @@ export default function UsersPage() {
                       {user.role_name || "MEMBER"}
                     </span>
                   </td>
+                  <td className="px-4 py-2">
+                    <p className="text-[10px] font-bold text-gray-600 dark:text-slate-300">{user.dob || "—"}</p>
+                  </td>
+                  <td className="px-4 py-2">
+                    <p className="text-[10px] font-bold text-gray-400 dark:text-slate-500 font-mono italic">{user.late_long || "—"}</p>
+                  </td>
                   <td className="px-4 py-2 text-right">
-                    <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="flex items-center justify-end gap-1">
                       <button
                         onClick={() => handleEdit(user)}
-                        className="p-1.5 text-gray-400 hover:text-[#003875] hover:bg-orange-50 rounded-lg transition-all"
+                        className="p-1.5 bg-[#003875]/10 text-[#003875] dark:bg-[#FFD500]/10 dark:text-[#FFD500] hover:bg-[#003875] hover:text-white dark:hover:bg-[#FFD500] dark:hover:text-black rounded-lg transition-all"
+                        title="Edit User"
                       >
-                        <PencilSquareIcon className="w-4 h-4" />
+                        <PencilSquareIcon className="w-3.5 h-3.5" />
                       </button>
                       <button
-                        onClick={() => handleDelete(user.id)}
-                        className="p-1.5 text-gray-400 hover:text-[#CE2029] hover:bg-orange-50 rounded-lg transition-all"
+                        onClick={() => handleDeleteClick(user.id)}
+                        className="p-1.5 bg-[#CE2029]/10 text-[#CE2029] hover:bg-[#CE2029] hover:text-white rounded-lg transition-all"
+                        title="Delete User"
                       >
-                        <TrashIcon className="w-4 h-4" />
+                        <TrashIcon className="w-3.5 h-3.5" />
                       </button>
                     </div>
                   </td>
@@ -266,8 +446,9 @@ export default function UsersPage() {
           </tbody>
         </table>
       </div>
+    </div>
 
-      {/* Modal */}
+    {/* Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/40 dark:bg-black/60 backdrop-blur-sm" onClick={() => setIsModalOpen(false)} />
@@ -277,10 +458,21 @@ export default function UsersPage() {
                 <h2 className="text-lg font-black text-gray-900 dark:text-white tracking-tight">
                   {editingUser ? "Edit User" : "Add New User"}
                 </h2>
-                <p className="text-gray-400 dark:text-slate-400 font-bold text-xs uppercase tracking-widest mt-1">Profile Configuration</p>
+                <div className="flex items-center gap-2 mt-1">
+                  <p className="text-gray-400 dark:text-slate-400 font-bold text-[8px] uppercase tracking-widest">Profile Configuration</p>
+                  {editingUser && (
+                    <span className="px-2 py-0.5 bg-orange-50 dark:bg-zinc-800 text-[8px] font-black text-gray-500 rounded border border-orange-100 dark:border-zinc-700">
+                      ID: {editingUser.id}
+                    </span>
+                  )}
+                </div>
               </div>
               <button
-                onClick={() => setIsModalOpen(false)}
+                onClick={() => {
+                  setIsModalOpen(false);
+                  setSelectedImage(null);
+                  setImagePreview(null);
+                }}
                 className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-zinc-200 transition-colors"
               >
                 <XMarkIcon className="w-8 h-8" />
@@ -288,6 +480,40 @@ export default function UsersPage() {
             </div>
 
             <form onSubmit={handleSubmit} className="p-4 space-y-4 max-h-[80vh] overflow-y-auto bg-white dark:bg-navy-800/50">
+              {/* Profile Image Upload */}
+              <div className="flex flex-col items-center justify-center p-4 bg-gray-50 dark:bg-navy-950/50 rounded-2xl border-2 border-dashed border-gray-100 dark:border-navy-800 group transition-all">
+                <div className="relative w-24 h-24 rounded-3xl overflow-hidden shadow-2xl border-4 border-white dark:border-navy-800 ring-4 ring-orange-50 dark:ring-navy-900 group-hover:scale-105 transition-all">
+                  {imagePreview ? (
+                    <img 
+                      src={getNormalizedImageUrl(imagePreview)} 
+                      alt="Preview" 
+                      className="w-full h-full object-cover" 
+                      referrerPolicy="no-referrer"
+                    />
+                  ) : (
+                    <div className="w-full h-full bg-orange-100 dark:bg-navy-800 flex items-center justify-center text-orange-300 dark:text-navy-700 font-black text-3xl">
+                      {formData.username?.substring(0, 2).toUpperCase() || "UR"}
+                    </div>
+                  )}
+                  <label className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 cursor-pointer transition-opacity">
+                    <PlusIcon className="w-8 h-8 text-white" />
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          setSelectedImage(file);
+                          setImagePreview(URL.createObjectURL(file));
+                        }
+                      }}
+                    />
+                  </label>
+                </div>
+                <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mt-3">Click Avatar to Update Photo</p>
+              </div>
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* Basic Info */}
                 <div className="space-y-4">
@@ -347,37 +573,25 @@ export default function UsersPage() {
                       <option value="USER">User</option>
                     </select>
                   </div>
-                  <div>
-                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-2">Date of Birth</label>
-                    <input
-                      type="date"
-                      value={formData.dob}
-                      onChange={(e) => setFormData({ ...formData, dob: e.target.value })}
-                      className="w-full bg-[#FFFBF0] dark:bg-zinc-900 px-3 py-1.5 rounded-lg border border-orange-100 dark:border-zinc-800 focus:border-[#FFD500] focus:bg-white dark:focus:bg-zinc-900 outline-none font-bold text-xs text-gray-800 dark:text-zinc-100 transition-all shadow-sm"
-                    />
-                  </div>
+                  <PremiumDatePicker 
+                    label="Date of Birth"
+                    value={formData.dob || ""}
+                    onChange={(val) => setFormData({ ...formData, dob: val })}
+                  />
                 </div>
 
                 {/* Full Width Fields */}
                 <div className="md:col-span-2 space-y-4">
                   <p className="text-[10px] font-black text-[#FFD500] uppercase tracking-[0.2em]">System Parameters</p>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div>
+                    <div className="md:col-span-2">
                       <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-2">Coordinates (Late/Long)</label>
                       <input
                         type="text"
                         value={formData.late_long}
                         onChange={(e) => setFormData({ ...formData, late_long: e.target.value })}
                         className="w-full bg-[#FFFBF0] dark:bg-zinc-900 px-3 py-1.5 rounded-lg border border-orange-100 dark:border-zinc-800 focus:border-[#FFD500] focus:bg-white dark:focus:bg-zinc-900 outline-none font-bold text-xs text-gray-800 dark:text-zinc-100 transition-all shadow-sm"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-2">Image URL</label>
-                      <input
-                        type="text"
-                        value={formData.image_url}
-                        onChange={(e) => setFormData({ ...formData, image_url: e.target.value })}
-                        className="w-full bg-[#FFFBF0] dark:bg-zinc-900 px-3 py-1.5 rounded-lg border border-orange-100 dark:border-zinc-800 focus:border-[#FFD500] focus:bg-white dark:focus:bg-zinc-900 outline-none font-bold text-xs text-gray-800 dark:text-zinc-100 transition-all shadow-sm"
+                        placeholder="e.g., 28.6139, 77.2090"
                       />
                     </div>
                   </div>
@@ -387,7 +601,11 @@ export default function UsersPage() {
               <div className="p-4 border-t border-orange-100/50 dark:border-zinc-800 flex gap-2">
                 <button
                   type="button"
-                  onClick={() => setIsModalOpen(false)}
+                  onClick={() => {
+                    setIsModalOpen(false);
+                    setSelectedImage(null);
+                    setImagePreview(null);
+                  }}
                   className="flex-1 px-4 py-2 rounded-xl font-black text-gray-400 hover:text-gray-600 hover:bg-gray-50 transition-all uppercase tracking-widest text-[10px]"
                 >
                   Cancel
@@ -403,6 +621,22 @@ export default function UsersPage() {
           </div>
         </div>
       )}
+      {/* Action Status Modal */}
+      <ActionStatusModal 
+        isOpen={isStatusModalOpen}
+        status={actionStatus}
+        message={actionMessage}
+      />
+
+      {/* Confirmation Modal */}
+      <ConfirmModal 
+        isOpen={isConfirmOpen}
+        title="Delete User?"
+        message="This action cannot be undone. All user data will be permanently removed from the system."
+        confirmLabel="Delete User"
+        onClose={() => setIsConfirmOpen(false)}
+        onConfirm={performDelete}
+      />
     </div>
   );
 }

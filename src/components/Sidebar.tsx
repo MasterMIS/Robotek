@@ -14,7 +14,7 @@ const navigation = [
 
 export default function Sidebar() {
   return (
-    <aside className="w-16 hover:w-56 bg-transparent text-gray-800 dark:text-slate-400 flex flex-col h-screen fixed left-0 top-0 z-20 transition-all duration-300 ease-in-out group overflow-x-hidden peer">
+    <aside className="w-16 hover:w-56 bg-transparent dark:bg-transparent text-gray-800 dark:text-slate-400 flex flex-col h-screen fixed left-0 top-0 z-20 transition-all duration-300 ease-in-out group overflow-x-hidden peer">
       <div className="pt-6 pb-2 px-3 flex items-center gap-4 group/logo">
         <div className="w-10 h-10 min-w-[40px] rounded-xl overflow-hidden shadow-lg transform group-hover/logo:-rotate-6 transition-transform duration-500 ring-1 ring-black/5 dark:ring-white/10">
           <img src="/logo_compact.png" alt="Logo" className="w-full h-full object-cover" />

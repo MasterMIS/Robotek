@@ -5,7 +5,7 @@ export default function Footer() {
         backgroundColor: 'var(--panel-bg)',
         borderTop: '1px solid var(--panel-border)'
       }}
-      className="h-12 flex items-center justify-between px-8 text-[10px] font-bold text-gray-400 uppercase tracking-tight transition-all duration-300"
+      className="h-12 flex items-center justify-between px-8 text-[10px] font-bold text-gray-400 uppercase tracking-tight"
     >
       <div>
         &copy; 2026 <span className="text-gray-900 dark:text-white font-black">Robotek Industries</span>
