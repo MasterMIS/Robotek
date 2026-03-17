@@ -15,6 +15,7 @@
   --panel-bg: #FFF9E6;
   --panel-card: #ffffff;
   --panel-border: rgba(0, 0, 0, 0.05);
+  --header-bg: linear-gradient(to right, #f7eccd, #f2b60c);
 }
 
 .dark {
@@ -23,6 +24,7 @@
   --panel-bg: #131C2E;
   --panel-card: #1E293B;
   --panel-border: rgba(255, 255, 255, 0.1);
+  --header-bg: #131C2E;
 }
 
 body {

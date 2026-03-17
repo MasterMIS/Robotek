@@ -17,7 +17,7 @@ export default function Header() {
   return (
     <header 
       style={{ 
-        backgroundColor: 'var(--panel-bg)',
+        background: 'var(--header-bg)',
         borderBottom: '1px solid var(--panel-border)'
       }}
       className="h-14 backdrop-blur-md flex items-center justify-between px-6 sticky top-0 z-10 transition-all duration-300 shadow-sm"

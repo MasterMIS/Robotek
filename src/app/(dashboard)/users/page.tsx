@@ -106,83 +106,81 @@ export default function UsersPage() {
 
   return (
     <div className="space-y-4">
-      {/* Header Section */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-2">
-        <div>
-          <h1 className="text-2xl font-black text-gray-900 dark:text-white tracking-tight">Users</h1>
-          <p className="text-gray-500 dark:text-slate-300 font-bold text-[10px] uppercase tracking-wider">System Access Control</p>
-        </div>
-        <button
-          onClick={() => {
-            setEditingUser(null);
-            setFormData({
-              id: Date.now().toString(),
-              username: "",
-              email: "",
-              password: "",
-              phone: "",
-              role_name: "",
-              late_long: "",
-              image_url: "",
-              dob: "",
-            });
-            setIsModalOpen(true);
-          }}
-          className="flex items-center justify-center gap-2 bg-[#003875] dark:bg-[#FFD500] hover:bg-[#002855] dark:hover:bg-[#FFC000] text-white dark:text-black px-4 py-2.5 rounded-xl font-black transition-all shadow-lg active:scale-95 uppercase tracking-widest text-[10px]"
-        >
-          <PlusIcon className="w-4 h-4" />
-          Add User
-        </button>
-      </div>
-
-      {/* Search & Stats */}
+      {/* Refined Header & Control Section */}
       <div 
         style={{ backgroundColor: 'var(--panel-bg)' }}
-        className="p-3 rounded-2xl border border-orange-100/50 dark:border-zinc-800 flex flex-col md:flex-row items-center gap-4 transition-colors duration-500"
+        className="p-4 rounded-2xl border border-orange-100/50 dark:border-white/5 flex flex-col md:flex-row md:items-center justify-between gap-4 transition-all duration-500 shadow-sm"
       >
-        <div className="relative flex-1 w-full">
-          <MagnifyingGlassIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-          <input
-            type="text"
-            placeholder="Filter database..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 bg-white dark:bg-navy-950 border border-gray-100 dark:border-navy-700/50 rounded-xl focus:border-[#FFD500] outline-none font-bold text-[13px] text-gray-700 dark:text-white transition-all shadow-sm"
-          />
-        </div>
-        <div className="flex gap-4">
-          <div 
-            style={{ backgroundColor: 'var(--panel-card)' }}
-            className="px-4 py-2 rounded-xl border border-gray-100 dark:border-white/10 transition-colors duration-500"
-          >
-            <p className="text-[8px] text-gray-400 dark:text-slate-400 font-black uppercase tracking-widest">Count</p>
+        <div className="flex items-center gap-6">
+          <div>
+            <h1 className="text-2xl font-black text-gray-900 dark:text-white tracking-tight">Users</h1>
+            <p className="text-gray-500 dark:text-slate-300 font-bold text-[10px] uppercase tracking-wider">System Access Control</p>
+          </div>
+          
+          {/* Integrated Stats */}
+          <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-white/50 dark:bg-navy-900/50 rounded-xl border border-gray-100 dark:border-white/5">
+            <p className="text-[8px] text-gray-400 dark:text-slate-400 font-black uppercase tracking-widest">Total</p>
             <p className="text-sm font-black text-gray-900 dark:text-white">{users.length}</p>
           </div>
         </div>
-      </div>
 
-      {/* Pagination & Filter Row */}
-      <div className="flex items-center justify-between bg-[#FFFBF0]/60 dark:bg-navy-800/40 px-4 py-2 rounded-xl border border-orange-100/30 dark:border-white/5">
-        <div className="flex items-center gap-2">
-          <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Page 1 of 1</p>
-          <div className="flex gap-1">
-            <button className="p-1 text-gray-400 hover:text-black dark:hover:text-white hover:bg-orange-50 dark:hover:bg-white/5 rounded-md transition-all">
-              <ChevronLeftIcon className="w-4 h-4" />
-            </button>
-            <button className="p-1 text-gray-400 hover:text-black dark:hover:text-white hover:bg-orange-50 dark:hover:bg-white/5 rounded-md transition-all">
-              <ChevronRightIcon className="w-4 h-4" />
-            </button>
+        <div className="flex flex-wrap items-center gap-3">
+          {/* Search Input - Now in the Control Row */}
+          <div className="relative group min-w-[200px]">
+            <MagnifyingGlassIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-[#FFD500] transition-colors" />
+            <input
+              type="text"
+              placeholder="Search users..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 bg-white dark:bg-navy-950 border border-gray-100 dark:border-navy-700/50 rounded-xl focus:border-[#FFD500] outline-none font-bold text-[13px] text-gray-700 dark:text-white transition-all shadow-sm"
+            />
           </div>
-        </div>
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2">
-            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Show</label>
-            <select className="bg-white dark:bg-navy-900 border border-orange-100 dark:border-navy-700 rounded-lg px-2 py-0.5 text-[10px] font-bold outline-none dark:text-white">
-              <option>10</option>
-              <option>25</option>
-              <option>50</option>
-            </select>
+
+          {/* Pagination Controls */}
+          <div className="flex items-center gap-4 px-3 py-1.5 bg-white/50 dark:bg-navy-900/50 rounded-xl border border-gray-100 dark:border-white/5">
+            <div className="flex items-center gap-2">
+              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">P. 1/1</p>
+              <div className="flex gap-0.5">
+                <button className="p-1 text-gray-400 hover:text-black dark:hover:text-white hover:bg-orange-50 dark:hover:bg-white/5 rounded-md transition-all">
+                  <ChevronLeftIcon className="w-4 h-4" />
+                </button>
+                <button className="p-1 text-gray-400 hover:text-black dark:hover:text-white hover:bg-orange-50 dark:hover:bg-white/5 rounded-md transition-all">
+                  <ChevronRightIcon className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+            <div className="h-4 w-[1px] bg-gray-200 dark:bg-white/10 hidden sm:block" />
+            <div className="hidden sm:flex items-center gap-2">
+              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Show</label>
+              <select className="bg-transparent border-none p-0 text-[10px] font-bold outline-none dark:text-white cursor-pointer">
+                <option>10</option>
+                <option>25</option>
+              </select>
+            </div>
           </div>
+
+          <button
+            onClick={() => {
+              setEditingUser(null);
+              setFormData({
+                id: Date.now().toString(),
+                username: "",
+                email: "",
+                password: "",
+                phone: "",
+                role_name: "",
+                late_long: "",
+                image_url: "",
+                dob: "",
+              });
+              setIsModalOpen(true);
+            }}
+            className="flex items-center gap-2 bg-[#003875] dark:bg-[#FFD500] hover:bg-[#002855] dark:hover:bg-[#FFC000] text-white dark:text-black px-4 py-2.5 rounded-xl font-black transition-all shadow-lg active:scale-95 uppercase tracking-widest text-[10px]"
+          >
+            <PlusIcon className="w-4 h-4" />
+            Add User
+          </button>
         </div>
       </div>
 
