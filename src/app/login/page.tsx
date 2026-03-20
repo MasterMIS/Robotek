@@ -50,22 +50,22 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen bg-[#FFF9E6] flex items-center justify-center p-4 font-sans selection:bg-[#CE2029] selection:text-white">
       {/* Container Card */}
-      <div className="w-full max-w-5xl h-[640px] bg-white rounded-[60px] shadow-[0_50px_120px_-30px_rgba(0,0,0,0.15)] overflow-hidden flex flex-col lg:flex-row relative">
+      <div className="w-full max-w-5xl h-auto lg:h-[640px] bg-white rounded-[30px] lg:rounded-[60px] shadow-[0_50px_120px_-30px_rgba(0,0,0,0.15)] overflow-hidden flex flex-col lg:flex-row relative">
 
         {/* The Giant Brand Bubble (The Core of the Layout) */}
         <div className="absolute top-1/2 left-[-35%] -translate-y-1/2 w-[110%] aspect-square max-w-[800px] bg-gradient-to-br from-[#FFD500] to-[#E6B100] rounded-full shadow-[20px_0_80px_rgba(0,0,0,0.1)] z-10 pointer-events-none hidden lg:block" />
 
         {/* Left Pane - Content Wrapper (Mobile Friendly) */}
-        <div className="lg:w-[50%] h-full relative z-20 flex flex-col justify-center p-12 lg:p-20 text-white lg:bg-transparent bg-gradient-to-br from-[#FFD500] to-[#E6B100]">
+        <div className="lg:w-[50%] h-auto lg:h-full relative z-20 flex flex-col justify-center p-6 sm:p-8 lg:p-20 text-white lg:bg-transparent bg-gradient-to-br from-[#FFD500] to-[#E6B100]">
           {/* Internal 3D Spheres for Depth */}
-          <div className="absolute top-[10%] left-[20%] w-32 h-32 rounded-full bg-gradient-to-br from-white/20 to-transparent shadow-[inset_-10px_-10px_30px_rgba(0,0,0,0.1),inset_10px_10px_30px_rgba(255,255,255,0.2)]" />
+          <div className="absolute top-[10%] left-[20%] w-20 lg:w-32 h-20 lg:h-32 rounded-full bg-gradient-to-br from-white/20 to-transparent shadow-[inset_-10px_-10px_30px_rgba(0,0,0,0.1),inset_10px_10px_30px_rgba(255,255,255,0.2)] hidden sm:block" />
 
-          <div className="absolute bottom-[15%] left-[60%] w-64 h-64 rounded-full bg-gradient-to-br from-white/15 to-transparent shadow-[inset_-30px_-30px_60px_rgba(0,0,0,0.15),inset_30px_30px_60px_rgba(255,255,255,0.3)] backdrop-blur-[2px]" />
+          <div className="absolute bottom-[15%] left-[60%] w-40 lg:w-64 h-40 lg:h-64 rounded-full bg-gradient-to-br from-white/15 to-transparent shadow-[inset_-30px_-30px_60px_rgba(0,0,0,0.15),inset_30px_30px_60px_rgba(255,255,255,0.3)] backdrop-blur-[2px] hidden sm:block" />
 
           <div className="space-y-8 relative z-30">
             {/* Logo injected back to Left Pane */}
             <div className="mb-2 relative z-50">
-              <div className="w-full max-w-[350px] h-[120px] mb-2 drop-shadow-md">
+              <div className="w-full max-w-[250px] lg:max-w-[350px] h-[70px] lg:h-[120px] mb-2 drop-shadow-md">
                 <img
                   src="https://drive.google.com/uc?export=view&id=1h6ar3DDzgJM9-6jQhieVmDun02Ii_DV0"
                   alt="Robotek Logo"
@@ -76,28 +76,28 @@ export default function LoginPage() {
             </div>
 
             <div className="space-y-1">
-              <h1 className="text-7xl font-black tracking-tight leading-none uppercase drop-shadow-sm">
+              <h1 className="text-4xl sm:text-5xl lg:text-7xl font-black tracking-tight leading-none uppercase drop-shadow-sm">
                 WELCOME
               </h1>
-              <h2 className="text-3xl font-black text-black/80 tracking-tight uppercase">
+              <h2 className="text-xl sm:text-2xl lg:text-3xl font-black text-black/80 tracking-tight uppercase">
                 ROBOTEK ERP
               </h2>
             </div>
 
-            <p className="text-sm font-bold text-black/60 leading-relaxed max-w-xs uppercase tracking-wide">
+            <p className="text-xs sm:text-sm font-bold text-black/60 leading-relaxed max-w-xs uppercase tracking-wide">
               Elevate your business productivity with our state-of-the-art enterprise resource planning suite.
             </p>
 
             {/* Logo In Brand Pane removed as per user request */}
-            <div className="pt-10 h-28" />
+            <div className="pt-4 lg:pt-10 h-8 lg:h-28" />
           </div>
         </div>
 
         {/* Right Pane - Form */}
-        <div className="flex-1 bg-white p-8 md:p-14 lg:p-20 flex flex-col justify-start relative z-20 overflow-y-auto">
+        <div className="flex-1 bg-white p-6 sm:p-8 md:p-14 lg:p-20 flex flex-col justify-start relative z-20 overflow-y-auto">
           <div className="max-w-md w-full mx-auto relative z-30 flex-1 flex flex-col justify-center">
             {/* Secondary Bubble in the form area (to match reference) */}
-            <div className="absolute bottom-[-100px] right-[-80px] w-72 h-72 rounded-full bg-gradient-to-tr from-[#FFD500] to-[#FFD500]/50 shadow-[inset_-20px_-20px_50px_rgba(0,0,0,0.1),inset_20px_20px_50px_rgba(255,255,255,0.2)] z-[-1]" />
+            <div className="absolute bottom-[-100px] right-[-80px] w-72 h-72 rounded-full bg-gradient-to-tr from-[#FFD500] to-[#FFD500]/50 shadow-[inset_-20px_-20px_50px_rgba(0,0,0,0.1),inset_20px_20px_50px_rgba(255,255,255,0.2)] z-[-1] hidden sm:block" />
 
             <form onSubmit={handleSubmit} className="space-y-6">
               {error && (
@@ -155,7 +155,7 @@ export default function LoginPage() {
               <button
                 type="submit"
                 disabled={isLoading}
-                className="w-full bg-[#003875] hover:bg-[#002855] text-white font-black py-5 rounded-[24px] shadow-2xl shadow-[#003875]/20 transition-all duration-300 disabled:opacity-50 active:scale-[0.98] uppercase tracking-[0.25em] text-[13px] h-16"
+                className="w-full bg-[#003875] hover:bg-[#002855] text-white font-black py-4 lg:py-5 rounded-[24px] shadow-2xl shadow-[#003875]/20 transition-all duration-300 disabled:opacity-50 active:scale-[0.98] uppercase tracking-[0.25em] text-[12px] lg:text-[13px] h-14 lg:h-16"
               >
                 {isLoading ? (
                   <div className="w-6 h-6 border-3 border-white/30 border-t-white rounded-full animate-spin mx-auto" />
