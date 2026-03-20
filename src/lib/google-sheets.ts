@@ -250,23 +250,78 @@ function getColumnLetter(column: number): string {
 export async function deleteUser(id: string): Promise<boolean> {
   try {
     const sheets = await getSheetsClient();
-    const response = await sheets.spreadsheets.values.get({
+    
+    // Find row in user sheet
+    const userResponse = await sheets.spreadsheets.values.get({
       spreadsheetId: GOOGLE_SHEET_ID,
       range: `${SHEET_NAME}!A:A`,
     });
 
-    const rows = response.data.values;
-    if (!rows) return false;
+    const userRows = userResponse.data.values;
+    if (!userRows) return false;
 
-    const rowIndex = rows.findIndex(row => row[0] === id);
-    if (rowIndex === -1) return false;
+    const userRowIndex = userRows.findIndex(row => row[0] === id);
+    if (userRowIndex === -1) return false;
 
-    // To "delete" in sheets without complex row manipulation, we often just clear the row
-    // or use batchUpdate to actually remove the row index.
-    // For simplicity, we'll clear the row data first.
-    await sheets.spreadsheets.values.clear({
+    // Get spreadsheet info to get sheet IDs
+    const spreadsheet = await sheets.spreadsheets.get({
+      spreadsheetId: GOOGLE_SHEET_ID
+    });
+    
+    const userSheetId = spreadsheet.data.sheets?.find(s => s.properties?.title === SHEET_NAME)?.properties?.sheetId;
+    const visibilitySheetId = spreadsheet.data.sheets?.find(s => s.properties?.title === VISIBILITY_SHEET_NAME)?.properties?.sheetId;
+
+    if (userSheetId === undefined) {
+      console.error(`Sheet with name ${SHEET_NAME} not found.`);
+      return false;
+    }
+
+    const requests: any[] = [
+      {
+        deleteDimension: {
+          range: {
+            sheetId: userSheetId,
+            dimension: "ROWS",
+            startIndex: userRowIndex,
+            endIndex: userRowIndex + 1
+          }
+        }
+      }
+    ];
+
+    // Find row in visibility sheet and delete if exists
+    if (visibilitySheetId !== undefined) {
+      try {
+        const visResponse = await sheets.spreadsheets.values.get({
+          spreadsheetId: GOOGLE_SHEET_ID,
+          range: `${VISIBILITY_SHEET_NAME}!A:A`,
+        });
+        const visRows = visResponse.data.values;
+        if (visRows) {
+          const visRowIndex = visRows.findIndex(row => row[0] === id);
+          if (visRowIndex !== -1) {
+            requests.push({
+              deleteDimension: {
+                range: {
+                  sheetId: visibilitySheetId,
+                  dimension: "ROWS",
+                  startIndex: visRowIndex,
+                  endIndex: visRowIndex + 1
+                }
+              }
+            });
+          }
+        }
+      } catch (e) {
+        console.error("Error fetching visibility rows for deletion:", e);
+      }
+    }
+
+    await sheets.spreadsheets.batchUpdate({
       spreadsheetId: GOOGLE_SHEET_ID,
-      range: `${SHEET_NAME}!A${rowIndex + 1}:I${rowIndex + 1}`,
+      requestBody: {
+        requests
+      }
     });
     
     return true;

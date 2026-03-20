@@ -24,29 +24,42 @@ export async function PUT(
           userData.image_url = getDriveImageUrl(fileId);
         }
       }
+
+      const success = await updateUser(id, userData);
+      if (success) {
+        return NextResponse.json({ message: "User updated successfully" });
+      } else {
+        return NextResponse.json({ error: "Failed to update user" }, { status: 500 });
+      }
     } else {
       userData = await req.json();
-    }
 
-    // If permissions are provided, it's a visibility update
-    if (userData.permissions && Array.isArray(userData.permissions)) {
-      const pages = navigation.map(n => n.id);
-      const username = userData.username || "User";
-      
-      const success = await updateUserPermissions(id, username, userData.permissions, pages);
-      
-      if (success) {
-        return NextResponse.json({ message: "Permissions updated successfully" });
-      } else {
-        return NextResponse.json({ error: "Failed to update permissions" }, { status: 500 });
+      // If permissions are provided in a JSON request, it's a visibility update
+      if (userData.permissions && Array.isArray(userData.permissions)) {
+        const pages = navigation.map((n) => n.id);
+        const username = userData.username || "User";
+
+        const success = await updateUserPermissions(
+          id,
+          username,
+          userData.permissions,
+          pages
+        );
+
+        if (success) {
+          return NextResponse.json({ message: "Permissions updated successfully" });
+        } else {
+          return NextResponse.json({ error: "Failed to update permissions" }, { status: 500 });
+        }
       }
-    }
 
-    const success = await updateUser(id, userData);
-    if (success) {
-      return NextResponse.json({ message: "User updated successfully" });
-    } else {
-      return NextResponse.json({ error: "Failed to update user" }, { status: 500 });
+      // Fallback for any other JSON user update
+      const success = await updateUser(id, userData);
+      if (success) {
+        return NextResponse.json({ message: "User updated successfully" });
+      } else {
+        return NextResponse.json({ error: "Failed to update user" }, { status: 500 });
+      }
     }
   } catch (error) {
     console.error("API Error:", error);

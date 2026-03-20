@@ -8,28 +8,38 @@ import {
 } from "@heroicons/react/24/outline";
 
 interface PremiumDatePickerProps {
-  value: string; // YYYY-MM-DD
+  value: string; // YYYY-MM-DD or comma-separated YYYY-MM-DD,YYYY-MM-DD
   onChange: (value: string) => void;
   label?: string;
+  multiSelect?: boolean;
+  allowPast?: boolean;
+  allowSundays?: boolean;
 }
 
-export default function PremiumDatePicker({ value, onChange, label }: PremiumDatePickerProps) {
+export default function PremiumDatePicker({ 
+  value, 
+  onChange, 
+  label, 
+  multiSelect = false,
+  allowPast = false,
+  allowSundays = false
+}: PremiumDatePickerProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [showYearPicker, setShowYearPicker] = useState(false);
   const [showMonthPicker, setShowMonthPicker] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   
-  // Parse initial date
-  const initialDate = value ? new Date(value) : new Date();
-  const [viewDate, setViewDate] = useState(initialDate);
-  const [selectedDate, setSelectedDate] = useState(value ? new Date(value) : null);
+  // Parse initial date(s)
+  const getInitialDates = (val: string) => {
+    if (!val) return [];
+    return val.split(',').map(v => v.trim()).filter(Boolean);
+  };
+
+  const [selectedDates, setSelectedDates] = useState<string[]>(getInitialDates(value));
+  const [viewDate, setViewDate] = useState(value ? new Date(value.split(',')[0]) : new Date());
 
   useEffect(() => {
-    if (value) {
-      const d = new Date(value);
-      setSelectedDate(d);
-      setViewDate(d);
-    }
+    setSelectedDates(getInitialDates(value));
   }, [value]);
 
   useEffect(() => {
@@ -55,9 +65,32 @@ export default function PremiumDatePicker({ value, onChange, label }: PremiumDat
 
   const handleDateSelect = (day: number) => {
     const newDate = new Date(viewDate.getFullYear(), viewDate.getMonth(), day);
-    const formatted = newDate.toISOString().split('T')[0];
-    onChange(formatted);
-    setIsOpen(false);
+    
+    // Check constraints
+    const today = new Date();
+    today.setHours(0,0,0,0);
+    if (!allowPast && newDate < today) return;
+    if (!allowSundays && newDate.getDay() === 0) return;
+
+    const year = newDate.getFullYear();
+    const month = String(newDate.getMonth() + 1).padStart(2, '0');
+    const dayStr = String(newDate.getDate()).padStart(2, '0');
+    const dateStr = `${year}-${month}-${dayStr}`;
+
+    if (multiSelect) {
+      const isAlreadySelected = selectedDates.includes(dateStr);
+      let newSelectedDates;
+      if (isAlreadySelected) {
+        newSelectedDates = selectedDates.filter(d => d !== dateStr);
+      } else {
+        newSelectedDates = [...selectedDates, dateStr].sort();
+      }
+      setSelectedDates(newSelectedDates);
+      onChange(newSelectedDates.join(','));
+    } else {
+      onChange(dateStr);
+      setIsOpen(false);
+    }
   };
 
   const currentYear = viewDate.getFullYear();
@@ -82,12 +115,26 @@ export default function PremiumDatePicker({ value, onChange, label }: PremiumDat
       )}
       <div 
         onClick={() => setIsOpen(true)}
-        className="w-full bg-[#FFFBF0] dark:bg-zinc-900 px-3 py-1.5 rounded-lg border border-orange-100 dark:border-zinc-800 focus-within:border-[#FFD500] cursor-pointer flex items-center justify-between group transition-all shadow-sm"
+        className="w-full bg-[#FFFBF0] dark:bg-zinc-900 px-3 py-1.5 rounded-lg border border-orange-100 dark:border-zinc-800 focus-within:border-[#FFD500] cursor-pointer flex items-center justify-between gap-4 group transition-all shadow-sm"
       >
-        <span className="font-bold text-xs text-gray-800 dark:text-zinc-100">
-          {value ? new Date(value).toLocaleDateString('en-GB') : "Select Date"}
-        </span>
-        <CalendarIcon className="w-4 h-4 text-gray-400 group-hover:text-[#CE2029] dark:group-hover:text-[#FFD500] transition-colors" />
+        <div className="flex-1 min-w-0">
+          <span className="font-bold text-xs text-gray-800 dark:text-zinc-100 block">
+            {value ? new Date(value.split(',')[0]).toLocaleDateString('en-GB') : "Select Date"}
+          </span>
+        </div>
+
+        {multiSelect && selectedDates.length > 1 && (
+          <div className="flex-1 min-w-0 border-l border-orange-100 dark:border-zinc-800 pl-3 py-0.5 max-h-[40px] overflow-y-auto custom-scrollbar no-scrollbar">
+            <span className="text-[9px] text-gray-400 font-bold block leading-relaxed">
+              {selectedDates.slice(1).map(d => {
+                const [y, m, day] = d.split('-').map(Number);
+                return new Date(y, m - 1, day).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit' });
+              }).join(', ')}
+            </span>
+          </div>
+        )}
+
+        <CalendarIcon className="w-4 h-4 text-gray-400 group-hover:text-[#CE2029] dark:group-hover:text-[#FFD500] flex-shrink-0 transition-colors" />
       </div>
 
       {isOpen && (
@@ -192,17 +239,24 @@ export default function PremiumDatePicker({ value, onChange, label }: PremiumDat
                 <div key={`blank-${b}`} className="h-8" />
               ))}
               {days.map(d => {
-                const isSelected = selectedDate?.getDate() === d && 
-                                 selectedDate?.getMonth() === currentMonth && 
-                                 selectedDate?.getFullYear() === currentYear;
-                const isToday = new Date().getDate() === d && 
-                               new Date().getMonth() === currentMonth && 
-                               new Date().getFullYear() === currentYear;
+                const dateStr = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+                const dateObj = new Date(currentYear, currentMonth, d);
+                const isSelected = selectedDates.includes(dateStr);
+                const localToday = new Date();
+                const todayStr = `${localToday.getFullYear()}-${String(localToday.getMonth() + 1).padStart(2, '0')}-${String(localToday.getDate()).padStart(2, '0')}`;
+                const isToday = todayStr === dateStr;
+                
+                const todayObj = new Date();
+                todayObj.setHours(0,0,0,0);
+                const isPast = dateObj < todayObj;
+                const isSunday = dateObj.getDay() === 0;
+                const isDisabled = (!allowPast && isPast) || (!allowSundays && isSunday);
 
                 return (
                   <button
                     key={d}
                     type="button"
+                    disabled={isDisabled}
                     onClick={() => handleDateSelect(d)}
                     className={`
                       h-8 flex items-center justify-center rounded-lg text-xs font-bold transition-all
@@ -210,7 +264,9 @@ export default function PremiumDatePicker({ value, onChange, label }: PremiumDat
                         ? "bg-[#CE2029] text-white shadow-lg scale-105" 
                         : isToday 
                           ? "bg-[#FFD500]/20 text-[#CE2029] dark:text-[#FFD500] border border-[#FFD500]/30" 
-                          : "text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-white/5"
+                          : isDisabled
+                            ? "opacity-20 cursor-not-allowed grayscale"
+                            : "text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-white/5"
                       }
                     `}
                   >

@@ -849,10 +849,10 @@ export default function DelegationsPage() {
           <p className="text-gray-500 dark:text-slate-300 font-bold text-[10px] uppercase tracking-wider">Task Assignment System</p>
         </div>
         
-        <div className="flex items-center rounded-full border-2 border-b-4 border-[#003875] dark:border-[#FFD500] overflow-hidden shadow-sm transition-all active:translate-y-[2px] active:border-b-2">
+        <div className="flex items-center rounded-full border-2 border-b-4 border-[#003875] dark:border-[#FFD500] bg-white dark:bg-navy-800 shadow-sm transition-all active:translate-y-[2px] active:border-b-2 p-1">
           <button
             onClick={handleExport}
-            className="flex items-center justify-center gap-2 bg-white dark:bg-navy-800 text-[#003875] dark:text-[#FFD500] px-5 py-2 font-black transition-colors hover:bg-gray-50 dark:hover:bg-navy-700 uppercase tracking-widest text-[10px]"
+            className="flex items-center justify-center gap-2 text-[#003875] dark:text-[#FFD500] px-5 py-1.5 font-black transition-colors hover:bg-gray-100 dark:hover:bg-navy-700 uppercase tracking-widest text-[10px] rounded-full"
           >
             <ArrowDownTrayIcon className="w-4 h-4" />
             Export
@@ -863,7 +863,7 @@ export default function DelegationsPage() {
               resetForm();
               setIsModalOpen(true);
             }}
-            className="flex items-center justify-center bg-white dark:bg-navy-800 hover:bg-gray-50 dark:hover:bg-navy-700 text-[#003875] dark:text-[#FFD500] px-5 py-2 transition-colors border-l-2 border-[#003875] dark:border-[#FFD500]"
+            className="flex items-center justify-center hover:bg-gray-100 dark:hover:bg-navy-700 text-[#003875] dark:text-[#FFD500] px-3 py-1.5 transition-colors rounded-full"
             title="New Delegation"
           >
             <PlusIcon className="w-5 h-5" />
@@ -878,16 +878,16 @@ export default function DelegationsPage() {
         {/* Status Filtration Tiles */}
         <div className="flex flex-wrap gap-2 p-3 bg-gray-50/50 dark:bg-navy-900/30 border-b border-gray-100 dark:border-navy-700/50">
           {[
-            { label: 'All', icon: <TagIcon className="w-3 h-3" />, color: 'bg-white text-gray-700 border-gray-200 dark:bg-navy-800 dark:text-gray-300 dark:border-navy-600' },
-            { label: 'Pending', icon: <ClockIcon className="w-3 h-3" />, color: 'bg-gray-50 text-gray-600 border-gray-200 dark:bg-gray-800 dark:text-gray-400 dark:border-gray-700' },
-            { label: 'Planned', icon: <CalendarDaysIcon className="w-3 h-3" />, color: 'bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-800' },
-            { label: 'Need Clarity', icon: <QuestionMarkCircleIcon className="w-3 h-3" />, color: 'bg-sky-50 text-sky-600 border-sky-200 dark:bg-sky-900/20 dark:text-sky-400 dark:border-sky-800' },
-            { label: 'Need Revision', icon: <ArrowPathIcon className="w-3 h-3" />, color: 'bg-rose-50 text-rose-600 border-rose-200 dark:bg-rose-900/20 dark:text-rose-400 dark:border-rose-800' },
-            { label: 'Completed', icon: <CheckCircleIcon className="w-3 h-3" />, color: 'bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-400 dark:border-emerald-800' },
-            { label: 'Approved', icon: <ShieldCheckIcon className="w-3 h-3" />, color: 'bg-green-50 text-green-600 border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-800' },
-            { label: 'Hold', icon: <PauseIcon className="w-3 h-3" />, color: 'bg-amber-50 text-amber-600 border-amber-200 dark:bg-amber-900/20 dark:text-amber-400 dark:border-amber-800' },
-            { label: 'Re-Open', icon: <BoltIcon className="w-3 h-3" />, color: 'bg-violet-50 text-violet-600 border-violet-200 dark:bg-violet-900/20 dark:text-violet-400 dark:border-violet-800' },
-            { label: 'Overdue', icon: <ExclamationTriangleIcon className="w-3 h-3" />, color: 'bg-red-50 text-red-600 border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800' },
+            { label: 'All', icon: <TagIcon className="w-3 h-3" />, color: 'bg-white text-gray-700 border-gray-300 dark:bg-navy-800 dark:text-gray-300 dark:border-navy-600' },
+            { label: 'Pending', icon: <ClockIcon className="w-3 h-3" />, color: 'bg-gray-50 text-gray-600 border-gray-300 dark:bg-gray-800 dark:text-gray-400 dark:border-gray-600' },
+            { label: 'Planned', icon: <CalendarDaysIcon className="w-3 h-3" />, color: 'bg-blue-50 text-blue-600 border-blue-300 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-700' },
+            { label: 'Need Clarity', icon: <QuestionMarkCircleIcon className="w-3 h-3" />, color: 'bg-sky-50 text-sky-600 border-sky-300 dark:bg-sky-900/30 dark:text-sky-400 dark:border-sky-700' },
+            { label: 'Need Revision', icon: <ArrowPathIcon className="w-3 h-3" />, color: 'bg-rose-50 text-rose-600 border-rose-300 dark:bg-rose-900/30 dark:text-rose-400 dark:border-rose-700' },
+            { label: 'Completed', icon: <CheckCircleIcon className="w-3 h-3" />, color: 'bg-emerald-50 text-emerald-600 border-emerald-300 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-700' },
+            { label: 'Approved', icon: <ShieldCheckIcon className="w-3 h-3" />, color: 'bg-green-50 text-green-600 border-green-300 dark:bg-green-900/30 dark:text-green-400 dark:border-green-700' },
+            { label: 'Hold', icon: <PauseIcon className="w-3 h-3" />, color: 'bg-amber-50 text-amber-600 border-amber-300 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-700' },
+            { label: 'Re-Open', icon: <BoltIcon className="w-3 h-3" />, color: 'bg-violet-50 text-violet-600 border-violet-300 dark:bg-violet-900/30 dark:text-violet-400 dark:border-violet-700' },
+            { label: 'Overdue', icon: <ExclamationTriangleIcon className="w-3 h-3" />, color: 'bg-red-50 text-red-600 border-red-300 dark:bg-red-900/30 dark:text-red-400 dark:border-red-700' },
           ].map(tile => {
             const count = tile.label === 'All' ? delegations.length : delegations.filter(d => getDisplayStatus(d) === tile.label).length;
             const isActive = activeStatusFilter === tile.label;
@@ -903,17 +903,17 @@ export default function DelegationsPage() {
                   setActiveStatusFilter(tile.label);
                   setCurrentPage(1);
                 }}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[10px] font-black uppercase tracking-widest transition-all ${
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-[10px] font-black uppercase tracking-widest transition-all ${
                   isActive 
-                    ? `${tile.color} shadow-md scale-105 ring-1 ring-black/5 dark:ring-white/10 opacity-100` 
-                    : `${tile.color} opacity-60 hover:opacity-100 hover:scale-[1.02] grayscale-[50%] hover:grayscale-0`
+                    ? 'bg-[#003875] dark:bg-[#FFD500] text-white dark:text-black border-[#003875] dark:border-[#FFD500] shadow-md scale-105' 
+                    : `${tile.color} hover:scale-[1.02] hover:shadow-sm`
                 }`}
               >
                 {tile.icon}
                 {tile.label}
-                <span className={`ml-1 px-1.5 py-0.5 rounded-md text-[9px] ${
+                <span className={`ml-1 px-1.5 py-0.5 rounded-full text-[9px] ${
                   isActive 
-                    ? 'bg-white/50 dark:bg-black/20' 
+                    ? 'bg-white/20 dark:bg-black/20' 
                     : 'bg-black/5 dark:bg-white/10'
                 }`}>
                   {count}
@@ -967,10 +967,10 @@ export default function DelegationsPage() {
             {/* Date Filters */}
             <div className="flex flex-wrap items-center gap-1.5 flex-shrink-0">
               {[
-                { id: 'Delayed', label: 'Delayed', color: 'text-red-600 dark:text-red-400', active: 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 ring-1 ring-red-500/20' },
-                { id: 'Today', label: 'Today', color: 'text-amber-600 dark:text-amber-400', active: 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800 ring-1 ring-amber-500/20' },
-                { id: 'Tomorrow', label: 'Tomorrow', color: 'text-blue-600 dark:text-blue-400', active: 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800 ring-1 ring-blue-500/20' },
-                { id: 'Next3', label: 'Next 3 Days', color: 'text-emerald-600 dark:text-emerald-400', active: 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800 ring-1 ring-emerald-500/20' }
+                { id: 'Delayed', label: 'Delayed', color: 'bg-red-50 text-red-600 border-red-300 dark:bg-red-900/30 dark:text-red-400 dark:border-red-700' },
+                { id: 'Today', label: 'Today', color: 'bg-amber-50 text-amber-600 border-amber-300 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-700' },
+                { id: 'Tomorrow', label: 'Tomorrow', color: 'bg-blue-50 text-blue-600 border-blue-300 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-700' },
+                { id: 'Next3', label: 'Next 3 Days', color: 'bg-emerald-50 text-emerald-600 border-emerald-300 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-700' }
               ].map(f => {
                 const count = getDateFilterCount(f.id);
                 const isActive = dateFilter === f.id;
@@ -980,15 +980,15 @@ export default function DelegationsPage() {
                     onClick={() => { setDateFilter(isActive ? 'All' : f.id as any); setCurrentPage(1); }}
                     className={`px-3 py-1 rounded-full border text-[10px] font-black uppercase tracking-widest transition-all h-[28px] flex items-center gap-1.5 ${
                       isActive 
-                        ? `${f.active} ${f.color} shadow-sm scale-105` 
-                        : `bg-white dark:bg-navy-800 border-gray-200 dark:border-navy-700 hover:bg-gray-50 dark:hover:bg-navy-700/50 text-gray-500 dark:text-gray-400 opacity-70 hover:opacity-100`
+                        ? 'bg-[#003875] dark:bg-[#FFD500] text-white dark:text-black border-[#003875] dark:border-[#FFD500] shadow-sm scale-105' 
+                        : `${f.color} hover:shadow-sm hover:scale-[1.02]`
                     }`}
                   >
                     {f.label}
                     <span className={`px-1.5 py-0.5 rounded-full text-[9px] ${
                       isActive 
-                        ? 'bg-black/10 dark:bg-white/10' 
-                        : 'bg-gray-100 dark:bg-navy-900'
+                        ? 'bg-white/20 dark:bg-black/20' 
+                        : 'bg-black/5 dark:bg-white/10'
                     }`}>
                       {count}
                     </span>

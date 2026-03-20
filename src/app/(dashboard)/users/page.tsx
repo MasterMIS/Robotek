@@ -306,37 +306,37 @@ export default function UsersPage() {
         
         <div className="flex flex-wrap items-center">
           {/* Single Cylinder Container for All Actions */}
-          <div className="flex items-center rounded-full border-2 border-b-4 border-[#003875] dark:border-[#FFD500] overflow-hidden shadow-sm transition-all active:translate-y-[2px] active:border-b-2">
+          <div className="flex items-center rounded-full border-2 border-b-4 border-[#003875] dark:border-[#FFD500] bg-white dark:bg-navy-800 shadow-sm transition-all active:translate-y-[2px] active:border-b-2 p-1">
             {/* Tab: User List */}
             <button
               onClick={() => setActiveTab('list')}
-              className={`flex items-center gap-2 px-5 py-2 font-black uppercase tracking-widest text-[10px] transition-all ${
+              className={`flex items-center gap-2 px-5 py-1.5 font-black uppercase tracking-widest text-[10px] transition-all rounded-full ${
                 activeTab === 'list' 
-                ? 'bg-white dark:bg-navy-800 text-[#CE2029] dark:text-[#FFD500] scale-105' 
-                : 'bg-white dark:bg-navy-800 text-gray-400 dark:text-slate-500 hover:text-gray-600 dark:hover:text-slate-300'
+                ? 'bg-[#003875] dark:bg-[#FFD500] text-white dark:text-black shadow-md' 
+                : 'text-gray-400 dark:text-slate-500 hover:text-gray-600 dark:hover:text-slate-300'
               }`}
             >
-              <UsersIcon className={`w-4 h-4 ${activeTab === 'list' ? 'text-[#CE2029] dark:text-[#FFD500]' : ''}`} />
+              <UsersIcon className="w-4 h-4" />
               User List
             </button>
             
             {/* Tab: Page Visibility */}
             <button
               onClick={() => setActiveTab('visibility')}
-              className={`flex items-center gap-2 px-5 py-2 font-black uppercase tracking-widest text-[10px] transition-all border-l-2 border-[#003875] dark:border-[#FFD500] ${
+              className={`flex items-center gap-2 px-5 py-1.5 font-black uppercase tracking-widest text-[10px] transition-all rounded-full ${
                 activeTab === 'visibility' 
-                ? 'bg-white dark:bg-navy-800 text-[#CE2029] dark:text-[#FFD500] scale-105' 
-                : 'bg-white dark:bg-navy-800 text-gray-400 dark:text-slate-500 hover:text-gray-600 dark:hover:text-slate-300'
+                ? 'bg-[#003875] dark:bg-[#FFD500] text-white dark:text-black shadow-md' 
+                : 'text-gray-400 dark:text-slate-500 hover:text-gray-600 dark:hover:text-slate-300'
               }`}
             >
-              <EyeIcon className={`w-4 h-4 ${activeTab === 'visibility' ? 'text-[#CE2029] dark:text-[#FFD500]' : ''}`} />
+              <EyeIcon className="w-4 h-4" />
               Page Visibility
             </button>
 
             {/* Action: Export */}
             <button
               onClick={handleExport}
-              className="flex items-center justify-center gap-2 bg-white dark:bg-navy-800 text-[#003875] dark:text-[#FFD500] px-5 py-2 font-black transition-colors hover:bg-gray-50 dark:hover:bg-navy-700 uppercase tracking-widest text-[10px] border-l-2 border-[#003875] dark:border-[#FFD500]"
+              className="flex items-center justify-center gap-2 text-[#003875] dark:text-[#FFD500] px-5 py-1.5 font-black transition-colors hover:bg-gray-100 dark:hover:bg-navy-700 uppercase tracking-widest text-[10px] rounded-full"
             >
               <ArrowDownTrayIcon className="w-4 h-4" />
               Export
@@ -359,7 +359,7 @@ export default function UsersPage() {
                 });
                 setIsModalOpen(true);
               }}
-              className="flex items-center justify-center bg-white dark:bg-navy-800 hover:bg-gray-50 dark:hover:bg-navy-700 text-[#003875] dark:text-[#FFD500] px-5 py-2 transition-colors border-l-2 border-[#003875] dark:border-[#FFD500]"
+              className="flex items-center justify-center hover:bg-gray-100 dark:hover:bg-navy-700 text-[#003875] dark:text-[#FFD500] px-3 py-1.5 transition-colors rounded-full"
               title="Add User"
             >
               <PlusIcon className="w-5 h-5" />

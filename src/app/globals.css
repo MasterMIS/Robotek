@@ -14,7 +14,7 @@
   --foreground: #171717;
   --panel-bg: #FFF9E6;
   --panel-card: #ffffff;
-  --panel-border: transparent;
+  --panel-border: rgba(0, 56, 117, 0.08);
   --header-bg: transparent;
 }
 
