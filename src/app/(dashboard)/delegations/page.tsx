@@ -1661,13 +1661,13 @@ export default function DelegationsPage() {
                           />
                         </div>
                         <div className="max-h-40 overflow-y-auto">
-                          {usersList.filter(u => u.username.toLowerCase().includes(assignedBySearch.toLowerCase())).map(u => (
+                          {usersList.filter(u => ['ADMIN', 'EA'].includes(u.role_name?.toUpperCase() || '') && u.username.toLowerCase().includes(assignedBySearch.toLowerCase())).map(u => (
                             <div key={`by-${u.id}`}
                               className="px-3 py-2 text-xs font-bold text-gray-700 dark:text-gray-300 hover:bg-[#003875]/5 dark:hover:bg-[#FFD500]/10 cursor-pointer"
                               onClick={() => { setFormData({ ...formData, assigned_by: u.username }); setAssignedByOpen(false); setAssignedBySearch(""); }}
                             >{u.username}</div>
                           ))}
-                          {usersList.filter(u => u.username.toLowerCase().includes(assignedBySearch.toLowerCase())).length === 0 && (
+                          {usersList.filter(u => ['ADMIN', 'EA'].includes(u.role_name?.toUpperCase() || '') && u.username.toLowerCase().includes(assignedBySearch.toLowerCase())).length === 0 && (
                             <div className="px-3 py-2 text-[10px] text-gray-400 text-center">No users found</div>
                           )}
                         </div>

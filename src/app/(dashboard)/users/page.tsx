@@ -750,6 +750,7 @@ export default function UsersPage() {
                       <option value="">Select Role</option>
                       <option value="ADMIN">Admin</option>
                       <option value="USER">User</option>
+                      <option value="EA">EA</option>
                     </select>
                   </div>
                   <PremiumDatePicker 
