@@ -45,7 +45,8 @@ import {
   PaperClipIcon,
   SparklesIcon as SparklesIconOutline,
   Squares2X2Icon,
-  ListBulletIcon
+  ListBulletIcon,
+  CheckIcon
 } from "@heroicons/react/24/outline";
 import PremiumDatePicker from "@/components/PremiumDatePicker";
 import ActionStatusModal from "@/components/ActionStatusModal";
@@ -99,6 +100,31 @@ export default function ChecklistsPage() {
   const [assignedToSearch, setAssignedToSearch] = useState("");
   const [assignedByOpen, setAssignedByOpen] = useState(false);
   const [assignedToOpen, setAssignedToOpen] = useState(false);
+
+  // Filter Modal States
+  const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
+  const [modalStartDate, setModalStartDate] = useState("");
+  const [modalEndDate, setModalEndDate] = useState("");
+  const [modalStatusFilter, setModalStatusFilter] = useState<string[]>([]);
+  const [modalPriorityFilter, setModalPriorityFilter] = useState<string[]>([]);
+  const [modalAssignedToFilter, setModalAssignedToFilter] = useState<string[]>([]);
+  const [modalAssignedByFilter, setModalAssignedByFilter] = useState<string[]>([]);
+  const [modalDepartmentFilter, setModalDepartmentFilter] = useState<string[]>([]);
+  const [modalFrequencyFilter, setModalFrequencyFilter] = useState<string[]>([]);
+
+  // Modal Dropdown/Search States
+  const [modalStatusOpen, setModalStatusOpen] = useState(false);
+  const [modalPriorityOpen, setModalPriorityOpen] = useState(false);
+  const [modalAssignedToOpen, setModalAssignedToOpen] = useState(false);
+  const [modalAssignedByOpen, setModalAssignedByOpen] = useState(false);
+  const [modalDepartmentOpen, setModalDepartmentOpen] = useState(false);
+  const [modalFrequencyOpen, setModalFrequencyOpen] = useState(false);
+
+  const [modalStatusSearch, setModalStatusSearch] = useState("");
+  const [modalAssignedToSearch, setModalAssignedToSearch] = useState("");
+  const [modalAssignedBySearch, setModalAssignedBySearch] = useState("");
+  const [modalDepartmentSearch, setModalDepartmentSearch] = useState("");
+  const [modalFrequencySearch, setModalFrequencySearch] = useState("");
 
   // Action Status States
   const [actionStatus, setActionStatus] = useState<'loading' | 'success' | 'error'>('loading');
@@ -599,7 +625,37 @@ export default function ChecklistsPage() {
       }
     }
 
-    return matchesSearch && matchesStatus && matchesAssignment && matchesDate;
+    // Modal Filters
+    const matchesModalStatus = modalStatusFilter.length === 0 || modalStatusFilter.includes(getDisplayStatus(c));
+    const matchesModalPriority = modalPriorityFilter.length === 0 || modalPriorityFilter.includes(c.priority || "");
+    const matchesModalAssignedTo = modalAssignedToFilter.length === 0 || modalAssignedToFilter.includes(c.assigned_to || "");
+    const matchesModalAssignedBy = modalAssignedByFilter.length === 0 || modalAssignedByFilter.includes(c.assigned_by || "");
+    const matchesModalDepartment = modalDepartmentFilter.length === 0 || modalDepartmentFilter.includes(c.department || "");
+    const matchesModalFrequency = modalFrequencyFilter.length === 0 || modalFrequencyFilter.includes(c.frequency || "");
+
+    let matchesModalDate = true;
+    if (modalStartDate || modalEndDate) {
+      const due = getEarliestDate(c.due_date);
+      if (due) {
+        due.setHours(0, 0, 0, 0);
+        if (modalStartDate) {
+          const start = new Date(modalStartDate);
+          start.setHours(0, 0, 0, 0);
+          if (due < start) matchesModalDate = false;
+        }
+        if (modalEndDate) {
+          const end = new Date(modalEndDate);
+          end.setHours(0, 0, 0, 0);
+          if (due > end) matchesModalDate = false;
+        }
+      } else {
+        matchesModalDate = false;
+      }
+    }
+
+    return matchesSearch && matchesStatus && matchesAssignment && matchesDate && 
+           matchesModalStatus && matchesModalPriority && matchesModalAssignedTo && 
+           matchesModalAssignedBy && matchesModalDepartment && matchesModalFrequency && matchesModalDate;
   });
 
   const getDateFilterCount = (filter: string) => {
@@ -770,6 +826,20 @@ export default function ChecklistsPage() {
           <div className="h-4 w-[1px] bg-gray-100 dark:bg-white/10" />
 
           <button
+            onClick={() => setIsFilterModalOpen(true)}
+            className="flex items-center justify-center gap-2 text-[#003875] dark:text-[#FFD500] px-3 md:px-5 py-2 font-black transition-colors hover:bg-gray-100 dark:hover:bg-navy-700 uppercase tracking-widest text-[9px] md:text-[10px] rounded-full whitespace-nowrap relative"
+            title="Advanced Filters"
+          >
+            <FunnelIcon className="w-4 h-4" />
+            <span className="hidden sm:inline">Filter</span>
+            {(modalStartDate || modalEndDate || modalStatusFilter.length > 0 || modalPriorityFilter.length > 0 || modalAssignedToFilter.length > 0 || modalAssignedByFilter.length > 0 || modalDepartmentFilter.length > 0 || modalFrequencyFilter.length > 0) && (
+              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full border-2 border-white dark:border-navy-800 animate-pulse" />
+            )}
+          </button>
+
+          <div className="h-4 w-[1px] bg-gray-100 dark:bg-white/10" />
+
+          <button
             onClick={() => {
               setIsModalOpen(true);
             }}
@@ -806,6 +876,15 @@ export default function ChecklistsPage() {
                     setDateFilters([]);
                     setAssignmentFilter('All');
                     setSearchTerm('');
+                    // Reset modal filters
+                    setModalStartDate("");
+                    setModalEndDate("");
+                    setModalStatusFilter([]);
+                    setModalPriorityFilter([]);
+                    setModalAssignedToFilter([]);
+                    setModalAssignedByFilter([]);
+                    setModalDepartmentFilter([]);
+                    setModalFrequencyFilter([]);
                   } else {
                     const newFilters = activeStatusFilters.includes(tile.label)
                       ? activeStatusFilters.filter(f => f !== tile.label)
@@ -1885,6 +1964,416 @@ export default function ChecklistsPage() {
           setPendingDeleteId(null);
         }}
       />
+
+      {/* Filter Modal */}
+      {isFilterModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/40 dark:bg-black/60 backdrop-blur-sm animate-in fade-in duration-300" onClick={() => setIsFilterModalOpen(false)} />
+          <div className="relative bg-[#FFFBF0] dark:bg-navy-900 w-full max-w-lg rounded-[2.5rem] shadow-2xl border-4 border-[#003875] dark:border-[#FFD500] overflow-hidden animate-in fade-in zoom-in duration-300">
+            {/* Header */}
+            <div className="bg-[#003875] dark:bg-[#FFD500] p-6 border-b-4 border-orange-100 dark:border-zinc-800 flex items-center justify-between">
+              <div>
+                <h2 className="text-xl font-black text-white dark:text-[#003875] tracking-tight uppercase">Advanced Filters</h2>
+                <p className="text-white/60 dark:text-[#003875]/60 font-bold text-[10px] uppercase tracking-widest mt-0.5">Refine Checklist View</p>
+              </div>
+              <button onClick={() => setIsFilterModalOpen(false)} className="p-2 bg-white/10 dark:bg-black/10 hover:bg-white/20 dark:hover:bg-black/20 rounded-full transition-colors">
+                <XMarkIcon className="w-6 h-6 text-white dark:text-[#003875]" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-6 max-h-[60vh] overflow-y-auto custom-scrollbar bg-white dark:bg-navy-900/50">
+              {/* Date Range */}
+              <div className="space-y-3">
+                <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2 px-1">
+                  <CalendarDaysIcon className="w-4 h-4 text-[#003875] dark:text-[#FFD500]" /> Due Date Range
+                </label>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest pl-1">Start Date</span>
+                    <input 
+                      type="date" value={modalStartDate} onChange={(e) => setModalStartDate(e.target.value)}
+                      className="w-full bg-[#FFFBF0] dark:bg-navy-900 border-2 border-orange-50 dark:border-navy-700 rounded-xl px-3 py-2 text-xs font-bold outline-none focus:border-[#003875] dark:focus:border-[#FFD500] transition-colors"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest pl-1">End Date</span>
+                    <input 
+                      type="date" value={modalEndDate} onChange={(e) => setModalEndDate(e.target.value)}
+                      className="w-full bg-[#FFFBF0] dark:bg-navy-900 border-2 border-orange-50 dark:border-navy-700 rounded-xl px-3 py-2 text-xs font-bold outline-none focus:border-[#003875] dark:focus:border-[#FFD500] transition-colors"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-2">
+                {/* Status Filter */}
+                <div className="relative">
+                  <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest mb-2 block">Status</label>
+                  <div 
+                    className="w-full bg-[#FFFBF0] dark:bg-navy-900 border-2 border-orange-50 dark:border-navy-700 rounded-xl px-4 py-2.5 cursor-pointer flex justify-between items-center hover:border-[#003875] dark:hover:border-[#FFD500] transition-colors shadow-sm"
+                    onClick={() => {
+                        setModalStatusOpen(!modalStatusOpen);
+                         setModalPriorityOpen(false);
+                         setModalAssignedToOpen(false);
+                         setModalAssignedByOpen(false);
+                         setModalDepartmentOpen(false);
+                         setModalFrequencyOpen(false);
+                    }}
+                  >
+                    <span className="text-xs font-bold truncate">
+                      {modalStatusFilter.length > 0 ? `${modalStatusFilter.length} Selected` : "All Statuses"}
+                    </span>
+                    <ChevronDownIcon className={`w-4 h-4 text-gray-400 transition-transform ${modalStatusOpen ? 'rotate-180' : ''}`} />
+                  </div>
+                  {modalStatusOpen && (
+                    <div className="absolute z-60 w-full mt-2 bg-white dark:bg-navy-900 border-2 border-[#003875] dark:border-[#FFD500] rounded-2xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-2">
+                      <div className="p-2 border-b border-orange-50 dark:border-navy-700">
+                        <input 
+                          type="text" placeholder="Search status..." value={modalStatusSearch}
+                          onChange={(e) => setModalStatusSearch(e.target.value)}
+                          className="w-full bg-[#FFFBF0] dark:bg-navy-950 px-3 py-1.5 rounded-lg border-none outline-none text-xs font-bold"
+                        />
+                      </div>
+                      <div className="max-h-48 overflow-y-auto p-1 custom-scrollbar">
+                        {['Pending', 'Planned', 'Need Clarity', 'Need Revision', 'Completed', 'Approved', 'Hold', 'Re-Open', 'Overdue']
+                          .filter(s => s.toLowerCase().includes(modalStatusSearch.toLowerCase()))
+                          .map(s => {
+                            const count = checklists.filter(c => getDisplayStatus(c) === s).length;
+                            const isSelected = modalStatusFilter.includes(s);
+                            return (
+                              <div key={s} 
+                                className={`px-3 py-2 rounded-lg text-xs font-bold cursor-pointer flex items-center justify-between group transition-colors ${
+                                  isSelected ? 'bg-[#003875] text-white' : 'hover:bg-[#003875]/5 dark:hover:bg-[#FFD500]/10 text-gray-700 dark:text-gray-300'
+                                }`}
+                                onClick={() => setModalStatusFilter(prev => isSelected ? prev.filter(x => x !== s) : [...prev, s])}
+                              >
+                                <div className="flex items-center gap-2">
+                                  <div className={`w-4 h-4 rounded border flex items-center justify-center transition-all ${isSelected ? 'bg-white border-white' : 'border-gray-300 dark:border-navy-600'}`}>
+                                    {isSelected && <CheckIcon className="w-3 h-3 text-[#003875]" />}
+                                  </div>
+                                  <span>{s}</span>
+                                </div>
+                                <span className={`text-[9px] px-1.5 py-0.5 rounded-full ${isSelected ? 'bg-white/20' : 'bg-gray-100 dark:bg-navy-800 text-gray-500'}`}>
+                                  {count}
+                                </span>
+                              </div>
+                            );
+                          })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Priority Filter */}
+                <div className="relative">
+                  <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest mb-2 block">Priority</label>
+                  <div 
+                    className="w-full bg-[#FFFBF0] dark:bg-navy-900 border-2 border-orange-50 dark:border-navy-700 rounded-xl px-4 py-2.5 cursor-pointer flex justify-between items-center hover:border-[#003875] dark:hover:border-[#FFD500] transition-colors shadow-sm"
+                    onClick={() => {
+                        setModalPriorityOpen(!modalPriorityOpen);
+                        setModalStatusOpen(false);
+                         setModalAssignedToOpen(false);
+                         setModalAssignedByOpen(false);
+                         setModalDepartmentOpen(false);
+                         setModalFrequencyOpen(false);
+                    }}
+                  >
+                    <span className="text-xs font-bold truncate">
+                      {modalPriorityFilter.length > 0 ? `${modalPriorityFilter.length} Selected` : "All Priorities"}
+                    </span>
+                    <ChevronDownIcon className={`w-4 h-4 text-gray-400 transition-transform ${modalPriorityOpen ? 'rotate-180' : ''}`} />
+                  </div>
+                  {modalPriorityOpen && (
+                    <div className="absolute z-60 w-full mt-2 bg-white dark:bg-navy-900 border-2 border-[#003875] dark:border-[#FFD500] rounded-2xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-2">
+                       <div className="max-h-48 overflow-y-auto p-1 custom-scrollbar">
+                        {['Low', 'Medium', 'High'].map(p => {
+                          const count = checklists.filter(c => c.priority === p).length;
+                          const isSelected = modalPriorityFilter.includes(p);
+                          return (
+                            <div key={p} 
+                              className={`px-3 py-2 rounded-lg text-xs font-bold cursor-pointer flex items-center justify-between group transition-colors ${
+                                isSelected ? 'bg-[#003875] text-white' : 'hover:bg-[#003875]/5 dark:hover:bg-[#FFD500]/10 text-gray-700 dark:text-gray-300'
+                              }`}
+                              onClick={() => setModalPriorityFilter(prev => isSelected ? prev.filter(x => x !== p) : [...prev, p])}
+                            >
+                              <div className="flex items-center gap-2">
+                                <div className={`w-4 h-4 rounded border flex items-center justify-center transition-all ${isSelected ? 'bg-white border-white' : 'border-gray-300 dark:border-navy-600'}`}>
+                                  {isSelected && <CheckIcon className="w-3 h-3 text-[#003875]" />}
+                                </div>
+                                <span>{p}</span>
+                              </div>
+                              <span className={`text-[9px] px-1.5 py-0.5 rounded-full ${isSelected ? 'bg-white/20' : 'bg-gray-100 dark:bg-navy-800 text-gray-500'}`}>
+                                {count}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Assigned To Filter */}
+                <div className="relative">
+                  <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest mb-2 block">Assigned To</label>
+                  <div 
+                    className="w-full bg-[#FFFBF0] dark:bg-navy-900 border-2 border-orange-50 dark:border-navy-700 rounded-xl px-4 py-2.5 cursor-pointer flex justify-between items-center hover:border-[#003875] dark:hover:border-[#FFD500] transition-colors shadow-sm"
+                    onClick={() => {
+                        setModalAssignedToOpen(!modalAssignedToOpen);
+                        setModalStatusOpen(false);
+                        setModalPriorityOpen(false);
+                         setModalAssignedByOpen(false);
+                         setModalDepartmentOpen(false);
+                         setModalFrequencyOpen(false);
+                    }}
+                  >
+                    <span className="text-xs font-bold truncate">
+                      {modalAssignedToFilter.length > 0 ? `${modalAssignedToFilter.length} Selected` : "Everyone"}
+                    </span>
+                    <ChevronDownIcon className={`w-4 h-4 text-gray-400 transition-transform ${modalAssignedToOpen ? 'rotate-180' : ''}`} />
+                  </div>
+                  {modalAssignedToOpen && (
+                    <div className="absolute z-60 w-full mt-2 bg-white dark:bg-navy-900 border-2 border-[#003875] dark:border-[#FFD500] rounded-2xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-2">
+                       <div className="p-2 border-b border-orange-50 dark:border-navy-700">
+                        <input 
+                          type="text" placeholder="Search users..." value={modalAssignedToSearch}
+                          onChange={(e) => setModalAssignedToSearch(e.target.value)}
+                          className="w-full bg-[#FFFBF0] dark:bg-navy-950 px-3 py-1.5 rounded-lg border-none outline-none text-xs font-bold"
+                        />
+                      </div>
+                      <div className="max-h-48 overflow-y-auto p-1 custom-scrollbar">
+                        {usersList
+                          .filter(u => u.username.toLowerCase().includes(modalAssignedToSearch.toLowerCase()))
+                          .map(u => {
+                            const count = checklists.filter(c => c.assigned_to === u.username).length;
+                            const isSelected = modalAssignedToFilter.includes(u.username);
+                            return (
+                              <div key={u.id} 
+                                className={`px-3 py-2 rounded-lg text-xs font-bold cursor-pointer flex items-center justify-between group transition-colors ${
+                                  isSelected ? 'bg-[#003875] text-white' : 'hover:bg-[#003875]/5 dark:hover:bg-[#FFD500]/10 text-gray-700 dark:text-gray-300'
+                                }`}
+                                onClick={() => setModalAssignedToFilter(prev => isSelected ? prev.filter(x => x !== u.username) : [...prev, u.username])}
+                              >
+                                <div className="flex items-center gap-2">
+                                  <div className={`w-4 h-4 rounded border flex items-center justify-center transition-all ${isSelected ? 'bg-white border-white' : 'border-gray-300 dark:border-navy-600'}`}>
+                                    {isSelected && <CheckIcon className="w-3 h-3 text-[#003875]" />}
+                                  </div>
+                                  <span>{u.username}</span>
+                                </div>
+                                <span className={`text-[9px] px-1.5 py-0.5 rounded-full ${isSelected ? 'bg-white/20' : 'bg-gray-100 dark:bg-navy-800 text-gray-500'}`}>
+                                  {count}
+                                </span>
+                              </div>
+                            );
+                          })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Assigned By Filter */}
+                <div className="relative">
+                  <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest mb-2 block">Assigned By</label>
+                  <div 
+                    className="w-full bg-[#FFFBF0] dark:bg-navy-900 border-2 border-orange-50 dark:border-navy-700 rounded-xl px-4 py-2.5 cursor-pointer flex justify-between items-center hover:border-[#003875] dark:hover:border-[#FFD500] transition-colors shadow-sm"
+                    onClick={() => {
+                        setModalAssignedByOpen(!modalAssignedByOpen);
+                        setModalStatusOpen(false);
+                        setModalPriorityOpen(false);
+                        setModalAssignedToOpen(false);
+                         setModalDepartmentOpen(false);
+                         setModalFrequencyOpen(false);
+                    }}
+                  >
+                    <span className="text-xs font-bold truncate">
+                      {modalAssignedByFilter.length > 0 ? `${modalAssignedByFilter.length} Selected` : "All Senders"}
+                    </span>
+                    <ChevronDownIcon className={`w-4 h-4 text-gray-400 transition-transform ${modalAssignedByOpen ? 'rotate-180' : ''}`} />
+                  </div>
+                  {modalAssignedByOpen && (
+                    <div className="absolute z-60 w-full mt-2 bg-white dark:bg-navy-900 border-2 border-[#003875] dark:border-[#FFD500] rounded-2xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-2">
+                       <div className="p-2 border-b border-orange-50 dark:border-navy-700">
+                        <input 
+                          type="text" placeholder="Search users..." value={modalAssignedBySearch}
+                          onChange={(e) => setModalAssignedBySearch(e.target.value)}
+                          className="w-full bg-[#FFFBF0] dark:bg-navy-950 px-3 py-1.5 rounded-lg border-none outline-none text-xs font-bold"
+                        />
+                      </div>
+                      <div className="max-h-48 overflow-y-auto p-1 custom-scrollbar">
+                        {usersList
+                          .filter(u => ['ADMIN', 'EA'].includes(u.role_name?.toUpperCase() || '') && u.username.toLowerCase().includes(modalAssignedBySearch.toLowerCase()))
+                          .map(u => {
+                            const count = checklists.filter(c => c.assigned_by === u.username).length;
+                            const isSelected = modalAssignedByFilter.includes(u.username);
+                            return (
+                              <div key={u.id} 
+                                className={`px-3 py-2 rounded-lg text-xs font-bold cursor-pointer flex items-center justify-between group transition-colors ${
+                                  isSelected ? 'bg-[#003875] text-white' : 'hover:bg-[#003875]/5 dark:hover:bg-[#FFD500]/10 text-gray-700 dark:text-gray-300'
+                                }`}
+                                onClick={() => setModalAssignedByFilter(prev => isSelected ? prev.filter(x => x !== u.username) : [...prev, u.username])}
+                              >
+                                <div className="flex items-center gap-2">
+                                  <div className={`w-4 h-4 rounded border flex items-center justify-center transition-all ${isSelected ? 'bg-white border-white' : 'border-gray-300 dark:border-navy-600'}`}>
+                                    {isSelected && <CheckIcon className="w-3 h-3 text-[#003875]" />}
+                                  </div>
+                                  <span>{u.username}</span>
+                                </div>
+                                <span className={`text-[9px] px-1.5 py-0.5 rounded-full ${isSelected ? 'bg-white/20' : 'bg-gray-100 dark:bg-navy-800 text-gray-500'}`}>
+                                  {count}
+                                </span>
+                              </div>
+                            );
+                          })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Department Filter */}
+                <div className="relative">
+                  <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest mb-2 block">Department</label>
+                  <div 
+                    className="w-full bg-[#FFFBF0] dark:bg-navy-900 border-2 border-orange-50 dark:border-navy-700 rounded-xl px-4 py-2.5 cursor-pointer flex justify-between items-center hover:border-[#003875] dark:hover:border-[#FFD500] transition-colors shadow-sm"
+                    onClick={() => {
+                        setModalDepartmentOpen(!modalDepartmentOpen);
+                        setModalStatusOpen(false);
+                        setModalPriorityOpen(false);
+                        setModalAssignedToOpen(false);
+                        setModalAssignedByOpen(false);
+                         setModalFrequencyOpen(false);
+                    }}
+                  >
+                    <span className="text-xs font-bold truncate">
+                      {modalDepartmentFilter.length > 0 ? `${modalDepartmentFilter.length} Selected` : "All Departments"}
+                    </span>
+                    <ChevronDownIcon className={`w-4 h-4 text-gray-400 transition-transform ${modalDepartmentOpen ? 'rotate-180' : ''}`} />
+                  </div>
+                  {modalDepartmentOpen && (
+                    <div className="absolute z-60 w-full mt-2 bg-white dark:bg-navy-900 border-2 border-[#003875] dark:border-[#FFD500] rounded-2xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-2">
+                       <div className="p-2 border-b border-orange-50 dark:border-navy-700">
+                        <input 
+                          type="text" placeholder="Search departments..." value={modalDepartmentSearch}
+                          onChange={(e) => setModalDepartmentSearch(e.target.value)}
+                          className="w-full bg-[#FFFBF0] dark:bg-navy-950 px-3 py-1.5 rounded-lg border-none outline-none text-xs font-bold"
+                        />
+                      </div>
+                      <div className="max-h-48 overflow-y-auto p-1 custom-scrollbar">
+                        {predefinedDepartments
+                          .filter(d => d.toLowerCase().includes(modalDepartmentSearch.toLowerCase()))
+                          .map(d => {
+                            const count = checklists.filter(del => del.department === d).length;
+                            const isSelected = modalDepartmentFilter.includes(d);
+                            return (
+                              <div key={d} 
+                                className={`px-3 py-2 rounded-lg text-xs font-bold cursor-pointer flex items-center justify-between group transition-colors ${
+                                  isSelected ? 'bg-[#003875] text-white' : 'hover:bg-[#003875]/5 dark:hover:bg-[#FFD500]/10 text-gray-700 dark:text-gray-300'
+                                }`}
+                                onClick={() => setModalDepartmentFilter(prev => isSelected ? prev.filter(x => x !== d) : [...prev, d])}
+                              >
+                                <div className="flex items-center gap-2">
+                                  <div className={`w-4 h-4 rounded border flex items-center justify-center transition-all ${isSelected ? 'bg-white border-white' : 'border-gray-300 dark:border-navy-600'}`}>
+                                    {isSelected && <CheckIcon className="w-3 h-3 text-[#003875]" />}
+                                  </div>
+                                  <span>{d}</span>
+                                </div>
+                                <span className={`text-[9px] px-1.5 py-0.5 rounded-full ${isSelected ? 'bg-white/20' : 'bg-gray-100 dark:bg-navy-800 text-gray-500'}`}>
+                                  {count}
+                                </span>
+                              </div>
+                            );
+                          })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Frequency Filter */}
+                <div className="relative">
+                  <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest mb-2 block">Frequency</label>
+                  <div 
+                    className="w-full bg-[#FFFBF0] dark:bg-navy-900 border-2 border-orange-50 dark:border-navy-700 rounded-xl px-4 py-2.5 cursor-pointer flex justify-between items-center hover:border-[#003875] dark:hover:border-[#FFD500] transition-colors shadow-sm"
+                    onClick={() => {
+                        setModalFrequencyOpen(!modalFrequencyOpen);
+                        setModalStatusOpen(false);
+                        setModalPriorityOpen(false);
+                        setModalAssignedToOpen(false);
+                        setModalAssignedByOpen(false);
+                        setModalDepartmentOpen(false);
+                    }}
+                  >
+                    <span className="text-xs font-bold truncate">
+                      {modalFrequencyFilter.length > 0 ? `${modalFrequencyFilter.length} Selected` : "All Frequencies"}
+                    </span>
+                    <ChevronDownIcon className={`w-4 h-4 text-gray-400 transition-transform ${modalFrequencyOpen ? 'rotate-180' : ''}`} />
+                  </div>
+                  {modalFrequencyOpen && (
+                    <div className="absolute z-60 w-full mt-2 bg-white dark:bg-navy-900 border-2 border-[#003875] dark:border-[#FFD500] rounded-2xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-2">
+                       <div className="p-2 border-b border-orange-50 dark:border-navy-700">
+                        <input 
+                          type="text" placeholder="Search frequency..." value={modalFrequencySearch}
+                          onChange={(e) => setModalFrequencySearch(e.target.value)}
+                          className="w-full bg-[#FFFBF0] dark:bg-navy-950 px-3 py-1.5 rounded-lg border-none outline-none text-xs font-bold"
+                        />
+                      </div>
+                      <div className="max-h-48 overflow-y-auto p-1 custom-scrollbar">
+                        {['Daily', 'Weekly', 'Monthly', 'Quarterly', 'Half Yearly', 'Yearly']
+                          .filter(f => f.toLowerCase().includes(modalFrequencySearch.toLowerCase()))
+                          .map(f => {
+                            const count = checklists.filter(c => c.frequency === f).length;
+                            const isSelected = modalFrequencyFilter.includes(f);
+                            return (
+                              <div key={f} 
+                                className={`px-3 py-2 rounded-lg text-xs font-bold cursor-pointer flex items-center justify-between group transition-colors ${
+                                  isSelected ? 'bg-[#003875] text-white' : 'hover:bg-[#003875]/5 dark:hover:bg-[#FFD500]/10 text-gray-700 dark:text-gray-300'
+                                }`}
+                                onClick={() => setModalFrequencyFilter(prev => isSelected ? prev.filter(x => x !== f) : [...prev, f])}
+                              >
+                                <div className="flex items-center gap-2">
+                                  <div className={`w-4 h-4 rounded border flex items-center justify-center transition-all ${isSelected ? 'bg-white border-white' : 'border-gray-300 dark:border-navy-600'}`}>
+                                    {isSelected && <CheckIcon className="w-3 h-3 text-[#003875]" />}
+                                  </div>
+                                  <span>{f}</span>
+                                </div>
+                                <span className={`text-[9px] px-1.5 py-0.5 rounded-full ${isSelected ? 'bg-white/20' : 'bg-gray-100 dark:bg-navy-800 text-gray-500'}`}>
+                                  {count}
+                                </span>
+                              </div>
+                            );
+                          })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="p-6 bg-gray-50 dark:bg-navy-900 border-t-4 border-orange-50 dark:border-navy-700 flex gap-3">
+              <button 
+                onClick={() => {
+                  setModalStartDate("");
+                  setModalEndDate("");
+                  setModalStatusFilter([]);
+                  setModalPriorityFilter([]);
+                  setModalAssignedToFilter([]);
+                  setModalAssignedByFilter([]);
+                  setModalDepartmentFilter([]);
+                  setModalFrequencyFilter([]);
+                }}
+                className="flex-1 px-4 py-3 rounded-2xl font-black text-[#CE2029] hover:bg-red-50 dark:hover:bg-red-900/10 transition-all uppercase tracking-widest text-[10px] border-2 border-[#CE2029]/20"
+              >
+                Clear All
+              </button>
+              <button 
+                onClick={() => setIsFilterModalOpen(false)}
+                className="flex-[2] bg-[#003875] dark:bg-[#FFD500] text-white dark:text-black px-4 py-3 rounded-2xl font-black transition-all shadow-lg active:scale-95 uppercase tracking-widest text-[10px] hover:shadow-[#003875]/20 dark:hover:shadow-[#FFD500]/20"
+              >
+                Apply Filters
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

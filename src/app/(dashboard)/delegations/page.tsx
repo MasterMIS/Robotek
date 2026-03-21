@@ -36,7 +36,8 @@ import {
   ArrowPathIcon,
   QuestionMarkCircleIcon,
   Squares2X2Icon,
-  ListBulletIcon
+  ListBulletIcon,
+  FunnelIcon
 } from "@heroicons/react/24/outline";
 import PremiumDatePicker from "@/components/PremiumDatePicker";
 import ActionStatusModal from "@/components/ActionStatusModal";
@@ -58,6 +59,29 @@ export default function DelegationsPage() {
   const [assignmentFilter, setAssignmentFilter] = useState<'All' | 'ToMe' | 'ByMe'>('All');
   const [sortConfig, setSortConfig] = useState<{ key: keyof Delegation; direction: 'asc' | 'desc' } | null>({ key: 'id', direction: 'desc' });
   const [viewMode, setViewMode] = useState<'list' | 'tile'>('list');
+  
+  // Advanced Filter Modal States
+  const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
+  const [filterStartDate, setFilterStartDate] = useState("");
+  const [filterEndDate, setFilterEndDate] = useState("");
+  const [modalStatusFilter, setModalStatusFilter] = useState<string[]>([]);
+  const [modalAssignedByFilter, setModalAssignedByFilter] = useState<string[]>([]);
+  const [modalAssignedToFilter, setModalAssignedToFilter] = useState<string[]>([]);
+  const [modalDepartmentFilter, setModalDepartmentFilter] = useState<string[]>([]);
+  const [modalPriorityFilter, setModalPriorityFilter] = useState<string[]>([]);
+
+  // Search/Open states for modal dropdowns
+  const [modalStatusSearch, setModalStatusSearch] = useState("");
+  const [modalAssignedBySearch, setModalAssignedBySearch] = useState("");
+  const [modalAssignedToSearch, setModalAssignedToSearch] = useState("");
+  const [modalDepartmentSearch, setModalDepartmentSearch] = useState("");
+  const [modalPrioritySearch, setModalPrioritySearch] = useState("");
+
+  const [modalStatusOpen, setModalStatusOpen] = useState(false);
+  const [modalAssignedByOpen, setModalAssignedByOpen] = useState(false);
+  const [modalAssignedToOpen, setModalAssignedToOpen] = useState(false);
+  const [modalDepartmentOpen, setModalDepartmentOpen] = useState(false);
+  const [modalPriorityOpen, setModalPriorityOpen] = useState(false);
 
   // File uploads
   const [voiceNoteFile, setVoiceNoteFile] = useState<File | null>(null);
@@ -653,7 +677,64 @@ export default function DelegationsPage() {
       }
     }
 
-    return matchesSearch && matchesStatus && matchesAssignment && matchesDate;
+    // Modal Advanced Filters
+    let matchesModalStatus = true;
+    if (modalStatusFilter.length > 0) {
+      matchesModalStatus = modalStatusFilter.includes(getDisplayStatus(d));
+    }
+
+    let matchesModalAssignedBy = true;
+    if (modalAssignedByFilter.length > 0) {
+      matchesModalAssignedBy = modalAssignedByFilter.includes(d.assigned_by || "");
+    }
+
+    let matchesModalAssignedTo = true;
+    if (modalAssignedToFilter.length > 0) {
+      matchesModalAssignedTo = modalAssignedToFilter.includes(d.assigned_to || "");
+    }
+
+    let matchesModalDepartment = true;
+    if (modalDepartmentFilter.length > 0) {
+      matchesModalDepartment = modalDepartmentFilter.includes(d.department || "General");
+    }
+
+    let matchesModalPriority = true;
+    if (modalPriorityFilter.length > 0) {
+      matchesModalPriority = modalPriorityFilter.includes(d.priority || "Normal");
+    }
+
+    let matchesDateRange = true;
+    if (filterStartDate || filterEndDate) {
+      if (!d.due_date) {
+        matchesDateRange = false;
+      } else {
+        let due = new Date(d.due_date);
+        if (isNaN(due.getTime()) && d.due_date.includes('/')) {
+          const parts = d.due_date.split(' ')[0].split('/');
+          if (parts.length === 3) due = new Date(`${parts[2]}-${parts[1]}-${parts[0]}`);
+        }
+        
+        if (!isNaN(due.getTime())) {
+          due.setHours(0,0,0,0);
+          if (filterStartDate) {
+            const start = new Date(filterStartDate);
+            start.setHours(0,0,0,0);
+            if (due < start) matchesDateRange = false;
+          }
+          if (filterEndDate) {
+            const end = new Date(filterEndDate);
+            end.setHours(0,0,0,0);
+            if (due > end) matchesDateRange = false;
+          }
+        } else {
+          matchesDateRange = false;
+        }
+      }
+    }
+
+    return matchesSearch && matchesStatus && matchesAssignment && matchesDate && 
+           matchesModalStatus && matchesModalAssignedBy && matchesModalAssignedTo && 
+           matchesModalDepartment && matchesModalPriority && matchesDateRange;
   });
 
   const getDateFilterCount = (filter: string) => {
@@ -886,6 +967,20 @@ export default function DelegationsPage() {
             <span className="hidden sm:inline">Export</span>
           </button>
           
+          <div className="h-4 w-[1px] bg-gray-100 dark:bg-white/10" />
+
+          <button
+            onClick={setIsFilterModalOpen.bind(null, true)}
+            className="flex items-center justify-center gap-2 text-[#003875] dark:text-[#FFD500] px-3 md:px-5 py-2 font-black transition-colors hover:bg-gray-100 dark:hover:bg-navy-700 uppercase tracking-widest text-[9px] md:text-[10px] rounded-full whitespace-nowrap relative group"
+            title="Advanced Filters"
+          >
+            <FunnelIcon className="w-4 h-4" />
+            <span className="hidden sm:inline">Filter</span>
+            {(modalStatusFilter.length > 0 || modalAssignedByFilter.length > 0 || modalAssignedToFilter.length > 0 || modalDepartmentFilter.length > 0 || modalPriorityFilter.length > 0 || filterStartDate || filterEndDate) && (
+              <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-[#CE2029] animate-pulse border-2 border-white dark:border-navy-800" />
+            )}
+          </button>
+
           <div className="h-4 w-[1px] bg-gray-100 dark:bg-white/10" />
 
           <button
@@ -2047,7 +2142,335 @@ export default function DelegationsPage() {
             </div>
           </div>
         )}
-        
+
+        {/* Advanced Filter Modal */}
+        {isFilterModalOpen && (
+          <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={setIsFilterModalOpen.bind(null, false)} />
+            <div className="relative bg-white dark:bg-zinc-950 w-full max-w-2xl rounded-3xl shadow-2xl border border-orange-100 dark:border-zinc-800 overflow-hidden animate-in fade-in zoom-in duration-300">
+              {/* Header */}
+              <div className="p-6 bg-[#FFD500] border-b border-orange-200 dark:border-zinc-800 flex items-center justify-between">
+                <div className="flex items-center gap-3 text-[#003875]">
+                  <div className="p-2 bg-white/20 rounded-xl">
+                    <FunnelIcon className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-black tracking-tight">Advanced Filters</h2>
+                    <p className="text-[10px] font-black opacity-60 uppercase tracking-widest">Refine your delegation list</p>
+                  </div>
+                </div>
+                <button
+                  onClick={setIsFilterModalOpen.bind(null, false)}
+                  className="p-2 hover:bg-black/5 rounded-xl transition-all group"
+                >
+                  <XMarkIcon className="w-6 h-6 text-[#003875] group-hover:rotate-90 transition-transform" />
+                </button>
+              </div>
+
+              <div className="p-6 space-y-6 max-h-[70vh] overflow-y-auto custom-scrollbar bg-white dark:bg-zinc-950">
+                {/* Due Date Range */}
+                <div className="space-y-3">
+                  <label className="text-[11px] font-black text-[#CE2029] uppercase tracking-[0.2em] flex items-center gap-2">
+                    <CalendarDaysIcon className="w-4 h-4" /> Due Date Range
+                  </label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest px-1">Start Date</span>
+                      <input 
+                        type="date"
+                        value={filterStartDate}
+                        onChange={(e) => setFilterStartDate(e.target.value)}
+                        className="w-full px-4 py-2.5 bg-[#FFFBF0] dark:bg-zinc-900 border-2 border-orange-50 dark:border-zinc-800 rounded-xl text-xs font-bold text-gray-700 dark:text-zinc-100 outline-none focus:border-[#FFD500] transition-all"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest px-1">End Date</span>
+                      <input 
+                        type="date"
+                        value={filterEndDate}
+                        onChange={(e) => setFilterEndDate(e.target.value)}
+                        className="w-full px-4 py-2.5 bg-[#FFFBF0] dark:bg-zinc-900 border-2 border-orange-50 dark:border-zinc-800 rounded-xl text-xs font-bold text-gray-700 dark:text-zinc-100 outline-none focus:border-[#FFD500] transition-all"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                  {/* Status Filter */}
+                  <div className="relative">
+                    <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest mb-2 block">Status</label>
+                    <div 
+                      className="w-full bg-[#FFFBF0] dark:bg-zinc-900 border-2 border-orange-50 dark:border-zinc-800 rounded-xl px-4 py-2.5 cursor-pointer flex justify-between items-center"
+                      onClick={() => setModalStatusOpen(!modalStatusOpen)}
+                    >
+                      <span className="text-xs font-bold truncate">
+                        {modalStatusFilter.length > 0 ? `${modalStatusFilter.length} Selected` : "All Statuses"}
+                      </span>
+                      <ChevronDownIcon className={`w-4 h-4 text-gray-400 transition-transform ${modalStatusOpen ? 'rotate-180' : ''}`} />
+                    </div>
+                    {modalStatusOpen && (
+                      <div className="absolute z-20 w-full mt-2 bg-white dark:bg-zinc-900 border border-orange-50 dark:border-zinc-800 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-2">
+                        <div className="p-2 border-b border-orange-50 dark:border-zinc-800">
+                          <input 
+                            type="text" placeholder="Search status..." value={modalStatusSearch}
+                            onChange={(e) => setModalStatusSearch(e.target.value)}
+                            className="w-full bg-[#FFFBF0] dark:bg-zinc-950 px-3 py-1.5 rounded-lg border-none outline-none text-xs font-bold"
+                          />
+                        </div>
+                        <div className="max-h-48 overflow-y-auto p-1">
+                          {['Pending', 'Planned', 'Need Clarity', 'Need Revision', 'Completed', 'Approved', 'Hold', 'Re-Open', 'Overdue']
+                            .filter(s => s.toLowerCase().includes(modalStatusSearch.toLowerCase()))
+                            .map(s => {
+                              const count = delegations.filter(d => getDisplayStatus(d) === s).length;
+                              const isSelected = modalStatusFilter.includes(s);
+                              return (
+                                <div key={s} 
+                                  className={`px-3 py-2 rounded-lg text-xs font-bold cursor-pointer flex items-center justify-between group transition-colors ${
+                                    isSelected ? 'bg-[#003875]/5 dark:bg-[#FFD500]/10 text-[#003875] dark:text-[#FFD500]' : 'hover:bg-[#003875]/5 dark:hover:bg-[#FFD500]/10 text-gray-700 dark:text-zinc-300'
+                                  }`}
+                                  onClick={() => setModalStatusFilter(prev => isSelected ? prev.filter(x => x !== s) : [...prev, s])}
+                                >
+                                  <div className="flex items-center gap-2">
+                                    <div className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-all ${isSelected ? 'bg-[#003875] border-[#003875]' : 'border-gray-300 dark:border-zinc-600'}`}>
+                                      {isSelected && <CheckCircleIcon className="w-3 h-3 text-white" />}
+                                    </div>
+                                    <span>{s}</span>
+                                  </div>
+                                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${isSelected ? 'bg-[#003875] text-white' : 'bg-gray-100 dark:bg-zinc-800 text-gray-500'}`}>
+                                    {count}
+                                  </span>
+                                </div>
+                              );
+                            })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Priority Filter */}
+                  <div className="relative">
+                    <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest mb-2 block">Priority</label>
+                    <div 
+                      className="w-full bg-[#FFFBF0] dark:bg-zinc-900 border-2 border-orange-50 dark:border-zinc-800 rounded-xl px-4 py-2.5 cursor-pointer flex justify-between items-center"
+                      onClick={() => setModalPriorityOpen(!modalPriorityOpen)}
+                    >
+                      <span className="text-xs font-bold truncate">
+                        {modalPriorityFilter.length > 0 ? `${modalPriorityFilter.length} Selected` : "All Priorities"}
+                      </span>
+                      <ChevronDownIcon className={`w-4 h-4 text-gray-400 transition-transform ${modalPriorityOpen ? 'rotate-180' : ''}`} />
+                    </div>
+                    {modalPriorityOpen && (
+                      <div className="absolute z-20 w-full mt-2 bg-white dark:bg-zinc-900 border border-orange-50 dark:border-zinc-800 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-2">
+                        <div className="p-1 max-h-48 overflow-y-auto">
+                          {['Low', 'Medium', 'High'].map(p => {
+                            const count = delegations.filter(d => d.priority === p).length;
+                            const isSelected = modalPriorityFilter.includes(p);
+                            return (
+                              <div key={p} 
+                                className={`px-3 py-2 rounded-lg text-xs font-bold cursor-pointer flex items-center justify-between group transition-colors ${
+                                  isSelected ? 'bg-[#003875]/5 dark:bg-[#FFD500]/10 text-[#003875] dark:text-[#FFD500]' : 'hover:bg-[#003875]/5 dark:hover:bg-[#FFD500]/10 text-gray-700 dark:text-zinc-300'
+                                }`}
+                                onClick={() => setModalPriorityFilter(prev => isSelected ? prev.filter(x => x !== p) : [...prev, p])}
+                              >
+                                <div className="flex items-center gap-2">
+                                  <div className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-all ${isSelected ? 'bg-[#003875] border-[#003875]' : 'border-gray-300 dark:border-zinc-600'}`}>
+                                    {isSelected && <CheckCircleIcon className="w-3 h-3 text-white" />}
+                                  </div>
+                                  <span>{p}</span>
+                                </div>
+                                <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${isSelected ? 'bg-[#003875] text-white' : 'bg-gray-100 dark:bg-zinc-800 text-gray-500'}`}>
+                                  {count}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Assigned To Filter */}
+                  <div className="relative">
+                    <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest mb-2 block">Assigned To</label>
+                    <div 
+                      className="w-full bg-[#FFFBF0] dark:bg-zinc-900 border-2 border-orange-50 dark:border-zinc-800 rounded-xl px-4 py-2.5 cursor-pointer flex justify-between items-center"
+                      onClick={() => setModalAssignedToOpen(!modalAssignedToOpen)}
+                    >
+                      <span className="text-xs font-bold truncate">
+                        {modalAssignedToFilter.length > 0 ? `${modalAssignedToFilter.length} Selected` : "Everyone"}
+                      </span>
+                      <ChevronDownIcon className={`w-4 h-4 text-gray-400 transition-transform ${modalAssignedToOpen ? 'rotate-180' : ''}`} />
+                    </div>
+                    {modalAssignedToOpen && (
+                      <div className="absolute z-20 w-full mt-2 bg-white dark:bg-zinc-900 border border-orange-50 dark:border-zinc-800 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-2">
+                        <div className="p-2 border-b border-orange-50 dark:border-zinc-800">
+                          <input 
+                            type="text" placeholder="Search users..." value={modalAssignedToSearch}
+                            onChange={(e) => setModalAssignedToSearch(e.target.value)}
+                            className="w-full bg-[#FFFBF0] dark:bg-zinc-950 px-3 py-1.5 rounded-lg border-none outline-none text-xs font-bold"
+                          />
+                        </div>
+                        <div className="max-h-48 overflow-y-auto p-1">
+                          {usersList
+                            .filter(u => u.username.toLowerCase().includes(modalAssignedToSearch.toLowerCase()))
+                            .map(u => {
+                              const count = delegations.filter(d => d.assigned_to === u.username).length;
+                              const isSelected = modalAssignedToFilter.includes(u.username);
+                              return (
+                                <div key={u.id} 
+                                  className={`px-3 py-2 rounded-lg text-xs font-bold cursor-pointer flex items-center justify-between group transition-colors ${
+                                    isSelected ? 'bg-[#003875]/5 dark:bg-[#FFD500]/10 text-[#003875] dark:text-[#FFD500]' : 'hover:bg-[#003875]/5 dark:hover:bg-[#FFD500]/10 text-gray-700 dark:text-zinc-300'
+                                  }`}
+                                  onClick={() => setModalAssignedToFilter(prev => isSelected ? prev.filter(x => x !== u.username) : [...prev, u.username])}
+                                >
+                                  <div className="flex items-center gap-2">
+                                    <div className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-all ${isSelected ? 'bg-[#003875] border-[#003875]' : 'border-gray-300 dark:border-zinc-600'}`}>
+                                      {isSelected && <CheckCircleIcon className="w-3 h-3 text-white" />}
+                                    </div>
+                                    <span>{u.username}</span>
+                                  </div>
+                                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${isSelected ? 'bg-[#003875] text-white' : 'bg-gray-100 dark:bg-zinc-800 text-gray-500'}`}>
+                                    {count}
+                                  </span>
+                                </div>
+                              );
+                            })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Assigned By Filter */}
+                  <div className="relative">
+                    <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest mb-2 block">Assigned By</label>
+                    <div 
+                      className="w-full bg-[#FFFBF0] dark:bg-zinc-900 border-2 border-orange-50 dark:border-zinc-800 rounded-xl px-4 py-2.5 cursor-pointer flex justify-between items-center"
+                      onClick={() => setModalAssignedByOpen(!modalAssignedByOpen)}
+                    >
+                      <span className="text-xs font-bold truncate">
+                        {modalAssignedByFilter.length > 0 ? `${modalAssignedByFilter.length} Selected` : "All Senders"}
+                      </span>
+                      <ChevronDownIcon className={`w-4 h-4 text-gray-400 transition-transform ${modalAssignedByOpen ? 'rotate-180' : ''}`} />
+                    </div>
+                    {modalAssignedByOpen && (
+                      <div className="absolute z-20 w-full mt-2 bg-white dark:bg-zinc-900 border border-orange-50 dark:border-zinc-800 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-2">
+                        <div className="p-2 border-b border-orange-50 dark:border-zinc-800">
+                          <input 
+                            type="text" placeholder="Search users..." value={modalAssignedBySearch}
+                            onChange={(e) => setModalAssignedBySearch(e.target.value)}
+                            className="w-full bg-[#FFFBF0] dark:bg-zinc-950 px-3 py-1.5 rounded-lg border-none outline-none text-xs font-bold"
+                          />
+                        </div>
+                        <div className="max-h-48 overflow-y-auto p-1">
+                          {usersList
+                            .filter(u => ['ADMIN', 'EA'].includes(u.role_name?.toUpperCase() || '') && u.username.toLowerCase().includes(modalAssignedBySearch.toLowerCase()))
+                            .map(u => {
+                              const count = delegations.filter(d => d.assigned_by === u.username).length;
+                              const isSelected = modalAssignedByFilter.includes(u.username);
+                              return (
+                                <div key={u.id} 
+                                  className={`px-3 py-2 rounded-lg text-xs font-bold cursor-pointer flex items-center justify-between group transition-colors ${
+                                    isSelected ? 'bg-[#003875]/5 dark:bg-[#FFD500]/10 text-[#003875] dark:text-[#FFD500]' : 'hover:bg-[#003875]/5 dark:hover:bg-[#FFD500]/10 text-gray-700 dark:text-zinc-300'
+                                  }`}
+                                  onClick={() => setModalAssignedByFilter(prev => isSelected ? prev.filter(x => x !== u.username) : [...prev, u.username])}
+                                >
+                                  <div className="flex items-center gap-2">
+                                    <div className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-all ${isSelected ? 'bg-[#003875] border-[#003875]' : 'border-gray-300 dark:border-zinc-600'}`}>
+                                      {isSelected && <CheckCircleIcon className="w-3 h-3 text-white" />}
+                                    </div>
+                                    <span>{u.username}</span>
+                                  </div>
+                                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${isSelected ? 'bg-[#003875] text-white' : 'bg-gray-100 dark:bg-zinc-800 text-gray-500'}`}>
+                                    {count}
+                                  </span>
+                                </div>
+                              );
+                            })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Department Filter */}
+                  <div className="relative">
+                    <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest mb-2 block">Department</label>
+                    <div 
+                      className="w-full bg-[#FFFBF0] dark:bg-zinc-900 border-2 border-orange-50 dark:border-zinc-800 rounded-xl px-4 py-2.5 cursor-pointer flex justify-between items-center"
+                      onClick={() => setModalDepartmentOpen(!modalDepartmentOpen)}
+                    >
+                      <span className="text-xs font-bold truncate">
+                        {modalDepartmentFilter.length > 0 ? `${modalDepartmentFilter.length} Selected` : "All Departments"}
+                      </span>
+                      <ChevronDownIcon className={`w-4 h-4 text-gray-400 transition-transform ${modalDepartmentOpen ? 'rotate-180' : ''}`} />
+                    </div>
+                    {modalDepartmentOpen && (
+                      <div className="absolute z-20 w-full mt-2 bg-white dark:bg-zinc-900 border border-orange-50 dark:border-zinc-800 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-2">
+                        <div className="p-2 border-b border-orange-50 dark:border-zinc-800">
+                          <input 
+                            type="text" placeholder="Search departments..." value={modalDepartmentSearch}
+                            onChange={(e) => setModalDepartmentSearch(e.target.value)}
+                            className="w-full bg-[#FFFBF0] dark:bg-zinc-950 px-3 py-1.5 rounded-lg border-none outline-none text-xs font-bold"
+                          />
+                        </div>
+                        <div className="max-h-48 overflow-y-auto p-1">
+                          {predefinedDepartments
+                            .filter(d => d.toLowerCase().includes(modalDepartmentSearch.toLowerCase()))
+                            .map(d => {
+                              const count = delegations.filter(del => del.department === d).length;
+                              const isSelected = modalDepartmentFilter.includes(d);
+                              return (
+                                <div key={d} 
+                                  className={`px-3 py-2 rounded-lg text-xs font-bold cursor-pointer flex items-center justify-between group transition-colors ${
+                                    isSelected ? 'bg-[#003875]/5 dark:bg-[#FFD500]/10 text-[#003875] dark:text-[#FFD500]' : 'hover:bg-[#003875]/5 dark:hover:bg-[#FFD500]/10 text-gray-700 dark:text-zinc-300'
+                                  }`}
+                                  onClick={() => setModalDepartmentFilter(prev => isSelected ? prev.filter(x => x !== d) : [...prev, d])}
+                                >
+                                  <div className="flex items-center gap-2">
+                                    <div className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-all ${isSelected ? 'bg-[#003875] border-[#003875]' : 'border-gray-300 dark:border-zinc-600'}`}>
+                                      {isSelected && <CheckCircleIcon className="w-3 h-3 text-white" />}
+                                    </div>
+                                    <span>{d}</span>
+                                  </div>
+                                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${isSelected ? 'bg-[#003875] text-white' : 'bg-gray-100 dark:bg-zinc-800 text-gray-500'}`}>
+                                    {count}
+                                  </span>
+                                </div>
+                              );
+                            })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div className="p-6 bg-[#FFD500]/5 dark:bg-zinc-900/50 border-t border-orange-100 dark:border-zinc-800 flex items-center justify-between gap-4">
+                <button
+                  onClick={() => {
+                    setFilterStartDate("");
+                    setFilterEndDate("");
+                    setModalStatusFilter([]);
+                    setModalAssignedByFilter([]);
+                    setModalAssignedToFilter([]);
+                    setModalDepartmentFilter([]);
+                    setModalPriorityFilter([]);
+                  }}
+                  className="px-6 py-3 text-[11px] font-black uppercase tracking-widest text-[#CE2029] hover:bg-red-50 dark:hover:bg-red-900/10 rounded-2xl transition-all"
+                >
+                  Clear All Filters
+                </button>
+                <button
+                  onClick={setIsFilterModalOpen.bind(null, false)}
+                  className="px-8 py-3 bg-[#003875] text-white rounded-2xl text-[11px] font-black uppercase tracking-widest shadow-lg shadow-blue-900/20 hover:scale-105 active:scale-95 transition-all"
+                >
+                  Apply Filters
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Action Status Modal */}
         <ActionStatusModal 
           isOpen={isStatusModalOpen}

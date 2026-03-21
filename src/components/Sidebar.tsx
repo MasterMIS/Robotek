@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { navigation } from "@/lib/navigation";
 
 import { useSession, signOut } from "next-auth/react";
@@ -13,6 +14,7 @@ interface SidebarProps {
 
 export default function Sidebar({ mobileOpen, setMobileOpen }: SidebarProps) {
   const { data: session } = useSession();
+  const pathname = usePathname();
   
   // @ts-ignore
   const userPermissions = session?.user?.permissions || [];
@@ -40,17 +42,17 @@ export default function Sidebar({ mobileOpen, setMobileOpen }: SidebarProps) {
         />
       )}
 
-      <aside className={`
+      <aside 
+        style={{ background: mobileOpen ? 'var(--background)' : undefined }}
+        className={`
         fixed left-0 top-0 h-screen z-50 transition-all duration-300 ease-in-out
         ${mobileOpen 
-          ? 'w-60 translate-x-0 bg-[#FFF9E6] dark:bg-[#0B1120] shadow-[10px_0_30px_rgba(0,0,0,0.1)] border-r border-[#003875]/10 dark:border-white/5' 
-          : 'w-16 -translate-x-full md:translate-x-0 md:bg-transparent md:dark:bg-transparent md:hover:w-64'}
-        flex flex-col group overflow-x-hidden peer
+          ? 'w-60 translate-x-0 shadow-[20px_0_60px_-15px_rgba(0,0,0,0.3)] border-r-4 border-[#FFD500] dark:border-[#FFD500]/50 rounded-r-[2.5rem]' 
+          : 'w-16 -translate-x-full md:translate-x-0 md:bg-transparent md:dark:bg-transparent md:hover:w-56'}
+        flex flex-col group overflow-hidden peer
       `}>
-        {/* Mobile Header Background Accent */}
-        <div className={`absolute top-0 left-0 w-full h-40 bg-gradient-to-br from-[#f2b60c]/20 to-transparent -z-10 md:hidden ${mobileOpen ? 'block' : 'hidden'}`} />
 
-        <div className="flex items-center justify-between p-5 md:p-0 md:pt-6 md:pb-2 md:px-3">
+        <div className="flex items-center justify-between p-5 md:p-0 md:pt-6 md:pb-2 md:pl-5">
           <Link href="/" className="flex items-center gap-4 group/logo active:scale-95 transition-transform">
             <div className="w-10 h-10 min-w-[40px] rounded-xl overflow-hidden shadow-lg transform group-hover/logo:-rotate-6 transition-transform duration-500 ring-1 ring-black/5 dark:ring-white/10">
               <img src="/logo_compact.png" alt="Logo" className="w-full h-full object-cover" />
@@ -63,27 +65,37 @@ export default function Sidebar({ mobileOpen, setMobileOpen }: SidebarProps) {
           {mobileOpen && (
             <button 
               onClick={() => setMobileOpen?.(false)}
-              className="p-2 text-gray-400 hover:text-[#CE2029] bg-gray-50 dark:bg-white/5 rounded-xl md:hidden transition-colors"
+              className="p-2 text-[#003875] bg-[#FFD500] hover:bg-[#FFE55C] rounded-xl md:hidden transition-all shadow-md active:scale-90"
             >
-              <XMarkIcon className="w-6 h-6" />
+              <XMarkIcon className="w-6 h-6 stroke-[3]" />
             </button>
           )}
         </div>
         
-        <nav className="flex-1 px-4 md:px-3 pt-4 md:pt-1 pb-4 space-y-2 overflow-y-auto overflow-x-hidden invisible-scrollbar">
-          {filteredNavigation.map((item) => (
-            <Link
-              key={item.name}
-              href={item.href}
-              onClick={() => setMobileOpen?.(false)}
-              className="flex items-center gap-4 px-4 py-3 text-gray-600 dark:text-slate-400 hover:text-[#CE2029] dark:hover:text-[#FFD500] hover:bg-[#003875]/5 dark:hover:bg-white/5 rounded-2xl transition-all group/item font-bold overflow-hidden"
-            >
-              <item.icon className="w-6 h-6 min-w-[24px] group-hover/item:text-[#CE2029] dark:group-hover/item:text-[#FFD500] group-hover/item:scale-110 transition-all font-bold" />
-              <span className={`text-sm tracking-wide transition-all duration-300 whitespace-nowrap ${mobileOpen ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-4 md:group-hover:opacity-100 md:group-hover:translate-x-0'}`}>
-                {item.name}
-              </span>
-            </Link>
-          ))}
+        <nav className="flex-1 px-4 md:px-2 pt-4 md:pt-1 pb-4 space-y-2 overflow-y-auto overflow-x-hidden invisible-scrollbar">
+          {filteredNavigation.map((item) => {
+            const isActive = pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href));
+            return (
+              <Link
+                key={item.name}
+                href={item.href}
+                onClick={() => setMobileOpen?.(false)}
+                className={`
+                  flex items-center gap-4 px-4 md:px-3 py-3 rounded-2xl transition-all group/item font-bold overflow-hidden
+                  ${isActive 
+                    ? 'bg-[#003875] text-white shadow-lg shadow-[#003875]/20 md:translate-x-1' 
+                    : 'text-gray-600 dark:text-slate-400 hover:text-[#003875] dark:hover:text-[#FFD500] hover:bg-white/40 dark:hover:bg-white/5 active:scale-95 hover:translate-x-1'}
+                `}
+              >
+                <div className="flex items-center justify-center w-6 min-w-[24px]">
+                  <item.icon className={`w-6 h-6 transition-all font-bold ${isActive ? 'text-white' : 'group-hover/item:text-[#003875] dark:group-hover/item:text-[#FFD500] group-hover/item:scale-110'}`} />
+                </div>
+                <span className={`text-sm tracking-wide transition-all duration-300 whitespace-nowrap ${mobileOpen ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-4 md:group-hover:opacity-100 md:group-hover:translate-x-0'}`}>
+                  {item.name}
+                </span>
+              </Link>
+            );
+          })}
         </nav>
 
         {/* Mobile User Profile Section */}
