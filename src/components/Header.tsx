@@ -6,12 +6,17 @@ import {
   BellIcon, 
   MagnifyingGlassIcon,
   ChevronDownIcon,
-  ArrowRightOnRectangleIcon
+  ArrowRightOnRectangleIcon,
+  Bars3Icon
 } from "@heroicons/react/24/outline";
 
 import ThemeToggle from "./ThemeToggle";
 
-export default function Header() {
+interface HeaderProps {
+  onMenuClick?: () => void;
+}
+
+export default function Header({ onMenuClick }: HeaderProps) {
   const { data: session } = useSession();
 
   const getNormalizedImageUrl = (url: string) => {
@@ -31,39 +36,50 @@ export default function Header() {
         background: 'var(--header-bg)',
         borderBottom: '1px solid var(--panel-border)'
       }}
-      className="h-14 flex items-center justify-between px-6 sticky top-0 z-10 transition-all duration-300"
+      className="h-14 flex items-center justify-between px-2 md:px-6 sticky top-0 z-40 transition-all duration-300"
     >
-      {/* Left Section: Welcome Message */}
-      <div className="flex flex-col">
-        <h1 className="text-xl font-black text-gray-900 dark:text-zinc-100 leading-none">
-          HI, {(session?.user as any)?.username?.toUpperCase() || session?.user?.name?.toUpperCase() || session?.user?.email?.split("@")[0].toUpperCase() || "USER"}
-        </h1>
-        <p className="text-[10px] font-black text-[#CE2029] dark:text-[#FFD500] uppercase tracking-wider mt-1">
-          {/* @ts-ignore */}
-          {session?.user?.role || "SYSTEM ACCESS"} — WELCOME BACK
-        </p>
+      {/* Left Section: Mobile Menu & Welcome Message */}
+      <div className="flex items-center gap-3">
+        <button
+          onClick={onMenuClick}
+          className="p-2 md:hidden text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
+        >
+          <Bars3Icon className="w-6 h-6" />
+        </button>
+        
+        <div className="flex flex-col hidden md:flex">
+          <h1 className="text-xl font-black text-gray-900 dark:text-zinc-100 leading-none">
+            HI, {(session?.user as any)?.username?.toUpperCase() || session?.user?.name?.toUpperCase() || session?.user?.email?.split("@")[0].toUpperCase() || "USER"}
+          </h1>
+          <p className="text-[10px] font-black text-[#CE2029] dark:text-[#FFD500] uppercase tracking-wider mt-1">
+            {/* @ts-ignore */}
+            {session?.user?.role || "SYSTEM ACCESS"} — WELCOME BACK
+          </p>
+        </div>
       </div>
 
+      <div className="flex-1 min-w-0" />
+
       {/* Right Section: Search, Notifications & Profile */}
-      <div className="flex items-center gap-1.5">
-        {/* Search Input */}
-        <div className="relative group">
+      <div className="flex items-center gap-1 md:gap-2 flex-shrink-0">
+        {/* Search Input - Hidden on mobile */}
+        <div className="relative group hidden lg:block flex-shrink-1">
           <MagnifyingGlassIcon className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-[#CE2029] dark:group-focus-within:text-[#FFD500] transition-colors" />
           <input 
             type="text" 
             placeholder="Search..." 
-            className="w-52 pl-11 pr-4 py-1.5 bg-white/50 dark:bg-navy-900/50 border border-gray-100 dark:border-navy-800 rounded-xl focus:outline-none focus:ring-4 focus:ring-[#FFD500]/10 focus:border-[#FFD500] dark:focus:border-[#FFD500]/50 focus:bg-white dark:focus:bg-navy-900 transition-all text-xs font-bold placeholder:text-gray-400 dark:text-zinc-100"
+            className="w-32 lg:w-52 pl-11 pr-4 py-1.5 bg-white/50 dark:bg-navy-900/50 border border-gray-100 dark:border-navy-800 rounded-xl focus:outline-none focus:ring-4 focus:ring-[#FFD500]/10 focus:border-[#FFD500] dark:focus:border-[#FFD500]/50 focus:bg-white dark:focus:bg-navy-900 transition-all text-xs font-bold placeholder:text-gray-400 dark:text-zinc-100"
           />
         </div>
 
         {/* Theme Toggle (Replaces Bell) */}
         <ThemeToggle />
 
-        <div className="h-5 w-[1px] bg-gray-200/50 dark:bg-navy-800 mx-0.5" />
+        <div className="h-5 w-[1px] bg-gray-200/50 dark:bg-navy-800 mx-1" />
 
         {/* User Profile & Logout */}
-        <div className="flex items-center gap-1.5">
-          <div className="w-8.5 h-8.5 rounded-xl overflow-hidden shadow-sm border border-orange-100 ring-2 ring-[#FFD500]/20">
+        <div className="flex items-center gap-1 flex-shrink-0">
+          <div className="w-7 h-7 md:w-8.5 md:h-8.5 rounded-xl overflow-hidden shadow-sm border border-orange-100 ring-2 ring-[#FFD500]/20 flex-shrink-0">
             {session?.user?.image ? (
               <img 
                 src={getNormalizedImageUrl(session.user.image)} 
@@ -72,7 +88,7 @@ export default function Header() {
                 referrerPolicy="no-referrer"
               />
             ) : (
-              <div className="w-full h-full bg-[#FFD500] flex items-center justify-center text-[#CE2029] font-black text-xs uppercase">
+              <div className="w-full h-full bg-[#FFD500] flex items-center justify-center text-[#CE2029] font-black text-[10px] md:text-xs uppercase">
                 {session?.user?.name?.substring(0, 2) || session?.user?.email?.substring(0, 2) || "UR"}
               </div>
             )}
@@ -80,10 +96,10 @@ export default function Header() {
 
           <button 
             onClick={() => signOut()}
-            className="p-1.5 text-gray-400 hover:text-[#CE2029] hover:bg-red-50 rounded-xl transition-all group"
+            className="p-1 text-gray-400 hover:text-[#CE2029] hover:bg-red-50 rounded-lg md:rounded-xl transition-all group"
             title="Sign Out"
           >
-            <ArrowRightOnRectangleIcon className="w-5.5 h-5.5 group-hover:translate-x-0.5 transition-transform" />
+            <ArrowRightOnRectangleIcon className="w-5 h-5 md:w-5.5 md:h-5.5 group-hover:translate-x-0.5 transition-transform" />
           </button>
         </div>
       </div>

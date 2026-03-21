@@ -1,3 +1,6 @@
+"use client";
+
+import { ReactNode, useState } from "react";
 import Sidebar from "@/components/Sidebar";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
@@ -6,18 +9,20 @@ import AccessGuard from "@/components/AccessGuard";
 export default function DashboardLayout({
   children,
 }: {
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
   return (
     <div style={{ background: 'var(--background)' }} className="min-h-screen flex overflow-hidden transition-all duration-500">
-      <Sidebar />
+      <Sidebar mobileOpen={isMobileMenuOpen} setMobileOpen={setIsMobileMenuOpen} />
 
-      <div className="flex-1 flex flex-col ml-16 peer-hover:ml-56 min-h-screen py-1.5 pr-1.5 transition-all duration-300 ease-in-out">
-        <div style={{ backgroundColor: 'var(--panel-bg)' }} className="flex-1 flex flex-col rounded-tl-[32px] rounded-bl-[32px] shadow-2xl overflow-hidden border-l border-y border-white/5 dark:border-white/10 transition-all duration-500 panel-transition">
-          <Header />
+      <div className={`flex-1 flex flex-col min-h-screen transition-all duration-300 ease-in-out ${isMobileMenuOpen ? 'ml-0' : 'ml-0 md:ml-16 md:peer-hover:ml-56'} p-2 md:p-0 md:py-1.5 md:pr-1.5 overflow-x-hidden`}>
+        <div style={{ backgroundColor: 'var(--panel-bg)' }} className="flex-1 flex flex-col rounded-[24px] md:rounded-none md:rounded-l-[32px] shadow-2xl overflow-hidden border border-white/5 dark:border-white/10 transition-all duration-500 panel-transition">
+          <Header onMenuClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} />
           
-          <main className="flex-1 p-4 overflow-y-auto">
-            <div className="max-w-none mx-auto">
+          <main className="flex-1 p-2 md:p-4 overflow-y-auto w-full min-w-0">
+            <div className="w-full max-w-full mx-auto">
               <AccessGuard>
                 {children}
               </AccessGuard>

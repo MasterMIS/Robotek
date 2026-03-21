@@ -298,48 +298,53 @@ export default function UsersPage() {
   return (
     <div className="space-y-4">
       {/* Standalone Title Row */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 px-1">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-1">
         <div>
-          <h1 className="text-2xl font-black text-gray-900 dark:text-white tracking-tight">Users</h1>
-          <p className="text-gray-500 dark:text-slate-300 font-bold text-[10px] uppercase tracking-wider">System Access Control</p>
+          <h1 className="text-xl md:text-2xl font-black text-gray-900 dark:text-white tracking-tight">Users</h1>
+          <p className="text-gray-500 dark:text-slate-300 font-bold text-[8px] md:text-[10px] uppercase tracking-wider">System Access Control</p>
         </div>
         
-        <div className="flex flex-wrap items-center">
+        <div className="flex flex-wrap items-center gap-2">
           {/* Single Cylinder Container for All Actions */}
-          <div className="flex items-center rounded-full border-2 border-b-4 border-[#003875] dark:border-[#FFD500] bg-white dark:bg-navy-800 shadow-sm transition-all active:translate-y-[2px] active:border-b-2 p-1">
+          <div className="flex items-center gap-1 rounded-full border-2 border-b-4 border-[#003875] dark:border-[#FFD500] bg-white dark:bg-navy-800 shadow-sm transition-all active:translate-y-[2px] active:border-b-2 p-1 overflow-x-auto no-scrollbar">
             {/* Tab: User List */}
             <button
               onClick={() => setActiveTab('list')}
-              className={`flex items-center gap-2 px-5 py-1.5 font-black uppercase tracking-widest text-[10px] transition-all rounded-full ${
+              className={`flex items-center gap-2 px-3 md:px-5 py-1.5 font-black uppercase tracking-widest text-[9px] md:text-[10px] transition-all rounded-full whitespace-nowrap ${
                 activeTab === 'list' 
                 ? 'bg-[#003875] dark:bg-[#FFD500] text-white dark:text-black shadow-md' 
                 : 'text-gray-400 dark:text-slate-500 hover:text-gray-600 dark:hover:text-slate-300'
               }`}
+              title="User List"
             >
               <UsersIcon className="w-4 h-4" />
-              User List
+              <span className="hidden sm:inline">User List</span>
+              <span className="sm:hidden">List</span>
             </button>
             
             {/* Tab: Page Visibility */}
             <button
               onClick={() => setActiveTab('visibility')}
-              className={`flex items-center gap-2 px-5 py-1.5 font-black uppercase tracking-widest text-[10px] transition-all rounded-full ${
+              className={`flex items-center gap-2 px-3 md:px-5 py-1.5 font-black uppercase tracking-widest text-[9px] md:text-[10px] transition-all rounded-full whitespace-nowrap ${
                 activeTab === 'visibility' 
                 ? 'bg-[#003875] dark:bg-[#FFD500] text-white dark:text-black shadow-md' 
                 : 'text-gray-400 dark:text-slate-500 hover:text-gray-600 dark:hover:text-slate-300'
               }`}
+              title="Page Visibility"
             >
               <EyeIcon className="w-4 h-4" />
-              Page Visibility
+              <span className="hidden sm:inline">Page Visibility</span>
+              <span className="sm:hidden">Access</span>
             </button>
 
             {/* Action: Export */}
             <button
               onClick={handleExport}
-              className="flex items-center justify-center gap-2 text-[#003875] dark:text-[#FFD500] px-5 py-1.5 font-black transition-colors hover:bg-gray-100 dark:hover:bg-navy-700 uppercase tracking-widest text-[10px] rounded-full"
+              className="flex items-center justify-center gap-2 text-[#003875] dark:text-[#FFD500] px-3 md:px-5 py-1.5 font-black transition-colors hover:bg-gray-100 dark:hover:bg-navy-700 uppercase tracking-widest text-[9px] md:text-[10px] rounded-full whitespace-nowrap"
+              title="Export to CSV"
             >
               <ArrowDownTrayIcon className="w-4 h-4" />
-              Export
+              <span className="hidden sm:inline">Export</span>
             </button>
             
             {/* Action: Add User */}
@@ -380,9 +385,9 @@ export default function UsersPage() {
             backgroundColor: 'var(--panel-card)',
             borderBottom: '1px solid var(--panel-border)'
           }}
-          className="p-3 flex flex-col md:flex-row md:items-center justify-between gap-4"
+          className="p-3 flex flex-col lg:flex-row lg:items-center justify-between gap-4"
         >
-          <div className="relative group flex-1 max-w-sm">
+          <div className="relative group flex-1 max-w-full lg:max-w-sm">
             <MagnifyingGlassIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-[#FFD500] transition-colors" />
             <input
               type="text"
@@ -393,16 +398,16 @@ export default function UsersPage() {
             />
           </div>
 
-          <div className="flex items-center gap-4">
+          <div className="flex flex-wrap items-center gap-3 md:gap-4">
             <div className="flex items-center gap-2">
-              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
+              <p className="text-[9px] md:text-[10px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">
                 Page <span className="text-[#003875] dark:text-[#FFD500]">{currentPage}</span> of {totalPages || 1}
               </p>
               <div className="flex gap-0.5">
                 <button 
                   onClick={() => setCurrentPage(1)}
                   disabled={currentPage === 1}
-                  className="px-2 py-1 text-[10px] font-bold text-gray-400 hover:text-black dark:hover:text-white hover:bg-white dark:hover:bg-white/5 disabled:opacity-30 rounded-md transition-all"
+                  className="px-1.5 py-1 text-[9px] md:text-[10px] font-bold text-gray-400 hover:text-black dark:hover:text-white hover:bg-white dark:hover:bg-white/5 disabled:opacity-30 rounded-md transition-all whitespace-nowrap"
                 >
                   First
                 </button>
@@ -411,34 +416,34 @@ export default function UsersPage() {
                   disabled={currentPage === 1}
                   className="p-1 text-gray-400 hover:text-black dark:hover:text-white hover:bg-white dark:hover:bg-white/5 disabled:opacity-30 rounded-md transition-all"
                 >
-                  <ChevronLeftIcon className="w-4 h-4" />
+                  <ChevronLeftIcon className="w-3.5 h-3.5" />
                 </button>
                 <button 
                   onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
                   disabled={currentPage === totalPages || totalPages === 0}
                   className="p-1 text-gray-400 hover:text-black dark:hover:text-white hover:bg-white dark:hover:bg-white/5 disabled:opacity-30 rounded-md transition-all"
                 >
-                  <ChevronRightIcon className="w-4 h-4" />
+                  <ChevronRightIcon className="w-3.5 h-3.5" />
                 </button>
                 <button 
                   onClick={() => setCurrentPage(totalPages)}
                   disabled={currentPage === totalPages || totalPages === 0}
-                  className="px-2 py-1 text-[10px] font-bold text-gray-400 hover:text-black dark:hover:text-white hover:bg-white dark:hover:bg-white/5 disabled:opacity-30 rounded-md transition-all"
+                  className="px-1.5 py-1 text-[9px] md:text-[10px] font-bold text-gray-400 hover:text-black dark:hover:text-white hover:bg-white dark:hover:bg-white/5 disabled:opacity-30 rounded-md transition-all whitespace-nowrap"
                 >
                   Last
                 </button>
               </div>
             </div>
-            <div className="h-4 w-[1px] bg-gray-200 dark:bg-white/10" />
+            <div className="hidden xs:block h-4 w-[1px] bg-gray-200 dark:bg-white/10" />
             <div className="flex items-center gap-2">
-              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Show</label>
+              <label className="text-[9px] md:text-[10px] font-black text-gray-400 uppercase tracking-widest">Show</label>
               <select 
                 value={itemsPerPage}
                 onChange={(e) => {
                   setItemsPerPage(Number(e.target.value));
                   setCurrentPage(1);
                 }}
-                className="bg-transparent border-none p-0 text-[10px] font-bold outline-none dark:text-white cursor-pointer"
+                className="bg-transparent border-none p-0 text-[9px] md:text-[10px] font-bold outline-none dark:text-white cursor-pointer"
               >
                 <option value={10}>10</option>
                 <option value={25}>25</option>
@@ -458,25 +463,25 @@ export default function UsersPage() {
               <tr 
                 className="bg-[#003875] dark:bg-navy-950 text-white dark:text-slate-200"
               >
-                <th onClick={() => handleSort('id')} className="px-4 py-3 text-[10px] font-black uppercase tracking-widest cursor-pointer hover:bg-white/5 transition-colors">
+                <th onClick={() => handleSort('id')} className="px-3 md:px-4 py-3 text-[9px] md:text-[10px] font-black uppercase tracking-widest cursor-pointer hover:bg-white/5 transition-colors hidden sm:table-cell">
                   <div className="flex items-center">ID <SortIcon column="id" /></div>
                 </th>
-                <th onClick={() => handleSort('username')} className="px-4 py-3 text-[10px] font-black uppercase tracking-widest cursor-pointer hover:bg-white/5 transition-colors">
+                <th onClick={() => handleSort('username')} className="px-3 md:px-4 py-3 text-[9px] md:text-[10px] font-black uppercase tracking-widest cursor-pointer hover:bg-white/5 transition-colors">
                   <div className="flex items-center">Details <SortIcon column="username" /></div>
                 </th>
-                <th onClick={() => handleSort('phone')} className="px-4 py-3 text-[10px] font-black uppercase tracking-widest cursor-pointer hover:bg-white/5 transition-colors">
+                <th onClick={() => handleSort('phone')} className="px-3 md:px-4 py-3 text-[9px] md:text-[10px] font-black uppercase tracking-widest cursor-pointer hover:bg-white/5 transition-colors hidden md:table-cell">
                   <div className="flex items-center">Contact <SortIcon column="phone" /></div>
                 </th>
-                <th onClick={() => handleSort('role_name')} className="px-4 py-3 text-[10px] font-black uppercase tracking-widest cursor-pointer hover:bg-white/5 transition-colors">
+                <th onClick={() => handleSort('role_name')} className="px-3 md:px-4 py-3 text-[9px] md:text-[10px] font-black uppercase tracking-widest cursor-pointer hover:bg-white/5 transition-colors">
                   <div className="flex items-center">Role <SortIcon column="role_name" /></div>
                 </th>
-                <th onClick={() => handleSort('dob')} className="px-4 py-3 text-[10px] font-black uppercase tracking-widest cursor-pointer hover:bg-white/5 transition-colors">
+                <th onClick={() => handleSort('dob')} className="px-3 md:px-4 py-3 text-[9px] md:text-[10px] font-black uppercase tracking-widest cursor-pointer hover:bg-white/5 transition-colors hidden lg:table-cell">
                   <div className="flex items-center">DOB <SortIcon column="dob" /></div>
                 </th>
-                <th onClick={() => handleSort('late_long')} className="px-4 py-3 text-[10px] font-black uppercase tracking-widest cursor-pointer hover:bg-white/5 transition-colors">
+                <th onClick={() => handleSort('late_long')} className="px-3 md:px-4 py-3 text-[9px] md:text-[10px] font-black uppercase tracking-widest cursor-pointer hover:bg-white/5 transition-colors hidden xl:table-cell">
                   <div className="flex items-center">Coordinates <SortIcon column="late_long" /></div>
                 </th>
-                <th className="px-4 py-3 text-[10px] font-black uppercase tracking-widest text-right">Actions</th>
+                <th className="px-3 md:px-4 py-3 text-[9px] md:text-[10px] font-black uppercase tracking-widest text-right">Actions</th>
               </tr>
             </thead>
           <tbody className="divide-y divide-orange-50/30">
@@ -496,12 +501,12 @@ export default function UsersPage() {
             ) : (
               paginatedUsers.map((user) => (
                 <tr key={user.id} className="hover:bg-orange-50/10 border-b-2 border-gray-200 dark:border-white/10 last:border-0 transition-colors group">
-                  <td className="px-4 py-3">
-                    <span className="font-mono text-xs text-gray-400 font-bold">{user.id}</span>
+                  <td className="px-3 md:px-4 py-3 hidden sm:table-cell">
+                    <span className="font-mono text-[10px] md:text-xs text-gray-400 font-bold">{user.id}</span>
                   </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-lg bg-gray-50 dark:bg-zinc-800 overflow-hidden border border-gray-100 dark:border-zinc-700 flex-shrink-0">
+                  <td className="px-3 md:px-4 py-3">
+                    <div className="flex items-center gap-2 md:gap-3">
+                      <div className="w-7 h-7 md:w-8 md:h-8 rounded-lg bg-gray-50 dark:bg-zinc-800 overflow-hidden border border-gray-100 dark:border-zinc-700 flex-shrink-0">
                         {user.image_url ? (
                           <img 
                             src={getNormalizedImageUrl(user.image_url)} 
@@ -513,32 +518,32 @@ export default function UsersPage() {
                             }}
                           />
                         ) : (
-                          <div className="w-full h-full flex items-center justify-center font-black text-gray-400 dark:text-zinc-500 text-xs">
+                          <div className="w-full h-full flex items-center justify-center font-black text-gray-400 dark:text-zinc-500 text-[10px]">
                             {user.username?.substring(0, 2).toUpperCase()}
                           </div>
                         )}
                       </div>
-                      <div>
-                        <p className="font-black text-xs text-gray-900 dark:text-white leading-tight">{user.username}</p>
-                        <p className="text-[10px] text-gray-400 dark:text-slate-400 font-bold lowercase truncate max-w-[120px]">{user.email}</p>
+                      <div className="min-w-0">
+                        <p className="font-black text-[11px] md:text-xs text-gray-900 dark:text-white leading-tight truncate">{user.username}</p>
+                        <p className="text-[9px] md:text-[10px] text-gray-400 dark:text-slate-400 font-bold lowercase truncate max-w-[80px] md:max-w-[120px]">{user.email}</p>
                       </div>
                     </div>
                   </td>
-                  <td className="px-4 py-3">
-                    <p className="text-xs font-bold text-gray-600 dark:text-slate-300">{user.phone || "—"}</p>
+                  <td className="px-3 md:px-4 py-3 hidden md:table-cell">
+                    <p className="text-[11px] md:text-xs font-bold text-gray-600 dark:text-slate-300">{user.phone || "—"}</p>
                   </td>
-                  <td className="px-4 py-3">
-                    <span className="inline-flex items-center px-2 py-0.5 bg-orange-50 dark:bg-[#FFD500]/10 text-[#CE2029] dark:text-[#FFD500] text-[10px] font-black uppercase tracking-widest rounded-md border border-orange-100 dark:border-[#FFD500]/20">
+                  <td className="px-3 md:px-4 py-3">
+                    <span className="inline-flex items-center px-1.5 md:px-2 py-0.5 bg-orange-50 dark:bg-[#FFD500]/10 text-[#CE2029] dark:text-[#FFD500] text-[8px] md:text-[10px] font-black uppercase tracking-widest rounded-md border border-orange-100 dark:border-[#FFD500]/20">
                       {user.role_name || "MEMBER"}
                     </span>
                   </td>
-                  <td className="px-4 py-3">
-                    <p className="text-xs font-bold text-gray-600 dark:text-slate-300">{user.dob || "—"}</p>
+                  <td className="px-3 md:px-4 py-3 hidden lg:table-cell">
+                    <p className="text-[11px] md:text-xs font-bold text-gray-600 dark:text-slate-300">{user.dob || "—"}</p>
                   </td>
-                  <td className="px-4 py-3">
-                    <p className="text-xs font-bold text-gray-400 dark:text-slate-500 font-mono italic">{user.late_long || "—"}</p>
+                  <td className="px-3 md:px-4 py-3 hidden xl:table-cell">
+                    <p className="text-[11px] md:text-xs font-bold text-gray-400 dark:text-slate-500 font-mono italic">{user.late_long || "—"}</p>
                   </td>
-                  <td className="px-4 py-2 text-right">
+                  <td className="px-3 md:px-4 py-2 text-right">
                     <div className="flex items-center justify-end gap-1">
                       <button
                         onClick={() => handleEdit(user)}
@@ -573,9 +578,9 @@ export default function UsersPage() {
             <table className="w-full text-left border-collapse table-auto">
               <thead>
                 <tr className="bg-[#003875] dark:bg-navy-950 text-white dark:text-slate-200">
-                  <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest border-r border-white/10 w-64">User Name</th>
+                  <th className="px-3 md:px-6 py-3 md:py-4 text-[9px] md:text-[10px] font-black uppercase tracking-widest border-r border-white/10 w-40 md:w-64 sticky left-0 bg-[#003875] dark:bg-navy-950 z-10">User Name</th>
                   {navigation.map(page => (
-                    <th key={page.id} className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-center">
+                    <th key={page.id} className="px-3 md:px-6 py-3 md:py-4 text-[9px] md:text-[10px] font-black uppercase tracking-widest text-center whitespace-nowrap">
                       {page.name}
                     </th>
                   ))}
@@ -584,9 +589,9 @@ export default function UsersPage() {
               <tbody className="divide-y divide-gray-200 dark:divide-white/10">
                 {users.map(user => (
                   <tr key={user.id} className="hover:bg-orange-50/10 transition-colors group">
-                    <td className="px-6 py-4 border-r border-gray-200 dark:border-white/10">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-lg bg-gray-50 dark:bg-zinc-800 overflow-hidden border border-gray-100 dark:border-zinc-700 flex-shrink-0">
+                    <td className="px-3 md:px-6 py-3 md:py-4 border-r border-gray-200 dark:border-white/10 sticky left-0 bg-white dark:bg-[#131C2E] z-10">
+                      <div className="flex items-center gap-2 md:gap-3">
+                        <div className="w-7 h-7 md:w-8 md:h-8 rounded-lg bg-gray-50 dark:bg-zinc-800 overflow-hidden border border-gray-100 dark:border-zinc-700 flex-shrink-0">
                           {user.image_url ? (
                             <img 
                               src={getNormalizedImageUrl(user.image_url)} 
@@ -595,14 +600,14 @@ export default function UsersPage() {
                               referrerPolicy="no-referrer"
                             />
                           ) : (
-                            <div className="w-full h-full flex items-center justify-center font-black text-gray-400 dark:text-zinc-500 text-xs">
+                            <div className="w-full h-full flex items-center justify-center font-black text-gray-400 dark:text-zinc-500 text-[10px]">
                               {user.username?.substring(0, 2).toUpperCase()}
                             </div>
                           )}
                         </div>
-                        <div>
-                          <p className="font-black text-sm text-gray-900 dark:text-white leading-tight">{user.username}</p>
-                          <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">{user.role_name || "MEMBER"}</p>
+                        <div className="min-w-0">
+                          <p className="font-black text-[11px] md:text-sm text-gray-900 dark:text-white leading-tight truncate">{user.username}</p>
+                          <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider truncate">{user.role_name || "MEMBER"}</p>
                         </div>
                       </div>
                     </td>

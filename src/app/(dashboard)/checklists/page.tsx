@@ -24,7 +24,28 @@ import {
   TagIcon,
   CalendarDaysIcon,
   ArrowPathIcon,
-  UserIcon
+  UserIcon,
+  CurrencyDollarIcon,
+  WrenchScrewdriverIcon,
+  BuildingOfficeIcon,
+  ShoppingBagIcon,
+  ScaleIcon,
+  FunnelIcon,
+  WalletIcon,
+  InboxIcon,
+  BriefcaseIcon,
+  LightBulbIcon,
+  Cog6ToothIcon,
+  UserGroupIcon,
+  LifebuoyIcon,
+  ArrowTopRightOnSquareIcon,
+  DocumentTextIcon,
+  PlayIcon,
+  MicrophoneIcon,
+  PaperClipIcon,
+  SparklesIcon as SparklesIconOutline,
+  Squares2X2Icon,
+  ListBulletIcon
 } from "@heroicons/react/24/outline";
 import PremiumDatePicker from "@/components/PremiumDatePicker";
 import ActionStatusModal from "@/components/ActionStatusModal";
@@ -34,6 +55,7 @@ import { User } from "@/types/user";
 
 export default function ChecklistsPage() {
   const { data: session } = useSession();
+  const userRole = (session?.user as any)?.role || "USER";
   const [checklists, setChecklists] = useState<Checklist[]>([]);
   const [usersList, setUsersList] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -43,10 +65,11 @@ export default function ChecklistsPage() {
   const [sortConfig, setSortConfig] = useState<{ key: keyof Checklist; direction: 'asc' | 'desc' } | null>({ key: 'id', direction: 'desc' });
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [viewMode, setViewMode] = useState<'list' | 'tile'>('list');
 
   // Filters
-  const [activeStatusFilter, setActiveStatusFilter] = useState("All");
-  const [dateFilter, setDateFilter] = useState<'All' | 'Delayed' | 'Today' | 'Tomorrow' | 'Next3'>('All');
+  const [activeStatusFilters, setActiveStatusFilters] = useState<string[]>([]);
+  const [dateFilters, setDateFilters] = useState<string[]>([]);
   const [assignmentFilter, setAssignmentFilter] = useState<'All' | 'ToMe' | 'ByMe'>('All');
 
   const [formData, setFormData] = useState<Partial<Checklist>>({
@@ -57,7 +80,6 @@ export default function ChecklistsPage() {
     priority: "Medium",
     department: "",
     verification_required: "No",
-    verifier_name: "",
     attachment_required: "No",
     frequency: "Daily",
     due_date: "",
@@ -87,10 +109,119 @@ export default function ChecklistsPage() {
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
 
+  // Follow Up Sidebar States
+  const [selectedTask, setSelectedTask] = useState<Checklist | null>(null);
+  const [taskHistory, setTaskHistory] = useState<any[]>([]);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+  const [updatingStatus, setUpdatingStatus] = useState("");
+  const [remarkText, setRemarkText] = useState("");
+  const [isSubmittingUpdate, setIsSubmittingUpdate] = useState(false);
+  const [revisionReason, setRevisionReason] = useState("");
+  const [evidenceFile, setEvidenceFile] = useState<File | null>(null);
+  const [revisedDueDate, setRevisedDueDate] = useState("");
+  const [pendingDeleteGroupId, setPendingDeleteGroupId] = useState<string | null>(null);
+
   useEffect(() => {
     fetchChecklists();
     fetchUsers();
   }, []);
+
+  useEffect(() => {
+    if (selectedTask) {
+      fetchHistory(selectedTask.id);
+    } else {
+      setTaskHistory([]);
+      setUpdatingStatus("");
+      setRemarkText("");
+      setRevisionReason("");
+      setEvidenceFile(null);
+      setRevisedDueDate("");
+    }
+  }, [selectedTask]);
+
+  const fetchHistory = async (id: string) => {
+    setIsLoadingHistory(true);
+    try {
+      const res = await fetch(`/api/checklists/${id}/history`);
+      if (res.ok) {
+        const data = await res.json();
+        setTaskHistory(data);
+      }
+    } catch (error) {
+      console.error("Failed to fetch history:", error);
+    } finally {
+      setIsLoadingHistory(false);
+    }
+  };
+
+  const handleUpdateStatus = async () => {
+    if (!selectedTask || !updatingStatus) return;
+
+    // Validation: Compulsory evidence if required
+    if (updatingStatus === 'Completed' && selectedTask.attachment_required === 'Yes' && !evidenceFile) {
+      alert("Attachment is required for this checklist item when marking as Completed.");
+      return;
+    }
+    
+    setIsSubmittingUpdate(true);
+    try {
+      const formDataToSend = new FormData();
+      formDataToSend.append("status", updatingStatus);
+      formDataToSend.append("reason", revisionReason);
+      formDataToSend.append("revised_due_date", revisedDueDate);
+      if (evidenceFile) {
+        formDataToSend.append("evidence", evidenceFile);
+      }
+
+      const res = await fetch(`/api/checklists/${selectedTask.id}/status`, {
+        method: "POST",
+        body: formDataToSend,
+      });
+
+      if (res.ok) {
+        setUpdatingStatus("");
+        setRevisionReason("");
+        setEvidenceFile(null);
+        setRevisedDueDate("");
+        fetchHistory(selectedTask.id);
+        fetchChecklists(); // Refresh main list
+      } else {
+        const err = await res.json();
+        alert(err.error || "Failed to update status");
+      }
+    } catch (error) {
+      console.error("Error updating status:", error);
+      alert("An error occurred while updating status");
+    } finally {
+      setIsSubmittingUpdate(false);
+    }
+  };
+
+  const handleAddRemark = async () => {
+    if (!selectedTask || !remarkText.trim()) return;
+
+    setIsSubmittingUpdate(true);
+    try {
+      const res = await fetch(`/api/checklists/${selectedTask.id}/remarks`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ remark: remarkText }),
+      });
+
+      if (res.ok) {
+        setRemarkText("");
+        fetchHistory(selectedTask.id);
+      } else {
+        const err = await res.json();
+        alert(err.error || "Failed to add remark");
+      }
+    } catch (error) {
+      console.error("Error adding remark:", error);
+      alert("An error occurred while adding remark");
+    } finally {
+      setIsSubmittingUpdate(false);
+    }
+  };
 
   const fetchUsers = async () => {
     try {
@@ -129,7 +260,6 @@ export default function ChecklistsPage() {
       priority: "Medium",
       department: "",
       verification_required: "No",
-      verifier_name: "",
       attachment_required: "No",
       frequency: "Daily",
       due_date: "",
@@ -148,37 +278,100 @@ export default function ChecklistsPage() {
     e.preventDefault();
     
     setActionStatus('loading');
-    setActionMessage(editingItem ? "Updating checklist item..." : "Creating new checklist item...");
+    setActionMessage(editingItem ? "Updating checklist item..." : "Creating new checklist items...");
     setIsStatusModalOpen(true);
 
-    const method = editingItem ? "PUT" : "POST";
-    const url = editingItem ? `/api/checklists/${editingItem.id}` : "/api/checklists";
-
-    const now = new Date().toISOString();
-    const payload = {
-      ...formData,
-      created_at: editingItem ? formData.created_at : now,
-      updated_at: now,
-    };
+    const now = new Date();
+    const nowIso = now.toISOString();
 
     try {
-      const res = await fetch(url, {
-        method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
+      if (editingItem) {
+        // Handle group-wise update if groupId exists
+        const url = formData.group_id 
+          ? `/api/checklists/${editingItem.id}?groupId=${formData.group_id}`
+          : `/api/checklists/${editingItem.id}`;
+        
+        // Format due_date as ISO if it's a simple date
+        let finalDueDate = formData.due_date || "";
+        if (finalDueDate && /^\d{4}-\d{2}-\d{2}$/.test(finalDueDate)) {
+          const d = new Date(finalDueDate);
+          // Preserve current hours/mins if possible, or use current time
+          d.setHours(now.getHours(), now.getMinutes(), now.getSeconds(), now.getMilliseconds());
+          finalDueDate = d.toISOString();
+        }
 
-      if (res.ok) {
-        setIsStatusModalOpen(false);
-        setIsModalOpen(false);
-        resetForm();
-        fetchChecklists();
+        const payload = {
+          ...formData,
+          due_date: finalDueDate,
+          // Submit "Weekly" only for weekly frequency
+          frequency: formData.frequency?.startsWith('Weekly') ? 'Weekly' : formData.frequency,
+          updated_at: nowIso,
+        };
+
+        const res = await fetch(url, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+
+        if (!res.ok) {
+          const errorData = await res.json().catch(() => ({}));
+          throw new Error(errorData.error || "Failed to update checklist");
+        }
       } else {
-        throw new Error("Failed to save checklist");
+        // Handle creation (potentially multiple rows)
+        const selectedDates = formData.due_date?.split(',').map(d => d.trim()).filter(Boolean) || [];
+        const datesToSubmit = selectedDates.length > 0 ? selectedDates : [""];
+        
+        // Calculate starting ID - fetch latest from state to be sure
+        let currentMaxId = checklists.length > 0 
+          ? Math.max(...checklists.map(c => parseInt(c.id) || 0)) 
+          : 0;
+
+        for (let i = 0; i < datesToSubmit.length; i++) {
+          const dateStr = datesToSubmit[i];
+          const nextId = ++currentMaxId;
+          // Generate a unique group_id for each row as requested ("Group id will be different only")
+          const groupId = `GR-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
+
+          let finalDueDate = dateStr;
+          if (dateStr && /^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+            const d = new Date(dateStr);
+            d.setHours(now.getHours(), now.getMinutes(), now.getSeconds(), now.getMilliseconds());
+            finalDueDate = d.toISOString();
+          }
+
+          const payload = {
+            ...formData,
+            id: nextId.toString(),
+            group_id: groupId,
+            due_date: finalDueDate,
+            // Submit "Weekly" only for weekly frequency
+            frequency: formData.frequency?.startsWith('Weekly') ? 'Weekly' : formData.frequency,
+            created_at: nowIso,
+            updated_at: nowIso,
+          };
+
+          const res = await fetch("/api/checklists", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
+
+          if (!res.ok) {
+            const errorData = await res.json().catch(() => ({}));
+            throw new Error(errorData.error || `Failed to create checklist item ${i + 1}`);
+          }
+        }
       }
-    } catch (error) {
+
       setIsStatusModalOpen(false);
-      alert("Something went wrong while saving. Please try again.");
+      setIsModalOpen(false);
+      resetForm();
+      fetchChecklists();
+    } catch (error: any) {
+      setIsStatusModalOpen(false);
+      alert(error.message || "Something went wrong while saving. Please try again.");
     }
   };
 
@@ -195,6 +388,10 @@ export default function ChecklistsPage() {
     if (!dateStr) return "";
     return dateStr.split(',').map(ds => {
       const s = ds.trim();
+      // Handle ISO strings (e.g., 2026-03-24T14:30:00.000Z)
+      if (s.includes('T')) {
+        return s.split('T')[0];
+      }
       if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
       const parts = s.split("/");
       if (parts.length === 3) {
@@ -257,14 +454,21 @@ export default function ChecklistsPage() {
     if (!dateStr) return "";
     const dates = dateStr.split(',').map(d => d.trim()).filter(Boolean);
     
-    // Parse all dates as local dates to avoid offsets
     const formattedDates = dates.map(d => {
+      // Handle ISO strings
+      if (d.includes('T')) {
+        const date = new Date(d);
+        return isNaN(date.getTime()) ? d : date.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
+      }
+
+      // Handle YYYY-MM-DD
       if (d.includes('-') && d.split('-').length === 3) {
         const [y, m, day] = d.split('-').map(Number);
         if (!isNaN(y) && !isNaN(m) && !isNaN(day)) {
           return new Date(y, m - 1, day).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
         }
       }
+      
       const date = new Date(d);
       return isNaN(date.getTime()) ? d : date.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
     });
@@ -273,10 +477,10 @@ export default function ChecklistsPage() {
   };
 
   const handleExport = () => {
-    const headers = ["ID", "Task", "Assigned By", "Assigned To", "Priority", "Department", "Verification", "Verifier", "Attachment", "Frequency", "Due Date", "Status", "Group ID"];
+    const headers = ["ID", "Task", "Assigned By", "Assigned To", "Priority", "Department", "Verification", "Attachment", "Frequency", "Due Date", "Status", "Group ID"];
     const rows = sortedChecklists.map(c => [
       c.id, c.task, c.assigned_by, c.assigned_to, c.priority, c.department,
-      c.verification_required, c.verifier_name, c.attachment_required,
+      c.verification_required, c.attachment_required,
       c.frequency, c.due_date, c.status, c.group_id
     ]);
 
@@ -296,8 +500,9 @@ export default function ChecklistsPage() {
     document.body.removeChild(link);
   };
 
-  const handleDeleteClick = (id: string) => {
-    setPendingDeleteId(id);
+  const handleDeleteClick = (item: Checklist) => {
+    setPendingDeleteId(item.id);
+    setPendingDeleteGroupId(item.group_id);
     setIsConfirmOpen(true);
   };
 
@@ -305,11 +510,16 @@ export default function ChecklistsPage() {
     if (!pendingDeleteId) return;
 
     setActionStatus('loading');
-    setActionMessage("Removing checklist item...");
+    setActionMessage("Removing checklist group...");
     setIsStatusModalOpen(true);
 
     try {
-      const res = await fetch(`/api/checklists/${pendingDeleteId}`, { method: "DELETE" });
+      // Use groupId for deletion if available
+      const url = pendingDeleteGroupId 
+        ? `/api/checklists/${pendingDeleteId}?groupId=${pendingDeleteGroupId}`
+        : `/api/checklists/${pendingDeleteId}`;
+
+      const res = await fetch(url, { method: "DELETE" });
       if (res.ok) {
         setIsStatusModalOpen(false);
         fetchChecklists();
@@ -318,9 +528,10 @@ export default function ChecklistsPage() {
       }
     } catch (error) {
       setIsStatusModalOpen(false);
-      alert("Failed to delete checklist item. Please try again.");
+      alert("Failed to delete checklist. Please try again.");
     } finally {
       setPendingDeleteId(null);
+      setPendingDeleteGroupId(null);
     }
   };
 
@@ -355,7 +566,7 @@ export default function ChecklistsPage() {
       val?.toString().toLowerCase().includes(searchTerm.toLowerCase())
     );
     
-    const matchesStatus = activeStatusFilter === "All" || getDisplayStatus(c) === activeStatusFilter;
+    const matchesStatus = activeStatusFilters.length === 0 || activeStatusFilters.includes(getDisplayStatus(c));
     
     const currentUser = (session?.user as any)?.username || "";
     let matchesAssignment = true;
@@ -363,7 +574,7 @@ export default function ChecklistsPage() {
     else if (assignmentFilter === 'ByMe') matchesAssignment = c.assigned_by === currentUser;
 
     let matchesDate = true;
-    if (dateFilter !== 'All') {
+    if (dateFilters.length > 0) {
       const displayStatus = getDisplayStatus(c);
       if (!c.due_date || displayStatus === 'Completed' || displayStatus === 'Approved') {
         matchesDate = false;
@@ -374,10 +585,14 @@ export default function ChecklistsPage() {
         if (due) {
           due.setHours(0, 0, 0, 0);
           const diffDays = Math.round((due.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-          if (dateFilter === 'Delayed') matchesDate = diffDays < 0;
-          if (dateFilter === 'Today') matchesDate = diffDays === 0;
-          if (dateFilter === 'Tomorrow') matchesDate = diffDays === 1;
-          if (dateFilter === 'Next3') matchesDate = diffDays > 0 && diffDays <= 3;
+          
+          matchesDate = dateFilters.some(f => {
+            if (f === 'Delayed') return diffDays < 0;
+            if (f === 'Today') return diffDays === 0;
+            if (f === 'Tomorrow') return diffDays === 1;
+            if (f === 'Next3') return diffDays > 0 && diffDays <= 3;
+            return false;
+          });
         } else {
           matchesDate = false;
         }
@@ -440,11 +655,22 @@ export default function ChecklistsPage() {
   const getPriorityBadge = (priority: string) => {
     const p = priority?.toLowerCase();
     let color = "bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-800";
-    if (p === 'high') color = "bg-red-50 text-red-600 border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800";
-    else if (p === 'low') color = "bg-green-50 text-green-600 border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-800";
-    else if (p === 'medium') color = "bg-amber-50 text-amber-600 border-amber-200 dark:bg-amber-900/20 dark:text-amber-400 dark:border-amber-800";
+    let Icon = TagIcon;
+    
+    if (p === 'high') {
+      color = "bg-red-50 text-red-600 border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800";
+      Icon = ExclamationTriangleIcon;
+    } else if (p === 'low') {
+      color = "bg-green-50 text-green-600 border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-800";
+      Icon = ChevronDownIcon;
+    } else if (p === 'medium') {
+      color = "bg-amber-50 text-amber-600 border-amber-200 dark:bg-amber-900/20 dark:text-amber-400 dark:border-amber-800";
+      Icon = ChevronUpIcon;
+    }
+    
     return (
       <span className={`inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-black uppercase tracking-widest rounded-md border ${color}`}>
+        <Icon className="w-3 h-3" />
         {priority || "Normal"}
       </span>
     );
@@ -453,16 +679,48 @@ export default function ChecklistsPage() {
   const getStatusBadge = (status: string) => {
     const s = status?.toLowerCase();
     let color = "bg-gray-50 text-gray-600 border-gray-200 dark:bg-gray-800 dark:text-gray-400 dark:border-gray-700";
-    if (s === 'completed') color = "bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-400 dark:border-emerald-800";
-    else if (s === 'approved') color = "bg-green-50 text-green-600 border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-800";
-    else if (s === 'hold') color = "bg-amber-50 text-amber-600 border-amber-200 dark:bg-amber-900/20 dark:text-amber-400 dark:border-amber-800";
-    else if (s === 're-open') color = "bg-violet-50 text-violet-600 border-violet-200 dark:bg-violet-900/20 dark:text-violet-400 dark:border-violet-800";
-    else if (s === 'overdue') color = "bg-red-50 text-red-600 border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800";
-    else if (s === 'planned') color = "bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-800";
-    else if (s === 'need revision') color = "bg-rose-50 text-rose-600 border-rose-200 dark:bg-rose-900/20 dark:text-rose-400 dark:border-rose-800";
+    let Icon = ClockIcon;
+
+    if (s === 'completed') {
+      color = "bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-400 dark:border-emerald-800";
+      Icon = CheckCircleIcon;
+    } else if (s === 'approved') {
+      color = "bg-green-50 text-green-600 border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-800";
+      Icon = ShieldCheckIcon;
+    } else if (s === 'overdue') {
+      color = "bg-red-50 text-red-600 border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800";
+      Icon = ExclamationTriangleIcon;
+    } else if (s === 'planned') {
+      color = "bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-800";
+      Icon = CalendarDaysIcon;
+    }
+    
     return (
       <span className={`inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-black uppercase tracking-widest rounded-md border ${color}`}>
+        <Icon className="w-3 h-3" />
         {status || "Pending"}
+      </span>
+    );
+  };
+
+  const getDeptBadge = (dept: string) => {
+    const d = dept?.toLowerCase();
+    let Icon = BuildingOfficeIcon;
+    
+    if (d?.includes('sales')) Icon = CurrencyDollarIcon;
+    else if (d?.includes('marketing')) Icon = ShoppingBagIcon;
+    else if (d?.includes('engineering')) Icon = WrenchScrewdriverIcon;
+    else if (d?.includes('operations')) Icon = Cog6ToothIcon;
+    else if (d?.includes('hr')) Icon = UserGroupIcon;
+    else if (d?.includes('finance')) Icon = WalletIcon;
+    else if (d?.includes('support')) Icon = LifebuoyIcon;
+    else if (d?.includes('management')) Icon = BriefcaseIcon;
+    else if (d?.includes('idea')) Icon = LightBulbIcon;
+    
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-slate-50 text-slate-600 border border-slate-200 dark:bg-slate-900/40 dark:text-slate-400 dark:border-slate-800 text-[10px] font-black uppercase tracking-widest rounded-md">
+        <Icon className="w-3 h-3" />
+        {dept || "General"}
       </span>
     );
   };
@@ -472,27 +730,50 @@ export default function ChecklistsPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 px-1">
+      {/* Responsive Title Row */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-1">
         <div>
-          <h1 className="text-2xl font-black text-gray-900 dark:text-white tracking-tight">Checklists</h1>
-          <p className="text-gray-500 dark:text-slate-300 font-bold text-[10px] uppercase tracking-wider">Task Verification System</p>
+          <h1 className="text-xl md:text-2xl font-black text-gray-900 dark:text-white tracking-tight">Checklists</h1>
+          <p className="text-gray-500 dark:text-slate-300 font-bold text-[8px] md:text-[10px] uppercase tracking-wider">Task Verification System</p>
         </div>
         
-        <div className="flex items-center rounded-full border-2 border-b-4 border-[#003875] dark:border-[#FFD500] bg-white dark:bg-navy-800 shadow-sm transition-all active:translate-y-[2px] active:border-b-2 p-1">
+        <div className="flex items-center gap-1.5 rounded-full border-2 border-b-4 border-[#003875] dark:border-[#FFD500] bg-white dark:bg-navy-800 shadow-sm transition-all active:translate-y-[2px] active:border-b-2 p-1 w-fit">
+          {/* View Toggle */}
+          <div className="flex items-center bg-gray-50 dark:bg-navy-900 rounded-full p-0.5 border border-gray-100 dark:border-navy-700">
+            <button
+              onClick={() => setViewMode('list')}
+              className={`p-1.5 rounded-full transition-all ${viewMode === 'list' ? 'bg-[#003875] text-white shadow-sm' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}`}
+              title="List View"
+            >
+              <ListBulletIcon className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => setViewMode('tile')}
+              className={`p-1.5 rounded-full transition-all ${viewMode === 'tile' ? 'bg-[#003875] text-white shadow-sm' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}`}
+              title="Tile View"
+            >
+              <Squares2X2Icon className="w-4 h-4" />
+            </button>
+          </div>
+
+          <div className="h-4 w-[1px] bg-gray-100 dark:bg-white/10" />
+
           <button
             onClick={handleExport}
-            className="flex items-center justify-center gap-2 text-[#003875] dark:text-[#FFD500] px-5 py-1.5 font-black transition-colors hover:bg-gray-100 dark:hover:bg-navy-700 uppercase tracking-widest text-[10px] rounded-full"
+            className="flex items-center justify-center gap-2 text-[#003875] dark:text-[#FFD500] px-3 md:px-5 py-2 font-black transition-colors hover:bg-gray-100 dark:hover:bg-navy-700 uppercase tracking-widest text-[9px] md:text-[10px] rounded-full whitespace-nowrap"
+            title="Export to CSV"
           >
             <ArrowDownTrayIcon className="w-4 h-4" />
-            Export
+            <span className="hidden sm:inline">Export</span>
           </button>
-          
+
+          <div className="h-4 w-[1px] bg-gray-100 dark:bg-white/10" />
+
           <button
             onClick={() => {
-              resetForm();
               setIsModalOpen(true);
             }}
-            className="flex items-center justify-center hover:bg-gray-100 dark:hover:bg-navy-700 text-[#003875] dark:text-[#FFD500] px-3 py-1.5 transition-colors rounded-full"
+            className="flex items-center justify-center hover:bg-gray-100 dark:hover:bg-navy-700 text-[#003875] dark:text-[#FFD500] px-3 py-2 transition-colors rounded-full"
             title="New Checklist"
           >
             <PlusIcon className="w-5 h-5" />
@@ -504,31 +785,33 @@ export default function ChecklistsPage() {
         style={{ borderColor: 'var(--panel-border)' }}
         className="rounded-2xl border overflow-hidden shadow-sm transition-all duration-500"
       >
-        {/* Status Filtration Tiles */}
-        <div className="flex flex-wrap gap-2 p-3 bg-gray-50/50 dark:bg-navy-900/30 border-b border-gray-100 dark:border-navy-700/50">
+        {/* Status Filtration Tiles - Single row scrollable on mobile */}
+        <div className="flex flex-nowrap overflow-x-auto no-scrollbar gap-2 p-3 bg-gray-50/50 dark:bg-navy-900/30 border-b border-gray-100 dark:border-navy-700/50">
           {[
             { label: 'All', icon: <TagIcon className="w-3 h-3" />, color: 'bg-white text-gray-700 border-gray-300 dark:bg-navy-800 dark:text-gray-300 dark:border-navy-600' },
             { label: 'Pending', icon: <ClockIcon className="w-3 h-3" />, color: 'bg-gray-50 text-gray-600 border-gray-300 dark:bg-gray-800 dark:text-gray-400 dark:border-gray-600' },
             { label: 'Planned', icon: <CalendarDaysIcon className="w-3 h-3" />, color: 'bg-blue-50 text-blue-600 border-blue-300 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-700' },
-            { label: 'Need Revision', icon: <ArrowPathIcon className="w-3 h-3" />, color: 'bg-rose-50 text-rose-600 border-rose-300 dark:bg-rose-900/30 dark:text-rose-400 dark:border-rose-700' },
             { label: 'Completed', icon: <CheckCircleIcon className="w-3 h-3" />, color: 'bg-emerald-50 text-emerald-600 border-emerald-300 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-700' },
             { label: 'Approved', icon: <ShieldCheckIcon className="w-3 h-3" />, color: 'bg-green-50 text-green-600 border-green-300 dark:bg-green-900/30 dark:text-green-400 dark:border-green-700' },
-            { label: 'Hold', icon: <PauseIcon className="w-3 h-3" />, color: 'bg-amber-50 text-amber-600 border-amber-300 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-700' },
-            { label: 'Re-Open', icon: <BoltIcon className="w-3 h-3" />, color: 'bg-violet-50 text-violet-600 border-violet-300 dark:bg-violet-900/30 dark:text-violet-400 dark:border-violet-700' },
             { label: 'Overdue', icon: <ExclamationTriangleIcon className="w-3 h-3" />, color: 'bg-red-50 text-red-600 border-red-300 dark:bg-red-900/30 dark:text-red-400 dark:border-red-700' },
           ].map(tile => {
             const count = tile.label === 'All' ? checklists.length : checklists.filter(c => getDisplayStatus(c) === tile.label).length;
-            const isActive = activeStatusFilter === tile.label;
+            const isActive = tile.label === 'All' ? activeStatusFilters.length === 0 : activeStatusFilters.includes(tile.label);
             return (
               <button
                 key={tile.label}
                 onClick={() => {
                   if (tile.label === 'All') {
-                    setDateFilter('All');
+                    setActiveStatusFilters([]);
+                    setDateFilters([]);
                     setAssignmentFilter('All');
                     setSearchTerm('');
+                  } else {
+                    const newFilters = activeStatusFilters.includes(tile.label)
+                      ? activeStatusFilters.filter(f => f !== tile.label)
+                      : [...activeStatusFilters, tile.label];
+                    setActiveStatusFilters(newFilters);
                   }
-                  setActiveStatusFilter(tile.label);
                   setCurrentPage(1);
                 }}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-[10px] font-black uppercase tracking-widest transition-all ${
@@ -550,68 +833,77 @@ export default function ChecklistsPage() {
         </div>
 
         {/* Controls Bar */}
+        {/* Controls Bar */}
         <div 
           style={{ backgroundColor: 'var(--panel-card)', borderBottom: '1px solid var(--panel-border)' }}
-          className="p-3 flex flex-col xl:flex-row xl:items-center justify-between gap-4"
+          className="p-3 flex flex-col lg:flex-row lg:items-center justify-between gap-3"
         >
-          <div className="flex flex-wrap items-center gap-3 flex-1 w-full max-w-full overflow-hidden">
-            <div className="relative group flex-1 min-w-[150px] max-w-[220px]">
-              <MagnifyingGlassIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-[#FFD500] transition-colors" />
-              <input
-                type="text"
-                placeholder="Search checklists..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-1.5 bg-gray-50 dark:bg-navy-900 border border-gray-100 dark:border-navy-700/50 rounded-lg focus:border-[#FFD500] outline-none font-bold text-[13px] text-gray-700 dark:text-white transition-all shadow-sm"
-              />
-            </div>
+          <div className="flex flex-col lg:flex-row items-stretch lg:items-center gap-3 flex-1 w-full min-w-0">
+            {/* Search + Assignment Filters */}
+            <div className="flex flex-row items-center gap-2 w-full lg:w-auto lg:flex-1 lg:max-w-md">
+              <div className="relative group flex-1">
+                <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 group-focus-within:text-[#FFD500] transition-colors" />
+                <input
+                  type="text"
+                  placeholder="Search..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full pl-9 pr-3 py-1.5 bg-gray-50 dark:bg-navy-900 border border-gray-100 dark:border-navy-700/50 rounded-lg focus:border-[#FFD500] outline-none font-bold text-[12px] text-gray-700 dark:text-white transition-all shadow-sm"
+                />
+              </div>
 
-            {/* Assignment Filters */}
-            <div className="flex items-center bg-gray-100 dark:bg-navy-900 rounded-full p-1 border border-gray-200 dark:border-navy-700 flex-shrink-0">
-              <button 
-                onClick={() => { setAssignmentFilter(assignmentFilter === 'ToMe' ? 'All' : 'ToMe'); setCurrentPage(1); }}
-                className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest transition-all h-[26px] flex items-center gap-1.5 ${assignmentFilter === 'ToMe' ? 'bg-[#003875] text-white shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'}`}
-              >
-                To Me
-                <span className={`px-1.5 py-0.5 rounded-full text-[9px] ${assignmentFilter === 'ToMe' ? 'bg-white/20' : 'bg-gray-200 dark:bg-navy-800'}`}>
-                  {checklists.filter(c => c.assigned_to === ((session?.user as any)?.username || "")).length}
-                </span>
-              </button>
-              <button 
-                onClick={() => { setAssignmentFilter(assignmentFilter === 'ByMe' ? 'All' : 'ByMe'); setCurrentPage(1); }}
-                className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest transition-all h-[26px] flex items-center gap-1.5 ${assignmentFilter === 'ByMe' ? 'bg-[#003875] text-white shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'}`}
-              >
-                By Me
-                <span className={`px-1.5 py-0.5 rounded-full text-[9px] ${assignmentFilter === 'ByMe' ? 'bg-white/20' : 'bg-gray-200 dark:bg-navy-800'}`}>
-                  {checklists.filter(c => c.assigned_by === ((session?.user as any)?.username || "")).length}
-                </span>
-              </button>
+              <div className="flex items-center bg-gray-100 dark:bg-navy-900 rounded-full p-1 border border-gray-200 dark:border-navy-700 flex-shrink-0">
+                <button 
+                  onClick={() => { setAssignmentFilter(assignmentFilter === 'ToMe' ? 'All' : 'ToMe'); setCurrentPage(1); }}
+                  className={`px-2 md:px-3 py-1 rounded-full text-[9px] md:text-[10px] font-black uppercase tracking-widest transition-all h-[26px] flex items-center gap-1 ${assignmentFilter === 'ToMe' ? 'bg-[#003875] text-white shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'}`}
+                >
+                  <span className="hidden xs:inline">To Me</span>
+                  <span className="xs:hidden">To</span>
+                  <span className={`px-1 rounded-full text-[8px] ${assignmentFilter === 'ToMe' ? 'bg-white/20' : 'bg-gray-200 dark:bg-navy-800'}`}>
+                    {checklists.filter(c => c.assigned_to === ((session?.user as any)?.username || "")).length}
+                  </span>
+                </button>
+                <button 
+                  onClick={() => { setAssignmentFilter(assignmentFilter === 'ByMe' ? 'All' : 'ByMe'); setCurrentPage(1); }}
+                  className={`px-2 md:px-3 py-1 rounded-full text-[9px] md:text-[10px] font-black uppercase tracking-widest transition-all h-[26px] flex items-center gap-1 ${assignmentFilter === 'ByMe' ? 'bg-[#003875] text-white shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'}`}
+                >
+                  <span className="hidden xs:inline">By Me</span>
+                  <span className="xs:hidden">By</span>
+                  <span className={`px-1 rounded-full text-[8px] ${assignmentFilter === 'ByMe' ? 'bg-white/20' : 'bg-gray-200 dark:bg-navy-800'}`}>
+                    {checklists.filter(c => c.assigned_by === ((session?.user as any)?.username || "")).length}
+                  </span>
+                </button>
+              </div>
             </div>
 
             {/* Date Filters */}
-            <div className="flex flex-wrap items-center gap-1.5 flex-shrink-0">
+            <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
               {[
                 { id: 'Delayed', label: 'Delayed', color: 'bg-red-50 text-red-600 border-red-300 dark:bg-red-900/30 dark:text-red-400 dark:border-red-700' },
                 { id: 'Today', label: 'Today', color: 'bg-amber-50 text-amber-600 border-amber-300 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-700' },
                 { id: 'Tomorrow', label: 'Tomorrow', color: 'bg-blue-50 text-blue-600 border-blue-300 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-700' },
-                { id: 'Next3', label: 'Next 3 Days', color: 'bg-emerald-50 text-emerald-600 border-emerald-300 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-700' }
+                { id: 'Next3', label: 'Next 3', color: 'bg-emerald-50 text-emerald-600 border-emerald-300 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-700' }
               ].map(f => {
                 const count = getDateFilterCount(f.id);
-                const isActive = dateFilter === f.id;
+                const isActive = dateFilters.includes(f.id);
                 return (
                   <button
                     key={f.id}
-                    onClick={() => { setDateFilter(isActive ? 'All' : f.id as any); setCurrentPage(1); }}
-                    className={`px-3 py-1 rounded-full border text-[10px] font-black uppercase tracking-widest transition-all h-[28px] flex items-center gap-1.5 ${
+                    onClick={() => {
+                      const newFilters = dateFilters.includes(f.id)
+                        ? dateFilters.filter(item => item !== f.id)
+                        : [...dateFilters, f.id];
+                      setDateFilters(newFilters);
+                      setCurrentPage(1);
+                    }}
+                    className={`px-3 py-1 rounded-full border text-[9px] md:text-[10px] font-black uppercase tracking-widest transition-all h-[28px] flex items-center gap-1.5 whitespace-nowrap ${
                       isActive 
                         ? 'bg-[#003875] dark:bg-[#FFD500] text-white dark:text-black border-[#003875] dark:border-[#FFD500] shadow-sm scale-105' 
                         : `${f.color} hover:shadow-sm hover:scale-[1.02]`
                     }`}
                   >
                     {f.label}
-                    <span className={`px-1.5 py-0.5 rounded-full text-[9px] ${
-                      isActive ? 'bg-white/20 dark:bg-black/20' : 'bg-black/5 dark:bg-white/10'
-                    }`}>
+                    <span className={`px-1 py-0.5 rounded-full text-[8px] ${isActive ? 'bg-white/20 dark:bg-black/20' : 'bg-black/5 dark:bg-white/10'}`}>
                       {count}
                     </span>
                   </button>
@@ -620,25 +912,26 @@ export default function ChecklistsPage() {
             </div>
           </div>
 
-          <div className="flex items-center gap-4 hidden md:flex">
+          {/* Pagination Info */}
+          <div className="flex items-center justify-between sm:justify-end gap-3 md:gap-4 flex-shrink-0 border-t lg:border-t-0 border-gray-100 dark:border-white/5 pt-3 lg:pt-0">
             <div className="flex items-center gap-2">
-              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
+              <p className="text-[9px] md:text-[10px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">
                 Page <span className="text-[#003875] dark:text-[#FFD500]">{currentPage}</span> of {totalPages || 1}
               </p>
-              <div className="flex gap-0.5 ml-2">
-                <button onClick={() => setCurrentPage(1)} disabled={currentPage === 1} className="px-2 py-1 text-[10px] font-bold text-gray-400 hover:text-black dark:hover:text-white hover:bg-white dark:hover:bg-white/5 disabled:opacity-30 rounded-md transition-all">First</button>
+              <div className="flex gap-0.5">
+                <button onClick={() => setCurrentPage(1)} disabled={currentPage === 1} className="px-1.5 py-1 text-[9px] md:text-[10px] font-bold text-gray-400 hover:text-black dark:hover:text-white hover:bg-white dark:hover:bg-white/5 disabled:opacity-30 rounded-md transition-all">First</button>
                 <button onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))} disabled={currentPage === 1} className="p-1 text-gray-400 hover:text-black dark:hover:text-white hover:bg-white dark:hover:bg-white/5 disabled:opacity-30 rounded-md transition-all">
-                  <ChevronLeftIcon className="w-4 h-4" />
+                  <ChevronLeftIcon className="w-3.5 h-3.5" />
                 </button>
                 <button onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))} disabled={currentPage === totalPages || totalPages === 0} className="p-1 text-gray-400 hover:text-black dark:hover:text-white hover:bg-white dark:hover:bg-white/5 disabled:opacity-30 rounded-md transition-all">
-                  <ChevronRightIcon className="w-4 h-4" />
+                  <ChevronRightIcon className="w-3.5 h-3.5" />
                 </button>
-                <button onClick={() => setCurrentPage(totalPages)} disabled={currentPage === totalPages || totalPages === 0} className="px-2 py-1 text-[10px] font-bold text-gray-400 hover:text-black dark:hover:text-white hover:bg-white dark:hover:bg-white/5 disabled:opacity-30 rounded-md transition-all">Last</button>
+                <button onClick={() => setCurrentPage(totalPages)} disabled={currentPage === totalPages || totalPages === 0} className="px-1.5 py-1 text-[9px] md:text-[10px] font-bold text-gray-400 hover:text-black dark:hover:text-white hover:bg-white dark:hover:bg-white/5 disabled:opacity-30 rounded-md transition-all">Last</button>
               </div>
             </div>
-            <div className="h-4 w-[1px] bg-gray-200 dark:bg-white/10" />
+            <div className="hidden xs:block h-4 w-[1px] bg-gray-200 dark:bg-white/10" />
             <div className="flex items-center gap-2">
-              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Show</label>
+              <label className="text-[9px] md:text-[10px] font-black text-gray-400 uppercase tracking-widest">Show</label>
               <select 
                 value={itemsPerPage}
                 onChange={(e) => { setItemsPerPage(Number(e.target.value)); setCurrentPage(1); }}
@@ -652,12 +945,13 @@ export default function ChecklistsPage() {
           </div>
         </div>
 
-        {/* Table */}
-        <div 
-          style={{ backgroundColor: 'var(--panel-card)' }}
-          className="overflow-x-auto transition-colors duration-500 min-h-[400px]"
-        >
-          <table className="w-full text-left border-collapse table-auto">
+        {viewMode === 'list' ? (
+          /* Table View - Scrollable on mobile */
+          <div 
+            style={{ backgroundColor: 'var(--panel-card)' }}
+            className="overflow-x-auto no-scrollbar transition-colors duration-500 min-h-[400px] w-full"
+          >
+            <table className="w-full text-left border-collapse table-auto min-w-[800px]">
             <thead>
               <tr className="bg-[#003875] dark:bg-navy-950 text-white dark:text-slate-200 whitespace-nowrap">
                 <th onClick={() => handleSort('id')} className="px-4 py-3 text-[10px] font-black uppercase tracking-widest cursor-pointer hover:bg-white/5 transition-colors">
@@ -666,23 +960,23 @@ export default function ChecklistsPage() {
                 <th onClick={() => handleSort('task')} className="px-4 py-3 text-[10px] font-black uppercase tracking-widest cursor-pointer hover:bg-white/5 transition-colors min-w-[200px]">
                   <div className="flex items-center">Task <SortIcon column="task" /></div>
                 </th>
-                <th onClick={() => handleSort('assigned_to')} className="px-4 py-3 text-[10px] font-black uppercase tracking-widest cursor-pointer hover:bg-white/5 transition-colors">
+                <th onClick={() => handleSort('assigned_to')} className="px-4 py-3 text-[10px] font-black uppercase tracking-widest cursor-pointer hover:bg-white/5 transition-colors hidden sm:table-cell">
                   <div className="flex items-center">Personnel <SortIcon column="assigned_to" /></div>
                 </th>
-                <th onClick={() => handleSort('department')} className="px-4 py-3 text-[10px] font-black uppercase tracking-widest cursor-pointer hover:bg-white/5 transition-colors">
+                <th onClick={() => handleSort('department')} className="px-4 py-3 text-[10px] font-black uppercase tracking-widest cursor-pointer hover:bg-white/5 transition-colors hidden md:table-cell">
                   <div className="flex items-center">Dept <SortIcon column="department" /></div>
                 </th>
-                <th onClick={() => handleSort('priority')} className="px-4 py-3 text-[10px] font-black uppercase tracking-widest cursor-pointer hover:bg-white/5 transition-colors">
+                <th onClick={() => handleSort('priority')} className="px-4 py-3 text-[10px] font-black uppercase tracking-widest cursor-pointer hover:bg-white/5 transition-colors hidden sm:table-cell">
                   <div className="flex items-center">Priority <SortIcon column="priority" /></div>
                 </th>
                 <th onClick={() => handleSort('status')} className="px-4 py-3 text-[10px] font-black uppercase tracking-widest cursor-pointer hover:bg-white/5 transition-colors">
                   <div className="flex items-center">Status <SortIcon column="status" /></div>
                 </th>
-                <th onClick={() => handleSort('frequency')} className="px-4 py-3 text-[10px] font-black uppercase tracking-widest cursor-pointer hover:bg-white/5 transition-colors">
+                <th onClick={() => handleSort('frequency')} className="px-4 py-3 text-[10px] font-black uppercase tracking-widest cursor-pointer hover:bg-white/5 transition-colors hidden xl:table-cell">
                   <div className="flex items-center">Freq <SortIcon column="frequency" /></div>
                 </th>
                 <th onClick={() => handleSort('due_date')} className="px-4 py-3 text-[10px] font-black uppercase tracking-widest cursor-pointer hover:bg-white/5 transition-colors">
-                  <div className="flex items-center">Due Date <SortIcon column="due_date" /></div>
+                  <div className="flex items-center">Due <SortIcon column="due_date" /></div>
                 </th>
                 <th className="px-4 py-3 text-[10px] font-black uppercase tracking-widest text-right">Actions</th>
               </tr>
@@ -710,24 +1004,23 @@ export default function ChecklistsPage() {
                     <td className="px-4 py-3">
                       <p className="font-black text-xs text-gray-900 dark:text-white leading-tight">{item.task}</p>
                       {item.verification_required?.toLowerCase() === 'yes' && (
-                        <p className="text-[9px] text-amber-500 font-bold mt-0.5">🔍 Verification: {item.verifier_name || "—"}</p>
+                        <p className="text-[9px] text-amber-500 font-bold mt-0.5">🔍 Verification Required</p>
                       )}
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3 hidden sm:table-cell">
                       <div className="flex flex-col">
                         <span className="text-xs font-black text-gray-800 dark:text-gray-200">{item.assigned_to || "—"}</span>
                         <span className="text-[10px] text-gray-400 font-bold">By: {item.assigned_by || "—"}</span>
                       </div>
                     </td>
-                    <td className="px-4 py-3">
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-slate-50 text-slate-600 border border-slate-200 dark:bg-slate-900/40 dark:text-slate-400 dark:border-slate-800 text-[10px] font-black uppercase tracking-widest rounded-md">
-                        {item.department || "General"}
-                      </span>
+                    <td className="px-4 py-3 hidden md:table-cell">
+                      {getDeptBadge(item.department)}
                     </td>
-                    <td className="px-4 py-3">{getPriorityBadge(item.priority)}</td>
+                    <td className="px-4 py-3 hidden sm:table-cell">{getPriorityBadge(item.priority)}</td>
                     <td className="px-4 py-3">{getStatusBadge(getDisplayStatus(item))}</td>
-                    <td className="px-4 py-3">
-                      <span className="inline-flex items-center px-2 py-0.5 bg-indigo-50 text-indigo-600 border border-indigo-200 dark:bg-indigo-900/20 dark:text-indigo-400 dark:border-indigo-800 text-[10px] font-black uppercase tracking-widest rounded-md">
+                    <td className="px-4 py-3 hidden xl:table-cell">
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-indigo-50 text-indigo-600 border border-indigo-200 dark:bg-indigo-900/20 dark:text-indigo-400 dark:border-indigo-800 text-[10px] font-black uppercase tracking-widest rounded-md">
+                        <CalendarDaysIcon className="w-3 h-3" />
                         {item.frequency?.includes(':') ? (
                           <span className="flex items-center gap-1">
                             {item.frequency.split(':')[0]}
@@ -738,12 +1031,17 @@ export default function ChecklistsPage() {
                       </span>
                     </td>
                     <td className="px-4 py-3">
-                      <p className="text-[10px] font-bold text-gray-600 dark:text-slate-300 truncate max-w-[150px]" title={formatDateDisplay(item.due_date)}>
-                        {formatDateDisplay(item.due_date) || "—"}
-                      </p>
+                      <p className="text-[10px] md:text-xs font-bold text-gray-600 dark:text-slate-300">{formatDateDisplay(item.due_date) || "—"}</p>
                     </td>
                     <td className="px-4 py-3 text-right">
                       <div className="flex items-center justify-end gap-1">
+                        <button
+                          onClick={() => setSelectedTask(item)}
+                          className="p-1.5 bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-400 hover:bg-emerald-600 hover:text-white dark:hover:bg-emerald-500 dark:hover:text-black rounded-lg transition-all"
+                          title="Follow Up"
+                        >
+                          <ArrowTopRightOnSquareIcon className="w-3.5 h-3.5" />
+                        </button>
                         <button
                           onClick={() => handleEdit(item)}
                           className="p-1.5 bg-[#003875]/10 text-[#003875] dark:bg-[#FFD500]/10 dark:text-[#FFD500] hover:bg-[#003875] hover:text-white dark:hover:bg-[#FFD500] dark:hover:text-black rounded-lg transition-all"
@@ -752,7 +1050,7 @@ export default function ChecklistsPage() {
                           <PencilSquareIcon className="w-3.5 h-3.5" />
                         </button>
                         <button
-                          onClick={() => handleDeleteClick(item.id)}
+                          onClick={() => handleDeleteClick(item)}
                           className="p-1.5 bg-[#CE2029]/10 text-[#CE2029] hover:bg-[#CE2029] hover:text-white rounded-lg transition-all"
                           title="Delete"
                         >
@@ -766,7 +1064,118 @@ export default function ChecklistsPage() {
             </tbody>
           </table>
         </div>
-      </div>
+      ) : (
+        /* Tile View */
+        <div className="p-2 bg-gray-50/20 dark:bg-navy-950/20 min-h-[400px] w-full overflow-hidden">
+          {isLoading ? (
+            <div className="flex flex-col items-center justify-center py-20">
+              <div className="w-8 h-8 border-3 border-gray-100 border-t-[#FFD500] rounded-full animate-spin mb-4" />
+              <p className="text-gray-400 font-black uppercase tracking-widest text-[10px]">Syncing Checklists...</p>
+            </div>
+          ) : paginatedChecklists.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-20 bg-white/50 dark:bg-navy-900/50 rounded-2xl border-2 border-dashed border-gray-200 dark:border-white/5">
+              <DocumentTextIcon className="w-10 h-10 text-gray-200 dark:text-white/10 mb-2" />
+              <p className="text-xs text-gray-400 font-bold uppercase tracking-widest">No checklists found</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              {paginatedChecklists.map((item) => {
+                const status = getDisplayStatus(item);
+                const statusColorMap: Record<string, string> = {
+                  "Pending": "border-gray-200 dark:border-gray-700",
+                  "Planned": "border-blue-200 dark:border-blue-900/50",
+                  "Hold": "border-amber-200 dark:border-amber-900/50",
+                  "Completed": "border-emerald-200 dark:border-emerald-900/50",
+                  "Approved": "border-green-200 dark:border-green-900/50",
+                  "Re-Open": "border-violet-200 dark:border-violet-900/50",
+                  "Overdue": "border-red-200 dark:border-red-900/50",
+                };
+                const borderColor = statusColorMap[status] || "border-gray-100 dark:border-white/5";
+
+                return (
+                  <div 
+                    key={item.id}
+                    className={`group bg-white dark:bg-navy-900 rounded-2xl border-4 ${borderColor} shadow-sm hover:shadow-xl hover:translate-y-[-2px] transition-all duration-300 overflow-hidden flex flex-col h-full`}
+                  >
+                    {/* Card Header */}
+                    <div className="p-3 md:p-4 border-b border-gray-50 dark:border-white/5 flex items-start justify-between gap-3 bg-gray-50/30 dark:bg-white/5">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="font-mono text-[9px] font-black text-[#003875] dark:text-[#FFD500] bg-[#003875]/5 dark:bg-[#FFD500]/10 px-1.5 py-0.5 rounded">#{item.id}</span>
+                          {getPriorityBadge(item.priority)}
+                        </div>
+                        <h3 className="font-black text-sm text-gray-900 dark:text-white leading-tight line-clamp-3 uppercase tracking-wide group-hover:text-[#003875] dark:group-hover:text-[#FFD500] transition-colors">{item.task}</h3>
+                      </div>
+                      <div className="flex-shrink-0">
+                        {getStatusBadge(status)}
+                      </div>
+                    </div>
+
+                    {/* Card Body */}
+                    <div className="p-3 md:p-4 flex-1 flex flex-col gap-4">
+                      <div className="grid grid-cols-2 gap-3 mt-auto">
+                        <div className="flex flex-col gap-1 overflow-hidden">
+                          <span className="text-[8px] font-black text-gray-400 uppercase tracking-widest">Personnel</span>
+                          <span className="text-[10px] font-black text-gray-800 dark:text-gray-200 truncate">{item.assigned_to || "—"}</span>
+                        </div>
+                        <div className="flex flex-col gap-1 overflow-hidden">
+                          <span className="text-[8px] font-black text-gray-400 uppercase tracking-widest">Dept</span>
+                          <div className="scale-75 origin-left">
+                            {getDeptBadge(item.department)}
+                          </div>
+                        </div>
+                        <div className="flex flex-col gap-1 overflow-hidden">
+                          <span className="text-[8px] font-black text-gray-400 uppercase tracking-widest">Due Date</span>
+                          <span className="text-[10px] font-black text-gray-700 dark:text-slate-300 truncate">{formatDateDisplay(item.due_date) || "—"}</span>
+                        </div>
+                        <div className="flex flex-col gap-1 overflow-hidden">
+                          <span className="text-[8px] font-black text-gray-400 uppercase tracking-widest">Assigned By</span>
+                          <span className="text-[10px] font-bold text-gray-500 dark:text-gray-400 truncate">{item.assigned_by || "—"}</span>
+                        </div>
+                      </div>
+
+                      {item.verification_required?.toLowerCase() === 'yes' && (
+                        <div className="flex items-center gap-2 px-2 py-1 bg-amber-50 dark:bg-amber-900/10 border border-amber-100 dark:border-amber-900/30 rounded-lg">
+                          <MagnifyingGlassIcon className="w-3 h-3 text-amber-500" />
+                          <span className="text-[9px] font-black text-amber-600 dark:text-amber-400 uppercase tracking-widest">Verification Req.</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Card Footer: Actions */}
+                    <div className="p-2 md:p-3 bg-gray-50/50 dark:bg-white/5 border-t border-gray-50 dark:border-white/5 flex items-center justify-between gap-2">
+                       <button
+                          onClick={() => setSelectedTask(item)}
+                          className="flex-1 flex items-center justify-center gap-1.5 py-2 px-2 bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-400 hover:bg-emerald-600 hover:text-white dark:hover:bg-emerald-500 dark:hover:text-black rounded-xl transition-all font-black text-[9px] uppercase tracking-widest whitespace-nowrap overflow-hidden"
+                        >
+                          <ArrowTopRightOnSquareIcon className="w-3.5 h-3.5 flex-shrink-0" />
+                          <span className="truncate">Follow Up</span>
+                        </button>
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => handleEdit(item)}
+                            className="p-1.5 bg-[#003875]/10 text-[#003875] dark:bg-[#FFD500]/10 dark:text-[#FFD500] hover:bg-[#003875] hover:text-white dark:hover:bg-[#FFD500] dark:hover:text-black rounded-xl transition-all"
+                            title="Edit"
+                          >
+                            <PencilSquareIcon className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteClick(item)}
+                            className="p-1.5 bg-[#CE2029]/10 text-[#CE2029] hover:bg-[#CE2029] hover:text-white rounded-xl transition-all"
+                            title="Delete"
+                          >
+                            <TrashIcon className="w-4 h-4" />
+                          </button>
+                        </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
 
       {/* Add/Edit Modal */}
       {isModalOpen && (
@@ -989,111 +1398,116 @@ export default function ChecklistsPage() {
                 </div>
               </div>
 
-              {/* Row 3: Frequency + Due Date */}
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">Frequency</label>
-                  <div className="flex flex-nowrap overflow-x-auto pb-1.5 gap-1.5 custom-scrollbar no-scrollbar">
-                    {['Daily', 'Weekly', 'Monthly', 'Quarterly', 'Half Yearly', 'Yearly'].map((freq) => {
-                      const isSelected = formData.frequency?.startsWith(freq);
-                      return (
-                        <button
-                          key={freq}
-                          type="button"
-                          onClick={() => {
-                            if (freq === 'Weekly') {
-                              if (!formData.frequency?.startsWith('Weekly')) {
-                                const nextDayStr = getNextOccurringDay('Mon', formData.due_date);
-                                setFormData({ ...formData, frequency: 'Weekly: Mon', due_date: nextDayStr });
-                              }
-                            } else {
-                              setFormData({ ...formData, frequency: freq, due_date: "" });
-                            }
-                          }}
-                          className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all border whitespace-nowrap shadow-sm flex-shrink-0 ${
-                            isSelected 
-                              ? 'bg-[#FFD500] text-black border-[#FFD500] shadow-[#FFD500]/20' 
-                              : 'bg-white dark:bg-zinc-900 text-gray-500 border-orange-50 dark:border-zinc-800 hover:border-[#FFD500] hover:text-[#003875] dark:hover:text-[#FFD500]'
-                          }`}
-                        >
-                          {freq}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {formData.frequency?.startsWith('Weekly') && (
-                  <div className="animate-in fade-in slide-in-from-top-1 duration-300 border-t border-orange-50 dark:border-zinc-800/50 pt-3">
-                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Select Days (Next occurrence set automatically)</p>
-                    <div className="flex flex-wrap gap-2.5">
-                      {[
-                        { label: 'M', value: 'Mon', full: 'Monday' },
-                        { label: 'T', value: 'Tue', full: 'Tuesday' },
-                        { label: 'W', value: 'Wed', full: 'Wednesday' },
-                        { label: 'T', value: 'Thu', full: 'Thursday' },
-                        { label: 'F', value: 'Fri', full: 'Friday' },
-                        { label: 'S', value: 'Sat', full: 'Saturday' }
-                      ].map((day) => {
-                        const currentFreq = formData.frequency || "";
-                        const prefix = "Weekly: ";
-                        const activeDays = currentFreq.startsWith(prefix) 
-                          ? currentFreq.slice(prefix.length).split(',').map(d => d.trim()) 
-                          : [];
-                        const isDaySelected = activeDays.includes(day.value);
-
+              {!editingItem && (
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">Frequency</label>
+                    <div className="flex flex-nowrap overflow-x-auto pb-1.5 gap-1.5 custom-scrollbar no-scrollbar">
+                      {['Daily', 'Weekly', 'Monthly', 'Quarterly', 'Half Yearly', 'Yearly'].map((freq) => {
+                        const isSelected = formData.frequency?.startsWith(freq);
                         return (
                           <button
-                            key={day.value}
+                            key={freq}
                             type="button"
-                            title={day.full}
                             onClick={() => {
-                              let newDays;
-                              if (isDaySelected) {
-                                newDays = activeDays.filter(d => d !== day.value);
+                              if (freq === 'Weekly') {
+                                if (!formData.frequency?.startsWith('Weekly')) {
+                                  const nextDayStr = getNextOccurringDay('Mon', formData.due_date);
+                                  setFormData({ ...formData, frequency: 'Weekly: Mon', due_date: nextDayStr });
+                                }
                               } else {
-                                newDays = [...activeDays, day.value];
+                                setFormData({ ...formData, frequency: freq, due_date: "" });
                               }
-                              
-                              const dayOrder = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-                              newDays.sort((a,b) => dayOrder.indexOf(a) - dayOrder.indexOf(b));
-                              
-                              const newValue = newDays.length > 0 ? prefix + newDays.join(',') : 'Daily';
-                              
-                              // Auto-calculate next occurrence for ALL selected days from today
-                              const nextDates = newDays.map(d => getNextOccurringDay(d));
-                              const nextDateStr = nextDates.join(',');
-                              
-                              setFormData({ ...formData, frequency: newValue, due_date: nextDateStr });
                             }}
-                            className={`w-9 h-9 rounded-full flex flex-col items-center justify-center transition-all border shadow-sm ${
-                              isDaySelected
-                                ? 'bg-[#CE2029] text-white border-[#CE2029] shadow-[#CE2029]/20 scale-110'
-                                : 'bg-gray-50 dark:bg-zinc-800 text-gray-400 border-orange-50 dark:border-zinc-700 hover:border-[#CE2029] hover:text-[#CE2029]'
+                            className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all border whitespace-nowrap shadow-sm flex-shrink-0 ${
+                              isSelected 
+                                ? 'bg-[#FFD500] text-black border-[#FFD500] shadow-[#FFD500]/20' 
+                                : 'bg-white dark:bg-zinc-900 text-gray-500 border-orange-50 dark:border-zinc-800 hover:border-[#FFD500] hover:text-[#003875] dark:hover:text-[#FFD500]'
                             }`}
                           >
-                            <span className="text-[10px] font-black">{day.label}</span>
+                            {freq}
                           </button>
                         );
                       })}
                     </div>
                   </div>
-                )}
-                
-                <div className="border-t border-orange-50 dark:border-zinc-800/50 pt-3">
-                  <PremiumDatePicker 
-                    label="Due Date"
-                    value={formData.due_date || ""}
-                    onChange={(val) => setFormData({ ...formData, due_date: val })}
-                    multiSelect={formData.frequency?.startsWith('Weekly') || ['Monthly', 'Quarterly', 'Half Yearly', 'Yearly'].includes(formData.frequency || "")}
-                    allowPast={false}
-                    allowSundays={false}
-                  />
-                </div>
-              </div>
 
-              {/* Row 4: Verification + Attachment + Verifier */}
+                  {formData.frequency?.startsWith('Weekly') && (
+                    <div className="animate-in fade-in slide-in-from-top-1 duration-300 border-t border-orange-50 dark:border-zinc-800/50 pt-3">
+                      <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Select Days (Next occurrence set automatically)</p>
+                      <div className="flex flex-wrap gap-2.5">
+                        {[
+                          { label: 'M', value: 'Mon', full: 'Monday' },
+                          { label: 'T', value: 'Tue', full: 'Tuesday' },
+                          { label: 'W', value: 'Wed', full: 'Wednesday' },
+                          { label: 'T', value: 'Thu', full: 'Thursday' },
+                          { label: 'F', value: 'Fri', full: 'Friday' },
+                          { label: 'S', value: 'Sat', full: 'Saturday' }
+                        ].map((day) => {
+                          const currentFreq = formData.frequency || "";
+                          const prefix = "Weekly: ";
+                          const activeDays = currentFreq.startsWith(prefix) 
+                            ? currentFreq.slice(prefix.length).split(',').map(d => d.trim()) 
+                            : [];
+                          const isDaySelected = activeDays.includes(day.value);
+
+                          return (
+                            <button
+                              key={day.value}
+                              type="button"
+                              title={day.full}
+                              onClick={() => {
+                                let newDays;
+                                if (isDaySelected) {
+                                  newDays = activeDays.filter(d => d !== day.value);
+                                } else {
+                                  newDays = [...activeDays, day.value];
+                                }
+                                
+                                const dayOrder = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+                                newDays.sort((a,b) => dayOrder.indexOf(a) - dayOrder.indexOf(b));
+                                
+                                const newValue = newDays.length > 0 ? prefix + newDays.join(',') : 'Daily';
+                                
+                                // Auto-calculate next occurrence for ALL selected days from today
+                                const nextDates = newDays.map(d => getNextOccurringDay(d));
+                                const nextDateStr = nextDates.join(',');
+                                
+                                setFormData({ ...formData, frequency: newValue, due_date: nextDateStr });
+                              }}
+                              className={`w-9 h-9 rounded-full flex flex-col items-center justify-center transition-all border shadow-sm ${
+                                isDaySelected
+                                  ? 'bg-[#CE2029] text-white border-[#CE2029] shadow-[#CE2029]/20 scale-110'
+                                  : 'bg-gray-50 dark:bg-zinc-800 text-gray-400 border-orange-50 dark:border-zinc-700 hover:border-[#CE2029] hover:text-[#CE2029]'
+                              }`}
+                            >
+                              <span className="text-[10px] font-black">{day.label}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Row 4: Due Date + Verification + Attachment */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 border-t border-orange-50 dark:border-zinc-800/50 pt-4 items-end">
+                {!editingItem ? (
+                  <div>
+                    <PremiumDatePicker 
+                      label="Due Date"
+                      value={formData.due_date || ""}
+                      onChange={(val) => setFormData({ ...formData, due_date: val })}
+                      multiSelect={formData.frequency?.startsWith('Weekly') || ['Monthly', 'Quarterly', 'Half Yearly', 'Yearly'].includes(formData.frequency || "")}
+                      allowPast={false}
+                      allowSundays={false}
+                    />
+                  </div>
+                ) : (
+                  <div /> // Spacer to keep verification and attachment in correct columns
+                )}
+
                 <div>
                   <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1">Verification Required?</label>
                   <div className="flex bg-gray-100 dark:bg-zinc-900/50 p-1 rounded-xl">
@@ -1125,19 +1539,6 @@ export default function ChecklistsPage() {
                     ))}
                   </div>
                 </div>
-
-                {formData.verification_required === 'Yes' && (
-                  <div className="animate-in fade-in slide-in-from-top-2 duration-300">
-                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-2">Verifier Name</label>
-                    <input
-                      type="text"
-                      value={formData.verifier_name}
-                      onChange={(e) => setFormData({ ...formData, verifier_name: e.target.value })}
-                      className="w-full bg-[#FFFBF0] dark:bg-zinc-900 px-3 py-1.5 rounded-lg border border-orange-100 dark:border-zinc-800 focus:border-[#FFD500] focus:bg-white dark:focus:bg-zinc-900 outline-none font-bold text-xs text-gray-800 dark:text-zinc-100 transition-all shadow-sm"
-                      placeholder="Enter verifier's name"
-                    />
-                  </div>
-                )}
               </div>
 
               <div className="p-4 border-t border-orange-100/50 dark:border-zinc-800 flex gap-2">
@@ -1159,6 +1560,310 @@ export default function ChecklistsPage() {
           </div>
         </div>
       )}
+
+        {/* Follow Up Right Sidebar Drawer */}
+        {selectedTask && (
+          <div className="fixed inset-0 z-[100] overflow-hidden">
+            {/* Backdrop */}
+            <div 
+              className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300" 
+              onClick={() => setSelectedTask(null)}
+            />
+            
+            {/* Sidebar Content */}
+            <div className="absolute top-0 right-0 h-full w-full max-w-md bg-white dark:bg-navy-900 shadow-[-20px_0_50px_-12px_rgba(0,0,0,0.3)] flex flex-col animate-in slide-in-from-right duration-500 ease-out border-l border-gray-100 dark:border-white/5">
+              {/* Header */}
+              <div className="py-3 px-6 flex items-center justify-between bg-[#CE2029] sticky top-0 z-20 shadow-lg shadow-red-900/10">
+                <div className="flex items-center gap-4">
+                  <div className="p-2.5 bg-white/10 rounded-xl text-white backdrop-blur-md border border-white/20">
+                    <ArrowPathIcon className="w-6 h-6 animate-spin-slow" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <h2 className="text-xl font-black text-white tracking-tight">Follow Up</h2>
+                      <span className="text-[10px] font-mono text-white bg-white/10 px-2 py-0.5 rounded border border-white/20 uppercase tracking-widest font-black">#{selectedTask.id}</span>
+                    </div>
+                    <p className="text-[10px] font-black text-white/70 uppercase tracking-widest truncate max-w-[400px]">
+                      {selectedTask.task}
+                    </p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => setSelectedTask(null)}
+                  className="p-2 hover:bg-white/10 rounded-xl transition-all text-white/70 hover:text-white group"
+                >
+                  <XMarkIcon className="w-6 h-6 group-hover:rotate-90 transition-transform duration-300" />
+                </button>
+              </div>
+
+              {/* Body Content */}
+              <div className="flex-1 overflow-y-auto px-6 pt-1 pb-6 space-y-3 custom-scrollbar">
+                {/* Task Details and Badges */}
+                <section className="space-y-4">
+                  <div className="p-4 bg-red-50/30 dark:bg-red-900/10 rounded-2xl border border-red-100/50 dark:border-red-900/30">
+                    <p className="text-gray-700 dark:text-slate-300 font-bold text-sm leading-relaxed whitespace-pre-wrap">
+                      {selectedTask.task}
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {getStatusBadge(getDisplayStatus(selectedTask))}
+                    {getPriorityBadge(selectedTask.priority)}
+                    {getDeptBadge(selectedTask.department)}
+                  </div>
+                </section>
+
+                {/* Compact Details Grid */}
+                <div className="bg-red-50/30 dark:bg-red-900/10 rounded-2xl border border-red-100/50 dark:border-red-900/30 overflow-hidden divide-y divide-red-100/30 dark:divide-red-900/20">
+                  {/* Row 1: Stakeholders */}
+                  <div className="grid grid-cols-2">
+                    <div className="p-3 border-r border-gray-100 dark:border-white/5 flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-lg bg-gray-900 dark:bg-[#FFD500] flex items-center justify-center text-white dark:text-black text-[10px] font-black">
+                        {selectedTask.assigned_to?.substring(0, 2).toUpperCase() || "TO"}
+                      </div>
+                      <div>
+                        <p className="text-[8px] font-black text-gray-400 uppercase tracking-tighter leading-none mb-1">Assigned To</p>
+                        <p className="text-xs font-black text-gray-900 dark:text-white truncate max-w-[120px]">{selectedTask.assigned_to}</p>
+                      </div>
+                    </div>
+                    <div className="p-3 flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-lg bg-gray-200 dark:bg-white/10 flex items-center justify-center text-gray-500 dark:text-gray-400 text-[10px] font-black">
+                        {selectedTask.assigned_by?.substring(0, 2).toUpperCase() || "BY"}
+                      </div>
+                      <div>
+                        <p className="text-[8px] font-black text-gray-400 uppercase tracking-tighter leading-none mb-1">Assigned By</p>
+                        <p className="text-xs font-bold text-gray-600 dark:text-slate-400 truncate max-w-[120px]">{selectedTask.assigned_by}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Row 2: Dept & Due Date */}
+                  <div className="grid grid-cols-2">
+                    <div className="p-3 border-r border-gray-100 dark:border-white/5 flex items-center gap-3">
+                      <div className="p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg text-blue-600">
+                        <TagIcon className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest leading-none mb-1">Department</p>
+                        <p className="text-xs font-black text-gray-900 dark:text-white">{selectedTask.department}</p>
+                      </div>
+                    </div>
+                    <div className="p-3 flex items-center gap-3">
+                      <div className="p-2 bg-red-50 dark:bg-red-900/20 rounded-lg text-red-600">
+                        <CalendarDaysIcon className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest leading-none mb-1">Due Date</p>
+                        <p className="text-xs font-black text-gray-900 dark:text-white">{formatDateDisplay(selectedTask.due_date)}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Row 3: Timestamps */}
+                  <div className="grid grid-cols-2">
+                    <div className="p-3 border-r border-gray-100 dark:border-white/5 flex items-center gap-3">
+                      <div className="p-2 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg text-emerald-600">
+                        <ClockIcon className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest leading-none mb-1">Registered</p>
+                        <p className="text-[10px] font-bold text-gray-600 dark:text-slate-400">{formatDateDisplay(selectedTask.created_at)}</p>
+                      </div>
+                    </div>
+                    {selectedTask.updated_at && (
+                      <div className="p-3 flex items-center gap-3">
+                        <div className="p-2 bg-amber-50 dark:bg-amber-900/20 rounded-lg text-amber-600">
+                          <ArrowPathIcon className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest leading-none mb-1">Updated</p>
+                          <p className="text-[10px] font-bold text-gray-600 dark:text-slate-400">{formatDateDisplay(selectedTask.updated_at)}</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Status Update & Remarks Section */}
+                <div className="space-y-6 border-t border-gray-100 dark:border-white/5 pt-6 pb-2">
+                  <div className="w-full">
+                    <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4 flex items-center gap-2 px-1">
+                      <BoltIcon className="w-4 h-4 text-amber-500" /> Quick Status Update
+                    </h4>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      {[
+                        { label: 'Completed', icon: <CheckCircleIcon className="w-3 h-3" />, color: 'bg-emerald-50 text-emerald-600 border-emerald-100 dark:bg-emerald-900/20 dark:text-emerald-400 dark:border-emerald-900/30' },
+                        { label: 'Approved', icon: <ShieldCheckIcon className="w-3 h-3" />, color: 'bg-green-50 text-green-600 border-green-100 dark:bg-green-900/20 dark:text-green-400 dark:border-green-900/30', requiresPrivilege: true },
+                      ]
+                      .filter(item => {
+                        if (!item.requiresPrivilege) return true;
+                        const isAssigner = selectedTask?.assigned_by === ((session?.user as any)?.username || "");
+                        return userRole === 'ADMIN' || isAssigner;
+                      })
+                      .map((item) => (
+                        <button
+                          key={item.label}
+                          onClick={() => setUpdatingStatus(item.label === updatingStatus ? "" : item.label)}
+                          className={`flex items-center justify-center gap-1.5 px-2 py-3 rounded-xl text-[10px] font-black uppercase tracking-tight border transition-all ${
+                            updatingStatus === item.label
+                              ? 'bg-[#CE2029] text-white border-[#CE2029] shadow-lg shadow-red-500/30 scale-[1.02]'
+                              : `${item.color} hover:scale-[1.02]`
+                          }`}
+                        >
+                          {item.icon}
+                          {item.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Conditional: Evidence Upload */}
+                  {updatingStatus === 'Completed' && selectedTask.attachment_required === 'Yes' && (
+                    <div className="animate-in fade-in slide-in-from-top-2 duration-300">
+                      <label className="text-[9px] font-black text-red-600 dark:text-red-400 uppercase tracking-widest mb-1.5 block">Upload Evidence (Required)</label>
+                      <div className="relative group/file">
+                        <input
+                          type="file"
+                          onChange={(e) => setEvidenceFile(e.target.files?.[0] || null)}
+                          className="hidden"
+                          id="evidence-upload"
+                        />
+                        <label
+                          htmlFor="evidence-upload"
+                          className="w-full flex items-center justify-between px-4 py-2.5 bg-red-50/30 dark:bg-red-900/10 border border-dashed border-red-200 dark:border-red-900/30 rounded-xl text-xs text-red-600 dark:text-red-400 cursor-pointer hover:bg-red-50 transition-colors"
+                        >
+                          <span className="truncate">{evidenceFile?.name || "Select performance proof..."}</span>
+                          <PaperClipIcon className="w-4 h-4" />
+                        </label>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Optional Reason for status change */}
+                  {updatingStatus && (
+                    <div className="animate-in fade-in slide-in-from-top-2 duration-300">
+                      <label className="text-[9px] font-black text-red-600 dark:text-red-400 uppercase tracking-widest mb-1.5 block">Reason for Status Change</label>
+                      <textarea
+                        value={revisionReason}
+                        onChange={(e) => setRevisionReason(e.target.value)}
+                        placeholder="Explain why this status change is happening..."
+                        className="w-full px-4 py-2 bg-red-50/30 dark:bg-red-900/10 border border-red-100 dark:border-red-900/30 rounded-xl text-xs dark:text-white outline-none focus:ring-2 focus:ring-red-500/50 min-h-[80px] resize-none"
+                      />
+                    </div>
+                  )}
+
+                  {/* Remarks Input - Only show if NO status is being updated */}
+                  {!updatingStatus && (
+                    <div className="pt-2 animate-in fade-in slide-in-from-top-2 duration-300">
+                      <h4 className="text-[10px] font-black text-red-600 dark:text-red-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+                        <DocumentTextIcon className="w-4 h-4" /> New Remark
+                      </h4>
+                      <textarea
+                        value={remarkText}
+                        onChange={(e) => setRemarkText(e.target.value)}
+                        placeholder="Type a internal contextual remark..."
+                        className="w-full px-4 py-2 bg-red-50/30 dark:bg-red-900/10 border border-red-100 dark:border-red-900/30 rounded-xl text-xs dark:text-white outline-none focus:ring-2 focus:ring-red-500/50 min-h-[80px] resize-none"
+                      />
+                    </div>
+                  )}
+                </div>
+
+                {/* History Timeline Tracking */}
+                <div className="pt-8 border-t border-gray-100 dark:border-white/5 pb-10 w-full">
+                  <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-6 flex items-center gap-2 px-1">
+                    <ClockIcon className="w-4 h-4 text-blue-500" /> Activity History
+                  </h4>
+                  
+                  {isLoadingHistory ? (
+                    <div className="flex flex-col items-center justify-center py-8 opacity-40">
+                      <ArrowPathIcon className="w-6 h-6 animate-spin mb-2" />
+                      <p className="text-[10px] font-bold uppercase tracking-widest">Fetching history...</p>
+                    </div>
+                  ) : taskHistory.length > 0 ? (
+                    <div className="relative pl-6 space-y-6 before:absolute before:left-[11px] before:top-2 before:bottom-2 before:w-[2px] before:bg-gray-100 dark:before:bg-white/5">
+                      {taskHistory.map((item, index) => (
+                        <div key={item.id} className="relative">
+                          <div className={`absolute -left-[30px] top-1 w-4 h-4 rounded-full border-2 border-white dark:border-navy-900 z-10 ${
+                            item.type === 'remark' ? 'bg-blue-500' : 'bg-amber-500'
+                          }`}></div>
+                          
+                          <div className="flex flex-col gap-1">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[10px] font-black text-gray-900 dark:text-white uppercase tracking-tight">
+                                {item.type === 'remark' ? item.username : `Status -> ${item.new_status}`}
+                              </span>
+                              <span className="text-[8px] font-bold text-gray-400">{formatDateDisplay(item.created_at)}</span>
+                            </div>
+                            
+                            {item.type === 'remark' ? (
+                              <p className="text-xs text-gray-600 dark:text-slate-400 leading-relaxed font-medium bg-blue-50/30 dark:bg-blue-900/5 p-3 rounded-xl border border-blue-100/30 dark:border-blue-900/20 italic">
+                                "{item.remark}"
+                              </p>
+                            ) : (
+                              <div className="text-[10px] text-gray-500 dark:text-slate-500 bg-amber-50/30 dark:bg-amber-900/5 p-3 rounded-xl border border-amber-100/30 dark:border-amber-900/20">
+                                {item.reason && <p className="font-bold text-gray-700 dark:text-slate-300 mb-1">Reason: {item.reason}</p>}
+                                <div className="flex flex-wrap gap-x-4 gap-y-1 opacity-80">
+                                  <span>From: <b className="text-[#CE2029]">{item.old_status}</b></span>
+                                </div>
+                                {item.evidence_urls && (
+                                  <a 
+                                    href={`https://drive.google.com/file/d/${item.evidence_urls}/view`} 
+                                    target="_blank" 
+                                    className="mt-2 inline-flex items-center gap-1.5 text-[9px] font-black text-amber-600 uppercase tracking-widest hover:underline"
+                                  >
+                                    <PaperClipIcon className="w-3 h-3" /> View Evidence Attachment
+                                  </a>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-8 opacity-30 select-none">
+                      <SparklesIconOutline className="w-8 h-8 mx-auto mb-2" />
+                      <p className="text-[10px] font-black uppercase tracking-widest">No history yet</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Sidebar Footer Actions */}
+              <div className="p-5 px-6 border-t border-gray-200 dark:border-white/10 bg-white dark:bg-navy-900 flex gap-4 mt-auto sticky bottom-0 z-30 shadow-[0_-10px_30px_-15px_rgba(0,0,0,0.1)]">
+                <button
+                  onClick={handleUpdateStatus}
+                  disabled={
+                    !updatingStatus || 
+                    isSubmittingUpdate || 
+                    (updatingStatus === 'Completed' && selectedTask.attachment_required === 'Yes' && !evidenceFile)
+                  }
+                  className="w-[70%] px-4 py-3.5 bg-[#CE2029] hover:bg-red-700 disabled:bg-gray-300 text-white rounded-2xl text-[12px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 active:scale-95 no-underline border-none"
+                  style={{ backgroundColor: !updatingStatus || isSubmittingUpdate || (updatingStatus === 'Completed' && selectedTask.attachment_required === 'Yes' && !evidenceFile) ? '#ccc' : '#CE2029' }}
+                >
+                  {isSubmittingUpdate && updatingStatus ? (
+                    <ArrowPathIcon className="w-5 h-5 animate-spin" />
+                  ) : (
+                    <CheckCircleIcon className="w-5 h-5" />
+                  )}
+                  Update Status
+                </button>
+                <button
+                  onClick={handleAddRemark}
+                  disabled={!remarkText.trim() || isSubmittingUpdate}
+                  className="w-[30%] px-4 py-3.5 bg-[#FFD500] hover:bg-yellow-500 disabled:bg-gray-300 text-navy-900 rounded-2xl text-[12px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 active:scale-95 no-underline border-none"
+                  style={{ backgroundColor: '#FFD500' }}
+                >
+                  {isSubmittingUpdate && remarkText.trim() ? (
+                    <ArrowPathIcon className="w-5 h-5 animate-spin" />
+                  ) : (
+                    <DocumentTextIcon className="w-5 h-5" />
+                  )}
+                  Remark
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
       {/* Action Status Modal */}
       <ActionStatusModal
