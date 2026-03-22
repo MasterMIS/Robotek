@@ -36,7 +36,7 @@ export default function Header({ onMenuClick }: HeaderProps) {
         background: 'var(--header-bg)',
         borderBottom: '1px solid var(--panel-border)'
       }}
-      className="h-14 flex items-center justify-between px-2 md:px-6 sticky top-0 z-40 transition-all duration-300"
+      className="h-14 flex items-center justify-between px-2 md:px-6 sticky top-0 z-10 transition-all duration-300"
     >
       {/* Left Section: Mobile Menu & Welcome Message */}
       <div className="flex items-center gap-3">

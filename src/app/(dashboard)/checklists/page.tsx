@@ -1272,7 +1272,7 @@ export default function ChecklistsPage() {
 
       {/* Add/Edit Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/40 dark:bg-black/60 backdrop-blur-sm" onClick={() => setIsModalOpen(false)} />
           <div className="relative bg-[#FFFBF0] dark:bg-navy-900 w-full max-w-2xl rounded-2xl shadow-2xl border border-orange-100/50 dark:border-white/10 overflow-hidden animate-in fade-in zoom-in duration-300">
             <div className="p-4 border-b border-orange-100/50 dark:border-zinc-800 flex items-center justify-between">
@@ -1333,7 +1333,7 @@ export default function ChecklistsPage() {
                     </div>
                   </div>
                   {assignedByOpen && (
-                    <div className="absolute z-[60] w-full mt-1 bg-white dark:bg-zinc-900 border border-orange-100 dark:border-zinc-800 rounded-lg shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+                    <div className="absolute z-[10000] w-full mt-1 bg-white dark:bg-zinc-900 border border-orange-100 dark:border-zinc-800 rounded-lg shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
                       <div className="p-2 border-b border-orange-50 dark:border-zinc-800">
                         <input 
                           type="text" 
@@ -1383,7 +1383,7 @@ export default function ChecklistsPage() {
                     </div>
                   </div>
                   {assignedToOpen && (
-                    <div className="absolute z-[60] w-full mt-1 bg-white dark:bg-zinc-900 border border-orange-100 dark:border-zinc-800 rounded-lg shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+                    <div className="absolute z-[10000] w-full mt-1 bg-white dark:bg-zinc-900 border border-orange-100 dark:border-zinc-800 rounded-lg shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
                       <div className="p-2 border-b border-orange-50 dark:border-zinc-800">
                         <input 
                           type="text" 
@@ -1436,7 +1436,7 @@ export default function ChecklistsPage() {
                     </div>
                   </div>
                   {departmentOpen && (
-                    <div className="absolute z-[60] w-full mt-1 bg-white dark:bg-zinc-900 border border-orange-100 dark:border-zinc-800 rounded-lg shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+                    <div className="absolute z-[10000] w-full mt-1 bg-white dark:bg-zinc-900 border border-orange-100 dark:border-zinc-800 rounded-lg shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
                       <div className="p-2 border-b border-orange-50 dark:border-zinc-800">
                         <input 
                           type="text" 
@@ -1656,7 +1656,7 @@ export default function ChecklistsPage() {
 
         {/* Follow Up Right Sidebar Drawer */}
         {selectedTask && (
-          <div className="fixed inset-0 z-[100] overflow-hidden">
+          <div className="fixed inset-0 z-[9999] overflow-hidden">
             {/* Backdrop */}
             <div 
               className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300" 
@@ -1981,7 +1981,7 @@ export default function ChecklistsPage() {
 
       {/* Filter Modal */}
       {isFilterModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/40 dark:bg-black/60 backdrop-blur-sm animate-in fade-in duration-300" onClick={() => setIsFilterModalOpen(false)} />
           <div className="relative bg-[#FFFBF0] dark:bg-navy-900 w-full max-w-lg rounded-[2.5rem] shadow-2xl border-4 border-[#003875] dark:border-[#FFD500] overflow-hidden animate-in fade-in zoom-in duration-300">
             {/* Header */}
@@ -2040,7 +2040,7 @@ export default function ChecklistsPage() {
                     <ChevronDownIcon className={`w-4 h-4 text-gray-400 transition-transform ${modalStatusOpen ? 'rotate-180' : ''}`} />
                   </div>
                   {modalStatusOpen && (
-                    <div className="absolute z-60 w-full mt-2 bg-white dark:bg-navy-900 border-2 border-[#003875] dark:border-[#FFD500] rounded-2xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-2">
+                    <div className="absolute z-[10000] w-full mt-2 bg-white dark:bg-navy-900 border-2 border-[#003875] dark:border-[#FFD500] rounded-2xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-2">
                       <div className="p-2 border-b border-orange-50 dark:border-navy-700">
                         <input 
                           type="text" placeholder="Search status..." value={modalStatusSearch}
@@ -2098,7 +2098,7 @@ export default function ChecklistsPage() {
                     <ChevronDownIcon className={`w-4 h-4 text-gray-400 transition-transform ${modalPriorityOpen ? 'rotate-180' : ''}`} />
                   </div>
                   {modalPriorityOpen && (
-                    <div className="absolute z-60 w-full mt-2 bg-white dark:bg-navy-900 border-2 border-[#003875] dark:border-[#FFD500] rounded-2xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-2">
+                    <div className="absolute z-[10000] w-full mt-2 bg-white dark:bg-navy-900 border-2 border-[#003875] dark:border-[#FFD500] rounded-2xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-2">
                        <div className="max-h-48 overflow-y-auto p-1 custom-scrollbar">
                         {['Low', 'Medium', 'High'].map(p => {
                           const count = baseChecklists.filter(c => c.priority === p).length;
@@ -2147,7 +2147,7 @@ export default function ChecklistsPage() {
                     <ChevronDownIcon className={`w-4 h-4 text-gray-400 transition-transform ${modalAssignedToOpen ? 'rotate-180' : ''}`} />
                   </div>
                   {modalAssignedToOpen && (
-                    <div className="absolute z-60 w-full mt-2 bg-white dark:bg-navy-900 border-2 border-[#003875] dark:border-[#FFD500] rounded-2xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-2">
+                    <div className="absolute z-[10000] w-full mt-2 bg-white dark:bg-navy-900 border-2 border-[#003875] dark:border-[#FFD500] rounded-2xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-2">
                        <div className="p-2 border-b border-orange-50 dark:border-navy-700">
                         <input 
                           type="text" placeholder="Search users..." value={modalAssignedToSearch}
@@ -2205,7 +2205,7 @@ export default function ChecklistsPage() {
                     <ChevronDownIcon className={`w-4 h-4 text-gray-400 transition-transform ${modalAssignedByOpen ? 'rotate-180' : ''}`} />
                   </div>
                   {modalAssignedByOpen && (
-                    <div className="absolute z-60 w-full mt-2 bg-white dark:bg-navy-900 border-2 border-[#003875] dark:border-[#FFD500] rounded-2xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-2">
+                    <div className="absolute z-[10000] w-full mt-2 bg-white dark:bg-navy-900 border-2 border-[#003875] dark:border-[#FFD500] rounded-2xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-2">
                        <div className="p-2 border-b border-orange-50 dark:border-navy-700">
                         <input 
                           type="text" placeholder="Search users..." value={modalAssignedBySearch}
@@ -2263,7 +2263,7 @@ export default function ChecklistsPage() {
                     <ChevronDownIcon className={`w-4 h-4 text-gray-400 transition-transform ${modalDepartmentOpen ? 'rotate-180' : ''}`} />
                   </div>
                   {modalDepartmentOpen && (
-                    <div className="absolute z-60 w-full mt-2 bg-white dark:bg-navy-900 border-2 border-[#003875] dark:border-[#FFD500] rounded-2xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-2">
+                    <div className="absolute z-[10000] w-full mt-2 bg-white dark:bg-navy-900 border-2 border-[#003875] dark:border-[#FFD500] rounded-2xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-2">
                        <div className="p-2 border-b border-orange-50 dark:border-navy-700">
                         <input 
                           type="text" placeholder="Search departments..." value={modalDepartmentSearch}
@@ -2321,7 +2321,7 @@ export default function ChecklistsPage() {
                     <ChevronDownIcon className={`w-4 h-4 text-gray-400 transition-transform ${modalFrequencyOpen ? 'rotate-180' : ''}`} />
                   </div>
                   {modalFrequencyOpen && (
-                    <div className="absolute z-60 w-full mt-2 bg-white dark:bg-navy-900 border-2 border-[#003875] dark:border-[#FFD500] rounded-2xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-2">
+                    <div className="absolute z-[10000] w-full mt-2 bg-white dark:bg-navy-900 border-2 border-[#003875] dark:border-[#FFD500] rounded-2xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-2">
                        <div className="p-2 border-b border-orange-50 dark:border-navy-700">
                         <input 
                           type="text" placeholder="Search frequency..." value={modalFrequencySearch}

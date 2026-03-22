@@ -652,7 +652,7 @@ export default function TicketsPage() {
 
       {/* New / Edit Ticket Modal */}
       {(isNewModalOpen || editingTicket) && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => { setIsNewModalOpen(false); setEditingTicket(null); }} />
           <div className="relative bg-[#FFFBF0] dark:bg-navy-900 w-full max-w-2xl rounded-3xl shadow-2xl flex flex-col max-h-[90vh] animate-in fade-in zoom-in-95 duration-300 border border-orange-100/50 dark:border-navy-700 overflow-hidden">
             {/* Header */}
@@ -774,7 +774,7 @@ export default function TicketsPage() {
                     </div>
                   </div>
                   {categoryOpen && (
-                    <div className="absolute z-[60] w-full mt-1 bg-white dark:bg-navy-900 border border-orange-100 dark:border-navy-700 rounded-xl shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+                    <div className="absolute z-[10000] w-full mt-1 bg-white dark:bg-navy-900 border border-orange-100 dark:border-navy-700 rounded-xl shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
                       <div className="p-2 border-b border-orange-50 dark:border-navy-800">
                         <input type="text" placeholder="Search categories..." value={categorySearch} onChange={(e) => setCategorySearch(e.target.value)} onClick={(e) => e.stopPropagation()} className="w-full bg-gray-50 dark:bg-navy-900 px-2 py-1.5 rounded-lg border border-gray-100 dark:border-navy-800 outline-none text-[10px] font-bold text-gray-700 dark:text-gray-300" />
                       </div>
@@ -817,7 +817,7 @@ export default function TicketsPage() {
                     </div>
                   </div>
                   {assignedToOpen && (
-                    <div className="absolute z-[60] w-full mt-1 bg-white dark:bg-navy-900 border border-orange-100 dark:border-navy-700 rounded-xl shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+                    <div className="absolute z-[10000] w-full mt-1 bg-white dark:bg-navy-900 border border-orange-100 dark:border-navy-700 rounded-xl shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
                       <div className="p-2 border-b border-orange-50 dark:border-navy-800">
                         <input type="text" placeholder="Search staff..." value={assignedToSearch} onChange={(e) => setAssignedToSearch(e.target.value)} onClick={(e) => e.stopPropagation()} className="w-full bg-gray-50 dark:bg-navy-900 px-2 py-1.5 rounded-lg border border-gray-100 dark:border-navy-800 outline-none text-[10px] font-bold text-gray-700 dark:text-gray-300" />
                       </div>
@@ -857,7 +857,7 @@ export default function TicketsPage() {
 
       {/* Ticket Details Right Sidebar */}
       {selectedTicket && (
-        <div className="fixed inset-0 z-[100] flex justify-end overflow-hidden">
+        <div className="fixed inset-0 z-[9999] flex justify-end overflow-hidden">
           <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm animate-in fade-in" onClick={() => setSelectedTicket(null)} />
           <div className="relative w-full max-w-md bg-white dark:bg-navy-900 shadow-[-20px_0_50px_-12px_rgba(0,0,0,0.3)] flex flex-col animate-in slide-in-from-right duration-500 border-l border-gray-200 dark:border-navy-700">
             {/* Header */}
@@ -1052,7 +1052,7 @@ export default function TicketsPage() {
 
       {/* Action Status Modal */}
       {isStatusModalOpen && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[10001] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" />
           <div className="bg-white dark:bg-navy-900 p-6 rounded-2xl shadow-2xl relative z-10 max-w-xs w-full flex flex-col items-center text-center animate-in zoom-in-95 border border-gray-100 dark:border-navy-700">
             <div className="w-14 h-14 rounded-full bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center mb-3 border border-blue-100 dark:border-blue-800/50">

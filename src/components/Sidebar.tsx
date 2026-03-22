@@ -119,7 +119,7 @@ export default function Sidebar({ mobileOpen, setMobileOpen }: SidebarProps) {
       {/* Mobile Overlay */}
       {mobileOpen && (
         <div 
-          className="fixed inset-0 bg-black/50 z-40 md:hidden backdrop-blur-sm transition-all duration-300"
+          className="fixed inset-0 bg-black/50 z-20 md:hidden backdrop-blur-sm transition-all duration-300"
           onClick={() => setMobileOpen?.(false)}
         />
       )}
@@ -127,7 +127,7 @@ export default function Sidebar({ mobileOpen, setMobileOpen }: SidebarProps) {
       <aside 
         style={{ background: mobileOpen ? 'var(--background)' : undefined }}
         className={`
-        fixed left-0 top-0 h-screen z-50 transition-all duration-300 ease-in-out
+        fixed left-0 top-0 h-screen z-30 transition-all duration-300 ease-in-out
         ${mobileOpen 
           ? 'w-60 translate-x-0 shadow-[20px_0_60px_-15px_rgba(0,0,0,0.3)] border-r-4 border-[#FFD500] dark:border-[#FFD500]/50 rounded-r-[2.5rem]' 
           : 'w-16 -translate-x-full md:translate-x-0 md:bg-transparent md:dark:bg-transparent md:hover:w-56'}

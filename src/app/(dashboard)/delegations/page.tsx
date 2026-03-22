@@ -940,7 +940,7 @@ export default function DelegationsPage() {
   return (
     <div className="space-y-6">
       {/* Sticky Top Header & Filters */}
-      <div className="sticky top-0 z-30 bg-[var(--panel-bg)] -mx-2 -mt-2 p-2 pt-0.5 md:-mx-4 md:-mt-4 md:p-4 md:pt-1 border-b border-gray-100 dark:border-white/5 shadow-sm space-y-4">
+      <div className="sticky top-0 z-10 bg-[var(--panel-bg)] -mx-2 -mt-2 p-2 pt-0.5 md:-mx-4 md:-mt-4 md:p-4 md:pt-1 border-b border-gray-100 dark:border-white/5 shadow-sm space-y-4">
         {/* Responsive Title Row */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-1">
         <div className="min-w-0">
@@ -1377,7 +1377,7 @@ export default function DelegationsPage() {
 
         {/* Follow Up Right Sidebar Drawer */}
         {selectedTask && (
-          <div className="fixed inset-0 z-[100] overflow-hidden">
+          <div className="fixed inset-0 z-[9999] overflow-hidden">
             {/* Backdrop */}
             <div 
               className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300" 
@@ -1792,7 +1792,7 @@ export default function DelegationsPage() {
 
       {/* Modal */}
         {isModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-black/40 dark:bg-black/60 backdrop-blur-sm" onClick={() => setIsModalOpen(false)} />
             <div className="relative bg-[#FFFBF0] dark:bg-navy-900 w-full max-w-3xl rounded-2xl shadow-2xl border border-orange-100/50 dark:border-white/10 overflow-hidden animate-in fade-in zoom-in duration-300">
               <div className="p-4 border-b border-orange-100/50 dark:border-zinc-800 flex items-center justify-between">
@@ -1866,7 +1866,7 @@ export default function DelegationsPage() {
                       </div>
                     </div>
                     {assignedByOpen && (
-                      <div className="absolute z-[60] w-full mt-1 bg-white dark:bg-zinc-900 border border-orange-100 dark:border-zinc-800 rounded-lg shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+                      <div className="absolute z-[10000] w-full mt-1 bg-white dark:bg-zinc-900 border border-orange-100 dark:border-zinc-800 rounded-lg shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
                         <div className="p-2 border-b border-orange-50 dark:border-zinc-800">
                           <input 
                             type="text" placeholder="Search users..." value={assignedBySearch}
@@ -1910,7 +1910,7 @@ export default function DelegationsPage() {
                       </div>
                     </div>
                     {assignedToOpen && (
-                      <div className="absolute z-[60] w-full mt-1 bg-white dark:bg-zinc-900 border border-orange-100 dark:border-zinc-800 rounded-lg shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+                      <div className="absolute z-[10000] w-full mt-1 bg-white dark:bg-zinc-900 border border-orange-100 dark:border-zinc-800 rounded-lg shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
                         <div className="p-2 border-b border-orange-50 dark:border-zinc-800">
                           <input 
                             type="text" placeholder="Search users..." value={assignedToSearch}
@@ -1990,7 +1990,7 @@ export default function DelegationsPage() {
                       </div>
                     </div>
                     {departmentOpen && (
-                      <div className="absolute z-[60] w-full mt-1 bg-white dark:bg-zinc-900 border border-orange-100 dark:border-zinc-800 rounded-lg shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+                      <div className="absolute z-[10000] w-full mt-1 bg-white dark:bg-zinc-900 border border-orange-100 dark:border-zinc-800 rounded-lg shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
                         <div className="p-2 border-b border-orange-50 dark:border-zinc-800">
                           <input type="text" placeholder="Search departments..." value={departmentSearch}
                             onChange={(e) => setDepartmentSearch(e.target.value)}
@@ -2159,7 +2159,7 @@ export default function DelegationsPage() {
 
         {/* Advanced Filter Modal */}
         {isFilterModalOpen && (
-          <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={setIsFilterModalOpen.bind(null, false)} />
             <div className="relative bg-white dark:bg-zinc-950 w-full max-w-2xl rounded-3xl shadow-2xl border border-orange-100 dark:border-zinc-800 overflow-hidden animate-in fade-in zoom-in duration-300">
               {/* Header */}
@@ -2418,7 +2418,7 @@ export default function DelegationsPage() {
                       <ChevronDownIcon className={`w-4 h-4 text-gray-400 transition-transform ${modalDepartmentOpen ? 'rotate-180' : ''}`} />
                     </div>
                     {modalDepartmentOpen && (
-                      <div className="absolute z-20 w-full mt-2 bg-white dark:bg-zinc-900 border border-orange-50 dark:border-zinc-800 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-2">
+                      <div className="absolute z-[10000] w-full mt-2 bg-white dark:bg-zinc-900 border border-orange-50 dark:border-zinc-800 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-2">
                         <div className="p-2 border-b border-orange-50 dark:border-zinc-800">
                           <input 
                             type="text" placeholder="Search departments..." value={modalDepartmentSearch}
