@@ -406,7 +406,7 @@ export default function DelegationsPage() {
       id: nextId.toString(),
       title: "",
       description: "",
-      assigned_by: "",
+      assigned_by: userRole?.toUpperCase() === 'USER' ? currentUser : "",
       assigned_to: "",
       department: "",
       priority: "Medium",
@@ -1254,8 +1254,12 @@ export default function DelegationsPage() {
                       <td className="px-4 py-3 text-right">
                         <div className="flex items-center justify-end gap-1">
                           <button onClick={() => setSelectedTask(del)} className="p-1.5 bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-400 hover:bg-emerald-600 hover:text-white dark:hover:bg-emerald-500 dark:hover:text-black rounded-lg transition-all" title="Follow Up"><ArrowTopRightOnSquareIcon className="w-3.5 h-3.5" /></button>
-                          <button onClick={() => handleEdit(del)} className="p-1.5 bg-[#003875]/10 text-[#003875] dark:bg-[#FFD500]/10 dark:text-[#FFD500] hover:bg-[#003875] hover:text-white dark:hover:bg-[#FFD500] dark:hover:text-black rounded-lg transition-all" title="Edit"><PencilSquareIcon className="w-3.5 h-3.5" /></button>
-                          <button onClick={() => handleDeleteClick(del.id)} className="p-1.5 bg-[#CE2029]/10 text-[#CE2029] hover:bg-[#CE2029] hover:text-white rounded-lg transition-all" title="Delete"><TrashIcon className="w-3.5 h-3.5" /></button>
+                          {(['ADMIN', 'EA'].includes(userRole?.toUpperCase()) || del.assigned_by === currentUser) && (
+                            <>
+                              <button onClick={() => handleEdit(del)} className="p-1.5 bg-[#003875]/10 text-[#003875] dark:bg-[#FFD500]/10 dark:text-[#FFD500] hover:bg-[#003875] hover:text-white dark:hover:bg-[#FFD500] dark:hover:text-black rounded-lg transition-all" title="Edit"><PencilSquareIcon className="w-3.5 h-3.5" /></button>
+                              <button onClick={() => handleDeleteClick(del.id)} className="p-1.5 bg-[#CE2029]/10 text-[#CE2029] hover:bg-[#CE2029] hover:text-white rounded-lg transition-all" title="Delete"><TrashIcon className="w-3.5 h-3.5" /></button>
+                            </>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -1351,20 +1355,24 @@ export default function DelegationsPage() {
                             <span className="truncate">Follow Up</span>
                           </button>
                           <div className="flex items-center gap-1">
-                            <button
-                              onClick={() => handleEdit(del)}
-                              className="p-1.5 bg-[#003875]/10 text-[#003875] dark:bg-[#FFD500]/10 dark:text-[#FFD500] hover:bg-[#003875] hover:text-white dark:hover:bg-[#FFD500] dark:hover:text-black rounded-xl transition-all"
-                              title="Edit"
-                            >
-                              <PencilSquareIcon className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => handleDeleteClick(del.id)}
-                              className="p-1.5 bg-[#CE2029]/10 text-[#CE2029] hover:bg-[#CE2029] hover:text-white rounded-xl transition-all"
-                              title="Delete"
-                            >
-                              <TrashIcon className="w-4 h-4" />
-                            </button>
+                            {(['ADMIN', 'EA'].includes(userRole?.toUpperCase()) || del.assigned_by === currentUser) && (
+                              <>
+                                <button
+                                  onClick={() => handleEdit(del)}
+                                  className="p-1.5 bg-[#003875]/10 text-[#003875] dark:bg-[#FFD500]/10 dark:text-[#FFD500] hover:bg-[#003875] hover:text-white dark:hover:bg-[#FFD500] dark:hover:text-black rounded-xl transition-all"
+                                  title="Edit"
+                                >
+                                  <PencilSquareIcon className="w-4 h-4" />
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteClick(del.id)}
+                                  className="p-1.5 bg-[#CE2029]/10 text-[#CE2029] hover:bg-[#CE2029] hover:text-white rounded-xl transition-all"
+                                  title="Delete"
+                                >
+                                  <TrashIcon className="w-4 h-4" />
+                                </button>
+                              </>
+                            )}
                           </div>
                       </div>
                     </div>
@@ -1850,22 +1858,24 @@ export default function DelegationsPage() {
                   <div className="relative">
                     <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-2">Assigned By</label>
                     <div 
-                      className="w-full bg-[#FFFBF0] dark:bg-zinc-900 border border-orange-100 dark:border-zinc-800 rounded-lg shadow-sm cursor-pointer"
+                      className={`w-full bg-[#FFFBF0] dark:bg-zinc-900 border border-orange-100 dark:border-zinc-800 rounded-lg shadow-sm ${userRole?.toUpperCase() === 'USER' ? 'cursor-not-allowed opacity-75' : 'cursor-pointer'}`}
                       onClick={() => {
-                        setAssignedByOpen(!assignedByOpen)
-                        setAssignedToOpen(false)
-                        setDepartmentOpen(false)
+                        if (userRole?.toUpperCase() !== 'USER') {
+                          setAssignedByOpen(!assignedByOpen)
+                          setAssignedToOpen(false)
+                          setDepartmentOpen(false)
+                        }
                       }}
                     >
                       <div className="px-3 py-1.5 font-bold text-xs text-gray-800 dark:text-zinc-100 flex justify-between items-center group-hover:border-[#FFD500] transition-colors">
                         <div className="flex items-center gap-2">
                           <UserIcon className="w-3.5 h-3.5 text-gray-400" />
-                          <span>{formData.assigned_by || "Select User..."}</span>
+                          <span>{formData.assigned_by || (userRole?.toUpperCase() === 'USER' ? currentUser : "Select User...")}</span>
                         </div>
-                        <ChevronDownIcon className="w-3 h-3 text-gray-400" />
+                        {userRole?.toUpperCase() !== 'USER' && <ChevronDownIcon className="w-3 h-3 text-gray-400" />}
                       </div>
                     </div>
-                    {assignedByOpen && (
+                    {assignedByOpen && userRole?.toUpperCase() !== 'USER' && (
                       <div className="absolute z-[10000] w-full mt-1 bg-white dark:bg-zinc-900 border border-orange-100 dark:border-zinc-800 rounded-lg shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
                         <div className="p-2 border-b border-orange-50 dark:border-zinc-800">
                           <input 

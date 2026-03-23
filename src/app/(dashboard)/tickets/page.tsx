@@ -28,10 +28,12 @@ import {
   PencilSquareIcon,
   ChatBubbleBottomCenterTextIcon,
   FaceSmileIcon,
-  UserGroupIcon
+  UserGroupIcon,
+  TrashIcon
 } from "@heroicons/react/24/outline";
 import { ShieldCheckIcon, LockClosedIcon, BoltIcon } from "@heroicons/react/24/solid";
 import PremiumDatePicker from "@/components/PremiumDatePicker";
+import ConfirmModal from "@/components/ConfirmModal";
 
 interface Ticket {
   id: string;
@@ -81,6 +83,8 @@ export default function TicketsPage() {
   const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
   const [ticketHistory, setTicketHistory] = useState<TicketHistory[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [isConfirmOpen, setIsConfirmOpen] = useState(false);
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
 
   // Form States
   const [newTicket, setNewTicket] = useState({
@@ -377,6 +381,32 @@ export default function TicketsPage() {
     }
   };
 
+  const handleDeleteClick = (id: string) => {
+    setPendingDeleteId(id);
+    setIsConfirmOpen(true);
+  };
+
+  const performDelete = async () => {
+    if (!pendingDeleteId) return;
+    
+    setSubmitting(true);
+    showStatus("Removing Ticket...");
+    
+    try {
+      const res = await fetch(`/api/tickets/${pendingDeleteId}`, { method: "DELETE" });
+      if (res.ok) {
+        setTickets(tickets.filter(t => t.id !== pendingDeleteId));
+        setIsStatusModalOpen(false);
+      } else throw new Error();
+    } catch {
+      setIsStatusModalOpen(false);
+      alert("Failed to delete ticket.");
+    } finally {
+      setSubmitting(false);
+      setPendingDeleteId(null);
+    }
+  };
+
   const getDisplayStatus = (t: Ticket) => {
     const s = t.status;
     if (s === 'Resolved' || s === 'Closed') return s;
@@ -569,7 +599,7 @@ export default function TicketsPage() {
                       </div>
                     </div>
                     
-                    {/* Top Right Actions */}
+                     {/* Top Right Actions */}
                     <div className="flex items-center gap-1.5 shrink-0">
                       <button
                         onClick={() => setSelectedTicket(ticket)}
@@ -578,13 +608,25 @@ export default function TicketsPage() {
                       >
                         <ChatBubbleBottomCenterTextIcon className="w-4 h-4" />
                       </button>
-                      <button
-                        onClick={() => setEditingTicket(ticket)}
-                        className="p-1.5 bg-[#003875]/10 text-[#003875] dark:bg-[#FFD500]/10 dark:text-[#FFD500] hover:bg-[#003875] hover:text-white dark:hover:bg-[#FFD500] dark:hover:text-black rounded-lg transition-all border border-[#003875]/20 dark:border-[#FFD500]/20"
-                        title="Edit"
-                      >
-                        <PencilSquareIcon className="w-4 h-4" />
-                      </button>
+
+                      {(['ADMIN', 'EA'].includes(userRole?.toUpperCase()) || ticket.raised_by === currentUser) && (
+                        <>
+                          <button
+                            onClick={() => setEditingTicket(ticket)}
+                            className="p-1.5 bg-[#003875]/10 text-[#003875] dark:bg-[#FFD500]/10 dark:text-[#FFD500] hover:bg-[#003875] hover:text-white dark:hover:bg-[#FFD500] dark:hover:text-black rounded-lg transition-all border border-[#003875]/20 dark:border-[#FFD500]/20"
+                            title="Edit"
+                          >
+                            <PencilSquareIcon className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteClick(ticket.id)}
+                            className="p-1.5 bg-[#CE2029]/10 text-[#CE2029] hover:bg-[#CE2029] hover:text-white rounded-lg transition-all border border-[#CE2029]/20"
+                            title="Delete"
+                          >
+                            <TrashIcon className="w-4 h-4" />
+                          </button>
+                        </>
+                      )}
                     </div>
                   </div>
 
@@ -1063,6 +1105,17 @@ export default function TicketsPage() {
           </div>
         </div>
       )}
+
+      {/* Confirmation Modal */}
+      <ConfirmModal
+        isOpen={isConfirmOpen}
+        onClose={() => setIsConfirmOpen(false)}
+        onConfirm={performDelete}
+        title="Delete Ticket"
+        message="Are you sure you want to permanently delete this ticket? This action cannot be undone."
+        confirmLabel="Delete"
+        type="danger"
+      />
     </div>
   );
 }

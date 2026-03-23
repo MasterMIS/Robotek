@@ -281,7 +281,7 @@ export default function ChecklistsPage() {
     setFormData({
       id: nextId.toString(),
       task: "",
-      assigned_by: "",
+      assigned_by: userRole?.toUpperCase() === 'USER' ? currentUser : "",
       assigned_to: "",
       priority: "Medium",
       department: "",
@@ -1135,20 +1135,24 @@ export default function ChecklistsPage() {
                         >
                           <ArrowTopRightOnSquareIcon className="w-3.5 h-3.5" />
                         </button>
-                        <button
-                          onClick={() => handleEdit(item)}
-                          className="p-1.5 bg-[#003875]/10 text-[#003875] dark:bg-[#FFD500]/10 dark:text-[#FFD500] hover:bg-[#003875] hover:text-white dark:hover:bg-[#FFD500] dark:hover:text-black rounded-lg transition-all"
-                          title="Edit"
-                        >
-                          <PencilSquareIcon className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteClick(item)}
-                          className="p-1.5 bg-[#CE2029]/10 text-[#CE2029] hover:bg-[#CE2029] hover:text-white rounded-lg transition-all"
-                          title="Delete"
-                        >
-                          <TrashIcon className="w-3.5 h-3.5" />
-                        </button>
+                        {(['ADMIN', 'EA'].includes(userRole?.toUpperCase()) || item.assigned_by === currentUser) && (
+                          <>
+                            <button
+                              onClick={() => handleEdit(item)}
+                              className="p-1.5 bg-[#003875]/10 text-[#003875] dark:bg-[#FFD500]/10 dark:text-[#FFD500] hover:bg-[#003875] hover:text-white dark:hover:bg-[#FFD500] dark:hover:text-black rounded-lg transition-all"
+                              title="Edit"
+                            >
+                              <PencilSquareIcon className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteClick(item)}
+                              className="p-1.5 bg-[#CE2029]/10 text-[#CE2029] hover:bg-[#CE2029] hover:text-white rounded-lg transition-all"
+                              title="Delete"
+                            >
+                              <TrashIcon className="w-3.5 h-3.5" />
+                            </button>
+                          </>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -1244,22 +1248,24 @@ export default function ChecklistsPage() {
                           <ArrowTopRightOnSquareIcon className="w-3.5 h-3.5 flex-shrink-0" />
                           <span className="truncate">Follow Up</span>
                         </button>
-                        <div className="flex items-center gap-1">
-                          <button
-                            onClick={() => handleEdit(item)}
-                            className="p-1.5 bg-[#003875]/10 text-[#003875] dark:bg-[#FFD500]/10 dark:text-[#FFD500] hover:bg-[#003875] hover:text-white dark:hover:bg-[#FFD500] dark:hover:text-black rounded-xl transition-all"
-                            title="Edit"
-                          >
-                            <PencilSquareIcon className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => handleDeleteClick(item)}
-                            className="p-1.5 bg-[#CE2029]/10 text-[#CE2029] hover:bg-[#CE2029] hover:text-white rounded-xl transition-all"
-                            title="Delete"
-                          >
-                            <TrashIcon className="w-4 h-4" />
-                          </button>
-                        </div>
+                        {(['ADMIN', 'EA'].includes(userRole?.toUpperCase()) || item.assigned_by === currentUser) && (
+                          <div className="flex items-center gap-1">
+                            <button
+                              onClick={() => handleEdit(item)}
+                              className="p-1.5 bg-[#003875]/10 text-[#003875] dark:bg-[#FFD500]/10 dark:text-[#FFD500] hover:bg-[#003875] hover:text-white dark:hover:bg-[#FFD500] dark:hover:text-black rounded-xl transition-all"
+                              title="Edit"
+                            >
+                              <PencilSquareIcon className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteClick(item)}
+                              className="p-1.5 bg-[#CE2029]/10 text-[#CE2029] hover:bg-[#CE2029] hover:text-white rounded-xl transition-all"
+                              title="Delete"
+                            >
+                              <TrashIcon className="w-4 h-4" />
+                            </button>
+                          </div>
+                        )}
                     </div>
                   </div>
                 );
@@ -1315,24 +1321,26 @@ export default function ChecklistsPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* Assigned By Searchable Dropdown */}
                 <div className="relative">
-                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-2">Assigned By</label>
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1">Assigned By</label>
                   <div 
-                    className="w-full bg-[#FFFBF0] dark:bg-zinc-900 border border-orange-100 dark:border-zinc-800 rounded-lg shadow-sm cursor-pointer"
+                    className={`w-full bg-[#FFFBF0] dark:bg-zinc-900 border border-orange-100 dark:border-zinc-800 rounded-lg shadow-sm ${userRole?.toUpperCase() === 'USER' ? 'cursor-not-allowed opacity-75' : 'cursor-pointer'}`}
                     onClick={() => {
-                      setAssignedByOpen(!assignedByOpen);
-                      setAssignedToOpen(false);
-                      setDepartmentOpen(false);
+                      if (userRole?.toUpperCase() !== 'USER') {
+                        setAssignedByOpen(!assignedByOpen);
+                        setAssignedToOpen(false);
+                        setDepartmentOpen(false);
+                      }
                     }}
                   >
                     <div className="px-3 py-1.5 font-bold text-xs text-gray-800 dark:text-zinc-100 flex justify-between items-center hover:border-[#FFD500] transition-colors">
                       <div className="flex items-center gap-2">
                         <UserIcon className="w-3.5 h-3.5 text-gray-400" />
-                        <span>{formData.assigned_by || "Select User..."}</span>
+                        <span>{formData.assigned_by || (userRole?.toUpperCase() === 'USER' ? currentUser : "Select User...")}</span>
                       </div>
-                      <ChevronDownIcon className="w-3 h-3 text-gray-400" />
+                      {userRole?.toUpperCase() !== 'USER' && <ChevronDownIcon className="w-3 h-3 text-gray-400" />}
                     </div>
                   </div>
-                  {assignedByOpen && (
+                  {assignedByOpen && userRole?.toUpperCase() !== 'USER' && (
                     <div className="absolute z-[10000] w-full mt-1 bg-white dark:bg-zinc-900 border border-orange-100 dark:border-zinc-800 rounded-lg shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
                       <div className="p-2 border-b border-orange-50 dark:border-zinc-800">
                         <input 

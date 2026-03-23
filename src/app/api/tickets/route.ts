@@ -31,8 +31,16 @@ export async function POST(request: Request) {
     }
 
     const existingTickets = await getTickets();
-    const nextNumber = existingTickets.length + 1;
-    const newId = `TKT-${nextNumber.toString().padStart(2, '0')}`;
+    let maxId = 0;
+    existingTickets.forEach(t => {
+      const match = t.id.match(/TKT-(\d+)/);
+      if (match) {
+        const num = parseInt(match[1]);
+        if (num > maxId) maxId = num;
+      }
+    });
+    const nextNumber = maxId + 1;
+    const newId = `TKT-${nextNumber.toString().padStart(2, "0")}`;
     
     // Create new ticket object
     const newTicket = {

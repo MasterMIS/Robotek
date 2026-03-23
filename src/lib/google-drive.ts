@@ -1,5 +1,6 @@
 import { google } from "googleapis";
 import { Readable } from "stream";
+import { getDriveImageUrl } from "./drive-utils";
 
 const IMAGE_FOLDER_ID = "1WJiXLo7XVy8YDoSN1pNPCRatGzDA7yb9";
 
@@ -64,11 +65,6 @@ export async function uploadFileToDrive(file: File, folderId?: string): Promise<
   }
 }
 
-export function getDriveImageUrl(fileId: string) {
-  // Use the thumbnail endpoint which is much more reliable for direct embedding
-  return `https://drive.google.com/thumbnail?sz=w400&id=${fileId}`;
-}
-
 export async function getFileStream(fileId: string) {
   try {
     const drive = await getDriveClient();
@@ -94,3 +90,5 @@ export async function getFileStream(fileId: string) {
     return null;
   }
 }
+
+export { getDriveImageUrl };
