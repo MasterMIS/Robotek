@@ -140,6 +140,7 @@ export async function GET(request: Request) {
     // Trend Periods
     const periods: { from: Date; to: Date; label: string }[] = [];
     if (filterType === 'week') {
+      // Day-wise for the 7 days of the week
       for (let i = 0; i < 7; i++) {
         const d = new Date(from);
         d.setDate(from.getDate() + i);
@@ -147,8 +148,8 @@ export async function GET(request: Request) {
         const end = new Date(d); end.setHours(23,59,59,999);
         periods.push({ from: start, to: end, label: d.toLocaleDateString('en-US', { weekday: 'short' }) });
       }
-    } else {
-      // Month or Custom: Show 4-5 week blocks
+    } else if (filterType === 'month') {
+      // Week-wise blocks (W1–W5) for the month
       let curr = new Date(from);
       let count = 1;
       while (curr <= to && count <= 6) {
@@ -160,6 +161,19 @@ export async function GET(request: Request) {
         periods.push({ from: start, to: end, label: `W${count}` });
         curr.setDate(curr.getDate() + 7);
         count++;
+      }
+    } else {
+      // Custom / Till Date: Day-wise buckets
+      let curr = new Date(from);
+      while (curr <= to) {
+        const start = new Date(curr); start.setHours(0,0,0,0);
+        const end = new Date(curr); end.setHours(23,59,59,999);
+        periods.push({
+          from: start,
+          to: end,
+          label: curr.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+        });
+        curr.setDate(curr.getDate() + 1);
       }
     }
 
@@ -188,7 +202,13 @@ export async function GET(request: Request) {
 
     const company = calculateMetrics(allTasks, from, to);
 
-    return NextResponse.json({ company, users: userResult });
+    // Company-level trend data for the chart
+    const companyTrend = periods.map(p => {
+      const pMetrics = calculateMetrics(allTasks, p.from, p.to);
+      return { label: p.label, score: pMetrics.score, onTime: pMetrics.onTimeRate, finalScore: pMetrics.finalScore };
+    });
+
+    return NextResponse.json({ company, companyTrend, users: userResult });
   } catch (error) {
     console.error("Score aggregation error:", error);
     return NextResponse.json({ error: "Failed to aggregate score data" }, { status: 500 });

@@ -1,0 +1,93 @@
+"use client";
+
+import { useMemo, useEffect } from "react";
+import { motion, useMotionValue, useTransform, animate } from "framer-motion";
+
+interface SemiCircleGaugeProps {
+  value: number; // 0 to 100
+  label?: string;
+}
+
+export default function SemiCircleGauge({ value, label = "Overall Avg" }: SemiCircleGaugeProps) {
+  const segments = 24;
+  const radius = 65;
+  const strokeWidth = 14;
+  const cx = 100;
+  const cy = 80;
+
+  // For the animated number counting up
+  const countValue = useMotionValue(0);
+  const roundedValue = useTransform(countValue, Math.round);
+
+  useEffect(() => {
+    const animation = animate(countValue, value, { 
+      duration: 1.5, 
+      ease: "easeOut",
+      delay: 0.2
+    });
+    return animation.stop;
+  }, [value, countValue]);
+
+  const lines = useMemo(() => {
+    const l = [];
+    for (let i = 0; i < segments; i++) {
+      const angleDeg = 180 - (i / (segments - 1)) * 180;
+      const angleRad = angleDeg * (Math.PI / 180);
+      
+      const x1 = cx + (radius - strokeWidth / 2) * Math.cos(angleRad);
+      const y1 = cy - (radius - strokeWidth / 2) * Math.sin(angleRad);
+      
+      const x2 = cx + (radius + strokeWidth / 2) * Math.cos(angleRad);
+      const y2 = cy - (radius + strokeWidth / 2) * Math.sin(angleRad);
+
+      const percent = (i / (segments - 1)) * 100;
+      const isActive = percent <= value;
+      
+      const activeColor = 
+        percent < 40 ? "#EF4444" : // Rose
+        percent < 75 ? "#F59E0B" : // Amber
+        "#10B981"; // Emerald
+
+      l.push({
+        x1, y1, x2, y2,
+        isActive,
+        color: activeColor
+      });
+    }
+    return l;
+  }, [value, segments]);
+
+  return (
+    <div className="flex flex-col items-center justify-center relative w-full h-full p-2 pt-4">
+      <div className="relative w-full aspect-[2/1] max-w-[280px] mx-auto">
+        <svg viewBox="0 0 200 90" className="w-full h-full overflow-visible drop-shadow-sm">
+          {lines.map((l, i) => (
+            <motion.line
+              key={i}
+              x1={l.x1}
+              y1={l.y1}
+              x2={l.x2}
+              y2={l.y2}
+              stroke={l.isActive ? l.color : "currentColor"}
+              strokeWidth={8}
+              strokeLinecap="round"
+              className={l.isActive ? "" : "text-gray-200 dark:text-navy-800/60"}
+              initial={{ opacity: 0, pathLength: 0 }}
+              animate={{ opacity: 1, pathLength: 1 }}
+              transition={{ duration: 1.2, delay: i * 0.07, ease: "easeOut" }}
+            />
+          ))}
+        </svg>
+        <div className="absolute bottom-0 left-0 right-0 text-center translate-y-4">
+           <div className="text-3xl font-black text-gray-900 dark:text-white leading-none tracking-tighter flex items-center justify-center">
+             <motion.span>{roundedValue}</motion.span>
+             <span>%</span>
+           </div>
+           <div className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mt-1">
+             {label}
+           </div>
+        </div>
+      </div>
+    </div>
+  );
+}

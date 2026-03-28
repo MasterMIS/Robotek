@@ -1,0 +1,244 @@
+"use client";
+
+import { useState } from "react";
+
+interface TrendPoint {
+  label: string;
+  score: number;
+  onTime: number;
+}
+
+type Granularity = 'day' | 'week' | 'month' | 'quarterly' | 'yearly';
+
+interface ScoreTrendChartProps {
+  data: TrendPoint[];
+  granularity: Granularity;
+  onGranularityChange: (g: Granularity) => void;
+}
+
+const GRANULARITY_OPTIONS: { id: Granularity; label: string }[] = [
+  { id: 'day', label: 'Day' },
+  { id: 'week', label: 'Week' },
+  { id: 'month', label: 'Month' },
+  { id: 'quarterly', label: 'Quarterly' },
+  { id: 'yearly', label: 'Yearly' },
+];
+
+export default function ScoreTrendChart({ data, granularity, onGranularityChange }: ScoreTrendChartProps) {
+  const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
+
+  if (!data || data.length === 0) {
+    return (
+      <div className="flex flex-col h-full">
+        <ChartHeader granularity={granularity} onGranularityChange={onGranularityChange} />
+        <div className="flex items-center justify-center flex-1 text-[10px] font-black text-gray-300 uppercase tracking-widest">
+          No Trend Data
+        </div>
+      </div>
+    );
+  }
+
+  // Chart dimensions
+  const chartW = 500;
+  const chartH = 160;
+  const padL = 42;
+  const padR = 16;
+  const padT = 16;
+  const padB = 44;
+  const plotW = chartW - padL - padR;
+  const plotH = chartH - padT - padB;
+
+  const maxLabels = 16;
+  const step = data.length > maxLabels ? Math.ceil(data.length / maxLabels) : 1;
+
+  const toX = (i: number) => padL + (data.length === 1 ? plotW / 2 : (i / (data.length - 1)) * plotW);
+  const toY = (v: number) => padT + plotH - (v / 100) * plotH;
+
+  const makePath = (key: 'score' | 'onTime') =>
+    data
+      .map((d, i) => `${i === 0 ? 'M' : 'L'}${toX(i).toFixed(1)},${toY(d[key]).toFixed(1)}`)
+      .join(' ');
+
+  const makeAreaPath = (key: 'score' | 'onTime') => {
+    const line = data
+      .map((d, i) => `${i === 0 ? 'M' : 'L'}${toX(i).toFixed(1)},${toY(d[key]).toFixed(1)}`)
+      .join(' ');
+    return `${line} L${toX(data.length - 1).toFixed(1)},${(padT + plotH).toFixed(1)} L${toX(0).toFixed(1)},${(padT + plotH).toFixed(1)} Z`;
+  };
+
+  const yTicks = [0, 25, 50, 75, 100];
+
+  return (
+    <div className="w-full h-full flex flex-col">
+      <ChartHeader granularity={granularity} onGranularityChange={onGranularityChange} />
+
+      {/* SVG Chart */}
+      <div className="flex-1 px-1 pb-1">
+        <svg viewBox={`0 0 ${chartW} ${chartH}`} className="w-full h-full" preserveAspectRatio="xMidYMid meet">
+          <defs>
+            <linearGradient id="scoreGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#003875" stopOpacity="0.10" />
+              <stop offset="100%" stopColor="#003875" stopOpacity="0" />
+            </linearGradient>
+            <linearGradient id="onTimeGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#10b981" stopOpacity="0.08" />
+              <stop offset="100%" stopColor="#10b981" stopOpacity="0" />
+            </linearGradient>
+          </defs>
+
+          {/* Y Gridlines & Labels */}
+          {yTicks.map(v => (
+            <g key={v}>
+              <line
+                x1={padL} y1={toY(v)} x2={chartW - padR} y2={toY(v)}
+                stroke="#e5e7eb" strokeWidth="0.5" strokeDasharray="4 3"
+                className="dark:stroke-gray-700/40"
+              />
+              <text
+                x={padL - 6} y={toY(v) + 3}
+                textAnchor="end"
+                className="text-[8px] font-bold fill-gray-400"
+              >
+                {v}%
+              </text>
+            </g>
+          ))}
+
+          {/* Area fills */}
+          <path d={makeAreaPath('score')} fill="url(#scoreGrad)" />
+          <path d={makeAreaPath('onTime')} fill="url(#onTimeGrad)" />
+
+          {/* Score line - thin */}
+          <path
+            d={makePath('score')}
+            fill="none" stroke="#003875" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"
+            className="dark:stroke-[#FFD500]"
+          />
+
+          {/* On-Time line - thin dashed */}
+          <path
+            d={makePath('onTime')}
+            fill="none" stroke="#10b981" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"
+            strokeDasharray="5 3"
+          />
+
+          {/* Data points & hover zones */}
+          {data.map((d, i) => (
+            <g key={i}>
+              <rect
+                x={toX(i) - (data.length === 1 ? plotW / 2 : plotW / data.length / 2)}
+                y={padT}
+                width={data.length === 1 ? plotW : plotW / data.length}
+                height={plotH}
+                fill="transparent"
+                onMouseEnter={() => setHoveredIdx(i)}
+                onMouseLeave={() => setHoveredIdx(null)}
+              />
+
+              {/* Score dot */}
+              <circle
+                cx={toX(i)} cy={toY(d.score)} r={hoveredIdx === i ? 3.5 : 2}
+                className="fill-[#003875] dark:fill-[#FFD500] transition-all duration-200"
+                stroke="white" strokeWidth="1"
+              />
+
+              {/* On-Time dot */}
+              <circle
+                cx={toX(i)} cy={toY(d.onTime)} r={hoveredIdx === i ? 3.5 : 2}
+                fill="#10b981"
+                stroke="white" strokeWidth="1"
+                className="transition-all duration-200"
+              />
+
+              {/* Vertical hover indicator */}
+              {hoveredIdx === i && (
+                <line
+                  x1={toX(i)} y1={padT} x2={toX(i)} y2={padT + plotH}
+                  stroke="#003875" strokeWidth="0.5" strokeDasharray="3 3" opacity="0.25"
+                  className="dark:stroke-[#FFD500]"
+                />
+              )}
+
+              {/* Tooltip */}
+              {hoveredIdx === i && (
+                <g>
+                  <rect
+                    x={Math.max(2, Math.min(toX(i) - 46, chartW - 94))} y={padT - 18} width={92} height={16} rx={5}
+                    fill="#1e293b" opacity="0.92"
+                  />
+                  <text
+                    x={Math.max(48, Math.min(toX(i), chartW - 48))} y={padT - 7}
+                    textAnchor="middle"
+                    className="text-[7px] font-bold fill-white"
+                  >
+                    Score: {d.score}% | OT: {d.onTime}%
+                  </text>
+                </g>
+              )}
+            </g>
+          ))}
+
+          {/* X-axis labels */}
+          {data.map((d, i) => {
+            if (i % step !== 0 && i !== data.length - 1) return null;
+            return (
+              <text
+                key={`xl-${i}`}
+                x={toX(i)}
+                y={chartH - padB + 14}
+                textAnchor="middle"
+                className="text-[7px] font-bold fill-gray-400"
+                transform={data.length > 10 ? `rotate(-35, ${toX(i)}, ${chartH - padB + 14})` : ''}
+              >
+                {d.label}
+              </text>
+            );
+          })}
+
+          {/* X-axis period label */}
+          <text
+            x={padL + plotW / 2}
+            y={chartH - 2}
+            textAnchor="middle"
+            className="text-[8px] font-black fill-gray-300 uppercase tracking-widest"
+          >
+            {granularity === 'quarterly' ? 'Quarter' : granularity === 'yearly' ? 'Year' : granularity.charAt(0).toUpperCase() + granularity.slice(1)}
+          </text>
+        </svg>
+      </div>
+    </div>
+  );
+}
+
+// --- Chart header with legend + granularity dropdown ---
+function ChartHeader({ granularity, onGranularityChange }: { granularity: Granularity; onGranularityChange: (g: Granularity) => void }) {
+  return (
+    <div className="flex items-center justify-between px-3 pt-2.5 pb-1 gap-2 flex-wrap">
+      <h4 className="text-[10px] font-black text-gray-900 dark:text-white uppercase tracking-widest flex items-center gap-1.5 shrink-0">
+        <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 ring-2 ring-indigo-500/10" />
+        Score Trend
+      </h4>
+      <div className="flex items-center gap-3">
+        {/* Legend */}
+        <div className="flex items-center gap-1">
+          <span className="w-3 h-0.5 rounded-full bg-[#003875] dark:bg-[#FFD500]" />
+          <span className="text-[7px] font-black text-gray-400 uppercase">Score</span>
+        </div>
+        <div className="flex items-center gap-1">
+          <span className="w-3 h-0.5 rounded-full bg-emerald-500" />
+          <span className="text-[7px] font-black text-gray-400 uppercase">On-Time</span>
+        </div>
+        {/* Granularity dropdown */}
+        <select
+          value={granularity}
+          onChange={(e) => onGranularityChange(e.target.value as Granularity)}
+          className="bg-[#FFF9E6] dark:bg-navy-800 border border-[#F0E6D2] dark:border-navy-700 rounded-lg text-[8px] font-black uppercase tracking-tight px-2 py-1 text-gray-600 dark:text-gray-300 outline-none cursor-pointer hover:border-[#003875]/30 transition-colors"
+        >
+          {GRANULARITY_OPTIONS.map(opt => (
+            <option key={opt.id} value={opt.id}>{opt.label}</option>
+          ))}
+        </select>
+      </div>
+    </div>
+  );
+}

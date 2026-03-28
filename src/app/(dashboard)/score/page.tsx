@@ -21,6 +21,8 @@ import {
 import TaskDetailModal from "@/components/TaskDetailModal";
 import PremiumDatePicker from "@/components/PremiumDatePicker";
 import PremiumDateRangePicker from '@/components/PremiumDateRangePicker';
+import ScoreTrendChart from "@/components/ScoreTrendChart";
+import SemiCircleGauge from "@/components/SemiCircleGauge";
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
@@ -93,6 +95,7 @@ export default function ScorePage() {
   const [filterType, setFilterType] = useState<'week' | 'month' | 'custom' | 'tillDate'>('month');
   const [searchTerm, setSearchTerm] = useState("");
   const [expandedUsers, setExpandedUsers] = useState<Set<string>>(new Set(['COMPANY']));
+  const [chartGranularity, setChartGranularity] = useState<'day' | 'week' | 'month' | 'quarterly' | 'yearly'>('week');
   
   const [dateRange, setDateRange] = useState<{from: string, to: string}>(() => {
     const now = new Date();
@@ -135,15 +138,52 @@ export default function ScorePage() {
   const users = useMemo(() => {
     if (!data?.users) return [];
     return data.users.filter((u: any) => 
-      u.user.username.toLowerCase().includes(searchTerm.toLowerCase())
+      viewSetting === 'user' ? u.user.username.toLowerCase().includes(searchTerm.toLowerCase()) : true
     ).sort((a: any, b: any) => b.score - a.score);
-  }, [data, searchTerm]);
+  }, [data, searchTerm, viewSetting]);
+
+  const calculateDelayHours = (items: any[]) => {
+    let delayMs = 0;
+    let delayedCount = 0;
+    const now = new Date();
+    items.forEach(item => {
+      if (!item.plannedDate) return;
+      const planned = new Date(item.plannedDate);
+      if (isNaN(planned.getTime())) return;
+      
+      let itemDelayMs = 0;
+      if (item.actualDate) {
+        const actual = new Date(item.actualDate);
+        if (actual > planned) itemDelayMs = actual.getTime() - planned.getTime();
+      } else {
+        if (now > planned) itemDelayMs = now.getTime() - planned.getTime();
+      }
+      
+      if (itemDelayMs > 0) {
+        delayMs += itemDelayMs;
+        delayedCount++;
+      }
+    });
+    return delayedCount > 0 ? Math.floor(delayMs / (1000 * 60 * 60) / delayedCount) : 0;
+  };
 
   const companyStats = useMemo(() => {
     if (!users.length) return null;
+    
+    // Determine allowed categories for aggregation based on view & search
+    const activeCategories = [
+      { label: 'Delegations', id: 'delegationStats' },
+      { label: 'Checklists', id: 'checklistStats' },
+      { label: 'O2D FMS Jobs', id: 'o2dStats' }
+    ];
+    
+    const allowedCategories = viewSetting === 'category' 
+      ? activeCategories.filter(c => c.label.toLowerCase().includes(searchTerm.toLowerCase())).map(c => c.id)
+      : ['delegationStats', 'checklistStats', 'o2dStats'];
+
     const stats = {
       user: { id: 'COMPANY', username: 'COMPANY OVERALL', roleName: 'ROBOTEK SYSTEM' },
-      completed: 0, total: 0, score: 0,
+      completed: 0, total: 0, score: 0, totalDelayHours: 0,
       onTime: 0, onTimeRate: 0,
       delegationStats: { completed: 0, total: 0, score: 0, onTime: 0, onTimeRate: 0, items: [] as any[] },
       checklistStats: { completed: 0, total: 0, score: 0, onTime: 0, onTimeRate: 0, items: [] as any[] },
@@ -151,24 +191,36 @@ export default function ScorePage() {
     };
 
     users.forEach((u: any) => {
-      stats.completed += u.completed;
-      stats.total += u.total;
-      stats.onTime += u.onTime;
-      
-      stats.delegationStats.completed += u.delegationStats.completed;
-      stats.delegationStats.total += u.delegationStats.total;
-      stats.delegationStats.onTime += u.delegationStats.onTime;
-      stats.delegationStats.items.push(...u.delegationStats.items);
+      // For overall company totals, ONLY sum from the allowed categories
+      if (allowedCategories.includes('delegationStats')) {
+        stats.completed += u.delegationStats.completed;
+        stats.total += u.delegationStats.total;
+        stats.onTime += u.delegationStats.onTime;
+        stats.delegationStats.completed += u.delegationStats.completed;
+        stats.delegationStats.total += u.delegationStats.total;
+        stats.delegationStats.onTime += u.delegationStats.onTime;
+        stats.delegationStats.items.push(...u.delegationStats.items);
+      }
 
-      stats.checklistStats.completed += u.checklistStats.completed;
-      stats.checklistStats.total += u.checklistStats.total;
-      stats.checklistStats.onTime += u.checklistStats.onTime;
-      stats.checklistStats.items.push(...u.checklistStats.items);
+      if (allowedCategories.includes('checklistStats')) {
+        stats.completed += u.checklistStats.completed;
+        stats.total += u.checklistStats.total;
+        stats.onTime += u.checklistStats.onTime;
+        stats.checklistStats.completed += u.checklistStats.completed;
+        stats.checklistStats.total += u.checklistStats.total;
+        stats.checklistStats.onTime += u.checklistStats.onTime;
+        stats.checklistStats.items.push(...u.checklistStats.items);
+      }
 
-      stats.o2dStats.completed += u.o2dStats.completed;
-      stats.o2dStats.total += u.o2dStats.total;
-      stats.o2dStats.onTime += u.o2dStats.onTime;
-      stats.o2dStats.items.push(...u.o2dStats.items);
+      if (allowedCategories.includes('o2dStats')) {
+        stats.completed += u.o2dStats.completed;
+        stats.total += u.o2dStats.total;
+        stats.onTime += u.o2dStats.onTime;
+        stats.o2dStats.completed += u.o2dStats.completed;
+        stats.o2dStats.total += u.o2dStats.total;
+        stats.o2dStats.onTime += u.o2dStats.onTime;
+        stats.o2dStats.items.push(...u.o2dStats.items);
+      }
     });
 
     stats.score = stats.total > 0 ? Math.round((stats.completed / stats.total) * 100) : 0;
@@ -183,8 +235,121 @@ export default function ScorePage() {
     stats.o2dStats.score = stats.o2dStats.total > 0 ? Math.round((stats.o2dStats.completed / stats.o2dStats.total) * 100) : 0;
     stats.o2dStats.onTimeRate = stats.o2dStats.completed > 0 ? Math.round((stats.o2dStats.onTime / stats.o2dStats.completed) * 100) : 0;
 
+    stats.totalDelayHours = calculateDelayHours([
+      ...stats.delegationStats.items,
+      ...stats.checklistStats.items,
+      ...stats.o2dStats.items
+    ]);
+
     return stats;
-  }, [users]);
+  }, [users, viewSetting, searchTerm]);
+
+  // --- Chart: bucket creation + client-side aggregation from filtered users ---
+  const chartData = useMemo(() => {
+    if (!users.length) return [];
+
+    // Determine which categories to include based on search (if in category view)
+    const activeCategories = [
+      { label: 'Delegations', id: 'delegationStats' },
+      { label: 'Checklists', id: 'checklistStats' },
+      { label: 'O2D FMS Jobs', id: 'o2dStats' }
+    ];
+    
+    // In category view, filter categories by search term
+    const allowedCategories = viewSetting === 'category' 
+      ? activeCategories.filter(c => c.label.toLowerCase().includes(searchTerm.toLowerCase())).map(c => c.id)
+      : ['delegationStats', 'checklistStats', 'o2dStats']; // User view includes all mapped from filtered users
+
+    // Collect all items from filtered users/categories
+    const allItems: any[] = [];
+    users.forEach((u: any) => {
+      if (allowedCategories.includes('delegationStats')) allItems.push(...u.delegationStats.items);
+      if (allowedCategories.includes('checklistStats')) allItems.push(...u.checklistStats.items);
+      if (allowedCategories.includes('o2dStats')) allItems.push(...u.o2dStats.items);
+    });
+
+    const from = new Date(dateRange.from); from.setHours(0,0,0,0);
+    const to = new Date(dateRange.to); to.setHours(23,59,59,999);
+
+    // Create buckets
+    const buckets: { from: Date; to: Date; label: string }[] = [];
+    const curr = new Date(from);
+
+    if (chartGranularity === 'day') {
+      while (curr <= to) {
+        const s = new Date(curr); s.setHours(0,0,0,0);
+        const e = new Date(curr); e.setHours(23,59,59,999);
+        buckets.push({ from: s, to: e, label: curr.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' }) });
+        curr.setDate(curr.getDate() + 1);
+      }
+    } else if (chartGranularity === 'week') {
+      while (curr <= to) {
+        const s = new Date(curr); s.setHours(0,0,0,0);
+        const e = new Date(curr); e.setDate(e.getDate() + 6);
+        if (e > to) e.setTime(to.getTime());
+        e.setHours(23,59,59,999);
+        
+        // Calculate ISO calendar week number
+        const target = new Date(s.valueOf());
+        const dayNr = (s.getDay() + 6) % 7;
+        target.setDate(target.getDate() - dayNr + 3);
+        const firstThursday = target.valueOf();
+        target.setMonth(0, 1);
+        if (target.getDay() !== 4) {
+          target.setMonth(0, 1 + ((4 - target.getDay()) + 7) % 7);
+        }
+        const wn = 1 + Math.ceil((firstThursday - target.valueOf()) / 604800000);
+
+        buckets.push({ from: s, to: e, label: `W${wn} '${s.getFullYear().toString().slice(-2)}` });
+        curr.setDate(curr.getDate() + 7);
+      }
+    } else if (chartGranularity === 'month') {
+      while (curr <= to) {
+        const s = new Date(curr); s.setHours(0,0,0,0);
+        const e = new Date(curr.getFullYear(), curr.getMonth() + 1, 0); 
+        if (e > to) e.setTime(to.getTime());
+        e.setHours(23,59,59,999);
+        buckets.push({ from: s, to: e, label: curr.toLocaleDateString('en-US', { month: 'short', year: '2-digit' }) });
+        curr.setMonth(curr.getMonth() + 1); curr.setDate(1);
+      }
+    } else if (chartGranularity === 'quarterly') {
+      while (curr <= to) {
+        const q = Math.floor(curr.getMonth() / 3);
+        const s = new Date(curr); s.setHours(0,0,0,0);
+        const e = new Date(curr.getFullYear(), (q + 1) * 3, 0);
+        if (e > to) e.setTime(to.getTime());
+        e.setHours(23,59,59,999);
+        buckets.push({ from: s, to: e, label: `Q${q + 1} '${curr.getFullYear().toString().slice(-2)}` });
+        curr.setMonth((q + 1) * 3); curr.setDate(1);
+      }
+    } else {
+      while (curr <= to) {
+        const s = new Date(curr); s.setHours(0,0,0,0);
+        const e = new Date(curr.getFullYear(), 11, 31);
+        if (e > to) e.setTime(to.getTime());
+        e.setHours(23,59,59,999);
+        buckets.push({ from: s, to: e, label: curr.getFullYear().toString() });
+        curr.setFullYear(curr.getFullYear() + 1); curr.setMonth(0); curr.setDate(1);
+      }
+    }
+
+    // Compute metrics per bucket
+    return buckets.map(b => {
+      const inBucket = allItems.filter(item => {
+        const pd = item.plannedDate ? new Date(item.plannedDate) : null;
+        const ad = item.actualDate ? new Date(item.actualDate) : null;
+        return (pd && pd >= b.from && pd <= b.to) || (ad && ad >= b.from && ad <= b.to);
+      });
+      const total = inBucket.length;
+      const completed = inBucket.filter((i: any) => i.isCompleted).length;
+      const onTime = inBucket.filter((i: any) => i.isCompleted && !i.isLate).length;
+      return {
+        label: b.label,
+        score: total > 0 ? Math.round((completed / total) * 100) : 0,
+        onTime: completed > 0 ? Math.round((onTime / completed) * 100) : 0
+      };
+    });
+  }, [users, dateRange, chartGranularity]);
 
   const toggleUser = (userId: string) => {
     setExpandedUsers(prev => {
@@ -219,7 +384,7 @@ export default function ScorePage() {
             <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
             <input 
               type="text" 
-              placeholder="Search user..."
+              placeholder={viewSetting === 'user' ? "Search user..." : "Search category..."}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full pl-8 pr-4 py-1.5 bg-transparent outline-none font-bold text-[10px] transition-all uppercase"
@@ -311,7 +476,7 @@ export default function ScorePage() {
         <>
           {viewMode === 'grid' ? (
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 animate-in fade-in duration-500">
-              {/* Company Overall Tile - Always Shown */}
+              {/* Company Overall Tile */}
               {companyStats && (
                 <div className="group bg-[#FFFDF2] dark:bg-navy-900 rounded-[1.5rem] border-2 border-[#003875]/20 dark:border-[#FFD500]/20 shadow-lg hover:shadow-xl transition-all duration-500 overflow-hidden flex flex-col ring-4 ring-[#003875]/5 dark:ring-[#FFD500]/5">
                    <div className="p-3 border-b border-[#003875]/20 bg-gradient-to-br from-[#003875]/20 via-[#003875]/10 to-transparent dark:from-[#FFD500]/30 dark:to-transparent flex items-center justify-between">
@@ -324,14 +489,6 @@ export default function ScorePage() {
                             <div className="px-1.5 py-0.5 bg-[#003875]/10 dark:bg-yellow-500/10 rounded-md text-[7px] font-black text-[#003875] dark:text-[#FFD500] uppercase tracking-tighter mt-0.5 inline-block">SYSTEM SNAPSHOT</div>
                          </div>
                       </div>
-                      <button 
-                        onClick={() => toggleUser('COMPANY')}
-                        className={`w-8 h-5 flex items-center rounded-full transition-all duration-500 focus:outline-none p-0.5 border border-[#F0E6D2] dark:border-navy-700 ${
-                          expandedUsers.has('COMPANY') ? 'bg-[#FFD500]' : 'bg-[#FFF9E6] dark:bg-navy-800'
-                        }`}
-                      >
-                         <div className={`w-3.5 h-3.5 rounded-full shadow transition-all duration-500 ${expandedUsers.has('COMPANY') ? 'translate-x-3 bg-gray-900' : 'bg-[#DCD0B9] dark:bg-gray-400'}`} />
-                      </button>
                    </div>
                    <div className="p-3 space-y-3 flex-1">
                       <section>
@@ -344,27 +501,34 @@ export default function ScorePage() {
                             <ScoreRow label="Combined Accuracy" completed={companyStats.onTime} total={companyStats.completed} percentage={companyStats.onTimeRate} />
                          </div>
                       </section>
-                      {expandedUsers.has('COMPANY') && (
-                        <div className="space-y-2 pt-2 border-t border-[#F0E6D2] animate-in slide-in-from-top-2">
-                           {[
-                             { label: 'Delegations', id: 'delegationStats', icon: <DocumentTextIcon className="w-3.5 h-3.5" /> },
-                             { label: 'Checklists', id: 'checklistStats', icon: <ClipboardDocumentListIcon className="w-3.5 h-3.5" /> },
-                             { label: 'O2D FMS Jobs', id: 'o2dStats', icon: <ShoppingBagIcon className="w-3.5 h-3.5" /> }
-                           ].map(cat => (
-                                <section key={cat.id} className="p-2 bg-[#FFF9E6] dark:bg-navy-950/20 rounded-xl border border-[#F0E6D2]">
-                                   <div className="flex items-center gap-1.5 mb-1.5">
-                                      <cat.icon.type {...cat.icon.props} className="w-3.5 h-3.5 text-gray-400" />
-                                      <h5 className="text-[9px] font-black text-gray-500 uppercase tracking-widest leading-none">{cat.label}</h5>
-                                   </div>
-                                   <div className="space-y-0.5">
-                                      <ScoreRow label="Rate" completed={(companyStats as any)[cat.id].completed} total={(companyStats as any)[cat.id].total} percentage={(companyStats as any)[cat.id].score} />
-                                      <ScoreRow label="On-Time" completed={(companyStats as any)[cat.id].onTime} total={(companyStats as any)[cat.id].completed} percentage={(companyStats as any)[cat.id].onTimeRate} />
-                                   </div>
-                                </section>
-                           ))}
-                        </div>
-                      )}
+                      {/* Bottom Section: Gauge + Delay Hours */}
+                      <div className="pt-2 border-t border-[#F0E6D2] dark:border-navy-800/50 flex-1 flex flex-row items-end pb-2 px-1 gap-2 relative">
+                         {/* Average Gauge */}
+                         <div className="flex-1 w-full min-w-0">
+                            <SemiCircleGauge value={Math.round((companyStats.score + companyStats.onTimeRate) / 2)} />
+                         </div>
+                         
+                         {/* Average Delayed Hours Indicator (Floating Top Right) */}
+                         <div className="absolute top-3 right-3 flex flex-col items-end opacity-90 drop-shadow-sm cursor-help" title="Average delay per delayed task">
+                            <div className="flex items-center gap-1.5 text-gray-900 dark:text-white">
+                               <ClockIcon className="w-4 h-4 text-rose-500" />
+                               <span className="text-xl font-black leading-none tracking-tighter">
+                                  {companyStats.totalDelayHours}
+                               </span>
+                            </div>
+                            <div className="text-[7.5px] font-black text-gray-400 uppercase tracking-widest mt-0.5 whitespace-nowrap">
+                               Avg Delay Hrs
+                            </div>
+                         </div>
+                      </div>
                    </div>
+                </div>
+              )}
+
+              {/* Score Trend Chart (Spans remaining cols) */}
+              {companyStats && (
+                <div className="md:col-span-1 xl:col-span-3 bg-[#FFFDF2] dark:bg-navy-900 rounded-[1.5rem] border-2 border-[#003875]/20 dark:border-[#FFD500]/20 shadow-lg hover:shadow-xl transition-all duration-500 overflow-hidden ring-4 ring-[#003875]/5 dark:ring-[#FFD500]/5 min-h-[180px]">
+                   <ScoreTrendChart data={chartData} granularity={chartGranularity} onGranularityChange={setChartGranularity} />
                 </div>
               )}
 
@@ -444,12 +608,12 @@ export default function ScorePage() {
                   );
                 })
               ) : (
-                /* Category Tiles (Aggregated) */
+                /* Category Tiles (Aggregated & Filtered by Search) */
                 companyStats && [
                   { label: 'Delegations', id: 'delegationStats', icon: <DocumentTextIcon className="w-6 h-6" />, color: 'text-orange-500', bg: 'from-orange-100/50 via-orange-50/50 to-transparent dark:from-orange-900/40' },
                   { label: 'Checklists', id: 'checklistStats', icon: <ClipboardDocumentListIcon className="w-6 h-6" />, color: 'text-emerald-500', bg: 'from-emerald-100/50 via-emerald-50/50 to-transparent dark:from-emerald-900/40' },
                   { label: 'O2D FMS Jobs', id: 'o2dStats', icon: <ShoppingBagIcon className="w-6 h-6" />, color: 'text-blue-500', bg: 'from-blue-100/50 via-blue-50/50 to-transparent dark:from-blue-900/40' }
-                ].map(cat => {
+                ].filter(cat => cat.label.toLowerCase().includes(searchTerm.toLowerCase())).map(cat => {
                   const data = (companyStats as any)[cat.id];
                   return (
                     <div key={cat.id} className="group bg-[#FFFDF2] dark:bg-navy-900 rounded-[1.5rem] border-2 border-[#F0E6D2] dark:border-navy-800 shadow-sm hover:shadow-md transition-all duration-500 overflow-hidden flex flex-col cursor-pointer" onClick={() => openModal(cat.id, data.items, 'COMPANY')}>

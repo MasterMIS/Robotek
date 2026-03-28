@@ -14,8 +14,11 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Robotec ERP",
-  description: "Next-generation ERP solution for Robotec",
+  title: "Robotek ERP",
+  description: "Next-generation ERP solution for Robotek",
+  icons: {
+    icon: "/logo_compact.png",
+  },
 };
 
 export default function RootLayout({

@@ -28,6 +28,7 @@ export default function PremiumDateRangePicker({
   allowPast = true
 }: PremiumDateRangePickerProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [selectionPhase, setSelectionPhase] = useState<'start' | 'end'>('start');
   const containerRef = useRef<HTMLDivElement>(null);
   
   // Internal view state (months currently displayed)
@@ -63,16 +64,18 @@ export default function PremiumDateRangePicker({
   const handleDateClick = (date: Date) => {
     const dateStr = date.toISOString().split('T')[0];
     
-    if (!value.from || (value.from && value.to)) {
-      // Start a new range
+    if (selectionPhase === 'start') {
+      // First click — set start date, wait for end
       onChange({ from: dateStr, to: dateStr });
+      setSelectionPhase('end');
     } else {
-      // Complete the range
+      // Second click — complete the range
       if (dateStr < value.from) {
         onChange({ from: dateStr, to: value.from });
       } else {
         onChange({ from: value.from, to: dateStr });
       }
+      setSelectionPhase('start');
     }
   };
 
