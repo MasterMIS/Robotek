@@ -3,6 +3,7 @@ import { getDelegations } from "@/lib/delegation-sheets";
 import { getChecklists } from "@/lib/checklist-sheets";
 import { getO2Ds, getO2DStepConfig } from "@/lib/o2d-sheets";
 import { getUsers } from "@/lib/google-sheets";
+import { auth } from "@/auth";
 
 export const dynamic = 'force-dynamic';
 
@@ -60,6 +61,11 @@ export async function GET(request: Request) {
   const to = toStr ? new Date(toStr) : new Date(now.getFullYear(), now.getMonth() + 1, 0);
   from.setHours(0, 0, 0, 0);
   to.setHours(23, 59, 59, 999);
+
+  const session = await auth();
+  const userRole = (session?.user as any)?.role?.toUpperCase();
+  const userId = session?.user?.id;
+  const isPrivileged = userRole === "ADMIN" || userRole === "EA";
 
   try {
     const [delegations, checklists, o2ds, stepConfigs, users] = await Promise.all([
@@ -191,7 +197,7 @@ export async function GET(request: Request) {
       });
 
       return {
-        user: { id: u.id, username: u.username, roleName: u.role, image_url: u.image_url },
+        user: { id: u.id, username: u.username, roleName: u.role_name || u.role, image_url: u.image_url },
         ...metrics,
         delegationStats: { ...delegation, items: userTasks.filter(t => t.category === 'delegation' && (isDateInRange(t.plannedDate, from, to) || (t.actualDate && isDateInRange(t.actualDate, from, to)))) },
         checklistStats: { ...checklist, items: userTasks.filter(t => t.category === 'checklist' && (isDateInRange(t.plannedDate, from, to) || (t.actualDate && isDateInRange(t.actualDate, from, to)))) },
@@ -199,6 +205,11 @@ export async function GET(request: Request) {
         trendData
       };
     });
+
+    // Filter users based on privilege
+    const filteredUsers = isPrivileged 
+      ? userResult 
+      : userResult.filter(u => u.user.id === userId);
 
     const company = calculateMetrics(allTasks, from, to);
 
@@ -208,7 +219,11 @@ export async function GET(request: Request) {
       return { label: p.label, score: pMetrics.score, onTime: pMetrics.onTimeRate, finalScore: pMetrics.finalScore };
     });
 
-    return NextResponse.json({ company, companyTrend, users: userResult });
+    return NextResponse.json({ 
+      company: isPrivileged ? company : null, 
+      companyTrend: isPrivileged ? companyTrend : [], 
+      users: filteredUsers 
+    });
   } catch (error) {
     console.error("Score aggregation error:", error);
     return NextResponse.json({ error: "Failed to aggregate score data" }, { status: 500 });

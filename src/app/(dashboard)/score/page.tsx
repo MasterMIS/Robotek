@@ -28,6 +28,7 @@ import ScoreTrendChart from "@/components/ScoreTrendChart";
 import SemiCircleGauge from "@/components/SemiCircleGauge";
 import { jsPDF } from "jspdf";
 import * as htmlToImage from 'html-to-image';
+import { useSession } from "next-auth/react";
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
@@ -953,8 +954,13 @@ export default function ScorePage() {
 }
 
 function ScorePageContent() {
+  const { data: session } = useSession();
   const searchParams = useSearchParams();
   const isPrintMode = searchParams.get('print') === 'true';
+  
+  const userRole = (session?.user as any)?.role?.toUpperCase();
+  const currentUserId = session?.user?.id;
+  const isPrivileged = userRole === "ADMIN" || userRole === "EA";
 
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
   const [viewSetting, setViewSetting] = useState<'user' | 'category'>('user');
@@ -1084,6 +1090,13 @@ function ScorePageContent() {
     fetcher, 
     { refreshInterval: 120000 }
   );
+
+  // Auto-select user if not privileged
+  useEffect(() => {
+    if (!isPrivileged && data?.users?.length > 0 && !selectedUserId) {
+        setSelectedUserId(data.users[0].user.id);
+    }
+  }, [data, isPrivileged, selectedUserId]);
 
   const users = useMemo(() => {
     if (!data?.users) return [];
@@ -1362,17 +1375,19 @@ function ScorePageContent() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          {/* Search */}
-          <div className="relative group min-w-[180px] bg-[#FFFDF2] dark:bg-navy-900 border-2 border-[#F0E6D2] dark:border-navy-800 rounded-xl overflow-hidden shadow-sm">
-            <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
-            <input 
-              type="text" 
-              placeholder={viewSetting === 'user' ? "Search user..." : "Search category..."}
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-8 pr-4 py-1.5 bg-transparent outline-none font-bold text-[10px] transition-all uppercase"
-            />
-          </div>
+          {/* Search - Only for Privileged */}
+          {isPrivileged && (
+            <div className="relative group min-w-[180px] bg-[#FFFDF2] dark:bg-navy-900 border-2 border-[#F0E6D2] dark:border-navy-800 rounded-xl overflow-hidden shadow-sm">
+              <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+              <input 
+                type="text" 
+                placeholder={viewSetting === 'user' ? "Search user..." : "Search category..."}
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-8 pr-4 py-1.5 bg-transparent outline-none font-bold text-[10px] transition-all uppercase"
+              />
+            </div>
+          )}
           <div className="relative" ref={filterDropdownRef}>
             <button 
               onClick={() => setIsFilterDropdownOpen(!isFilterDropdownOpen)}
@@ -1441,37 +1456,41 @@ function ScorePageContent() {
                <ExclamationCircleIcon className="w-6 h-6 stroke-[2.5]" />
              </button>
           </div>
-           {/* View Selection Toggle (User / Category) */}
-           <div className="bg-[#FFFDF2] dark:bg-navy-900 p-0.5 rounded-xl border-2 border-[#F0E6D2] dark:border-navy-800 flex shadow-sm transition-all overflow-hidden mr-2">
-              <button 
-               onClick={() => setViewSetting('user')}
-               className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${viewSetting === 'user' ? 'bg-[#003875] dark:bg-[#FFD500] text-white dark:text-black shadow-md' : 'text-gray-400 hover:text-gray-600'}`}
-              >
-                By User
-              </button>
-              <button 
-               onClick={() => setViewSetting('category')}
-               className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${viewSetting === 'category' ? 'bg-[#003875] dark:bg-[#FFD500] text-white dark:text-black shadow-md' : 'text-gray-400 hover:text-gray-600'}`}
-              >
-                By Category
-              </button>
-           </div>
+           {/* View Selection Toggle (User / Category) - Privileged Only */}
+           {isPrivileged && (
+             <div className="bg-[#FFFDF2] dark:bg-navy-900 p-0.5 rounded-xl border-2 border-[#F0E6D2] dark:border-navy-800 flex shadow-sm transition-all overflow-hidden mr-2">
+                <button 
+                 onClick={() => setViewSetting('user')}
+                 className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${viewSetting === 'user' ? 'bg-[#003875] dark:bg-[#FFD500] text-white dark:text-black shadow-md' : 'text-gray-400 hover:text-gray-600'}`}
+                >
+                  By User
+                </button>
+                <button 
+                 onClick={() => setViewSetting('category')}
+                 className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${viewSetting === 'category' ? 'bg-[#003875] dark:bg-[#FFD500] text-white dark:text-black shadow-md' : 'text-gray-400 hover:text-gray-600'}`}
+                >
+                  By Category
+                </button>
+             </div>
+           )}
 
-           {/* View Mode Toggle - Pill Style */}
-           <div className="bg-[#FFFDF2] dark:bg-navy-900 p-0 rounded-full border-2 border-[#F0E6D2] dark:border-navy-800 flex shadow-sm overflow-hidden">
-              <button 
-               onClick={() => setViewMode('grid')}
-               className={`p-2 rounded-full transition-all ${viewMode === 'grid' ? 'bg-[#003875] dark:bg-[#FFD500] text-white dark:text-black shadow-md scale-105' : 'text-gray-400 hover:text-gray-600'}`}
-              >
-                <Squares2X2Icon className="w-4 h-4" />
-              </button>
-              <button 
-               onClick={() => setViewMode('table')}
-               className={`p-2 rounded-full transition-all ${viewMode === 'table' ? 'bg-[#003875] dark:bg-[#FFD500] text-white dark:text-black shadow-md scale-105' : 'text-gray-400 hover:text-gray-600'}`}
-              >
-                <ListBulletIcon className="w-4 h-4" />
-              </button>
-           </div>
+           {/* View Mode Toggle - Pill Style - Privileged Only */}
+           {isPrivileged && (
+             <div className="bg-[#FFFDF2] dark:bg-navy-900 p-0 rounded-full border-2 border-[#F0E6D2] dark:border-navy-800 flex shadow-sm overflow-hidden">
+                <button 
+                 onClick={() => setViewMode('grid')}
+                 className={`p-2 rounded-full transition-all ${viewMode === 'grid' ? 'bg-[#003875] dark:bg-[#FFD500] text-white dark:text-black shadow-md scale-105' : 'text-gray-400 hover:text-gray-600'}`}
+                >
+                  <Squares2X2Icon className="w-4 h-4" />
+                </button>
+                <button 
+                 onClick={() => setViewMode('table')}
+                 className={`p-2 rounded-full transition-all ${viewMode === 'table' ? 'bg-[#003875] dark:bg-[#FFD500] text-white dark:text-black shadow-md scale-105' : 'text-gray-400 hover:text-gray-600'}`}
+                >
+                  <ListBulletIcon className="w-4 h-4" />
+                </button>
+             </div>
+           )}
 
             {selectedUserId && (
              <div className="flex items-center">
@@ -1492,8 +1511,9 @@ function ScorePageContent() {
         </div>
       </div>
 
-      {/* Back to Dashboard Button - Outside profile cards */}
-      {(selectedUserId || selectedCategoryId) && (
+
+      {/* Back to Dashboard Button - Only for Privileged */}
+      {(selectedUserId || selectedCategoryId) && isPrivileged && (
         <div className="px-4">
           <button 
             onClick={() => { setSelectedUserId(null); setSelectedCategoryId(null); }}
@@ -1542,7 +1562,8 @@ function ScorePageContent() {
                 )}
 
             </div>
-          ) : viewMode === 'grid' ? (
+          ) : isPrivileged ? (
+              viewMode === 'grid' ? (
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 animate-in fade-in duration-500">
               {/* Company Overall Tile */}
               {companyStats && (
@@ -1750,7 +1771,7 @@ function ScorePageContent() {
                  </table>
                </div>
             </div>
-          )}
+          )) : null}
         </>
       )}
     </div>
