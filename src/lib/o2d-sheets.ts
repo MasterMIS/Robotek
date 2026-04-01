@@ -1,6 +1,7 @@
 import { BaseSheetsService, getColumnLetter } from "./sheets/base-service";
 import { O2D, O2DStepConfig } from "@/types/o2d";
 import { google } from "googleapis";
+import { globalCache } from "./cache";
 
 const GOOGLE_SHEET_ID = "1T0vSzAgHoO21DifCUcPMRLR4yOy-kFteJ2bv6pG-UTc";
 const SHEET_NAME = "O2D";
@@ -315,10 +316,10 @@ class O2DService extends BaseSheetsService<O2D> {
       const sheets = await this.getSheetsClient();
       let indicesToUpdate: number[] = [];
       const cacheKey = `${this.spreadsheetId}_${this.sheetName}`;
-      const cached = O2DService.cacheMap[cacheKey];
+      const cachedData = globalCache.get<O2D[]>(cacheKey);
 
-      if (cached && cached.data) {
-        indicesToUpdate = cached.data
+      if (cachedData) {
+        indicesToUpdate = cachedData
           .map((item: O2D, index: number) => (item.order_no === orderNo ? index + 1 : -1))
           .filter((index: number) => index !== -1);
       }
@@ -398,17 +399,28 @@ class O2DService extends BaseSheetsService<O2D> {
   }
 
   async getStepConfig(): Promise<O2DStepConfig[]> {
+    const cacheKey = `${this.spreadsheetId}_step_config`;
+    const cached = globalCache.get<O2DStepConfig[]>(cacheKey);
+    if (cached) return cached;
+
     const sheets = await this.getSheetsClient();
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: this.spreadsheetId,
       range: `${CONFIG_SHEET_NAME}!A2:C`,
     });
-    return response.data.values?.map(row => ({
+    const data = response.data.values?.map(row => ({
       step_name: row[0] || "", tat: row[1] || "", responsible_person: row[2] || ""
     })) || [];
+    
+    globalCache.set(cacheKey, data, 60 * 60 * 1000); // 1 hour TTL
+    return data;
   }
 
   async getDetails(): Promise<{ parties: string[]; items: { name: string; amount: string }[] }> {
+    const cacheKey = `${this.spreadsheetId}_details`;
+    const cached = globalCache.get<{ parties: string[]; items: { name: string; amount: string }[] }>(cacheKey);
+    if (cached) return cached;
+
     try {
       const sheets = await this.getSheetsClient();
       const response = await sheets.spreadsheets.values.get({
@@ -418,7 +430,10 @@ class O2DService extends BaseSheetsService<O2D> {
       const rows = response.data.values || [];
       const parties = Array.from(new Set(rows.map(row => row[0]).filter(Boolean)));
       const items = rows.map(row => ({ name: row[1] || "", amount: row[2] || "" })).filter(item => item.name);
-      return { parties, items };
+      const data = { parties, items };
+      
+      globalCache.set(cacheKey, data, 30 * 60 * 1000); // 30 mins TTL
+      return data;
     } catch (error) {
       return { parties: [], items: [] };
     }
@@ -429,10 +444,10 @@ class O2DService extends BaseSheetsService<O2D> {
       const sheets = await this.getSheetsClient();
       let indicesToDelete: number[] = [];
       const cacheKey = `${this.spreadsheetId}_${this.sheetName}`;
-      const cached = O2DService.cacheMap[cacheKey];
+      const cachedData = globalCache.get<O2D[]>(cacheKey);
 
-      if (cached && cached.data) {
-        indicesToDelete = cached.data
+      if (cachedData) {
+        indicesToDelete = cachedData
           .map((item: O2D, index: number) => (item.order_no === orderNo ? index + 1 : -1))
           .filter((index: number) => index !== -1);
       }
@@ -505,6 +520,7 @@ export async function updateO2DStepConfig(configs: O2DStepConfig[]): Promise<boo
         values: configs.map(c => [c.step_name, c.tat, c.responsible_person]),
       },
     });
+    globalCache.delete(`${GOOGLE_SHEET_ID}_step_config`);
     return true;
   } catch (error) {
     return false;

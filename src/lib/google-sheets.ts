@@ -124,10 +124,20 @@ export async function updateUser(id: string, user: User): Promise<boolean> {
   }
 }
 
+import { globalCache } from "./cache";
+
 const VISIBILITY_SHEET_NAME = "page_visibility";
 
 export async function getPagePermissions(): Promise<Record<string, string[]>> {
+  const cacheKey = "page_permissions";
+  const cached = globalCache.get<Record<string, string[]>>(cacheKey);
+  if (cached) {
+    console.log("[CACHE HIT] Permissions");
+    return cached;
+  }
+
   try {
+    console.log("[API CALL] Fetching Permissions...");
     const sheets = await getSheetsClient();
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: GOOGLE_SHEET_ID,
@@ -154,6 +164,7 @@ export async function getPagePermissions(): Promise<Record<string, string[]>> {
         permissions[userId] = userPerms;
     }
 
+    globalCache.set(cacheKey, permissions, 15 * 60 * 1000); // 15 minutes TTL
     return permissions;
   } catch (error) {
     console.error("Error fetching permissions:", error);
@@ -233,6 +244,7 @@ export async function updateUserPermissions(userId: string, username: string, us
       });
     }
 
+    globalCache.delete("page_permissions");
     return true;
   } catch (error) {
     console.error("Error updating user permissions:", error);

@@ -1,4 +1,5 @@
 import { google } from "googleapis";
+import { globalCache } from "../cache";
 
 export interface SheetItem {
   id: string | number;
@@ -22,11 +23,8 @@ export abstract class BaseSheetsService<T extends SheetItem> {
   protected abstract range: string;
   protected abstract idColumnIndex: number; // 0-based
 
-  // Memory cache (per instance)
-  protected static cacheMap: Record<string, { data: any[]; timestamp: number }> = {};
-  protected static headerCache: Record<string, string[]> = {};
   protected hMap: Record<string, number> = {};
-  private CACHE_TTL = 10000; // 10 seconds for real-time sync
+  private CACHE_TTL = 30000; // 30 seconds (was 10s)
 
   protected abstract mapRowToItem(row: any[]): T;
   protected abstract mapItemToRow(item: T): any[];
@@ -52,14 +50,15 @@ export abstract class BaseSheetsService<T extends SheetItem> {
   async getAll(): Promise<T[]> {
     await this.ensureHeaders();
     const cacheKey = `${this.spreadsheetId}_${this.sheetName}`;
-    const now = Date.now();
-    const cached = BaseSheetsService.cacheMap[cacheKey];
+    const cachedData = globalCache.get<T[]>(cacheKey);
 
-    if (cached && now - cached.timestamp < this.CACHE_TTL) {
-      return cached.data;
+    if (cachedData) {
+      console.log(`[CACHE HIT] ${this.sheetName}`);
+      return cachedData;
     }
 
     try {
+      console.log(`[API CALL] Fetching ${this.sheetName}...`);
       const sheets = await this.getSheetsClient();
       const response = await sheets.spreadsheets.values.get({
         spreadsheetId: this.spreadsheetId,
@@ -68,25 +67,28 @@ export abstract class BaseSheetsService<T extends SheetItem> {
 
       const rows = response.data.values;
       if (rows && rows.length > 0) {
-        BaseSheetsService.headerCache[cacheKey] = rows[0].map((h: any) => h.toString().toLowerCase().trim());
+        const headers = rows[0].map((h: any) => h.toString().toLowerCase().trim());
+        globalCache.set(`${this.spreadsheetId}_${this.sheetName}_headers`, headers, 24 * 60 * 60 * 1000); // Cache headers for 24 hours
       }
       
       const data = rows ? rows.slice(1).map((row) => this.mapRowToItem(row)) : [];
-      BaseSheetsService.cacheMap[cacheKey] = { data, timestamp: now };
+      globalCache.set(cacheKey, data, this.CACHE_TTL);
       return data;
     } catch (error) {
       console.error(`Error fetching ${this.sheetName}:`, error);
-      return cached ? cached.data : [];
+      return [];
     }
   }
 
   async getHeaders(): Promise<string[]> {
-    const cacheKey = `${this.spreadsheetId}_${this.sheetName}`;
-    if (BaseSheetsService.headerCache[cacheKey]) {
-      return BaseSheetsService.headerCache[cacheKey];
+    const cacheKey = `${this.spreadsheetId}_${this.sheetName}_headers`;
+    const cachedHeaders = globalCache.get<string[]>(cacheKey);
+    if (cachedHeaders) {
+      return cachedHeaders;
     }
     
     try {
+      console.log(`[API CALL] Fetching headers for ${this.sheetName}...`);
       const sheets = await this.getSheetsClient();
       const response = await sheets.spreadsheets.values.get({
         spreadsheetId: this.spreadsheetId,
@@ -94,14 +96,13 @@ export abstract class BaseSheetsService<T extends SheetItem> {
       });
       
       const headers = response.data.values?.[0]?.map((h: any) => h.toString().toLowerCase().trim()) || [];
-      BaseSheetsService.headerCache[cacheKey] = headers;
+      globalCache.set(cacheKey, headers, 24 * 60 * 60 * 1000); // Cache headers for 24 hours
       return headers;
     } catch (error) {
       console.error(`Error fetching headers for ${this.sheetName}:`, error);
       return [];
     }
   }
-
   async getHeaderMap(): Promise<Record<string, number>> {
     const headers = await this.getHeaders();
     const map: Record<string, number> = {};
@@ -114,6 +115,7 @@ export abstract class BaseSheetsService<T extends SheetItem> {
   async add(item: T): Promise<boolean> {
     await this.ensureHeaders();
     try {
+      console.log(`[API CALL] Adding to ${this.sheetName}...`);
       const sheets = await this.getSheetsClient();
       await sheets.spreadsheets.values.append({
         spreadsheetId: this.spreadsheetId,
@@ -135,9 +137,9 @@ export abstract class BaseSheetsService<T extends SheetItem> {
   async update(id: string | number, item: T): Promise<boolean> {
     await this.ensureHeaders();
     try {
+      console.log(`[API CALL] Updating ${this.sheetName} ID: ${id}...`);
       const sheets = await this.getSheetsClient();
       
-      // Efficient read for column IDs only
       const idColLetter = getColumnLetter(this.idColumnIndex);
       const response = await sheets.spreadsheets.values.get({
         spreadsheetId: this.spreadsheetId,
@@ -152,10 +154,8 @@ export abstract class BaseSheetsService<T extends SheetItem> {
       
       if (rowIndex === -1) return false;
 
-      // Extract the end column letter from the range (e.g., "A:BG" -> "BG")
       const endCol = this.range.split(':')[1] || 'Z';
 
-      // Update the specific row within the full range
       await sheets.spreadsheets.values.update({
         spreadsheetId: this.spreadsheetId,
         range: `${this.sheetName}!A${rowIndex + 1}:${endCol}${rowIndex + 1}`,
@@ -175,6 +175,7 @@ export abstract class BaseSheetsService<T extends SheetItem> {
 
   async delete(id: string | number): Promise<boolean> {
     try {
+      console.log(`[API CALL] Deleting from ${this.sheetName} ID: ${id}...`);
       const sheets = await this.getSheetsClient();
       const idColLetter = getColumnLetter(this.idColumnIndex);
       const response = await sheets.spreadsheets.values.get({
@@ -214,7 +215,7 @@ export abstract class BaseSheetsService<T extends SheetItem> {
 
   protected invalidateCache() {
     const cacheKey = `${this.spreadsheetId}_${this.sheetName}`;
-    delete BaseSheetsService.cacheMap[cacheKey];
-    delete BaseSheetsService.headerCache[cacheKey];
+    globalCache.delete(cacheKey);
+    // Note: We don't necessarily need to invalidate headers on data changes
   }
 }
