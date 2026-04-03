@@ -68,7 +68,10 @@ interface SearchableDropdownProps {
 function SearchableDropdown({ label, icon: Icon, value, onChange, options, placeholder, required, keepOpen = false, listPosition = "absolute" }: SearchableDropdownProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState("");
+  const [activeIndex, setActiveIndex] = useState(-1);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  const itemRefs = useRef<(HTMLDivElement | null)[]>([]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -80,9 +83,47 @@ function SearchableDropdown({ label, icon: Icon, value, onChange, options, place
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  // Reset active index when search changes or dropdown opens
+  useEffect(() => {
+    setActiveIndex(-1);
+  }, [search, isOpen]);
+
+  // Auto-scroll active item into view
+  useEffect(() => {
+    if (activeIndex >= 0 && itemRefs.current[activeIndex]) {
+      itemRefs.current[activeIndex]?.scrollIntoView({ block: "nearest" });
+    }
+  }, [activeIndex]);
+
   const filteredOptions = options.filter(opt =>
     opt.toLowerCase().includes(search.toLowerCase())
   );
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!isOpen) return;
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setActiveIndex(prev => (prev + 1) % filteredOptions.length);
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setActiveIndex(prev => prev <= 0 ? filteredOptions.length - 1 : prev - 1);
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      if (activeIndex >= 0 && activeIndex < filteredOptions.length) {
+        onChange(filteredOptions[activeIndex]);
+        if (!keepOpen) {
+          setIsOpen(false);
+          setSearch("");
+          setActiveIndex(-1);
+        }
+      }
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      setIsOpen(false);
+      setSearch("");
+      setActiveIndex(-1);
+    }
+  };
 
   return (
     <div className="relative" ref={dropdownRef}>
@@ -108,29 +149,36 @@ function SearchableDropdown({ label, icon: Icon, value, onChange, options, place
               <input
                 type="text"
                 autoFocus
-                placeholder="Search..."
+                placeholder="Search... (↑↓ to navigate, Enter to select)"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
+                onKeyDown={handleKeyDown}
                 className="w-full pl-7 pr-3 py-1.5 bg-gray-50 dark:bg-navy-950 border-none outline-none text-[11px] font-bold text-gray-700 dark:text-white rounded-md"
               />
             </div>
           </div>
-          <div className="max-h-52 overflow-y-auto no-scrollbar">
+          <div ref={listRef} className="max-h-52 overflow-y-auto no-scrollbar">
             {filteredOptions.length > 0 ? (
               filteredOptions.map((opt, i) => (
                 <div
                   key={i}
+                  ref={el => { itemRefs.current[i] = el; }}
                   onClick={() => {
                     onChange(opt);
                     if (!keepOpen) {
                       setIsOpen(false);
                       setSearch("");
+                      setActiveIndex(-1);
                     }
                   }}
-                  className={`px-4 py-2 text-[11px] font-bold cursor-pointer transition-colors ${value === opt
-                      ? 'bg-[#FFD500] text-black'
-                      : 'text-gray-600 dark:text-gray-300 hover:bg-orange-50 dark:hover:bg-white/5'
-                    }`}
+                  onMouseEnter={() => setActiveIndex(i)}
+                  className={`px-4 py-2 text-[11px] font-bold cursor-pointer transition-colors ${
+                    i === activeIndex
+                      ? 'bg-[#003875] text-white dark:bg-[#FFD500] dark:text-black'
+                      : value === opt
+                        ? 'bg-[#FFD500] text-black'
+                        : 'text-gray-600 dark:text-gray-300 hover:bg-orange-50 dark:hover:bg-white/5'
+                  }`}
                 >
                   {opt}
                 </div>
@@ -2016,12 +2064,11 @@ export default function O2DPage() {
 
                 {/* Dynamic Items */}
                 <div className="space-y-3">
-                  <div className="flex items-center justify-between px-1">
+                  <div className="flex items-center px-1">
                     <div className="flex items-center gap-2">
                       <div className="w-1 h-5 bg-[#CE2029] rounded-full" />
                       <h3 className="text-[10px] font-black uppercase tracking-widest text-gray-600 dark:text-gray-200">ITEMIZED LOGISTICS</h3>
                     </div>
-                    <button type="button" onClick={addItemRow} className="flex items-center gap-2 text-[9px] font-black uppercase tracking-widest text-[#003875] dark:text-[#FFD500] hover:scale-105 transition-all bg-[#003875]/5 dark:bg-[#FFD500]/10 px-4 py-2 rounded-full shadow-sm"><PlusIcon className="w-3.5 h-3.5 stroke-[3]" /> ADD LINE ITEM</button>
                   </div>
 
                   <div className="space-y-1.5">
@@ -2063,6 +2110,11 @@ export default function O2DPage() {
                         </div>
                       </div>
                     ))}
+                  </div>
+
+                  {/* Add Line Item - bottom */}
+                  <div className="flex justify-center pt-1">
+                    <button type="button" onClick={addItemRow} className="flex items-center gap-2 text-[9px] font-black uppercase tracking-widest text-[#003875] dark:text-[#FFD500] hover:scale-105 transition-all bg-[#003875]/5 dark:bg-[#FFD500]/10 px-4 py-2 rounded-full shadow-sm"><PlusIcon className="w-3.5 h-3.5 stroke-[3]" /> ADD LINE ITEM</button>
                   </div>
                 </div>
               </div>

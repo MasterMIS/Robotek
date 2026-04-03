@@ -5,6 +5,8 @@ import useSWR from "swr";
 import MessageBubble from "./MessageBubble";
 import ChatInput from "./ChatInput";
 import { UserCircleIcon, InformationCircleIcon } from "@heroicons/react/24/outline";
+import { XMarkIcon, ArrowDownTrayIcon, DocumentDuplicateIcon, CheckIcon } from "@heroicons/react/24/outline";
+import { getDriveImageUrl } from "@/lib/drive-utils";
 
 interface ChatMessage {
   id: string;
@@ -45,6 +47,9 @@ function getAvatarGradient(username: string) {
 export default function ChatWindow({ chatId, currentUsername }: ChatWindowProps) {
   const [isSending, setIsSending] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  
+  const [previewMediaUrl, setPreviewMediaUrl] = useState<string | null>(null);
+  const [isCopied, setIsCopied] = useState(false);
 
   // Fetch messages between current user and the partner (chatId)
   const { data: messages, mutate } = useSWR<ChatMessage[]>(`/api/chat/messages?chatId=${chatId}`, fetcher, {
@@ -137,10 +142,11 @@ export default function ChatWindow({ chatId, currentUsername }: ChatWindowProps)
         </button>
       </div>
 
-      {/* Messages */}
-      <div 
-        className="flex-1 overflow-y-auto p-4 md:p-6 custom-scrollbar flex flex-col gap-2 relative z-0"
-      >
+      {/* Messages Area Container */}
+      <div className="flex-1 relative flex flex-col overflow-hidden z-0">
+        <div 
+          className="flex-1 overflow-y-auto p-4 md:p-6 custom-scrollbar flex flex-col gap-2 relative z-0"
+        >
 
         {!messages ? (
           <div className="flex-1 flex items-center justify-center">
@@ -167,11 +173,88 @@ export default function ChatWindow({ chatId, currentUsername }: ChatWindowProps)
                 message={msg as any}
                 isOwn={isOwn}
                 showTail={showTail}
+                onImageClick={(url) => setPreviewMediaUrl(url)}
               />
             );
           })
         )}
         <div ref={messagesEndRef} />
+        </div>
+
+        {/* Message Area Preview Modal */}
+        {previewMediaUrl && (
+          <div 
+            className="absolute inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 transition-opacity"
+            onClick={() => setPreviewMediaUrl(null)}
+          >
+            <div 
+              className="relative max-w-3xl w-full max-h-full flex flex-col items-center justify-center"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <button 
+                onClick={() => setPreviewMediaUrl(null)}
+                className="absolute top-0 right-0 md:-right-12 md:top-0 p-2 text-white/70 hover:text-white transition-colors bg-black/40 rounded-full md:bg-transparent"
+              >
+                <XMarkIcon className="w-8 h-8" />
+              </button>
+              
+              <img 
+                src={getDriveImageUrl(previewMediaUrl)}
+                alt="Preview"
+                className="max-w-full max-h-[70vh] object-contain rounded-lg shadow-2xl"
+              />
+
+              <div className="flex gap-4 mt-6">
+                <button
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    try {
+                      // Fetch image natively using our unrestricted proxy
+                      const response = await fetch(`/api/drive-proxy?id=${previewMediaUrl}`);
+                      if (!response.ok) throw new Error("Proxy fetch failed");
+                      const blob = await response.blob();
+                      await navigator.clipboard.write([
+                        new ClipboardItem({ [blob.type]: blob })
+                      ]);
+                      setIsCopied(true);
+                      setTimeout(() => setIsCopied(false), 2000);
+                    } catch (err) {
+                      console.error("Failed to copy image to clipboard:", err);
+                      // Fallback: copy view link
+                      navigator.clipboard.writeText(`https://drive.google.com/file/d/${previewMediaUrl}/view`);
+                      setIsCopied(true);
+                      setTimeout(() => setIsCopied(false), 2000);
+                    }
+                  }}
+                  className="flex items-center gap-2 px-6 py-2.5 bg-white/10 hover:bg-white/20 text-white rounded-full font-medium transition-all backdrop-blur-md"
+                >
+                  {isCopied ? (
+                    <>
+                      <CheckIcon className="w-5 h-5 text-green-400" />
+                      <span className="text-green-400">Copied!</span>
+                    </>
+                  ) : (
+                    <>
+                      <DocumentDuplicateIcon className="w-5 h-5" />
+                      <span>Copy</span>
+                    </>
+                  )}
+                </button>
+                
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    window.open(`https://drive.google.com/uc?export=download&id=${previewMediaUrl}`, '_blank');
+                  }}
+                  className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-full font-medium shadow-lg transition-all"
+                >
+                  <ArrowDownTrayIcon className="w-5 h-5" />
+                  <span>Download</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Input Area */}

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { format } from "date-fns";
 import { getDriveImageUrl } from "@/lib/drive-utils";
 import { PlayIcon, PauseIcon, MicrophoneIcon } from "@heroicons/react/24/solid";
+import { XMarkIcon, ArrowDownTrayIcon, DocumentDuplicateIcon, CheckIcon } from "@heroicons/react/24/outline";
 
 interface ChatMessage {
   id: string;
@@ -18,6 +19,7 @@ interface MessageBubbleProps {
   message: ChatMessage;
   isOwn: boolean;
   showTail?: boolean;
+  onImageClick?: (url: string) => void;
 }
 
 // Utility to check if text contains ONLY emojis and whitespace
@@ -29,7 +31,7 @@ const isEmojiOnly = (text: string) => {
   return emojiRegex.test(stripped);
 };
 
-export default function MessageBubble({ message, isOwn, showTail = true }: MessageBubbleProps) {
+export default function MessageBubble({ message, isOwn, showTail = true, onImageClick }: MessageBubbleProps) {
   const emojisOnly = message.type === "text" && isEmojiOnly(message.text);
   const isRead = isOwn && message.read_by?.includes(message.receiver_id);
 
@@ -114,7 +116,7 @@ export default function MessageBubble({ message, isOwn, showTail = true }: Messa
               src={getDriveImageUrl(message.media_url)}
               alt="Uploaded media"
               className={`max-w-[180px] md:max-w-[220px] rounded-xl cursor-pointer hover:opacity-90 transition-opacity ${isOwn ? "border border-white/20" : "border border-white/10"}`}
-              onClick={() => window.open(`https://drive.google.com/file/d/${message.media_url}/view`, '_blank')}
+              onClick={() => onImageClick && onImageClick(message.media_url)}
             />
           </div>
         )}
