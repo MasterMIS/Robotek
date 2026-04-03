@@ -149,7 +149,7 @@ function SearchableDropdown({ label, icon: Icon, value, onChange, options, place
               <input
                 type="text"
                 autoFocus
-                placeholder="Search... (↑↓ to navigate, Enter to select)"
+                placeholder="Search... (â†‘â†“ to navigate, Enter to select)"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 onKeyDown={handleKeyDown}
@@ -243,6 +243,14 @@ export default function O2DPage() {
   const [busySearchQuery, setBusySearchQuery] = useState("");
 
   const [detailViewMode, setDetailViewMode] = useState<'full' | 'table'>('full');
+  const [pageViewMode, setPageViewMode] = useState<'panels' | 'table'>('panels');
+  const [filterStartDate, setFilterStartDate] = useState("");
+  const [filterEndDate, setFilterEndDate] = useState("");
+  const [tableFilterParty, setTableFilterParty] = useState("");
+  const [tableFilterOrderNo, setTableFilterOrderNo] = useState("");
+  const [tableCurrentPage, setTableCurrentPage] = useState(1);
+  const tableItemsPerPage = 25;
+
   const [showFilters, setShowFilters] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
 
@@ -346,6 +354,10 @@ export default function O2DPage() {
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm, selectedDateFilters, selectedStepFilters]);
+
+  useEffect(() => {
+    setTableCurrentPage(1);
+  }, [searchTerm, tableFilterParty, tableFilterOrderNo, filterStartDate, filterEndDate]);
 
 
   const toggleDateFilter = (id: string) => {
@@ -539,7 +551,7 @@ export default function O2DPage() {
   };
 
   const resetForm = () => {
-    setCommonData({ order_no: generateOrderNo(o2ds), party_name: "", remark: "" });
+    setCommonData({ order_no: "", party_name: "", remark: "" });
     setItems([{ item_name: "", item_qty: "", est_amount: "", item_specification: "" }]);
     setScreenshotFile(null); setImagePreview(null);
     setEditingOrderNo(null);
@@ -719,6 +731,7 @@ export default function O2DPage() {
         if (!res.ok) throw new Error("Update failed");
       } else {
         const tat1 = globalConfigs[0]?.tat || "24 Hrs";
+        const finalOrderNo = generateOrderNo(o2ds);
         let initRecord: any = { planned_1: calculatePlannedDate(now, tat1) };
         for (let i = 2; i <= 11; i++) initRecord[`planned_${i}`] = "";
 
@@ -726,7 +739,7 @@ export default function O2DPage() {
           currentMaxId++;
           return {
             ...initRecord,
-            id: currentMaxId.toString(), order_no: commonData.order_no, party_name: commonData.party_name,
+            id: currentMaxId.toString(), order_no: finalOrderNo, party_name: commonData.party_name,
             item_name: item.item_name, item_qty: item.item_qty, est_amount: item.est_amount,
             item_specification: item.item_specification,
             remark: commonData.remark, filled_by: currentUser, created_at: now, updated_at: now
@@ -924,6 +937,51 @@ export default function O2DPage() {
     return groupedOrders[selectedOrderNo || ""] || [];
   }, [groupedOrders, selectedOrderNo]);
 
+  const flattenedO2Ds = useMemo(() => {
+    return [...o2ds].reverse().map(item => ({ ...item }));
+  }, [o2ds]);
+
+  const filteredTableData = useMemo(() => {
+    return flattenedO2Ds.filter(item => {
+      // Basic Search (Order No, Party, Item Name)
+      const searchLower = searchTerm.toLowerCase();
+      const matchesSearch = !searchTerm || 
+        item.order_no.toLowerCase().includes(searchLower) ||
+        item.party_name.toLowerCase().includes(searchLower) ||
+        item.item_name.toLowerCase().includes(searchLower);
+
+      // Party Filter
+      const matchesParty = !tableFilterParty || item.party_name.toLowerCase().includes(tableFilterParty.toLowerCase());
+      
+      // Order ID Filter
+      const matchesOrderId = !tableFilterOrderNo || item.order_no.toLowerCase().includes(tableFilterOrderNo.toLowerCase());
+
+      // Date Range Filter
+      let matchesDateRange = true;
+      if (filterStartDate || filterEndDate) {
+        const itemDate = new Date(item.created_at || item.updated_at);
+        if (filterStartDate) {
+          const start = new Date(filterStartDate);
+          start.setHours(0,0,0,0);
+          if (itemDate < start) matchesDateRange = false;
+        }
+        if (filterEndDate) {
+          const end = new Date(filterEndDate);
+          end.setHours(23,59,59,999);
+          if (itemDate > end) matchesDateRange = false;
+        }
+      }
+
+      return matchesSearch && matchesParty && matchesOrderId && matchesDateRange;
+    });
+  }, [flattenedO2Ds, searchTerm, tableFilterParty, tableFilterOrderNo, filterStartDate, filterEndDate]);
+
+  const tableTotalPages = Math.ceil(filteredTableData.length / tableItemsPerPage);
+  const paginatedTableData = useMemo(() => {
+    const start = (tableCurrentPage - 1) * tableItemsPerPage;
+    return filteredTableData.slice(start, start + tableItemsPerPage);
+  }, [filteredTableData, tableCurrentPage]);
+
   const handleRemoveFollowUp = async () => {
     if (!selectedOrderNo) return;
     setActionStatus('loading');
@@ -952,29 +1010,42 @@ export default function O2DPage() {
   };
 
   const handleExport = () => {
-    if (o2ds.length === 0) return;
-    const headers = ['ID', 'Order No', 'Party Name', 'Item Name', 'Item Qty', 'Est Amount', 'Remark', 'Filled By', 'Created At'];
-    const csvContent = [
-      headers.join(','),
-      ...o2ds.map((item: O2D) => [
-        item.id,
+    const dataToExport = pageViewMode === 'table' ? filteredTableData : o2ds;
+    if (dataToExport.length === 0) return;
+
+    const headers = ['Order No', 'Party Name', 'Item Name', 'Item Qty', 'Est Amount', 'Created At', 'Filled By', 'Remark'];
+    const csvRows = [headers.join(',')];
+
+    dataToExport.forEach(item => {
+      const row = [
         item.order_no,
-        `"${item.party_name}"`,
-        `"${item.item_name}"`,
+        `"${item.party_name.replace(/"/g, '""')}"`,
+        `"${item.item_name.replace(/"/g, '""')}"`,
         item.item_qty,
         item.est_amount,
-        `"${item.remark || ''}"`,
-        item.filled_by,
-        item.created_at
-      ].join(','))
-    ].join('\n');
+        (() => {
+          if (!item.created_at) return '-';
+          const d = new Date(item.created_at);
+          const day = d.getDate().toString().padStart(2, '0');
+          const month = (d.getMonth() + 1).toString().padStart(2, '0');
+          const year = d.getFullYear();
+          const hours = d.getHours().toString().padStart(2, '0');
+          const minutes = d.getMinutes().toString().padStart(2, '0');
+          const seconds = d.getSeconds().toString().padStart(2, '0');
+          return `${day}/${month}/${year} ${hours}:${minutes}:${seconds}`;
+        })(),
+        `"${item.filled_by || ''}"`,
+        `"${(item.remark || '').replace(/"/g, '""')}"`
+      ];
+      csvRows.push(row.join(','));
+    });
 
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
+    const csvString = csvRows.join('\n');
+    const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
-    link.setAttribute('href', url);
-    link.setAttribute('download', `o2d_export_${new Date().toISOString().split('T')[0]}.csv`);
-    link.style.visibility = 'hidden';
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `O2D_Export_${new Date().toISOString().split('T')[0]}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -1209,18 +1280,33 @@ export default function O2DPage() {
   return (
     <div className="flex flex-col h-[calc(100vh-80px)] space-y-3">
       {/* Header Row */}
-      <div className="flex flex-col lg:flex-row items-center gap-2 px-1 shrink-0">
-        <div className="w-full lg:w-1/3 text-center lg:text-left min-w-0">
+      <div className="flex flex-col lg:flex-row items-center justify-between gap-4 px-2 shrink-0">
+        <div className="text-center lg:text-left min-w-0">
           <h1 className="text-xl md:text-2xl font-black text-gray-900 dark:text-white tracking-tight italic">O2D SYSTEM</h1>
           <p className="text-[#003875] dark:text-[#FFD500] font-black text-[9px] md:text-[10px] uppercase tracking-[0.2em] opacity-80 -mt-1">Syncing Intelligence</p>
         </div>
-        <div className="w-full lg:w-1/3 flex justify-center flex-shrink-0 min-w-0">
+        <div className="flex justify-end flex-shrink-0 min-w-0 lg:ml-auto">
           <div className="flex items-center gap-1 rounded-full border-2 border-[#003875] dark:border-[#FFD500] bg-white dark:bg-navy-800 shadow-lg p-0.5 overflow-x-auto no-scrollbar max-w-full">
             <button onClick={() => { resetForm(); setIsModalOpen(true); }} className="flex items-center gap-2 text-[#003875] dark:text-[#FFD500] px-2 sm:px-4 py-1.5 font-black text-[11px] uppercase tracking-widest rounded-full hover:bg-[#003875]/5 dark:hover:bg-navy-700 transition-all">
               <PlusIcon className="w-4 h-4 stroke-[3]" /> 
               <span className="hidden sm:inline">New Order</span>
             </button>
             <div className="h-4 w-[1px] bg-[#003875]/10 dark:bg-[#FFD500]/10 mx-0.5" />
+            
+            {/* View Mode Switcher - Prominent in pill as requested */}
+            <button 
+              onClick={() => setPageViewMode(pageViewMode === 'panels' ? 'table' : 'panels')} 
+              className={`flex items-center gap-2 px-2 sm:px-3 py-1.5 font-black text-[11px] uppercase tracking-widest rounded-full transition-all border-2 ${
+                pageViewMode === 'table' 
+                ? 'bg-[#003875] text-[#FFD500] border-[#003875]' 
+                : 'text-[#003875] dark:text-[#FFD500] border-transparent hover:bg-[#003875]/5 dark:hover:bg-navy-700'
+              }`}
+            >
+              {pageViewMode === 'panels' ? <Squares2X2Icon className="w-4 h-4 stroke-[3]" /> : <ListBulletIcon className="w-4 h-4 stroke-[3]" />}
+              <span className="hidden sm:inline">{pageViewMode === 'panels' ? 'Table View' : 'Panel View'}</span>
+            </button>
+            <div className="h-4 w-[1px] bg-[#003875]/10 dark:bg-[#FFD500]/10 mx-0.5" />
+
             <button onClick={handleExport} className="flex items-center gap-2 text-[#003875] dark:text-[#FFD500] px-2 sm:px-3 py-1.5 font-black text-[11px] uppercase tracking-widest rounded-full hover:bg-[#003875]/5 dark:hover:bg-navy-700 transition-all">
               <ArrowDownTrayIcon className="w-4 h-4 stroke-[3]" /> 
               <span className="hidden sm:inline">Export</span>
@@ -1235,11 +1321,10 @@ export default function O2DPage() {
               <ClipboardDocumentCheckIcon className="w-4 h-4 stroke-[3]" /> 
               <span className="hidden sm:inline">For Busy</span>
             </button>
-            <div className="h-4 w-[1px] bg-[#003875]/10 dark:bg-[#FFD500]/10 mx-0.5" />
-            <button onClick={fetchO2Ds} className="p-1 text-[#003875] dark:text-[#FFD500] rounded-full hover:bg-gray-100 dark:hover:bg-navy-700 transition-all"><ArrowPathIcon className={`w-4.5 h-4.5 ${isLoading ? 'animate-spin' : ''}`} /></button>
+            <div className="h-4 w-[1px] bg-[#003875]/10 dark:bg-[#FFD500]/10 mx-1" />
+            <button onClick={fetchO2Ds} className="p-1.5 text-[#003875] dark:text-[#FFD500] rounded-full hover:bg-gray-100 dark:hover:bg-navy-700 transition-all"><ArrowPathIcon className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} /></button>
           </div>
         </div>
-        <div className="hidden lg:block lg:w-1/3"></div>
       </div>
 
       {/* Main Master-Detail View Wrapper */}
@@ -1264,154 +1349,170 @@ export default function O2DPage() {
 
         <div className="flex-1 flex flex-col overflow-hidden rounded-2xl border border-gray-100 dark:border-navy-800 bg-white dark:bg-navy-900 shadow-xl">
           {showFilters && (
-            <>
-              <div className="flex items-center gap-2 overflow-x-auto no-scrollbar shrink-0 px-3 py-2 bg-white dark:bg-navy-900 border-b border-gray-100 dark:border-navy-800 animate-in slide-in-from-top duration-300">
-          {O2D_STEP_SHORTS.map((stepName, idx) => {
-            const stepIdx = idx + 1;
-            const count = getStepFilterCount(stepIdx);
-            const isActive = selectedStepFilters.includes(stepIdx);
+            <div className="flex flex-col shrink-0 border-b border-gray-100 dark:border-navy-800 animate-in slide-in-from-top duration-300">
+              <div className="flex items-center gap-2 overflow-x-auto no-scrollbar px-3 py-2 bg-white dark:bg-navy-900">
+                {O2D_STEP_SHORTS.map((stepName, idx) => {
+                  const stepIdx = idx + 1;
+                  const count = getStepFilterCount(stepIdx);
+                  const isActive = selectedStepFilters.includes(stepIdx);
+                  return (
+                    <button
+                      key={stepIdx}
+                      onClick={() => toggleStepFilter(stepIdx)}
+                      className={`flex items-center gap-2 px-3 py-1.5 rounded-full border transition-all whitespace-nowrap ${
+                        isActive 
+                        ? 'bg-[#CE2029] border-[#CE2029] text-white shadow-lg scale-105' 
+                        : 'bg-white dark:bg-navy-800 border-gray-100 dark:border-navy-700 text-gray-500 hover:border-[#CE2029]/30'
+                      }`}
+                    >
+                      <span className={`text-[10px] font-black uppercase tracking-widest ${isActive ? 'text-white' : 'text-gray-600 dark:text-gray-300'}`}>{stepName}</span>
+                      <span className={`px-1.5 py-0.5 rounded-md text-[9px] font-black ${isActive ? 'bg-white/20 text-white' : 'bg-gray-100 dark:bg-navy-700 text-gray-400'}`}>{count}</span>
+                    </button>
+                  );
+                })}
+              </div>
 
-            // Icons for each step
-            const stepIcons = [
-              PencilSquareIcon,
-              MagnifyingGlassIcon,
-              CheckBadgeIcon,
-              ShareIcon,
-              ArrowsRightLeftIcon,
-              ArchiveBoxIcon,
-              DocumentTextIcon,
-              CurrencyRupeeIcon,
-              TruckIcon,
-              ClipboardDocumentCheckIcon,
-              CheckCircleIcon
-            ];
-            const Icon = stepIcons[idx] || PhotoIcon;
-
-            // Premium colors for steps (Standard state)
-            const stepColors = [
-              'border-indigo-100 bg-indigo-50/50 text-indigo-700 dark:border-indigo-500/20 dark:bg-indigo-500/5 dark:text-indigo-400',
-              'border-blue-100 bg-blue-50/50 text-blue-700 dark:border-blue-500/20 dark:bg-blue-500/5 dark:text-blue-400',
-              'border-cyan-100 bg-cyan-50/50 text-cyan-700 dark:border-cyan-500/20 dark:bg-cyan-500/5 dark:text-cyan-400',
-              'border-teal-100 bg-teal-50/50 text-teal-700 dark:border-teal-500/20 dark:bg-teal-500/5 dark:text-teal-400',
-              'border-emerald-100 bg-emerald-50/50 text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-500/5 dark:text-emerald-400',
-              'border-green-100 bg-green-50/50 text-green-700 dark:border-green-500/20 dark:bg-green-500/5 dark:text-green-400',
-              'border-amber-100 bg-amber-100/50 text-amber-700 dark:border-amber-500/20 dark:bg-amber-1000/5 dark:text-amber-400',
-              'border-orange-100 bg-orange-50/50 text-orange-700 dark:border-orange-500/20 dark:bg-orange-500/5 dark:text-orange-400',
-              'border-red-100 bg-red-50/50 text-red-700 dark:border-red-500/20 dark:bg-red-500/5 dark:text-red-400',
-              'border-pink-100 bg-pink-50/50 text-pink-700 dark:border-pink-500/20 dark:bg-pink-500/5 dark:text-pink-400',
-              'border-rose-100 bg-rose-50/50 text-rose-700 dark:border-rose-500/20 dark:bg-rose-500/5 dark:text-rose-400'
-            ];
-
-            // Active colors
-            const activeColors = [
-              'bg-indigo-600 text-white border-indigo-600 dark:bg-indigo-500 dark:text-black dark:border-indigo-500',
-              'bg-blue-600 text-white border-blue-600 dark:bg-blue-500 dark:text-black dark:border-blue-500',
-              'bg-cyan-600 text-white border-cyan-600 dark:bg-cyan-500 dark:text-black dark:border-cyan-500',
-              'bg-teal-600 text-white border-teal-600 dark:bg-teal-500 dark:text-black dark:border-teal-500',
-              'bg-emerald-600 text-white border-emerald-600 dark:bg-emerald-500 dark:text-black dark:border-emerald-500',
-              'bg-green-600 text-white border-green-600 dark:bg-green-500 dark:text-black dark:border-green-500',
-              'bg-amber-600 text-white border-amber-600 dark:bg-amber-1000 dark:text-black dark:border-amber-500',
-              'bg-orange-600 text-white border-orange-600 dark:bg-orange-500 dark:text-black dark:border-orange-500',
-              'bg-red-600 text-white border-red-600 dark:bg-red-500 dark:text-black dark:border-red-500',
-              'bg-pink-600 text-white border-pink-600 dark:bg-pink-500 dark:text-black dark:border-pink-500',
-              'bg-rose-600 text-white border-rose-600 dark:bg-rose-500 dark:text-black dark:border-rose-500'
-            ];
-
-            const iconColors = [
-              'bg-indigo-600 text-white dark:bg-indigo-400 dark:text-navy-950',
-              'bg-blue-600 text-white dark:bg-blue-400 dark:text-navy-950',
-              'bg-cyan-600 text-white dark:bg-cyan-400 dark:text-navy-950',
-              'bg-teal-600 text-white dark:bg-teal-400 dark:text-navy-950',
-              'bg-emerald-600 text-white dark:bg-emerald-400 dark:text-navy-950',
-              'bg-green-600 text-white dark:bg-green-400 dark:text-navy-950',
-              'bg-amber-600 text-white dark:bg-amber-400 dark:text-navy-950',
-              'bg-orange-600 text-white dark:bg-orange-400 dark:text-navy-950',
-              'bg-red-600 text-white dark:bg-red-400 dark:text-navy-950',
-              'bg-pink-600 text-white dark:bg-pink-400 dark:text-navy-950',
-              'bg-rose-600 text-white dark:bg-rose-400 dark:text-navy-950'
-            ];
-
-            return (
-              <button
-                key={stepIdx}
-                onClick={() => toggleStepFilter(stepIdx)}
-                className={`flex-shrink-0 w-auto h-[52px] rounded-xl border flex flex-row items-center px-4 gap-3 transition-all duration-300 ${isActive
-                    ? `${activeColors[idx]} shadow-lg scale-105 z-10`
-                    : `${stepColors[idx]} hover:scale-[1.02] hover:shadow-sm`
-                  }`}
-              >
-                <div className={`w-8.5 h-8.5 rounded-lg flex items-center justify-center shrink-0 ${isActive ? 'bg-white/20' : iconColors[idx]}`}>
-                  <Icon className="w-5 h-5" />
+              {/* Advanced Filter Sub-Row */}
+              <div className="flex flex-wrap items-center gap-4 px-4 py-2 bg-gray-50/50 dark:bg-navy-800/20 border-t border-gray-100 dark:border-navy-800">
+                <div className="flex items-center gap-2">
+                  <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Date Range:</span>
+                  <input type="date" value={filterStartDate} onChange={(e) => setFilterStartDate(e.target.value)} className="bg-white dark:bg-black border border-gray-200 dark:border-navy-700 rounded-lg px-2 py-1 text-[10px] font-bold outline-none focus:border-[#FFD500]" />
+                  <span className="text-gray-300">-</span>
+                  <input type="date" value={filterEndDate} onChange={(e) => setFilterEndDate(e.target.value)} className="bg-white dark:bg-black border border-gray-200 dark:border-navy-700 rounded-lg px-2 py-1 text-[10px] font-bold outline-none focus:border-[#FFD500]" />
                 </div>
-                <div className="flex flex-col items-start leading-[1.1] whitespace-nowrap">
-                  <div className={`text-[10px] font-black uppercase tracking-tight ${isActive ? 'text-white/80 dark:text-black/70' : 'opacity-80'}`}>
-                    {stepIdx}. {stepName}
-                  </div>
-                  <div className="text-[17px] font-black">{count}</div>
+                <div className="h-4 w-[1px] bg-gray-200 dark:bg-navy-700" />
+                <div className="flex items-center gap-2">
+                  <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Party:</span>
+                  <input type="text" placeholder="Filter by Party..." value={tableFilterParty} onChange={(e) => setTableFilterParty(e.target.value)} className="bg-white dark:bg-black border border-gray-200 dark:border-navy-700 rounded-lg px-3 py-1 text-[10px] font-bold outline-none focus:border-[#FFD500] w-40" />
                 </div>
-              </button>
-            );
-          })}
-        </div>
-        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar shrink-0 px-3 py-1.5 border-b border-gray-100 dark:border-navy-800 bg-gray-50/40 dark:bg-navy-900/60">
-          {[
-            { id: '', label: 'All', color: 'bg-white text-gray-700 border-gray-300 dark:bg-navy-800 dark:text-gray-300 dark:border-navy-600' },
-            { id: 'Delayed', label: 'Delayed', color: 'bg-red-50 text-red-600 border-red-300 dark:bg-red-900/30 dark:text-red-400 dark:border-red-700' },
-            { id: 'Today', label: 'Today', color: 'bg-amber-100 text-amber-600 border-amber-300 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-700' },
-            { id: 'Tomorrow', label: 'Tomorrow', color: 'bg-blue-50 text-blue-600 border-blue-300 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-700' },
-            { id: 'Next5', label: 'Next 5', color: 'bg-emerald-50 text-emerald-600 border-emerald-300 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-700' },
-            { id: 'Next10', label: 'Next 10', color: 'bg-violet-50 text-violet-600 border-violet-300 dark:bg-violet-900/30 dark:text-violet-400 dark:border-violet-700' },
-          ].map(f => {
-            const count = getDateFilterCount(f.id);
-            const isActive = (f.id === '' ? selectedDateFilters.length === 0 : selectedDateFilters.includes(f.id));
-            return (<button
-              key={f.id}
-              onClick={() => toggleDateFilter(f.id)}
-              className={`px-3 py-1.5 rounded-full border text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-1.5 whitespace-nowrap ${(f.id === '' ? selectedDateFilters.length === 0 : selectedDateFilters.includes(f.id))
-                  ? 'bg-[#003875] dark:bg-[#FFD500] text-white dark:text-black border-[#003875] dark:border-[#FFD500] shadow-md scale-105'
-                  : `${f.color} hover:shadow-sm hover:scale-[1.02]`
-                }`}
-            >
-              {f.label}
-              <span className={`px-1.5 py-0.5 rounded-full text-[9px] ${isActive ? 'bg-white/20 dark:bg-black/20' : 'bg-black/10 dark:bg-white/10'}`}>
-                {count}
-              </span>
-            </button>
-            );
-          })}
-
-          {/* Status-based filters with Partition */}
-          <div className="w-[1.5px] h-4 bg-[#003875]/10 dark:bg-white/10 mx-1 shrink-0" />
-
-          {[
-            { id: 'Hold', label: 'On Hold', color: 'bg-orange-50 text-orange-600 border-orange-200 dark:bg-orange-900/30 dark:text-orange-400 dark:border-orange-800/40' },
-            { id: 'Cancelled', label: 'Cancelled', color: 'bg-red-50 text-red-600 border-red-200 dark:bg-red-900/30 dark:text-red-400 dark:border-red-800/40' },
-          ].map(f => {
-            const count = getDateFilterCount(f.id);
-            const isActive = selectedDateFilters.includes(f.id);
-            return (
-              <button
-                key={f.id}
-                onClick={() => toggleDateFilter(f.id)}
-                className={`px-3 py-1.5 rounded-full border text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-1.5 whitespace-nowrap ${isActive
-                    ? f.id === 'Hold' ? 'bg-orange-500 text-white border-orange-500 shadow-md scale-105' : 'bg-red-500 text-white border-red-500 shadow-md scale-105'
-                    : `${f.color} hover:shadow-sm hover:scale-[1.02]`
-                  }`}
-              >
-                {f.label}
-                <span className={`px-1.5 py-0.5 rounded-full text-[9px] ${isActive ? 'bg-white/20 dark:bg-black/20' : 'bg-black/10 dark:bg-white/10'}`}>
-                  {count}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-            </>
+                <div className="h-4 w-[1px] bg-gray-200 dark:bg-navy-700" />
+                <div className="flex items-center gap-2">
+                  <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Order ID:</span>
+                  <input type="text" placeholder="OR-XXXXX" value={tableFilterOrderNo} onChange={(e) => setTableFilterOrderNo(e.target.value)} className="bg-white dark:bg-black border border-gray-200 dark:border-navy-700 rounded-lg px-3 py-1 text-[10px] font-bold outline-none focus:border-[#FFD500] w-28" />
+                </div>
+                <button onClick={() => { setFilterStartDate(""); setFilterEndDate(""); setTableFilterParty(""); setTableFilterOrderNo(""); setSearchTerm(""); }} className="ml-auto px-3 py-1.5 text-[9px] font-black uppercase text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all">Reset Filters</button>
+              </div>
+            </div>
           )}
 
-        {/* Panels Row */}
+        {/* Simple Table vs Master-Detail Panels Row */}
         <div className="flex-1 flex overflow-hidden">
-          {/* Master Pane: Order List */}
+          {pageViewMode === 'table' ? (
+             <div className="flex-1 flex flex-col overflow-hidden bg-white dark:bg-navy-900">
+               <div className="flex-1 overflow-auto no-scrollbar pb-10">
+                 <table className="w-full text-left border-collapse min-w-[1000px]">
+                   <thead className="sticky top-0 z-20 shadow-sm">
+                     <tr className="bg-gray-50 dark:bg-navy-950 text-[10px] font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest border-b border-gray-100 dark:border-navy-800">
+                       <th className="px-6 py-4">Order ID</th>
+                       <th className="px-6 py-4">Party Name</th>
+                       <th className="px-6 py-4">Item Name</th>
+                       <th className="px-6 py-4 text-center">Item Qty</th>
+                       <th className="px-6 py-4">Created At</th>
+                       <th className="px-6 py-4">Filled By</th>
+                       <th className="px-6 py-4">Actions</th>
+                     </tr>
+                   </thead>
+                   <tbody className="divide-y divide-gray-50 dark:divide-navy-800/20">
+                     {paginatedTableData.length > 0 ? (
+                       paginatedTableData.map((item, idx) => (
+                         <tr key={idx} className="group hover:bg-[#003875]/[0.02] dark:hover:bg-white/5 transition-colors">
+                           <td className="px-6 py-4">
+                             <div className="flex flex-col">
+                               <span className="text-[13px] font-black text-[#003875] dark:text-[#FFD500]">{item.order_no}</span>
+                               {item.hold && <span className="text-[7px] text-orange-500 font-black uppercase tracking-tighter">On Hold</span>}
+                               {item.cancelled && <span className="text-[7px] text-red-500 font-black uppercase tracking-tighter">Cancelled</span>}
+                             </div>
+                           </td>
+                           <td className="px-6 py-4 text-[12px] font-black text-gray-700 dark:text-gray-200 uppercase max-w-[200px] truncate" title={item.party_name}>{item.party_name}</td>
+                           <td className="px-6 py-4 text-[12px] font-bold text-gray-600 dark:text-gray-300 uppercase max-w-[250px] truncate" title={item.item_name}>{item.item_name}</td>
+                           <td className="px-6 py-4 text-center font-black text-[#003875] dark:text-[#FFD500] text-[13px]">{item.item_qty}</td>
+                           <td className="px-6 py-4 text-[11px] font-bold text-gray-400 tracking-tight">
+                              {item.created_at ? (
+                                <div className="flex flex-col">
+                                  <span className="text-gray-700 dark:text-gray-200">{new Date(item.created_at).toLocaleDateString('en-GB')}</span>
+                                  <span className="text-[9px] text-[#003875] dark:text-[#FFD500] font-black opacity-70 uppercase">{new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}</span>
+                                </div>
+                              ) : '-'}
+                            </td>
+                           <td className="px-6 py-4 text-[11px] font-black text-gray-500 uppercase tracking-tighter">{item.filled_by || '-'}</td>
+                           <td className="px-6 py-4">
+                              <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <button onClick={() => { setSelectedOrderNo(item.order_no); setPageViewMode('panels'); }} className="p-1.5 bg-[#003875]/5 text-[#003875] rounded-lg hover:bg-[#003875] hover:text-white transition-all"><EyeIcon className="w-3.5 h-3.5" /></button>
+                                <button onClick={() => handleEdit(item.order_no)} className="p-1.5 bg-amber-50 text-amber-600 rounded-lg hover:bg-amber-500 hover:text-white transition-all"><PencilSquareIcon className="w-3.5 h-3.5" /></button>
+                              </div>
+                           </td>
+                         </tr>
+                       ))
+                     ) : (
+                       <tr>
+                         <td colSpan={7} className="px-6 py-20 text-center">
+                            <ArchiveBoxIcon className="w-12 h-12 text-gray-200 mx-auto mb-4" />
+                            <p className="text-[11px] font-black text-gray-400 uppercase tracking-[0.3em]">No data matches your intelligence criteria</p>
+                         </td>
+                       </tr>
+                     )}
+                   </tbody>
+                                   </table>
+                </div>
+
+                {/* Table View Pagination Footer */}
+                {!isLoading && filteredTableData.length > tableItemsPerPage && (
+                  <div className="shrink-0 px-6 py-4 bg-gray-50 dark:bg-navy-950 border-t border-gray-100 dark:border-navy-800 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                        Showing <span className="text-[#003875] dark:text-[#FFD500]">{(tableCurrentPage - 1) * tableItemsPerPage + 1}</span> to <span className="text-[#003875] dark:text-[#FFD500]">{Math.min(tableCurrentPage * tableItemsPerPage, filteredTableData.length)}</span> of <span className="text-gray-600 dark:text-gray-300 font-black">{filteredTableData.length}</span> entries
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        disabled={tableCurrentPage === 1}
+                        onClick={() => setTableCurrentPage(prev => Math.max(1, prev - 1))}
+                        className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white dark:bg-navy-900 border border-gray-200 dark:border-navy-800 text-[10px] font-black uppercase tracking-widest text-[#003875] dark:text-[#FFD500] disabled:opacity-30 hover:shadow-md transition-all active:scale-95 shadow-sm"
+                      >
+                        <ChevronLeftIcon className="w-3.5 h-3.5" />
+                        Prev
+                      </button>
+
+                      <div className="flex items-center gap-1">
+                        {Array.from({ length: Math.min(5, tableTotalPages) }, (_, i) => {
+                          let pageNum = tableCurrentPage;
+                          if (tableTotalPages <= 5) pageNum = i + 1;
+                          else if (tableCurrentPage <= 3) pageNum = i + 1;
+                          else if (tableCurrentPage >= tableTotalPages - 2) pageNum = tableTotalPages - 4 + i;
+                          else pageNum = tableCurrentPage - 2 + i;
+
+                          return (
+                            <button
+                              key={pageNum}
+                              onClick={() => setTableCurrentPage(pageNum)}
+                              className={`w-9 h-9 rounded-xl text-[11px] font-black transition-all ${
+                                tableCurrentPage === pageNum 
+                                ? 'bg-[#003875] text-[#FFD500] shadow-lg scale-110 z-10' 
+                                : 'bg-white dark:bg-navy-900 text-gray-400 border border-gray-100 dark:border-navy-800 hover:border-[#003875] dark:hover:border-[#FFD500]'
+                              }`}
+                            >
+                              {pageNum}
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      <button
+                        disabled={tableCurrentPage === tableTotalPages}
+                        onClick={() => setTableCurrentPage(prev => Math.min(tableTotalPages, prev + 1))}
+                        className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white dark:bg-navy-900 border border-gray-200 dark:border-navy-800 text-[10px] font-black uppercase tracking-widest text-[#003875] dark:text-[#FFD500] disabled:opacity-30 hover:shadow-md transition-all active:scale-95 shadow-sm"
+                      >
+                        Next
+                        <ChevronRightIcon className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+          ) : (
+             <>
+               {/* Master Pane: Order List */}
           <div className={`w-full lg:w-80 flex flex-col border-r border-[#003875]/5 dark:border-navy-800 ${selectedOrderNo ? 'hidden lg:flex' : 'flex'}`}>
             <div className="p-2 border-b border-gray-50 dark:border-navy-800 bg-gray-50/30 dark:bg-navy-900/40">
               <div className="relative group mb-2">
@@ -1538,7 +1639,7 @@ export default function O2DPage() {
                         </div>
                         <div className="flex flex-col items-end shrink-0 leading-[1.1]">
                           <span className="text-[10px] font-black text-gray-400 uppercase tracking-tighter mb-0.5">{totalQty} ITEMS</span>
-                          <span className="text-[12px] font-black text-[#003875] dark:text-[#FFD500]">₹{totalAmt.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</span>
+                          <span className="text-[12px] font-black text-[#003875] dark:text-[#FFD500]">â‚¹{totalAmt.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</span>
                         </div>
                       </div>
                     </div>
@@ -1774,7 +1875,7 @@ export default function O2DPage() {
                                           <ItemIcon className={`w-3.5 h-3.5 shrink-0 ${promo.color}`} />
                                           <span className="text-[11px] font-black text-gray-800 dark:text-gray-100">{name}</span>
                                           <div className="w-px h-3 bg-gray-200 dark:bg-navy-700" />
-                                          <span className="text-[11px] font-black text-[#003875] dark:text-[#FFD500]">×{qty}</span>
+                                          <span className="text-[11px] font-black text-[#003875] dark:text-[#FFD500]">Ã—{qty}</span>
                                         </div>
                                       );
                                     })}
@@ -1795,7 +1896,7 @@ export default function O2DPage() {
                           <div className="w-1 h-3.5 bg-[#003875] rounded-full" /> Tactical Inventory
                         </h3>
                         <div className="text-[12px] font-black text-[#003875] dark:text-[#FFD500] uppercase tracking-tighter">
-                          TOTAL Value: ₹{selectedOrder.reduce((sum: number, i: O2D) => sum + (parseFloat(i.est_amount) || 0), 0).toLocaleString()}
+                          TOTAL Value: â‚¹{selectedOrder.reduce((sum: number, i: O2D) => sum + (parseFloat(i.est_amount) || 0), 0).toLocaleString()}
                         </div>
                       </div>
                       <div className="overflow-x-auto">
@@ -1814,7 +1915,7 @@ export default function O2DPage() {
                                 <td className="px-6 py-4 font-black text-gray-900 dark:text-white uppercase">{item.item_name}</td>
                                 <td className="px-6 py-4 text-[11px] font-medium text-gray-500 dark:text-gray-400 italic italic">{item.item_specification || "-"}</td>
                                 <td className="px-6 py-4 text-center font-black text-[#003875] dark:text-[#FFD500]">{item.item_qty}</td>
-                                <td className="px-6 py-4 text-right font-black text-[#CE2029]">₹{parseFloat(item.est_amount).toLocaleString()}</td>
+                                <td className="px-6 py-4 text-right font-black text-[#CE2029]">â‚¹{parseFloat(item.est_amount).toLocaleString()}</td>
                               </tr>
                             ))}
                           </tbody>
@@ -1825,7 +1926,7 @@ export default function O2DPage() {
                                 {selectedOrder.reduce((sum: number, i: O2D) => sum + (parseFloat(i.item_qty) || 0), 0)} Units
                               </td>
                               <td className="px-6 py-4 text-right bg-[#003875] text-white">
-                                ₹{selectedOrder.reduce((sum: number, i: O2D) => sum + (parseFloat(i.est_amount) || 0), 0).toLocaleString()}
+                                â‚¹{selectedOrder.reduce((sum: number, i: O2D) => sum + (parseFloat(i.est_amount) || 0), 0).toLocaleString()}
                               </td>
                             </tr>
                           </tfoot>
@@ -1845,7 +1946,7 @@ export default function O2DPage() {
                           <div className="flex items-center gap-2 text-[11px] font-black text-[#003875] dark:text-[#FFD500] uppercase tracking-widest border-b border-gray-100 pb-2"><IdentificationIcon className="w-4 h-4" /> Step 1: SO Protocol</div>
                           <div className="grid grid-cols-2 gap-4">
                             <div className="flex flex-col"><span className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">SO Number</span><span className="text-[14px] font-black text-gray-700 dark:text-gray-200">{selectedOrder[0]?.so_number_1 || "-"}</span></div>
-                            <div className="flex flex-col"><span className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">Final Amt</span><span className="text-[14px] font-black text-[#003875] dark:text-[#FFD500]">₹{parseFloat(selectedOrder[0]?.final_amount_1 || "0").toLocaleString()}</span></div>
+                            <div className="flex flex-col"><span className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">Final Amt</span><span className="text-[14px] font-black text-[#003875] dark:text-[#FFD500]">â‚¹{parseFloat(selectedOrder[0]?.final_amount_1 || "0").toLocaleString()}</span></div>
                           </div>
                           <div className="flex flex-col"><span className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">Merge With</span><span className="text-[14px] font-black text-gray-700 dark:text-gray-200">{selectedOrder[0]?.merge_order_with_1 || "N/A"}</span></div>
                           {selectedOrder[0]?.upload_so_1 && (
@@ -1888,7 +1989,7 @@ export default function O2DPage() {
                           <div className="grid grid-cols-2 sm:grid-cols-4 gap-6">
                             <div className="flex flex-col"><span className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">Checked</span><span className={`text-[14px] font-black ${selectedOrder[0]?.order_details_checked_8 === 'Yes' ? 'text-green-500' : 'text-red-500'}`}>{selectedOrder[0]?.order_details_checked_8 || "No"}</span></div>
                             <div className="flex flex-col"><span className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">Voucher 51</span><span className="text-[14px] font-black text-gray-700 dark:text-gray-200">{selectedOrder[0]?.voucher_num_51_8 || "-"}</span></div>
-                            <div className="flex flex-col sm:col-span-2"><span className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">T. Amount</span><span className="text-[14px] font-black text-[#003875] dark:text-[#FFD500]">₹{parseFloat(selectedOrder[0]?.t_amt_8 || "0").toLocaleString()}</span></div>
+                            <div className="flex flex-col sm:col-span-2"><span className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">T. Amount</span><span className="text-[14px] font-black text-[#003875] dark:text-[#FFD500]">â‚¹{parseFloat(selectedOrder[0]?.t_amt_8 || "0").toLocaleString()}</span></div>
                           </div>
                         </div>
                       </div>
@@ -1933,7 +2034,7 @@ export default function O2DPage() {
                               <td className="px-6 py-3 border-r border-[#CE2029]/5 sticky left-0 z-10 bg-white dark:bg-navy-800">{item.item_name}</td>
                               <td className="px-6 py-3 border-r border-[#CE2029]/5 italic text-gray-500 text-[11px] max-w-[250px] truncate" title={item.item_specification}>{item.item_specification || "-"}</td>
                               <td className="px-6 py-3 text-center border-r border-[#CE2029]/5 bg-[#FFD500]/5 dark:bg-navy-900 font-black">{item.item_qty}</td>
-                              <td className="px-6 py-3 text-right font-black text-[#003875] dark:text-[#FFD500] border-r border-[#CE2029]/5">₹{parseFloat(item.est_amount).toLocaleString()}</td>
+                              <td className="px-6 py-3 text-right font-black text-[#003875] dark:text-[#FFD500] border-r border-[#CE2029]/5">â‚¹{parseFloat(item.est_amount).toLocaleString()}</td>
                               {O2D_STEPS.map((_, stepIdx) => {
                                 const plannedRaw = item[`planned_${stepIdx + 1}` as keyof O2D] as string;
                                 const actualRaw = item[`actual_${stepIdx + 1}` as keyof O2D] as string;
@@ -1969,7 +2070,7 @@ export default function O2DPage() {
                             <td className="px-6 py-4 border-r border-[#003875]/10 sticky left-0 z-10 bg-[#FEF6DB]/80 dark:bg-navy-950 backdrop-blur-md">AGGREGATE SUM</td>
                             <td className="px-6 py-4 border-r border-[#003875]/10"></td>
                             <td className="px-6 py-4 text-center border-r border-[#003875]/10">{selectedOrder.reduce((sum: number, i: O2D) => sum + (parseFloat(i.item_qty) || 0), 0)} Units</td>
-                            <td className="px-6 py-4 text-right text-[#003875] dark:text-[#FFD500] border-r border-[#003875]/10">₹{selectedOrder.reduce((sum: number, i: O2D) => sum + (parseFloat(i.est_amount) || 0), 0).toLocaleString()}</td>
+                            <td className="px-6 py-4 text-right text-[#003875] dark:text-[#FFD500] border-r border-[#003875]/10">â‚¹{selectedOrder.reduce((sum: number, i: O2D) => sum + (parseFloat(i.est_amount) || 0), 0).toLocaleString()}</td>
                             <td colSpan={O2D_STEPS.length} className="px-6 py-4"></td>
                           </tr>
                         </tfoot>
@@ -1984,10 +2085,12 @@ export default function O2DPage() {
                 <p className="text-[11px] font-black uppercase tracking-[0.3em] text-[#003875] italic">Select record to engage</p>
               </div>
             )}
-          </div>{/* end Detail Pane */}
-        </div>{/* end Panels Row */}
-      </div>{/* end Main Container (now inside wrapper) */}
-    </div>{/* end Main Master-Detail View Wrapper */}
+          </div>
+        </>
+      )}
+    </div>{/* end Panels Row */}
+  </div>{/* end Main Container (now inside wrapper) */}
+</div>{/* end Main Master-Detail View Wrapper */}
 
       <PartyFormModal
         isOpen={isPartyModalOpen}
@@ -2036,7 +2139,7 @@ export default function O2DPage() {
                     </div>
 
                     <div className="flex-1 flex flex-col gap-4">
-                      <div>
+                      <div className={!editingOrderNo ? 'hidden' : ''}>
                         <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1.5 mb-2"><IdentificationIcon className="w-3 h-3" />Order ID</label>
                         <input type="text" value={commonData.order_no} readOnly className="w-full h-[36px] bg-gray-50 dark:bg-black border border-transparent dark:border-navy-700 px-3 rounded-xl font-bold text-[11px] text-gray-400 dark:text-gray-500 cursor-not-allowed shadow-inner" />
                       </div>
@@ -2744,3 +2847,4 @@ function YesNoToggle({ label, value, onChange }: { label: string, value: string,
     </div>
   );
 }
+
