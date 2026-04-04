@@ -22,6 +22,7 @@ export default function Sidebar({ mobileOpen, setMobileOpen }: SidebarProps) {
   const [checklistsPendingCount, setChecklistsPendingCount] = useState(0);
   const [ticketsOpenCount, setTicketsOpenCount] = useState(0);
   const [o2dPendingCount, setO2dPendingCount] = useState(0);
+  const [chatUnreadCount, setChatUnreadCount] = useState(0);
 
   useEffect(() => {
     if (!session?.user) return;
@@ -32,12 +33,13 @@ export default function Sidebar({ mobileOpen, setMobileOpen }: SidebarProps) {
 
     const fetchCounts = async () => {
       try {
-        const [delRes, checkRes, tickRes, o2dRes, configRes] = await Promise.all([
+        const [delRes, checkRes, tickRes, o2dRes, configRes, chatRes] = await Promise.all([
           fetch('/api/delegations'),
           fetch('/api/checklists'),
           fetch('/api/tickets'),
           fetch('/api/o2d'),
-          fetch('/api/o2d/config')
+          fetch('/api/o2d/config'),
+          fetch('/api/chat/users')
         ]);
         
         let delData = [];
@@ -49,8 +51,10 @@ export default function Sidebar({ mobileOpen, setMobileOpen }: SidebarProps) {
 
         let o2dData = [];
         let configData: any = { configs: [] };
+        let chatData: any[] = [];
         if (o2dRes.ok) o2dData = await o2dRes.json();
         if (configRes.ok) configData = await configRes.json();
+        if (chatRes.ok) chatData = await chatRes.json();
 
         // Filter for USER role
         const baseDel = userRole === 'USER' ? delData.filter((d: any) => d.assigned_to === currentUser) : delData;
@@ -134,6 +138,11 @@ export default function Sidebar({ mobileOpen, setMobileOpen }: SidebarProps) {
         });
 
         setO2dPendingCount(delayed + today);
+
+        // Chat Logic
+        const totalUnreadChat = Array.isArray(chatData) ? chatData.reduce((acc, user) => acc + (user.unreadCount || 0), 0) : 0;
+        setChatUnreadCount(totalUnreadChat);
+
       } catch (err) {
         console.error("Failed to fetch sidebar counts:", err);
       }
@@ -241,6 +250,11 @@ export default function Sidebar({ mobileOpen, setMobileOpen }: SidebarProps) {
                 {item.id === 'o2d' && o2dPendingCount > 0 && (
                   <span className={`transition-all duration-300 ${mobileOpen ? 'opacity-100' : 'opacity-0 md:group-hover:opacity-100'} bg-[#CE2029] text-white text-xs font-black px-2.5 py-0.5 rounded-full shadow-sm`}>
                     {o2dPendingCount}
+                  </span>
+                )}
+                {item.id === 'chat' && chatUnreadCount > 0 && (
+                  <span className={`transition-all duration-300 ${mobileOpen ? 'opacity-100' : 'opacity-0 md:group-hover:opacity-100'} bg-[#CE2029] text-white text-xs font-black px-2.5 py-0.5 rounded-full shadow-sm`}>
+                    {chatUnreadCount}
                   </span>
                 )}
               </Link>

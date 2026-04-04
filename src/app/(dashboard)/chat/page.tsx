@@ -32,6 +32,7 @@ export default function ChatPage() {
           <ChatWindow 
             chatId={activePartnerId} 
             currentUsername={currentUsername} 
+            onBack={() => setActivePartnerId(null)}
           />
         ) : (
           <div className="flex-1 flex flex-col items-center justify-center text-center p-8">
@@ -46,17 +47,6 @@ export default function ChatPage() {
         )}
       </div>
 
-      {/* Mobile Back Button Override when chat is active */}
-      {activePartnerId && (
-        <button 
-          onClick={() => setActivePartnerId(null)}
-          className="md:hidden absolute top-4 left-4 z-50 p-2 bg-foreground/10 backdrop-blur-md rounded-full text-foreground/80 hover:text-foreground"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" />
-          </svg>
-        </button>
-      )}
     </div>
   );
 }

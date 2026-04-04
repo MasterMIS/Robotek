@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import useSWR from "swr";
 import MessageBubble from "./MessageBubble";
 import ChatInput from "./ChatInput";
+import ForwardModal from "./ForwardModal";
 import { UserCircleIcon, InformationCircleIcon } from "@heroicons/react/24/outline";
 import { XMarkIcon, ArrowDownTrayIcon, DocumentDuplicateIcon, CheckIcon } from "@heroicons/react/24/outline";
 import { getDriveImageUrl } from "@/lib/drive-utils";
@@ -22,6 +23,7 @@ interface ChatMessage {
 interface ChatWindowProps {
   chatId: string; // This is the partner's username
   currentUsername: string;
+  onBack?: () => void;
 }
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
@@ -44,12 +46,13 @@ function getAvatarGradient(username: string) {
   return colors[index];
 }
 
-export default function ChatWindow({ chatId, currentUsername }: ChatWindowProps) {
+export default function ChatWindow({ chatId, currentUsername, onBack }: ChatWindowProps) {
   const [isSending, setIsSending] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   
   const [previewMediaUrl, setPreviewMediaUrl] = useState<string | null>(null);
   const [isCopied, setIsCopied] = useState(false);
+  const [forwardingMessage, setForwardingMessage] = useState<ChatMessage | null>(null);
 
   // Fetch messages between current user and the partner (chatId)
   const { data: messages, mutate } = useSWR<ChatMessage[]>(`/api/chat/messages?chatId=${chatId}`, fetcher, {
@@ -124,12 +127,70 @@ export default function ChatWindow({ chatId, currentUsername }: ChatWindowProps)
     }
   };
 
+  const handleForwardMessage = async (selectedUsernames: string[], msgToForward: ChatMessage) => {
+    try {
+      const promises = selectedUsernames.map(async (username) => {
+        if (username === chatId) {
+          const tempId = `temp-fwd-${Date.now()}-${Math.random()}`;
+          mutate(
+            currentMessages => [
+              ...(currentMessages || []),
+              {
+                id: tempId,
+                sender_id: currentUsername,
+                receiver_id: chatId,
+                text: msgToForward.text,
+                type: msgToForward.type,
+                media_url: msgToForward.media_url || "",
+                created_at: new Date().toISOString(),
+              } as ChatMessage
+            ],
+            false
+          );
+        }
+
+        const res = await fetch("/api/chat/messages", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            chat_id: username,
+            text: msgToForward.text,
+            type: msgToForward.type,
+            media_url: msgToForward.media_url,
+          }),
+        });
+
+        if (!res.ok) {
+           console.error(`Failed to forward to ${username}`);
+        }
+      });
+
+      await Promise.all(promises);
+      
+      if (selectedUsernames.includes(chatId)) {
+         mutate();
+      }
+    } catch (err) {
+      console.error("Error forwarding messages", err);
+    }
+  };
+
   return (
     <div className="flex-1 flex flex-col h-full bg-gradient-to-br from-[#FEF5E7] via-[#fdfaf5] to-[#FCE4EC] md:rounded-br-[24px] transition-colors duration-500">
       
       {/* Header */}
       <div className="p-4 flex justify-between items-center bg-[#001F3F] shadow-sm sticky top-0 z-10 transition-colors">
         <div className="flex items-center gap-3">
+          {onBack && (
+            <button 
+              onClick={onBack}
+              className="md:hidden p-1.5 -ml-1 mr-1 rounded-full text-white/80 hover:text-white hover:bg-white/10 transition-colors flex items-center justify-center"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-5 h-5">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" />
+              </svg>
+            </button>
+          )}
           <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm border border-white/20 shadow-sm bg-gradient-to-br ${getAvatarGradient(chatId)}`}>
             {chatId.charAt(0).toUpperCase()}
           </div>
@@ -174,6 +235,7 @@ export default function ChatWindow({ chatId, currentUsername }: ChatWindowProps)
                 isOwn={isOwn}
                 showTail={showTail}
                 onImageClick={(url) => setPreviewMediaUrl(url)}
+                onForwardClick={(msgToForward) => setForwardingMessage(msgToForward as any)}
               />
             );
           })
@@ -181,81 +243,96 @@ export default function ChatWindow({ chatId, currentUsername }: ChatWindowProps)
         <div ref={messagesEndRef} />
         </div>
 
-        {/* Message Area Preview Modal */}
+        {/* Image Preview Modal */}
         {previewMediaUrl && (
           <div 
-            className="absolute inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 transition-opacity"
+            className="absolute inset-0 z-[100] flex flex-col items-center justify-between bg-black/95 backdrop-blur-md p-4 transition-opacity"
             onClick={() => setPreviewMediaUrl(null)}
           >
-            <div 
-              className="relative max-w-3xl w-full max-h-full flex flex-col items-center justify-center"
-              onClick={(e) => e.stopPropagation()}
-            >
+            {/* Top Bar with Close Button */}
+            <div className="w-full flex justify-end flex-shrink-0 mb-4 h-12">
               <button 
                 onClick={() => setPreviewMediaUrl(null)}
-                className="absolute top-0 right-0 md:-right-12 md:top-0 p-2 text-white/70 hover:text-white transition-colors bg-black/40 rounded-full md:bg-transparent"
+                className="p-2 text-white/80 hover:text-white hover:bg-white/20 transition-colors bg-white/10 backdrop-blur-md rounded-full shadow-lg"
               >
-                <XMarkIcon className="w-8 h-8" />
+                <XMarkIcon className="w-6 h-6 md:w-8 md:h-8 font-bold" />
               </button>
-              
+            </div>
+
+            {/* Image Wrapper - Takes maximum remaining space but shrinks to fit */}
+            <div 
+              className="flex-1 min-h-0 w-full flex items-center justify-center p-2"
+              onClick={(e) => e.stopPropagation()}
+            >
               <img 
                 src={getDriveImageUrl(previewMediaUrl)}
                 alt="Preview"
-                className="max-w-full max-h-[70vh] object-contain rounded-lg shadow-2xl"
+                className="max-h-full max-w-full object-contain rounded-xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] border border-white/10"
               />
+            </div>
 
-              <div className="flex gap-4 mt-6">
-                <button
-                  onClick={async (e) => {
-                    e.stopPropagation();
-                    try {
-                      // Fetch image natively using our unrestricted proxy
-                      const response = await fetch(`/api/drive-proxy?id=${previewMediaUrl}`);
-                      if (!response.ok) throw new Error("Proxy fetch failed");
-                      const blob = await response.blob();
-                      await navigator.clipboard.write([
-                        new ClipboardItem({ [blob.type]: blob })
-                      ]);
-                      setIsCopied(true);
-                      setTimeout(() => setIsCopied(false), 2000);
-                    } catch (err) {
-                      console.error("Failed to copy image to clipboard:", err);
-                      // Fallback: copy view link
-                      navigator.clipboard.writeText(`https://drive.google.com/file/d/${previewMediaUrl}/view`);
-                      setIsCopied(true);
-                      setTimeout(() => setIsCopied(false), 2000);
-                    }
-                  }}
-                  className="flex items-center gap-2 px-6 py-2.5 bg-white/10 hover:bg-white/20 text-white rounded-full font-medium transition-all backdrop-blur-md"
-                >
-                  {isCopied ? (
-                    <>
-                      <CheckIcon className="w-5 h-5 text-green-400" />
-                      <span className="text-green-400">Copied!</span>
-                    </>
-                  ) : (
-                    <>
-                      <DocumentDuplicateIcon className="w-5 h-5" />
-                      <span>Copy</span>
-                    </>
-                  )}
-                </button>
-                
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    window.open(`https://drive.google.com/uc?export=download&id=${previewMediaUrl}`, '_blank');
-                  }}
-                  className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-full font-medium shadow-lg transition-all"
-                >
-                  <ArrowDownTrayIcon className="w-5 h-5" />
-                  <span>Download</span>
-                </button>
-              </div>
+            {/* Bottom Actions */}
+            <div 
+              className="flex flex-shrink-0 flex-wrap items-center justify-center gap-4 w-full pt-4 pb-2"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <button
+                onClick={async (e) => {
+                  e.stopPropagation();
+                  try {
+                    const response = await fetch(`/api/drive-proxy?id=${previewMediaUrl}`);
+                    if (!response.ok) throw new Error("Proxy fetch failed");
+                    const blob = await response.blob();
+                    await navigator.clipboard.write([
+                      new ClipboardItem({ [blob.type]: blob })
+                    ]);
+                    setIsCopied(true);
+                    setTimeout(() => setIsCopied(false), 2000);
+                  } catch (err) {
+                    console.error("Failed to copy image to clipboard:", err);
+                    navigator.clipboard.writeText(`https://drive.google.com/file/d/${previewMediaUrl}/view`);
+                    setIsCopied(true);
+                    setTimeout(() => setIsCopied(false), 2000);
+                  }
+                }}
+                className="flex flex-1 md:flex-none items-center justify-center gap-2 px-6 py-3 bg-white/10 hover:bg-white/20 text-white rounded-full font-bold shadow-lg transition-all backdrop-blur-md border border-white/10 active:scale-95"
+              >
+                {isCopied ? (
+                  <>
+                    <CheckIcon className="w-5 h-5 text-green-400" />
+                    <span className="text-green-400">Copied!</span>
+                  </>
+                ) : (
+                  <>
+                    <DocumentDuplicateIcon className="w-5 h-5" />
+                    <span>Copy Image</span>
+                  </>
+                )}
+              </button>
+              
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  window.open(`https://drive.google.com/uc?export=download&id=${previewMediaUrl}`, '_blank');
+                }}
+                className="flex flex-1 md:flex-none items-center justify-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-full font-bold shadow-lg transition-all active:scale-95 border border-blue-400/20"
+              >
+                <ArrowDownTrayIcon className="w-5 h-5" />
+                <span>Download</span>
+              </button>
             </div>
           </div>
         )}
       </div>
+
+      {/* Forward Modal */}
+      {forwardingMessage && (
+        <ForwardModal
+          message={forwardingMessage}
+          onClose={() => setForwardingMessage(null)}
+          onForward={handleForwardMessage}
+        />
+      )}
 
       {/* Input Area */}
       <ChatInput onSendMessage={handleSendMessage} isSending={isSending} />

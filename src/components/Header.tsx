@@ -2,15 +2,20 @@
 
 import { useSession, signOut } from "next-auth/react";
 import Image from "next/image";
+import Link from "next/link";
+import useSWR from "swr";
 import { 
   BellIcon, 
   MagnifyingGlassIcon,
   ChevronDownIcon,
   ArrowRightOnRectangleIcon,
-  Bars3Icon
+  Bars3Icon,
+  ChatBubbleLeftRightIcon
 } from "@heroicons/react/24/outline";
 
 import ThemeToggle from "./ThemeToggle";
+
+const fetcher = (url: string) => fetch(url).then(res => res.json());
 
 interface HeaderProps {
   onMenuClick?: () => void;
@@ -29,6 +34,11 @@ export default function Header({ onMenuClick }: HeaderProps) {
     }
     return url;
   };
+
+  const { data: chatData } = useSWR<any[]>('/api/chat/users', fetcher, {
+    refreshInterval: 120000, 
+  });
+  const chatUnreadCount = Array.isArray(chatData) ? chatData.reduce((acc, user) => acc + (user.unreadCount || 0), 0) : 0;
 
   return (
     <header 
@@ -75,7 +85,21 @@ export default function Header({ onMenuClick }: HeaderProps) {
         {/* Theme Toggle (Replaces Bell) */}
         <ThemeToggle />
 
-        <div className="h-5 w-[1px] bg-gray-200/50 dark:bg-navy-800 mx-1" />
+        {/* Chat Notification Icon */}
+        <Link 
+          href="/chat" 
+          className="relative p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:hover:bg-navy-800 rounded-lg transition-colors ml-0.5 md:ml-1"
+          title="Chat Messages"
+        >
+          <ChatBubbleLeftRightIcon className="w-5 h-5 dark:text-zinc-300" />
+          {chatUnreadCount > 0 && (
+            <span className="absolute top-1 right-1 inline-flex items-center justify-center px-1 py-0.5 text-[9px] font-black leading-none text-white transform translate-x-1/4 -translate-y-1/4 bg-[#CE2029] rounded-full shadow-sm ring-2 ring-white dark:ring-[#001F3F]">
+              {chatUnreadCount}
+            </span>
+          )}
+        </Link>
+
+        <div className="h-5 w-[1px] bg-gray-200/50 dark:bg-navy-800 mx-1 md:mx-2" />
 
         {/* User Profile & Logout */}
         <div className="flex items-center gap-1 flex-shrink-0">

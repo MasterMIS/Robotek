@@ -20,6 +20,7 @@ interface MessageBubbleProps {
   isOwn: boolean;
   showTail?: boolean;
   onImageClick?: (url: string) => void;
+  onForwardClick?: (message: ChatMessage) => void;
 }
 
 // Utility to check if text contains ONLY emojis and whitespace
@@ -31,7 +32,7 @@ const isEmojiOnly = (text: string) => {
   return emojiRegex.test(stripped);
 };
 
-export default function MessageBubble({ message, isOwn, showTail = true, onImageClick }: MessageBubbleProps) {
+export default function MessageBubble({ message, isOwn, showTail = true, onImageClick, onForwardClick }: MessageBubbleProps) {
   const emojisOnly = message.type === "text" && isEmojiOnly(message.text);
   const isRead = isOwn && message.read_by?.includes(message.receiver_id);
 
@@ -211,30 +212,45 @@ export default function MessageBubble({ message, isOwn, showTail = true, onImage
         )}
 
         {/* Timestamp & Ticks */}
-        <div className={`text-[10px] text-right flex items-center justify-end gap-1 ${
+        <div className={`text-[10px] text-right flex items-center justify-end gap-2 ${
           emojisOnly 
             ? "bg-black/10 text-gray-700 px-2 py-0.5 rounded-full inline-flex self-end drop-shadow-sm mt-[-0.5rem] mb-1" 
             : `mt-1 ${isOwn ? "text-white/80" : "text-gray-400"}`
         }`}>
-          {format(new Date(message.created_at), "HH:mm")}
-          {isOwn && (
-            <div className="flex">
-              {isRead ? (
-                <div className="relative flex">
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className={`w-3.5 h-3.5 ${emojisOnly ? "text-blue-500" : "text-blue-300 drop-shadow-sm"}`}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
-                  </svg>
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className={`w-3.5 h-3.5 -ml-2.5 ${emojisOnly ? "text-blue-500" : "text-blue-300 drop-shadow-sm"}`}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
-                  </svg>
-                </div>
-              ) : (
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className={`w-3.5 h-3.5 ${emojisOnly ? "text-gray-500" : "text-white/50 drop-shadow-sm"}`}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
-                </svg>
-              )}
-            </div>
+          {onForwardClick && (
+            <button
+              onClick={() => onForwardClick(message)}
+              className={`p-0.5 rounded-md hover:bg-black/10 transition-colors ${
+                isOwn ? "text-white/80 hover:text-white" : "text-gray-400 hover:text-gray-600"
+              }`}
+              title="Forward message"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5">
+                <path strokeLinecap="round" strokeLinejoin="round" d="m15 15 6-6m0 0-6-6m6 6H9a6 6 0 0 0 0 12h3" />
+              </svg>
+            </button>
           )}
+          <span className="flex items-center gap-1">
+            {format(new Date(message.created_at), "HH:mm")}
+            {isOwn && (
+              <span className="flex">
+                {isRead ? (
+                  <div className="relative flex">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className={`w-3.5 h-3.5 ${emojisOnly ? "text-blue-500" : "text-blue-300 drop-shadow-sm"}`}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+                    </svg>
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className={`w-3.5 h-3.5 -ml-2.5 ${emojisOnly ? "text-blue-500" : "text-blue-300 drop-shadow-sm"}`}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+                    </svg>
+                  </div>
+                ) : (
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className={`w-3.5 h-3.5 ${emojisOnly ? "text-gray-500" : "text-white/50 drop-shadow-sm"}`}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+                  </svg>
+                )}
+              </span>
+            )}
+          </span>
         </div>
       </div>
     </div>
