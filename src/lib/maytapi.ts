@@ -36,6 +36,7 @@ export async function sendWhatsAppMessage(phoneNumber: string, message: string) 
         "Content-Type": "application/json",
       },
       body: JSON.stringify(payload),
+      cache: "no-store"
     });
 
     const data = await response.json();
