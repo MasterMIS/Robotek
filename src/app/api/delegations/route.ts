@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDelegations, addDelegation } from "@/lib/delegation-sheets";
+import { getUserByUsernameOrEmail } from "@/lib/google-sheets";
 import { uploadFileToDrive } from "@/lib/google-drive";
 import { Delegation } from "@/types/delegation";
+import { sendWhatsAppMessage } from "@/lib/maytapi";
+import { formatDate } from "@/lib/dateUtils";
 
 const DELEGATION_FOLDER_ID = "1Rz8tFgUBfLI0WBEXXdZplJJ2zsk0H4l6";
 
@@ -41,6 +44,18 @@ export async function POST(req: NextRequest) {
 
     const success = await addDelegation(delegationData as Delegation);
     if (success) {
+      // Send WhatsApp Notification
+      try {
+        const assignedUser = await getUserByUsernameOrEmail(delegationData.assigned_to || "");
+        if (assignedUser && assignedUser.phone) {
+          const formattedDueDate = formatDate(delegationData.due_date || "");
+          const message = `🔔 *Delegation - New Task Assigned*\n\n*Title:* ${delegationData.title}\n*Priority:* ${delegationData.priority}\n*Due Date:* ${formattedDueDate}\n*Assigned By:* ${delegationData.assigned_by}\n\n*Description:* ${delegationData.description}`;
+          await sendWhatsAppMessage(assignedUser.phone, message);
+        }
+      } catch (err) {
+        console.error("Error sending WhatsApp notification:", err);
+      }
+
       return NextResponse.json({ message: "Delegation added successfully" });
     } else {
       return NextResponse.json({ error: "Failed to add delegation" }, { status: 500 });

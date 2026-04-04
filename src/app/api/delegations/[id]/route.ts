@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { updateDelegation, deleteDelegation } from "@/lib/delegation-sheets";
+import { updateDelegation, deleteDelegation, getDelegations } from "@/lib/delegation-sheets";
+import { getUserByUsernameOrEmail } from "@/lib/google-sheets";
 import { uploadFileToDrive } from "@/lib/google-drive";
 import { Delegation } from "@/types/delegation";
+import { sendWhatsAppMessage } from "@/lib/maytapi";
+import { formatDate } from "@/lib/dateUtils";
 
 const DELEGATION_FOLDER_ID = "1Rz8tFgUBfLI0WBEXXdZplJJ2zsk0H4l6";
 
@@ -41,6 +44,19 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
     // Pass the merged object back to Google Sheets updating
     await updateDelegation(id, delegationData as Delegation);
+
+    // Send WhatsApp Notification for Update
+    try {
+      const assignedUser = await getUserByUsernameOrEmail(delegationData.assigned_to || "");
+      if (assignedUser && assignedUser.phone) {
+        const formattedDueDate = formatDate(delegationData.due_date || "");
+        const message = `📝 *Delegation - Task Updated*\n\n*Title:* ${delegationData.title}\n*Priority:* ${delegationData.priority}\n*Due Date:* ${formattedDueDate}\n*Assigned By:* ${delegationData.assigned_by}\n\n*Description:* ${delegationData.description}`;
+        await sendWhatsAppMessage(assignedUser.phone, message);
+      }
+    } catch (err) {
+      console.error("Error sending WhatsApp notification:", err);
+    }
+
     return NextResponse.json({ message: "Delegation updated successfully" });
   } catch (error: any) {
     console.error("API Error updating delegation:", error);
@@ -57,8 +73,23 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
       return NextResponse.json({ error: "Missing delegation ID" }, { status: 400 });
     }
 
+    const delegations = await getDelegations();
+    const current = delegations.find(d => String(d.id) === String(id));
+
     const success = await deleteDelegation(id);
     if (success) {
+      // Send WhatsApp Notification for Deletion
+      if (current) {
+        try {
+          const assignedUser = await getUserByUsernameOrEmail(current.assigned_to || "");
+          if (assignedUser && assignedUser.phone) {
+            const message = `🗑️ *Delegation - Task Deleted*\n\n*Title:* ${current.title}\n*Assigned To:* ${current.assigned_to}\n\nThe task has been removed from the system.`;
+            await sendWhatsAppMessage(assignedUser.phone, message);
+          }
+        } catch (err) {
+          console.error("Error sending WhatsApp notification:", err);
+        }
+      }
       return NextResponse.json({ message: "Delegation deleted successfully" });
     } else {
       return NextResponse.json({ error: "Failed to delete delegation" }, { status: 500 });

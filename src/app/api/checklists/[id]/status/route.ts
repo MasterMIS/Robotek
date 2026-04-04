@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getChecklists, updateChecklist, addChecklistRevision } from "@/lib/checklist-sheets";
+import { getUserByUsernameOrEmail } from "@/lib/google-sheets";
 import { uploadFileToDrive } from "@/lib/google-drive";
 import { ChecklistRevision } from "@/types/checklist";
+import { sendWhatsAppMessage } from "@/lib/maytapi";
+import { formatDate } from "@/lib/dateUtils";
 import { v4 as uuidv4 } from "uuid";
 
 const CHECKLIST_FOLDER_ID = "1q0qGYa7lQ2FuIVf5hN5uoDm7cYEGFrMO";
@@ -57,6 +60,26 @@ export async function POST(
     };
 
     await addChecklistRevision(revision);
+
+    // Send WhatsApp Notifications for Status Change
+    try {
+      const formattedNow = formatDate(new Date().toISOString());
+      const message = `🔄 *Checklist - Status Changed*\n\n*Task:* ${current.task}\n*From:* ${current.status}\n*To:* ${newStatus}\n*Reason:* ${reason || "N/A"}\n\n*Updated At:* ${formattedNow}`;
+      
+      // Notify both parties
+      const parties = [current.assigned_to, current.assigned_by];
+      const uniqueParties = [...new Set(parties)];
+
+      for (const username of uniqueParties) {
+        if (!username) continue;
+        const user = await getUserByUsernameOrEmail(username);
+        if (user && user.phone) {
+          await sendWhatsAppMessage(user.phone, message);
+        }
+      }
+    } catch (err) {
+      console.error("Error sending WhatsApp notification:", err);
+    }
 
     return NextResponse.json({ 
       message: "Status updated and revision logged",

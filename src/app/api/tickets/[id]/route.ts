@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
-import { updateTicket, deleteTicket, Ticket } from '@/lib/ticket-sheets';
+import { updateTicket, deleteTicket, getTickets, Ticket } from '@/lib/ticket-sheets';
+import { getUserByUsernameOrEmail } from "@/lib/google-sheets";
 import { uploadFileToDrive } from '@/lib/google-drive';
+import { sendWhatsAppMessage } from "@/lib/maytapi";
+import { formatDate } from "@/lib/dateUtils";
 
 const TICKET_FOLDER_ID = "1zNEIi62bxuCP2g5KadniAWp4hSNpfVzq";
 
@@ -38,9 +41,36 @@ export async function PUT(
       if (fileId) data.attachment_url = fileId;
     }
 
+    const existingTickets = await getTickets();
+    const current = existingTickets.find(t => String(t.id) === String(id));
+
     const success = await updateTicket(id, data);
     
     if (success) {
+      // Send WhatsApp Notification for Ticket Update/Status Change
+      try {
+        if (current) {
+          const isStatusChange = data.status && data.status !== current.status;
+          const branding = isStatusChange ? "🔄 Help Ticket - Status Changed" : "📝 Help Ticket - Details Updated";
+          const formattedUpdate = formatDate(new Date().toISOString());
+          
+          const message = `${branding}\n\n*ID:* ${current.id}\n*Title:* ${data.title || current.title}\n*Status:* ${data.status || current.status}\n*Priority:* ${data.priority || current.priority}\n*Updated:* ${formattedUpdate}`;
+
+          const parties = [data.raised_by || current.raised_by, data.solver_person || current.solver_person];
+          const uniqueParties = [...new Set(parties)];
+
+          for (const username of uniqueParties) {
+            if (!username) continue;
+            const user = await getUserByUsernameOrEmail(username);
+            if (user && user.phone) {
+              await sendWhatsAppMessage(user.phone, message);
+            }
+          }
+        }
+      } catch (err) {
+        console.error("Error sending WhatsApp notification:", err);
+      }
+
       return NextResponse.json({ success: true, ticket: data });
     } else {
       return NextResponse.json({ error: "Failed to update ticket" }, { status: 404 });
@@ -57,8 +87,23 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
+    const existingTickets = await getTickets();
+    const current = existingTickets.find(t => String(t.id) === String(id));
+
     const success = await deleteTicket(id);
     if (success) {
+      // Send WhatsApp Notification for Deletion
+      try {
+        if (current) {
+          const solver = await getUserByUsernameOrEmail(current.solver_person || "");
+          if (solver && solver.phone) {
+            const message = `🗑️ *Help Ticket - Deleted*\n\n*ID:* ${current.id}\n*Title:* ${current.title}\n\nThe ticket has been removed from the system.`;
+            await sendWhatsAppMessage(solver.phone, message);
+          }
+        }
+      } catch (err) {
+        console.error("Error sending WhatsApp notification:", err);
+      }
       return NextResponse.json({ success: true });
     } else {
       return NextResponse.json({ error: "Failed to delete ticket" }, { status: 404 });

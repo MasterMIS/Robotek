@@ -25,6 +25,8 @@ export interface AttendanceRecord {
   inTime: string;
   outTime: string;
   status: string;
+  inPhoto?: string;
+  outPhoto?: string;
 }
 
 export async function getAttendanceRecords(): Promise<AttendanceRecord[]> {
@@ -32,7 +34,7 @@ export async function getAttendanceRecords(): Promise<AttendanceRecord[]> {
     const sheets = await getSheetsClient();
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: ATTENDANCE_SPREADSHEET_ID,
-      range: "Sheet1!A:G",
+      range: "Sheet1!A:I",
     });
 
     const rows = response.data.values;
@@ -46,6 +48,8 @@ export async function getAttendanceRecords(): Promise<AttendanceRecord[]> {
       inTime: row[4] || "",
       outTime: row[5] || "",
       status: row[6] || "",
+      inPhoto: row[7] || "",
+      outPhoto: row[8] || "",
     }));
   } catch (error) {
     console.error("Error fetching attendance records:", error);
@@ -58,7 +62,7 @@ export async function addAttendanceRecord(record: AttendanceRecord): Promise<boo
     const sheets = await getSheetsClient();
     await sheets.spreadsheets.values.append({
       spreadsheetId: ATTENDANCE_SPREADSHEET_ID,
-      range: "Sheet1!A:G",
+      range: "Sheet1!A:I",
       valueInputOption: "USER_ENTERED",
       requestBody: {
         values: [[
@@ -69,6 +73,8 @@ export async function addAttendanceRecord(record: AttendanceRecord): Promise<boo
           record.inTime,
           record.outTime,
           record.status,
+          record.inPhoto,
+          record.outPhoto,
         ]],
       },
     });
@@ -79,7 +85,7 @@ export async function addAttendanceRecord(record: AttendanceRecord): Promise<boo
   }
 }
 
-export async function updateAttendanceRecord(id: string, outTime: string, status: string): Promise<boolean> {
+export async function updateAttendanceRecord(id: string, outTime: string, status: string, outPhoto?: string): Promise<boolean> {
   try {
     const sheets = await getSheetsClient();
     const response = await sheets.spreadsheets.values.get({
@@ -101,6 +107,18 @@ export async function updateAttendanceRecord(id: string, outTime: string, status
         values: [[outTime, status]],
       },
     });
+
+    if (outPhoto) {
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: ATTENDANCE_SPREADSHEET_ID,
+        range: `Sheet1!I${rowIndex + 1}`,
+        valueInputOption: "USER_ENTERED",
+        requestBody: {
+          values: [[outPhoto]],
+        },
+      });
+    }
+
     return true;
   } catch (error) {
     console.error("Error updating attendance record:", error);

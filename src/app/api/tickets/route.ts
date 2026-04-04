@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import { getTickets, addTicket } from '@/lib/ticket-sheets';
+import { getUserByUsernameOrEmail } from "@/lib/google-sheets";
 import { uploadFileToDrive } from '@/lib/google-drive';
+import { sendWhatsAppMessage } from "@/lib/maytapi";
+import { formatDate } from "@/lib/dateUtils";
 
 const TICKET_FOLDER_ID = "1zNEIi62bxuCP2g5KadniAWp4hSNpfVzq";
 
@@ -72,6 +75,18 @@ export async function POST(request: Request) {
     const success = await addTicket(newTicket);
     
     if (success) {
+      // Send WhatsApp Notification for New Ticket
+      try {
+        const solver = await getUserByUsernameOrEmail(newTicket.solver_person || "");
+        if (solver && solver.phone) {
+          const formattedDate = formatDate(newTicket.created_at);
+          const message = `🎫 *Help Ticket - New Ticket Raised*\n\n*ID:* ${newTicket.id}\n*Title:* ${newTicket.title}\n*Category:* ${newTicket.category}\n*Priority:* ${newTicket.priority}\n*Raised By:* ${newTicket.raised_by}\n*Created:* ${formattedDate}\n\n*Description:* ${newTicket.description}`;
+          await sendWhatsAppMessage(solver.phone, message);
+        }
+      } catch (err) {
+        console.error("Error sending WhatsApp notification:", err);
+      }
+
       return NextResponse.json({ success: true, ticket: newTicket });
     } else {
       return NextResponse.json({ error: "Failed to save ticket" }, { status: 500 });

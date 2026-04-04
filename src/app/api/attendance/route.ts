@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAttendanceRecords, addAttendanceRecord, updateAttendanceRecord } from "@/lib/sheets/attendance-sheets";
 import { getUsers } from "@/lib/google-sheets";
 import { parseLatLong, getShortestDistance } from "@/lib/locationUtils";
+import { uploadBase64ToDrive } from "@/lib/google-drive";
 
 export async function GET(req: NextRequest) {
     try {
@@ -64,13 +65,34 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
     try {
-        const { action, userId, userName, latitude, longitude } = await req.json();
+        const { action, userId, userName, latitude, longitude, photo } = await req.json();
 
         if (!userId || !action) return NextResponse.json({ error: "Missing data" }, { status: 400 });
 
+        let photoUrl = "";
+        if (photo) {
+            const driveFileId = await uploadBase64ToDrive(photo, "1mQbuPp111m-fz3x2JCBecFZHMoRzDYPw");
+            if (driveFileId) {
+                photoUrl = `https://drive.google.com/uc?export=view&id=${driveFileId}`;
+            }
+        }
+
+        // Extract Date in IST to match calendar days properly
         const now = new Date();
-        const dateStr = now.toISOString().split('T')[0];
+        const istOffset = 5.5 * 60 * 60 * 1000;
+        const istNow = new Date(now.getTime() + istOffset);
+        const dateStr = istNow.toISOString().split('T')[0]; 
         const timeStr = now.toISOString();
+
+        // Helper to normalize Google Sheets dates
+        const normalizeDate = (dStr: string): string => {
+            if (!dStr) return '';
+            if (/^\d{2}\/\d{2}\/\d{4}$/.test(dStr)) {
+                const [dd, mm, yyyy] = dStr.split('/');
+                return `${yyyy}-${mm}-${dd}`;
+            }
+            return dStr.split('T')[0];
+        };
 
         if (action === 'CHECK_IN') {
             // Validate location if coordinates provided
@@ -92,7 +114,9 @@ export async function POST(req: NextRequest) {
                 date: dateStr,
                 inTime: timeStr,
                 outTime: "",
-                status: "IN"
+                status: "IN",
+                inPhoto: photoUrl,
+                outPhoto: ""
             };
 
             await addAttendanceRecord(newRecord);
@@ -100,11 +124,15 @@ export async function POST(req: NextRequest) {
 
         } else if (action === 'CHECK_OUT') {
             const records = await getAttendanceRecords();
-            const todayRecord = records.find(r => String(r.userId) === String(userId) && r.date === dateStr && r.status === 'IN');
+            const todayRecord = records.find(r => 
+                String(r.userId) === String(userId) && 
+                normalizeDate(r.date) === dateStr && 
+                r.status === 'IN'
+            );
 
             if (!todayRecord) return NextResponse.json({ error: "Active check-in not found" }, { status: 404 });
 
-            await updateAttendanceRecord(todayRecord.id, timeStr, "COMPLETED");
+            await updateAttendanceRecord(todayRecord.id, timeStr, "COMPLETED", photoUrl);
             return NextResponse.json({ success: true });
         }
 

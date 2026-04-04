@@ -61,6 +61,9 @@ export default function AttendancePage() {
     const [currentStatus, setCurrentStatus] = useState<'IDLE' | 'CHECKED_IN' | 'COMPLETED'>('IDLE');
     const [elapsedTime, setElapsedTime] = useState('00:00:00');
     const [checkInTime, setCheckInTime] = useState<Date | null>(null);
+    const [showCameraMode, setShowCameraMode] = useState<'CHECK_IN' | 'CHECK_OUT' | null>(null);
+    const videoRef = React.useRef<HTMLVideoElement>(null);
+    const canvasRef = React.useRef<HTMLCanvasElement>(null);
 
     // Leave State
     const [leaves, setLeaves] = useState<Leave[]>([]);
@@ -79,6 +82,11 @@ export default function AttendancePage() {
     const [locationError, setLocationError] = useState<string | null>(null);
     const [isApple, setIsApple] = useState(false);
     const [isMobile, setIsMobile] = useState(false);
+    const [showCamera, setShowCamera] = useState(false);
+    const [capturedImage, setCapturedImage] = useState<string | null>(null);
+    const [submitTarget, setSubmitTarget] = useState<'IN' | 'OUT' | null>(null);
+    const [masterSearch, setMasterSearch] = useState('');
+    const [reportViewMode, setReportViewMode] = useState<'STATUS' | 'TIME'>('STATUS');
 
     useEffect(() => {
         const ua = navigator.userAgent;
@@ -213,6 +221,45 @@ export default function AttendancePage() {
         return () => clearInterval(interval);
     }, [currentStatus, checkInTime]);
 
+    useEffect(() => {
+        if (showCameraMode) {
+            navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } })
+                .then(stream => {
+                    if (videoRef.current) {
+                        videoRef.current.srcObject = stream;
+                    }
+                })
+                .catch(err => {
+                    error("Camera access denied or failed");
+                    setShowCameraMode(null);
+                });
+        } else {
+            if (videoRef.current && videoRef.current.srcObject) {
+                const stream = videoRef.current.srcObject as MediaStream;
+                stream.getTracks().forEach(track => track.stop());
+                videoRef.current.srcObject = null;
+            }
+        }
+    }, [showCameraMode]);
+
+    const capturePhotoAndSubmit = () => {
+        if (videoRef.current && canvasRef.current) {
+            const context = canvasRef.current.getContext('2d');
+            if (context) {
+                canvasRef.current.width = videoRef.current.videoWidth;
+                canvasRef.current.height = videoRef.current.videoHeight;
+                context.drawImage(videoRef.current, 0, 0, canvasRef.current.width, canvasRef.current.height);
+                const photoData = canvasRef.current.toDataURL('image/jpeg', 0.8);
+                
+                const stream = videoRef.current.srcObject as MediaStream;
+                stream.getTracks().forEach(track => track.stop());
+                
+                handleAction(showCameraMode!, photoData);
+                setShowCameraMode(null);
+            }
+        }
+    };
+
     const fetchAttendance = async (userId: string) => {
         const res = await fetch(`/api/attendance?userId=${userId}`);
         const data = await res.json();
@@ -247,7 +294,7 @@ export default function AttendancePage() {
         }
     };
 
-    const handleAction = async (action: 'CHECK_IN' | 'CHECK_OUT') => {
+    const handleAction = async (action: 'CHECK_IN' | 'CHECK_OUT', photoData?: string) => {
         setIsPageLoading(true);
         try {
             const res = await fetch('/api/attendance', {
@@ -257,7 +304,8 @@ export default function AttendancePage() {
                     userId: user.id,
                     userName: user.username,
                     latitude: liveLocation?.lat,
-                    longitude: liveLocation?.lng
+                    longitude: liveLocation?.lng,
+                    photo: photoData
                 })
             });
 
@@ -337,7 +385,16 @@ export default function AttendancePage() {
 
     const formatDateIST = (dateStr: string) => {
         if (!dateStr) return "-";
-        const d = new Date(dateStr);
+        
+        // Handle DD/MM/YYYY
+        let parsedStr = dateStr;
+        if (/^\d{2}\/\d{2}\/\d{4}$/.test(dateStr)) {
+            const [dd, mm, yyyy] = dateStr.split('/');
+            parsedStr = `${yyyy}-${mm}-${dd}`;
+        }
+        
+        const d = new Date(parsedStr);
+        if (isNaN(d.getTime())) return "Invalid Date";
         return d.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
     };
 
@@ -347,6 +404,15 @@ export default function AttendancePage() {
         return d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
     };
 
+    const normalizeDateSheet = (dStr: string): string => {
+        if (!dStr) return '';
+        if (/^\d{2}\/\d{2}\/\d{4}$/.test(dStr)) {
+            const [dd, mm, yyyy] = dStr.split('/');
+            return `${yyyy}-${mm}-${dd}`;
+        }
+        return dStr.split('T')[0];
+    };
+
     const renderCalendar = () => {
         const year = currentDate.getFullYear();
         const month = currentDate.getMonth();
@@ -354,22 +420,35 @@ export default function AttendancePage() {
         const daysInMonth = new Date(year, month + 1, 0).getDate();
         const days = [];
 
-        for (let i = 0; i < firstDay; i++) days.push(<div key={`e-${i}`} className="h-24 md:h-32 bg-gray-50/20 dark:bg-slate-900/10" />);
+        for (let i = 0; i < firstDay; i++) days.push(<div key={`e-${i}`} className="h-16 md:h-20 bg-gray-50/20 dark:bg-slate-900/10" />);
 
         const todayStr = getIstDateString();
 
         for (let d = 1; d <= daysInMonth; d++) {
             const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-            const record = history.find(h => h.date === dateStr);
+            const record = history.find(h => normalizeDateSheet(h.date) === dateStr);
             const isToday = dateStr === todayStr;
-            const leave = leaves.find(l => dateStr >= l.startDate && dateStr <= l.endDate && l.status === 'Approved');
+            const leave = leaves.find(l => {
+                const start = normalizeDateSheet(l.startDate);
+                const end = normalizeDateSheet(l.endDate);
+                return dateStr >= start && dateStr <= end && l.status === 'Approved';
+            });
             const isSunday = new Date(year, month, d).getDay() === 0;
 
             let color = 'bg-white/50 dark:bg-slate-800/30';
             if (isSunday) color = 'bg-gray-100 dark:bg-slate-900/50 opacity-40';
-            else if (leave) color = 'bg-amber-400/80 text-white shadow-amber-200';
+            else if (leave) color = 'bg-purple-500/80 text-white shadow-purple-500/30 border-2 border-purple-400';
             else if (record?.inTime) {
-                color = record.outTime ? 'bg-green-500/90 text-white shadow-green-200' : 'bg-[#FFD500] text-[#003875] shadow-amber-300';
+                let isHalfDay = false;
+                if (record.outTime) {
+                    const hours = (new Date(record.outTime).getTime() - new Date(record.inTime).getTime()) / (1000 * 60 * 60);
+                    if (hours <= 4) isHalfDay = true;
+                }
+                if (isHalfDay) {
+                    color = 'bg-orange-500/90 text-white shadow-orange-200';
+                } else {
+                    color = record.outTime ? 'bg-green-500/90 text-white shadow-green-200' : 'bg-[#FFD500] text-[#003875] shadow-amber-300';
+                }
             } else if (dateStr < todayStr) color = 'bg-red-500/80 text-white opacity-90';
             else if (isToday) color = 'border-2 border-[#003875] dark:border-[#FFD500] text-[#003875] dark:text-[#FFD500]';
 
@@ -377,7 +456,7 @@ export default function AttendancePage() {
             const isActiveCheckIn = record?.inTime && !record?.outTime;
 
             days.push(
-                <div key={d} className="flex flex-col items-center pt-2 h-24 md:h-32 group border border-white/5 transition-all">
+                <div key={d} className="flex flex-col items-center pt-2 h-16 md:h-20 group border border-white/5 transition-all">
                     <div className="relative">
                         {isActiveCheckIn && (
                             <>
@@ -398,7 +477,13 @@ export default function AttendancePage() {
     if (!user) return <div className="p-8 text-center text-gray-400 font-bold">Initializing Attendance...</div>;
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-6 relative">
+            {isPageLoading && (
+                <div className="fixed inset-0 z-[999] bg-[#FFFBF0]/60 dark:bg-slate-900/60 backdrop-blur-sm flex flex-col items-center justify-center">
+                    <div className="w-16 h-16 border-4 border-[#003875]/20 border-t-[#003875] dark:border-[#FFD500]/20 dark:border-t-[#FFD500] rounded-full animate-spin mb-4"></div>
+                    <div className="text-[#003875] dark:text-[#FFD500] font-black tracking-widest text-sm uppercase animate-pulse">Processing...</div>
+                </div>
+            )}
             {/* Page Header with Integrated Pill Tabs */}
             <div className="flex flex-col lg:flex-row items-center gap-4 px-1">
                 <div className="text-center lg:text-left shrink-0 min-w-0">
@@ -407,12 +492,12 @@ export default function AttendancePage() {
                 </div>
 
                 <div className="flex-1 w-full flex justify-center lg:justify-end">
-                    <div className="rounded-full border-2 border-b-4 border-[#003875] dark:border-[#FFD500] bg-white dark:bg-navy-800 shadow-sm transition-all p-1 overflow-x-auto no-scrollbar max-w-full flex items-center gap-1.5">
+                    <div className="rounded-full border-2 border-b-4 border-[#003875] dark:border-[#FFD500] bg-[#FCF9F0] dark:bg-navy-800 shadow-sm transition-all p-1 overflow-x-auto no-scrollbar max-w-full flex items-center gap-1.5">
                         {[
                             { id: 'ATTENDANCE', label: 'Dashboard', icon: CalendarBtnIcon },
                             { id: 'LEAVE', label: 'Leaves', icon: ArrowRightCircleIcon },
-                            { id: 'ATTENDANCE_MASTER', label: 'Master List', icon: UserBtnIcon },
-                            { id: 'REPORT', label: 'Analytics', icon: ClockIcon }
+                            { id: 'ATTENDANCE_MASTER', label: 'Attendance Master', icon: UserBtnIcon },
+                            { id: 'REPORT', label: 'Attendance Report', icon: ClockIcon }
                         ].map((tab) => (
                             <button
                                 key={tab.id}
@@ -435,7 +520,7 @@ export default function AttendancePage() {
             {activeTab === 'ATTENDANCE' && (
                 <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
                     {/* Calendar Section */}
-                    <div className="lg:col-span-3 bg-white/80 dark:bg-[#1E293B]/50 rounded-[32px] shadow-xl border border-white/40 dark:border-white/5 overflow-hidden backdrop-blur-xl">
+                    <div className="lg:col-span-3 bg-[#FCF9F0]/90 dark:bg-[#1E293B]/50 rounded-[32px] shadow-xl border border-white/40 dark:border-white/5 overflow-hidden backdrop-blur-xl">
                         <div className="p-6 flex justify-between items-center border-b border-white/10">
                             <button onClick={() => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() - 1)))} className="p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-full transition"><ChevronLeftIcon className="w-5 h-5" /></button>
                             <h2 className="text-xl font-black text-[#003875] dark:text-[#FFD500] uppercase tracking-tighter">
@@ -453,7 +538,7 @@ export default function AttendancePage() {
 
                     {/* Action Panel */}
                     <div className="flex flex-col gap-6">
-                        <div className="bg-white dark:bg-slate-800 rounded-[32px] shadow-2xl p-8 border border-white/40 dark:border-white/5 text-center relative group overflow-hidden">
+                        <div className="bg-[#FCF9F0] dark:bg-slate-800 rounded-[32px] shadow-2xl p-8 border border-white/40 dark:border-white/5 text-center relative group overflow-hidden">
                             <div className={`absolute top-0 left-0 w-full h-1 ${currentStatus === 'CHECKED_IN' ? 'bg-[#FFD500] animate-pulse' : 'bg-[#003875] dark:bg-[#FFD500] opacity-30'}`}></div>
                             <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.25em] mb-2 opacity-70">
                                 {currentStatus === 'CHECKED_IN' ? 'Active Shift' : 'Global Work System'}
@@ -468,7 +553,7 @@ export default function AttendancePage() {
                             {currentStatus === 'IDLE' ? (
                                 <div className="space-y-4">
                                     <button
-                                        onClick={() => handleAction('CHECK_IN')}
+                                        onClick={() => setShowCameraMode('CHECK_IN')}
                                         disabled={!isInRange || isPageLoading}
                                         className={`w-full py-5 rounded-[24px] font-black text-sm uppercase tracking-widest transition-all ${isInRange ? 'bg-[#003875] hover:bg-[#002a58] text-white shadow-xl shadow-[#003875]/20 hover:-translate-y-1' : 'bg-gray-200 text-gray-400 cursor-not-allowed opacity-50'}`}
                                     >
@@ -482,7 +567,7 @@ export default function AttendancePage() {
                                 </div>
                             ) : currentStatus === 'CHECKED_IN' ? (
                                 <button 
-                                    onClick={() => handleAction('CHECK_OUT')} 
+                                    onClick={() => setShowCameraMode('CHECK_OUT')} 
                                     disabled={!isInRange || isPageLoading}
                                     className={`w-full py-5 rounded-[24px] font-black text-sm uppercase tracking-widest shadow-xl transition-all hover:-translate-y-1 text-white ${isInRange ? 'bg-red-600 hover:bg-red-700 shadow-red-600/20' : 'bg-gray-300 text-gray-500 cursor-not-allowed opacity-50 shadow-none'}`}
                                 >
@@ -494,7 +579,7 @@ export default function AttendancePage() {
                         </div>
 
                         {/* Location Intelligence Section */}
-                        <div className="bg-white dark:bg-slate-800 rounded-[32px] shadow-2xl p-8 border border-white/40 dark:border-white/5 flex-grow">
+                        <div className="bg-[#FCF9F0] dark:bg-slate-800 rounded-[32px] shadow-2xl p-8 border border-white/40 dark:border-white/5 flex-grow">
                              <h3 className="text-xs font-black mb-6 flex items-center gap-2 text-gray-800 dark:text-white uppercase border-b border-gray-100 dark:border-white/5 pb-4">
                                 <MapPinIcon className="w-4 h-4 text-[#003875] dark:text-[#FFD500]" /> Location Intelligence
                              </h3>
@@ -571,11 +656,25 @@ export default function AttendancePage() {
                                          )}
                                      </div>
 
-                                     {/* Sync Button */}
-                                     <button onClick={refreshLocationManual} className="w-full py-3 bg-gray-50 dark:bg-slate-900/50 hover:bg-gray-100 dark:hover:bg-slate-900 rounded-2xl border border-gray-200 dark:border-white/5 text-[10px] font-black uppercase tracking-widest text-gray-600 dark:text-gray-400 flex items-center justify-center gap-2 transition-all shadow-sm">
-                                         <ArrowPathIcon className="w-4 h-4" />
-                                         Refresh Location Sync
-                                     </button>
+                                     {/* Action Buttons */}
+                                     <div className="flex flex-col gap-2 mt-2">
+                                         <button onClick={refreshLocationManual} className="w-full py-3 bg-gray-50 dark:bg-slate-900/50 hover:bg-gray-100 dark:hover:bg-slate-900 rounded-2xl border border-gray-200 dark:border-white/5 text-[10px] font-black uppercase tracking-widest text-gray-600 dark:text-gray-400 flex items-center justify-center gap-2 transition-all shadow-sm">
+                                             <ArrowPathIcon className="w-4 h-4" />
+                                             Refresh Location Sync
+                                         </button>
+                                         
+                                         {liveLocation && closestPoint && !isInRange && (
+                                            <a 
+                                                href={`https://www.google.com/maps/dir/?api=1&destination=${closestPoint.lat},${closestPoint.long}`} 
+                                                target="_blank" 
+                                                rel="noreferrer" 
+                                                className="w-full py-3 bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/20 dark:hover:bg-blue-900/40 rounded-2xl border border-blue-200 dark:border-blue-500/20 text-[10px] font-black uppercase tracking-widest text-blue-600 dark:text-blue-400 flex items-center justify-center gap-2 transition-all shadow-sm"
+                                            >
+                                                <MapPinIcon className="w-4 h-4" />
+                                                Find the nearest location gap on Google map
+                                            </a>
+                                         )}
+                                     </div>
                                  </div>
                              )}
                         </div>
@@ -587,7 +686,7 @@ export default function AttendancePage() {
             {activeTab === 'LEAVE' && (
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                      {/* Leave Form */}
-                     <div className="bg-white dark:bg-slate-800 rounded-[32px] p-8 shadow-xl border border-white/10 h-fit">
+                     <div className="bg-[#FCF9F0] dark:bg-slate-800 rounded-[32px] p-8 shadow-xl border border-white/10 h-fit">
                         <h3 className="text-xl font-black text-[#003875] dark:text-[#FFD500] mb-8 uppercase tracking-tighter">Submit Leave Request</h3>
                         <form onSubmit={handleLeaveSubmit} className="space-y-6">
                             <CustomDateTimePicker label="From Date" dateOnly value={leaveForm.startDate} onChange={v => setLeaveForm({...leaveForm, startDate: v})} required />
@@ -608,7 +707,7 @@ export default function AttendancePage() {
                      {/* Leave History */}
                      <div className="lg:col-span-2 space-y-4">
                         {leaves.map(lv => (
-                            <div key={lv.id} onClick={() => { setSelectedLeave(lv); fetchRemarks(lv.id); }} className="p-6 bg-white dark:bg-slate-800 rounded-[28px] border border-white/10 hover:border-[#003875]/30 cursor-pointer group transition-all shadow-sm">
+                            <div key={lv.id} onClick={() => { setSelectedLeave(lv); fetchRemarks(lv.id); }} className="p-6 bg-[#FCF9F0] dark:bg-slate-800 rounded-[28px] border border-white/10 hover:border-[#003875]/30 cursor-pointer group transition-all shadow-sm">
                                 <div className="flex justify-between items-center mb-4">
                                      <div className="flex items-center gap-3">
                                          <div className="w-10 h-10 bg-[#003875]/5 rounded-xl flex items-center justify-center font-black text-[#003875] dark:text-[#FFD500]">
@@ -630,48 +729,204 @@ export default function AttendancePage() {
                 </div>
             )}
 
-            {/* MASTER LIST (Admin Only implementation would go here) */}
+            {/* MASTER LIST */}
             {activeTab === 'ATTENDANCE_MASTER' && (
-                <div className="bg-white dark:bg-slate-800 rounded-[32px] p-8 shadow-xl border border-white/10 overflow-x-auto min-h-[600px]">
-                    <h3 className="text-2xl font-black text-[#003875] dark:text-[#FFD500] mb-8 uppercase tracking-tighter">Attendance Intelligence Matrix</h3>
+                <div className="bg-[#FCF9F0] dark:bg-slate-800 rounded-[32px] p-4 md:p-8 shadow-xl border border-white/10 overflow-x-auto min-h-[600px]">
+                    <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
+                        <div className="flex items-center gap-4 bg-white dark:bg-slate-900 px-4 py-2 rounded-full shadow-sm border border-gray-100 dark:border-white/5">
+                            <button onClick={() => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() - 1)))} className="p-1 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-full transition"><ChevronLeftIcon className="w-5 h-5 text-gray-500" /></button>
+                            <span className="text-sm font-black text-[#003875] dark:text-[#FFD500] uppercase tracking-widest w-32 text-center">
+                                {currentDate.toLocaleString('default', { month: 'short', year: 'numeric' })}
+                            </span>
+                            <button onClick={() => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() + 1)))} className="p-1 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-full transition"><ChevronRightIcon className="w-5 h-5 text-gray-500" /></button>
+                        </div>
+                        <input 
+                            type="text" 
+                            placeholder="SEARCH EMPLOYEE..." 
+                            value={masterSearch}
+                            onChange={(e) => setMasterSearch(e.target.value)}
+                            className="w-full md:w-64 bg-white dark:bg-slate-900 border border-gray-200 dark:border-white/10 rounded-full px-4 py-2.5 text-xs font-black placeholder-gray-400 focus:outline-none focus:border-[#FFD500] transition-colors shadow-sm"
+                        />
+                    </div>
                     {!masterData ? (
-                        <div className="text-gray-400 text-sm animate-pulse">Syncing Global Data...</div>
+                        <div className="text-gray-400 text-sm animate-pulse font-black text-center py-20">SYNCING DATA...</div>
                     ) : (
-                        <table className="w-full text-left border-separate border-spacing-y-4">
+                        <table className="w-full text-left border-separate border-spacing-y-4 min-w-[1000px]">
                             <thead>
-                                <tr className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
-                                    <th className="px-6 py-4">Professional</th>
-                                    <th className="px-6 py-4 text-center">Status Index</th>
-                                    <th className="px-6 py-4 text-center">Hours Aggregate</th>
-                                    <th className="px-6 py-4 text-right">Performance Score</th>
+                                <tr className="text-[9px] font-black text-gray-400 uppercase tracking-widest text-center">
+                                    <th className="px-6 py-2 text-left">Employee Details</th>
+                                    <th className="px-4 py-2">Presents</th>
+                                    <th className="px-4 py-2">Absents</th>
+                                    <th className="px-4 py-2">Leaves</th>
+                                    <th className="px-4 py-2">Half Day</th>
+                                    <th className="px-4 py-2">Total Hours</th>
+                                    <th className="px-4 py-2">System Score</th>
+                                    <th className="px-4 py-2">Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                {masterData.users.filter(u => user.role === 'Admin' || u.id === user.id).map(u => {
-                                     // Quick summary logic
-                                     const monthAtt = masterData?.attendance.filter(a => String(a.userId) === String(u.id));
-                                     const pCount = monthAtt.length;
+                                {masterData.users
+                                    .filter(u => user?.role?.toLowerCase() === 'admin' || String(u.id) === String(user.id))
+                                    .filter(u => (u.full_name || u.username)?.toLowerCase().includes(masterSearch.toLowerCase()) || String(u.id).toLowerCase().includes(masterSearch.toLowerCase()))
+                                    .map(u => {
+                                     const monthAtt = masterData?.attendance.filter(a => String(a.userId) === String(u.id)) || [];
+                                     const uLeaves = masterData?.leaves?.filter((l:any) => String(l.userId) === String(u.id) && l.status === 'Approved') || [];
                                      
+                                     // Quick summary logic for current month
+                                     const year = currentDate.getFullYear();
+                                     const month = currentDate.getMonth();
+                                     const daysInMonth = new Date(year, month + 1, 0).getDate();
+                                     const todayStr = getIstDateString();
+                                     
+                                     let presents = 0;
+                                     let absents = 0;
+                                     let leavesCount = 0;
+                                     let halfDays = 0;
+                                     let totalHours = 0;
+                                     let totalWorkingDays = 0;
+
+                                     // Generate day cells
+                                     const dayCells = [];
+                                     for (let d = 1; d <= daysInMonth; d++) {
+                                        const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+                                        const isSunday = new Date(year, month, d).getDay() === 0;
+                                        
+                                        if (!isSunday) totalWorkingDays++;
+
+                                        const record = monthAtt.find(h => normalizeDateSheet(h.date) === dateStr);
+                                        const leave = uLeaves.find((l:any) => {
+                                            const start = normalizeDateSheet(l.startDate);
+                                            const end = normalizeDateSheet(l.endDate);
+                                            return dateStr >= start && dateStr <= end;
+                                        });
+
+                                        let statusChar = '-';
+                                        let statusColor = 'text-gray-300';
+                                        let dotColor = null;
+                                        let dotText = '';
+
+                                        if (isSunday) {
+                                            statusChar = 'SUN';
+                                            statusColor = 'text-gray-300 font-bold';
+                                        } else if (leave) {
+                                            leavesCount++;
+                                            statusChar = 'L';
+                                            statusColor = 'text-[#FFD500] font-black';
+                                        } else if (record?.inTime) {
+                                            let hours = 0;
+                                            if (record.outTime) {
+                                                hours = (new Date(record.outTime).getTime() - new Date(record.inTime).getTime()) / (1000 * 60 * 60);
+                                                totalHours += hours;
+                                            }
+                                            
+                                            // Half day occurs if checked out AND total logged time <= 4 hours
+                                            if (record.outTime && hours <= 4) {
+                                                halfDays++;
+                                                statusChar = 'HD';
+                                                statusColor = 'text-orange-500 font-black';
+                                                dotColor = 'bg-orange-500';
+                                                dotText = '0.5';
+                                            } else {
+                                                presents++;
+                                                statusChar = 'P';
+                                                statusColor = 'text-green-500 font-black';
+                                                dotColor = 'bg-green-500';
+                                                dotText = '1';
+                                            }
+                                        } else if (dateStr < todayStr) {
+                                            absents++;
+                                            statusChar = 'A';
+                                            statusColor = 'text-red-500 font-black';
+                                            dotColor = 'bg-red-500';
+                                            dotText = '-1';
+                                        }
+
+                                        dayCells.push({ d, statusChar, statusColor, dotColor, dotText });
+                                     }
+
+                                     const monthlyScore = (presents * 1) + (halfDays * 0.5) - (absents * 1);
+                                     const cumulativePercent = totalWorkingDays > 0 ? ((monthlyScore / totalWorkingDays) * 100).toFixed(0) : 0;
+                                     const isExpanded = expandedUserId === u.id;
+
                                      return (
-                                         <tr key={u.id} className="bg-gray-50 dark:bg-slate-900/50 rounded-[20px] group hover:bg-[#003875]/5 transition-all">
-                                             <td className="px-6 py-4 rounded-l-[20px]">
-                                                 <div className="flex items-center gap-3">
-                                                      <div className="w-10 h-10 rounded-xl bg-white dark:bg-slate-800 border border-white/10 flex items-center justify-center font-black overflow-hidden shadow-sm">
-                                                          {u.image_url ? <img src={u.image_url} alt="" className="w-full h-full object-cover" /> : <UserBtnIcon className="w-5 h-5 text-gray-400" />}
-                                                      </div>
-                                                      <div className="text-sm font-black text-gray-900 dark:text-white uppercase">{u.full_name || u.username}</div>
-                                                 </div>
-                                             </td>
-                                             <td className="px-6 py-4 text-center">
-                                                 <span className="bg-green-500/10 text-green-600 px-3 py-1 rounded-full text-[10px] font-black">{pCount} Present</span>
-                                             </td>
-                                             <td className="px-6 py-4 text-center text-sm font-bold opacity-60">N/A</td>
-                                             <td className="px-6 py-4 text-right rounded-r-[20px]">
-                                                 <button onClick={() => setExpandedUserId(expandedUserId === u.id ? null : u.id)} className="p-2 text-[#003875] dark:text-[#FFD500]">
-                                                     <ArrowRightCircleIcon className={`w-6 h-6 transition-transform ${expandedUserId === u.id ? 'rotate-90' : ''}`} />
-                                                 </button>
-                                             </td>
-                                         </tr>
+                                        <React.Fragment key={u.id}>
+                                            <tr className="bg-white dark:bg-slate-900 rounded-[24px] shadow-sm relative z-10 hover:shadow-md transition-shadow">
+                                                <td className="px-6 py-4 rounded-l-[24px]">
+                                                    <div className="flex items-center gap-4">
+                                                        <div className="w-10 h-10 rounded-full bg-[#FFD500] flex items-center justify-center font-black text-white shadow-sm overflow-hidden shrink-0">
+                                                            {u.image_url ? <img src={u.image_url} alt="" className="w-full h-full object-cover" /> : <UserBtnIcon className="w-5 h-5 text-white" />}
+                                                        </div>
+                                                        <div>
+                                                            <div className="text-sm font-black text-[#003875] dark:text-white uppercase tracking-tighter">{u.full_name || u.username}</div>
+                                                            <div className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">ID: {String(u.id).substring(0, 6)}</div>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td className="px-4 py-4 text-center">
+                                                    <span className="bg-green-100 text-green-600 dark:bg-green-500/20 px-4 py-2 rounded-full text-sm font-black">{presents}</span>
+                                                </td>
+                                                <td className="px-4 py-4 text-center">
+                                                    <span className="bg-red-100 text-red-600 dark:bg-red-500/20 px-4 py-2 rounded-full text-sm font-black">{absents}</span>
+                                                </td>
+                                                <td className="px-4 py-4 text-center">
+                                                    <span className="bg-yellow-100 text-yellow-600 dark:bg-yellow-500/20 px-4 py-2 rounded-full text-sm font-black">{leavesCount}</span>
+                                                </td>
+                                                <td className="px-4 py-4 text-center">
+                                                    <span className="bg-orange-100 text-orange-600 dark:bg-orange-500/20 px-4 py-2 rounded-full text-sm font-black">{halfDays}</span>
+                                                </td>
+                                                <td className="px-4 py-4 text-center text-sm font-black text-[#FFD500]">
+                                                    {totalHours.toFixed(1)}h
+                                                </td>
+                                                <td className="px-4 py-4 text-center">
+                                                    <span className="bg-red-50 text-red-500 dark:bg-red-500/10 px-4 py-2 rounded-full text-sm font-black">{cumulativePercent}%</span>
+                                                </td>
+                                                <td className="px-4 py-4 text-center rounded-r-[24px]">
+                                                    <button 
+                                                        onClick={() => setExpandedUserId(isExpanded ? null : u.id)} 
+                                                        className="w-8 h-8 rounded-[12px] bg-[#FFD500] hover:bg-[#e6c000] text-white dark:text-black flex items-center justify-center font-black text-xl transition-all mx-auto shadow-sm shadow-[#FFD500]/50 active:scale-95"
+                                                    >
+                                                        {isExpanded ? '-' : '+'}
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                            
+                                            {isExpanded && (
+                                                <tr className="animate-in fade-in slide-in-from-top-4 duration-200">
+                                                    <td colSpan={8} className="px-2 md:px-8 pb-8 pt-4">
+                                                        <div className="bg-white dark:bg-slate-800 rounded-[32px] p-6 md:p-8 border border-gray-100 dark:border-white/5 shadow-2xl">
+                                                            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-8">
+                                                                <h4 className="text-[#FFD500] font-black flex items-center gap-3 uppercase tracking-tighter text-lg">
+                                                                    <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                                                                    </svg>
+                                                                    Performance Analysis
+                                                                </h4>
+                                                                <div className="flex gap-8 text-right bg-gray-50/50 dark:bg-slate-900/50 p-4 rounded-2xl w-full md:w-auto overflow-hidden">
+                                                                    <div className="flex-1 md:flex-none">
+                                                                        <div className="text-[9px] font-black text-gray-400 uppercase tracking-[0.2em] mb-1">Monthly Points</div>
+                                                                        <div className="text-xl font-black text-[#003875] dark:text-white">{monthlyScore.toFixed(1)}</div>
+                                                                    </div>
+                                                                    <div className="w-[1px] bg-gray-200 dark:bg-white/10 shrink-0"></div>
+                                                                    <div className="flex-1 md:flex-none">
+                                                                        <div className="text-[9px] font-black text-gray-400 uppercase tracking-[0.2em] mb-1">Cumulative Score</div>
+                                                                        <div className="text-xl font-black text-[#FFD500]">{cumulativePercent}%</div>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                            <div className="grid grid-cols-5 sm:grid-cols-7 md:grid-cols-10 gap-3">
+                                                                {dayCells.map((c, idx) => (
+                                                                    <div key={idx} className="relative bg-gray-50/50 dark:bg-slate-900 border border-gray-100 dark:border-white/5 rounded-[20px] p-3 flex flex-col items-center justify-center min-h-[72px] shadow-[inset_0_2px_4px_rgba(0,0,0,0.02)] hover:shadow-md transition-shadow group">
+                                                                        {c.dotColor && <div className={`absolute -top-2 -right-2 w-auto min-w-[22px] h-5 px-1.5 rounded-full ${c.dotColor} border-[3px] border-white dark:border-slate-800 text-[10px] text-white flex items-center justify-center font-black shadow-sm z-10 scale-105`}>{c.dotText}</div>}
+                                                                        <div className="text-[11px] font-black text-gray-800 dark:text-gray-200 mb-2 opacity-80">{c.d}</div>
+                                                                        <div className={`text-[11px] font-black uppercase tracking-wider ${c.statusColor}`}>{c.statusChar}</div>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            )}
+                                        </React.Fragment>
                                      );
                                 })}
                             </tbody>
@@ -680,19 +935,191 @@ export default function AttendancePage() {
                 </div>
             )}
 
+            {/* REPORT LIST */}
+            {activeTab === 'REPORT' && (
+                <div className="bg-[#FCF9F0] dark:bg-slate-800 rounded-[32px] shadow-xl border border-white/10 overflow-hidden flex flex-col h-[calc(100vh-200px)] min-h-[600px]">
+                    {/* Header Top */}
+                    <div className="p-6 md:p-8 border-b border-gray-100 dark:border-white/5 bg-white/50 dark:bg-slate-900/50 flex flex-col xl:flex-row justify-between items-start xl:items-center gap-6">
+                        <div>
+                            <h3 className="text-2xl font-black text-[#FFD500] uppercase tracking-tighter flex items-center gap-3">
+                                <ClockIcon className="w-8 h-8" /> Attendance Comprehensive Report
+                            </h3>
+                            <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest mt-1">Matrix View &bull; Performance Analytics</div>
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-4">
+                            <input 
+                                type="text" 
+                                placeholder="Search by name..." 
+                                value={masterSearch}
+                                onChange={(e) => setMasterSearch(e.target.value)}
+                                className="w-full md:w-48 bg-white dark:bg-slate-900 border border-gray-200 dark:border-white/10 rounded-full px-4 py-2.5 text-xs font-black placeholder-gray-400 focus:outline-none focus:border-[#FFD500] shadow-sm"
+                            />
+                            
+                            {/* Toggle Mode */}
+                            <div className="flex items-center bg-white dark:bg-slate-900 rounded-full p-1 border border-gray-200 dark:border-white/10 shadow-sm">
+                                <button onClick={() => setReportViewMode('STATUS')} className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${reportViewMode === 'STATUS' ? 'bg-[#FFD500] text-white shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}>Status</button>
+                                <button onClick={() => setReportViewMode('TIME')} className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${reportViewMode === 'TIME' ? 'bg-[#FFD500] text-white shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}>Time</button>
+                            </div>
+
+                            <div className="flex items-center gap-4 bg-white dark:bg-slate-900 px-4 py-1.5 rounded-full shadow-sm border border-gray-100 dark:border-white/5">
+                                <button onClick={() => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() - 1)))} className="p-1 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-full transition"><ChevronLeftIcon className="w-4 h-4 text-[#FFD500]" /></button>
+                                <span className="text-sm font-black text-gray-800 dark:text-white uppercase tracking-tighter w-32 text-center">
+                                    {currentDate.toLocaleString('default', { month: 'long', year: 'numeric' })}
+                                </span>
+                                <button onClick={() => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() + 1)))} className="p-1 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-full transition"><ChevronRightIcon className="w-4 h-4 text-[#FFD500]" /></button>
+                            </div>
+                        </div>
+                    </div>
+
+                    {!masterData ? (
+                        <div className="flex-1 flex items-center justify-center text-gray-400 text-sm animate-pulse font-black">SYNCING DATA...</div>
+                    ) : (
+                        <div className="flex-1 overflow-auto custom-scrollbar relative bg-[#FCF9F0] dark:bg-slate-800">
+                            <table className="w-full text-left border-collapse min-w-max">
+                                <thead>
+                                    <tr>
+                                        <th className="sticky top-0 left-0 z-50 bg-[#F5F0E6] dark:bg-slate-900 p-4 min-w-[200px] border-b border-r border-[#E8E2D2] dark:border-white/10 text-xs font-black text-[#003875] dark:text-[#FFD500] uppercase tracking-widest flex flex-col justify-center shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">USER DETAILS / DAYS</th>
+                                        {(() => {
+                                            const year = currentDate.getFullYear();
+                                            const month = currentDate.getMonth();
+                                            const days = new Date(year, month + 1, 0).getDate();
+                                            return Array.from({length: days}, (_, i) => i + 1).map(d => (
+                                                <th key={d} className="sticky top-0 z-40 bg-[#F5F0E6] dark:bg-slate-900 p-3 border-b border-r border-[#E8E2D2] dark:border-white/10 text-center text-xs font-black text-gray-800 dark:text-white">{d}</th>
+                                            ));
+                                        })()}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {masterData.users
+                                        .filter(u => user?.role?.toLowerCase() === 'admin' || String(u.id) === String(user.id))
+                                        .filter(u => (u.full_name || u.username)?.toLowerCase().includes(masterSearch.toLowerCase()) || String(u.id).toLowerCase().includes(masterSearch.toLowerCase()))
+                                        .map(u => {
+                                            const monthAtt = masterData?.attendance.filter(a => String(a.userId) === String(u.id)) || [];
+                                            const uLeaves = masterData?.leaves?.filter((l:any) => String(l.userId) === String(u.id) && l.status === 'Approved') || [];
+                                            
+                                            const year = currentDate.getFullYear();
+                                            const month = currentDate.getMonth();
+                                            const daysInMonth = new Date(year, month + 1, 0).getDate();
+                                            const todayStr = getIstDateString();
+                                            
+                                            let presents = 0, absents = 0, leavesCount = 0, halfDays = 0, totalWorkingDays = 0;
+
+                                            const dayCells = [];
+                                            for (let d = 1; d <= daysInMonth; d++) {
+                                                const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+                                                const isSunday = new Date(year, month, d).getDay() === 0;
+                                                
+                                                if (!isSunday) totalWorkingDays++;
+
+                                                const record = monthAtt.find(h => normalizeDateSheet(h.date) === dateStr);
+                                                const leave = uLeaves.find((l:any) => {
+                                                    const start = normalizeDateSheet(l.startDate);
+                                                    const end = normalizeDateSheet(l.endDate);
+                                                    return dateStr >= start && dateStr <= end;
+                                                });
+
+                                                let statusChar = '-';
+                                                let statusColor = 'text-gray-300';
+                                                let dotText = '';
+                                                let rawIn = record?.inTime;
+                                                let rawOut = record?.outTime;
+
+                                                if (isSunday) {
+                                                    statusChar = 'SUN';
+                                                    statusColor = 'text-gray-800 dark:text-gray-200 font-bold';
+                                                } else if (leave) {
+                                                    leavesCount++;
+                                                    statusChar = 'L';
+                                                    statusColor = 'text-[#FFD500] font-black';
+                                                } else if (rawIn) {
+                                                    let hours = 0;
+                                                    if (rawOut) hours = (new Date(rawOut).getTime() - new Date(rawIn).getTime()) / 3600000;
+                                                    if (rawOut && hours <= 4) {
+                                                        halfDays++;
+                                                        statusChar = 'HD';
+                                                        statusColor = 'text-orange-500 font-black';
+                                                        dotText = '+0.5';
+                                                    } else {
+                                                        presents++;
+                                                        statusChar = 'P';
+                                                        statusColor = 'text-green-500 font-black';
+                                                        dotText = '+1';
+                                                    }
+                                                } else if (dateStr < todayStr) {
+                                                    absents++;
+                                                    statusChar = 'A';
+                                                    statusColor = 'text-red-500 font-black';
+                                                    dotText = '-1';
+                                                }
+
+                                                dayCells.push({ d, statusChar, statusColor, dotText, rawIn, rawOut });
+                                            }
+
+                                            const monthlyScore = (presents * 1) + (halfDays * 0.5) - (absents * 1);
+                                            const cumP = totalWorkingDays > 0 ? ((monthlyScore / totalWorkingDays) * 100).toFixed(0) : "0";
+
+                                            return (
+                                                <tr key={u.id} className="hover:bg-[#F5F0E6]/50 dark:hover:bg-slate-700/50 transition-colors">
+                                                    <td className="sticky left-0 z-30 bg-[#FCF9F0] dark:bg-slate-800 p-4 border-b border-r border-[#E8E2D2] dark:border-white/10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)]">
+                                                        <div className="flex items-center gap-4">
+                                                            <div className="w-10 h-10 rounded-full bg-white dark:bg-slate-900 border border-[#E8E2D2] dark:border-white/10 flex items-center justify-center font-black overflow-hidden shrink-0">
+                                                                {u.image_url ? <img src={u.image_url} alt="" className="w-full h-full object-cover" /> : <UserBtnIcon className="w-5 h-5 text-[#FFD500]" />}
+                                                            </div>
+                                                            <div>
+                                                                <div className="text-[11px] font-black text-gray-800 dark:text-white uppercase tracking-tighter truncate w-32">{u.full_name || u.username}</div>
+                                                                <div className="text-[10px] font-bold text-[#FFD500] uppercase mt-0.5">{cumP}%</div>
+                                                            </div>
+                                                        </div>
+                                                    </td>
+                                                    {dayCells.map((c, idx) => (
+                                                        <td key={idx} className="p-2 border-b border-r border-[#E8E2D2] dark:border-white/5 text-center min-w-[60px] align-middle">
+                                                            {reportViewMode === 'STATUS' ? (
+                                                                <div className="flex flex-col items-center justify-center gap-1">
+                                                                    <div className={`text-xs font-black uppercase tracking-tighter ${c.statusColor}`}>{c.statusChar}</div>
+                                                                    {c.dotText && (
+                                                                         <div className={`text-[9px] font-black ${c.statusChar === 'P' ? 'text-green-500' : c.statusChar === 'HD' ? 'text-orange-500' : 'text-red-500'}`}>
+                                                                            {c.dotText}
+                                                                         </div>
+                                                                    )}
+                                                                </div>
+                                                            ) : (
+                                                                <div className="flex flex-col items-center justify-center gap-0.5">
+                                                                    {c.statusChar === 'SUN' || c.statusChar === 'L' || c.statusChar === 'A' || c.statusChar === '-' ? (
+                                                                        <div className={`text-xs font-black uppercase tracking-tighter ${c.statusColor}`}>{c.statusChar}</div>
+                                                                    ) : (
+                                                                        <>
+                                                                            <div className="text-[9px] font-bold text-gray-500 dark:text-gray-400">{c.rawIn ? formatTimeIST(c.rawIn) : '-'}</div>
+                                                                            <div className="text-[9px] font-bold text-gray-500 dark:text-gray-400">{c.rawOut ? formatTimeIST(c.rawOut) : '-'}</div>
+                                                                        </>
+                                                                    )}
+                                                                </div>
+                                                            )}
+                                                        </td>
+                                                    ))}
+                                                </tr>
+                                            );
+                                        })}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+                </div>
+            )}
+
             {/* Leave Detail Modal */}
             {selectedLeave && (
                 <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-md flex items-center justify-center p-4">
-                     <div className="bg-white dark:bg-slate-800 rounded-[32px] w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col shadow-2xl border border-white/10 animate-in zoom-in duration-200">
-                        <div className="p-6 border-b border-white/10 flex justify-between items-center bg-[#003875]/5">
-                             <h4 className="font-black uppercase tracking-widest text-[#003875] dark:text-[#FFD500]">Lifecycle Detail: {selectedLeave.id}</h4>
-                             <button onClick={() => setSelectedLeave(null)} className="text-gray-400 hover:text-black dark:hover:text-white text-2xl font-black">&times;</button>
+                     <div className="bg-[#FCF9F0] dark:bg-slate-800 rounded-[28px] w-full max-w-4xl max-h-[85vh] overflow-hidden flex flex-col shadow-2xl border border-white/10 animate-in zoom-in duration-200">
+                        <div className="p-4 border-b border-white/10 flex justify-between items-center bg-[#003875]/5">
+                             <h4 className="font-black text-sm uppercase tracking-widest text-[#003875] dark:text-[#FFD500]">Lifecycle Detail: {selectedLeave.id}</h4>
+                             <button onClick={() => setSelectedLeave(null)} className="text-gray-400 hover:text-black dark:hover:text-white text-xl font-black flex items-center justify-center w-8 h-8 rounded-full hover:bg-black/5">&times;</button>
                         </div>
-                        <div className="flex-1 overflow-y-auto p-8 grid grid-cols-1 md:grid-cols-2 gap-8">
-                             <div className="space-y-6">
-                                <div className="p-6 bg-[#003875] rounded-[24px] text-white shadow-xl">
-                                    <div className="text-[10px] font-black uppercase opacity-60 mb-2">Request Origin</div>
-                                    <div className="text-2xl font-black tracking-tighter mb-4">{selectedLeave.userName}</div>
+                        <div className="flex-1 overflow-y-auto p-5 grid grid-cols-1 md:grid-cols-2 gap-5">
+                             <div className="space-y-4">
+                                <div className="p-5 bg-[#003875] rounded-[20px] text-white shadow-xl">
+                                    <div className="text-[9px] font-black uppercase opacity-60 mb-1">Request Origin</div>
+                                    <div className="text-xl font-black tracking-tighter mb-3">{selectedLeave.userName}</div>
                                     <div className="flex gap-4">
                                         <div>
                                             <div className="text-[8px] font-black uppercase opacity-60">From</div>
@@ -705,46 +1132,83 @@ export default function AttendancePage() {
                                         </div>
                                     </div>
                                 </div>
-                                <div className="p-6 bg-gray-50 dark:bg-slate-900 rounded-[24px] border border-white/5">
-                                    <div className="text-[10px] font-black uppercase text-gray-400 mb-2">Internal Reason</div>
-                                    <p className="text-sm font-medium italic">"{selectedLeave.reason}"</p>
+                                <div className="p-5 bg-gray-50 dark:bg-slate-900 rounded-[20px] border border-white/5">
+                                    <div className="text-[9px] font-black uppercase text-gray-400 mb-1">Internal Reason</div>
+                                    <p className="text-xs font-medium italic">"{selectedLeave.reason}"</p>
                                 </div>
-                                {user.role === 'Admin' && selectedLeave.status === 'Pending' && (
-                                    <div className="flex gap-4 pt-4">
-                                        <button onClick={() => handleStatusUpdate('Approved')} className="flex-1 py-4 bg-green-500 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg shadow-green-500/20">Authorize</button>
-                                        <button onClick={() => handleStatusUpdate('Rejected')} className="flex-1 py-4 bg-red-500 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg shadow-red-500/20">Decline</button>
-                                    </div>
-                                )}
                              </div>
 
-                             <div className="flex flex-col h-full space-y-4">
-                                <div className="flex-1 bg-gray-50 dark:bg-slate-900 rounded-[24px] p-6 border border-white/5 overflow-y-auto space-y-4 max-h-[400px]">
-                                    <div className="text-[10px] font-black uppercase text-gray-400 mb-2">Discussion Trail</div>
+                             <div className="flex flex-col h-full space-y-3">
+                                <div className="flex-1 bg-gray-50 dark:bg-slate-900 rounded-[20px] p-5 border border-white/5 overflow-y-auto space-y-3 max-h-[300px]">
+                                    <div className="text-[9px] font-black uppercase text-gray-400 mb-2">Discussion Trail</div>
                                     {remarks.map(r => (
-                                        <div key={r.id} className={`p-4 rounded-2xl text-xs ${r.userName === user.username ? 'bg-[#003875] text-white ml-8 shadow-md' : 'bg-white dark:bg-slate-800 mr-8'} border border-white/5`}>
+                                        <div key={r.id} className={`p-3 rounded-2xl text-[10px] ${r.userName === user.username ? 'bg-[#003875] text-white ml-6 shadow-md' : 'bg-white dark:bg-slate-800 mr-6'} border border-white/5`}>
                                             <div className="font-black mb-1 flex justify-between items-center opacity-60">
                                                 <span>{r.userName}</span>
-                                                <span className="text-[8px]">{formatTimeIST(r.createdAt)}</span>
+                                                <span className="text-[7px]">{formatTimeIST(r.createdAt)}</span>
                                             </div>
                                             {r.comment}
                                         </div>
                                     ))}
                                 </div>
-                                <div className="flex gap-2 p-2 bg-white dark:bg-slate-800 rounded-[20px] border border-white/10 shadow-sm">
+                                <div className="flex gap-2 p-1.5 bg-white dark:bg-slate-800 rounded-[16px] border border-white/10 shadow-sm shrink-0">
                                     <input 
-                                        className="flex-1 px-4 py-2 bg-transparent outline-none text-xs font-bold"
+                                        className="flex-1 px-3 py-1.5 bg-transparent outline-none text-[10px] font-bold"
                                         placeholder="Add comment..."
                                         value={newRemark}
                                         onChange={e => setNewRemark(e.target.value)}
                                         onKeyDown={e => e.key === 'Enter' && handleAddRemark()}
                                     />
-                                    <button onClick={handleAddRemark} className="p-3 bg-[#003875] dark:bg-[#FFD500] text-white dark:text-black rounded-xl active:scale-95 transition-transform">
+                                    <button onClick={handleAddRemark} className="p-2.5 bg-[#003875] dark:bg-[#FFD500] text-white dark:text-black rounded-xl active:scale-95 transition-transform">
                                         <CommentBtnIcon className="w-4 h-4" />
                                     </button>
                                 </div>
                              </div>
                         </div>
+
+                        {/* Sticky Action Footer */}
+                        <div className="p-4 border-t border-gray-100 dark:border-white/5 bg-gray-50/50 dark:bg-slate-900/50 flex gap-4 shrink-0">
+                            {user?.role?.toLowerCase() === 'admin' && selectedLeave.status === 'Pending' ? (
+                                <>
+                                    <button onClick={() => handleStatusUpdate('Approved')} className="flex-1 py-3 bg-green-500 hover:bg-green-600 text-white rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg shadow-green-500/20 transition-all">Authorize</button>
+                                    <button onClick={() => handleStatusUpdate('Rejected')} className="flex-1 py-3 bg-red-500 hover:bg-red-600 text-white rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg shadow-red-500/20 transition-all">Decline</button>
+                                </>
+                            ) : (
+                                <div className={`flex-1 py-3 text-center rounded-xl font-black text-[10px] uppercase tracking-widest ${selectedLeave.status === 'Approved' ? 'bg-green-500/10 text-green-600 border border-green-500/20' : selectedLeave.status === 'Rejected' ? 'bg-red-500/10 text-red-600 border border-red-500/20' : 'bg-amber-400/10 text-amber-500 border border-amber-400/20'}`}>
+                                    Status: {selectedLeave.status}
+                                </div>
+                            )}
+                        </div>
                      </div>
+                </div>
+            )}
+            {/* Camera Modal */}
+            {showCameraMode && (
+                <div className="fixed inset-0 z-[200] bg-black/80 backdrop-blur-sm flex flex-col items-center justify-center p-4">
+                    <div className="bg-white dark:bg-slate-800 p-6 rounded-[32px] w-full max-w-sm flex flex-col items-center relative shadow-2xl animate-in zoom-in duration-200">
+                        <h3 className="text-lg font-black uppercase text-[#003875] dark:text-[#FFD500] mb-4">
+                            Selfie Verification Required
+                        </h3>
+                        <div className="relative w-full aspect-[3/4] bg-black rounded-2xl overflow-hidden mb-6 shadow-inner border border-gray-100 dark:border-white/10">
+                            <video ref={videoRef} className="absolute inset-0 w-full h-full object-cover scale-x-[-1]" playsInline muted autoPlay />
+                            <div className="absolute inset-x-8 inset-y-16 border-2 border-white/30 rounded-[100px] border-dashed animate-pulse pointer-events-none" />
+                            <canvas ref={canvasRef} className="hidden" />
+                        </div>
+                        <div className="flex gap-4 w-full">
+                            <button 
+                                onClick={() => setShowCameraMode(null)} 
+                                className="flex-1 py-4 bg-gray-200 dark:bg-slate-700 text-gray-600 dark:text-white rounded-2xl font-black text-xs uppercase tracking-widest transition hover:bg-gray-300 dark:hover:bg-slate-600"
+                            >
+                                Cancel
+                            </button>
+                            <button 
+                                onClick={capturePhotoAndSubmit} 
+                                className="flex-[2] py-4 bg-[#003875] dark:bg-[#FFD500] text-white dark:text-black rounded-2xl font-black text-xs uppercase tracking-widest transition shadow-lg hover:-translate-y-1"
+                            >
+                                📸 Capture
+                            </button>
+                        </div>
+                    </div>
                 </div>
             )}
         </div>

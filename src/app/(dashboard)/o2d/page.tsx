@@ -50,6 +50,7 @@ import {
 import ActionStatusModal from "@/components/ActionStatusModal";
 import ConfirmModal from "@/components/ConfirmModal";
 import PartyFormModal from "@/components/PartyFormModal";
+import PremiumDatePicker from "@/components/PremiumDatePicker";
 import { getDriveImageUrl } from "@/lib/drive-utils";
 
 // --- Searchable Dropdown ---
@@ -248,6 +249,7 @@ export default function O2DPage() {
   const [filterEndDate, setFilterEndDate] = useState("");
   const [tableFilterParty, setTableFilterParty] = useState("");
   const [tableFilterOrderNo, setTableFilterOrderNo] = useState("");
+  const [tableFilterItemName, setTableFilterItemName] = useState("");
   const [tableCurrentPage, setTableCurrentPage] = useState(1);
   const tableItemsPerPage = 25;
 
@@ -357,7 +359,7 @@ export default function O2DPage() {
 
   useEffect(() => {
     setTableCurrentPage(1);
-  }, [searchTerm, tableFilterParty, tableFilterOrderNo, filterStartDate, filterEndDate]);
+  }, [searchTerm, tableFilterParty, tableFilterOrderNo, tableFilterItemName, filterStartDate, filterEndDate]);
 
 
   const toggleDateFilter = (id: string) => {
@@ -938,7 +940,34 @@ export default function O2DPage() {
   }, [groupedOrders, selectedOrderNo]);
 
   const flattenedO2Ds = useMemo(() => {
-    return [...o2ds].reverse().map(item => ({ ...item }));
+    if (!o2ds || o2ds.length === 0) return [];
+
+    // 1. Group by order_no
+    const groups: Record<string, O2D[]> = {};
+    o2ds.forEach(item => {
+      const no = item.order_no || "Unknown";
+      if (!groups[no]) groups[no] = [];
+      groups[no].push(item);
+    });
+
+    // 2. Sort groups by their latest item's created_at (descending) -> "latest order on top"
+    // Also ensuring items within group are chronological (original order usually)
+    const sortedNos = Object.keys(groups).sort((a, b) => {
+      const latestA = Math.max(...groups[a].map(i => new Date(i.created_at || i.updated_at || 0).getTime()));
+      const latestB = Math.max(...groups[b].map(i => new Date(i.created_at || i.updated_at || 0).getTime()));
+      return latestB - latestA;
+    });
+
+    // 3. Flatten back, items in groups should be ASCENDING created_at (first entry on top)
+    const result: O2D[] = [];
+    sortedNos.forEach(no => {
+      const sortedGroup = [...groups[no]].sort((x, y) => 
+        new Date(x.created_at || 0).getTime() - new Date(y.created_at || 0).getTime()
+      );
+      result.push(...sortedGroup);
+    });
+
+    return result;
   }, [o2ds]);
 
   const filteredTableData = useMemo(() => {
@@ -956,6 +985,9 @@ export default function O2DPage() {
       // Order ID Filter
       const matchesOrderId = !tableFilterOrderNo || item.order_no.toLowerCase().includes(tableFilterOrderNo.toLowerCase());
 
+      // Item Name Filter
+      const matchesItemName = !tableFilterItemName || item.item_name.toLowerCase().includes(tableFilterItemName.toLowerCase());
+
       // Date Range Filter
       let matchesDateRange = true;
       if (filterStartDate || filterEndDate) {
@@ -972,9 +1004,9 @@ export default function O2DPage() {
         }
       }
 
-      return matchesSearch && matchesParty && matchesOrderId && matchesDateRange;
+      return matchesSearch && matchesParty && matchesOrderId && matchesItemName && matchesDateRange;
     });
-  }, [flattenedO2Ds, searchTerm, tableFilterParty, tableFilterOrderNo, filterStartDate, filterEndDate]);
+  }, [flattenedO2Ds, searchTerm, tableFilterParty, tableFilterOrderNo, tableFilterItemName, filterStartDate, filterEndDate]);
 
   const tableTotalPages = Math.ceil(filteredTableData.length / tableItemsPerPage);
   const paginatedTableData = useMemo(() => {
@@ -1390,7 +1422,12 @@ export default function O2DPage() {
                   <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Order ID:</span>
                   <input type="text" placeholder="OR-XXXXX" value={tableFilterOrderNo} onChange={(e) => setTableFilterOrderNo(e.target.value)} className="bg-white dark:bg-black border border-gray-200 dark:border-navy-700 rounded-lg px-3 py-1 text-[10px] font-bold outline-none focus:border-[#FFD500] w-28" />
                 </div>
-                <button onClick={() => { setFilterStartDate(""); setFilterEndDate(""); setTableFilterParty(""); setTableFilterOrderNo(""); setSearchTerm(""); }} className="ml-auto px-3 py-1.5 text-[9px] font-black uppercase text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all">Reset Filters</button>
+                <div className="h-4 w-[1px] bg-gray-200 dark:bg-navy-700" />
+                <div className="flex items-center gap-2">
+                  <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Item Name:</span>
+                  <input type="text" placeholder="Search Item..." value={tableFilterItemName} onChange={(e) => setTableFilterItemName(e.target.value)} className="bg-white dark:bg-black border border-gray-200 dark:border-navy-700 rounded-lg px-3 py-1 text-[10px] font-bold outline-none focus:border-[#FFD500] w-40" />
+                </div>
+                <button onClick={() => { setFilterStartDate(""); setFilterEndDate(""); setTableFilterParty(""); setTableFilterOrderNo(""); setTableFilterItemName(""); setSearchTerm(""); }} className="ml-auto px-3 py-1.5 text-[9px] font-black uppercase text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all">Reset Filters</button>
               </div>
             </div>
           )}
@@ -2631,16 +2668,34 @@ export default function O2DPage() {
 function BusyModal({ isOpen, onClose, groupedOrders, fullParties }: { isOpen: boolean, onClose: () => void, groupedOrders: any, fullParties: any[] }) {
   const [selectedNos, setSelectedNos] = useState<string[]>([]);
   const [copyStatus, setCopyStatus] = useState("Copy All for Busy");
+  const [selectedBusyDate, setSelectedBusyDate] = useState<string>("");
+  const [isBusyCalendarOpen, setIsBusyCalendarOpen] = useState(false);
 
   const orderOptions = useMemo(() => {
-    return Object.keys(groupedOrders)
+    let filteredOrders = Object.keys(groupedOrders);
+
+    if (selectedBusyDate) {
+      filteredOrders = filteredOrders.filter(no => {
+        const order = groupedOrders[no][0];
+        if (!order || !order.created_at) return false;
+        
+        const orderDate = new Date(order.created_at);
+        const filterDate = new Date(selectedBusyDate);
+        
+        return orderDate.getFullYear() === filterDate.getFullYear() &&
+               orderDate.getMonth() === filterDate.getMonth() &&
+               orderDate.getDate() === filterDate.getDate();
+      });
+    }
+
+    return filteredOrders
       .map(no => ({
         no,
         party: groupedOrders[no][0]?.party_name || ""
       }))
       .sort((a, b) => b.no.localeCompare(a.no)) // Sort newest first
       .map(item => `${item.no} | ${item.party}`);
-  }, [groupedOrders]);
+  }, [groupedOrders, selectedBusyDate]);
 
   const results = useMemo(() => {
     return selectedNos.map(no => {
@@ -2722,13 +2777,80 @@ function BusyModal({ isOpen, onClose, groupedOrders, fullParties }: { isOpen: bo
 
         <div className="p-6 overflow-y-auto no-scrollbar space-y-6 bg-white/40 dark:bg-navy-900">
           <div className="space-y-4">
+            {/* Date Filter Buttons */}
+            <div className="flex flex-wrap items-center gap-2 mb-4">
+              <button 
+                onClick={() => setSelectedBusyDate("")} 
+                className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${!selectedBusyDate ? 'bg-[#003875] text-white shadow-md' : 'bg-white dark:bg-navy-950 text-gray-400 border border-gray-100 dark:border-navy-800'}`}
+              >
+                Show All
+              </button>
+              
+              {(() => {
+                const now = new Date();
+                const today = new Date(now.setHours(0,0,0,0)).toISOString().split('T')[0];
+                const yesterday = new Date(new Date().setDate(new Date().getDate() - 1)).toISOString().split('T')[0];
+                const dayBeforeYesterday = new Date(new Date().setDate(new Date().getDate() - 2)).toISOString().split('T')[0];
+
+                return (
+                  <>
+                    <button 
+                      onClick={() => setSelectedBusyDate(dayBeforeYesterday)} 
+                      className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${selectedBusyDate === dayBeforeYesterday ? 'bg-[#003875] text-white shadow-md' : 'bg-white dark:bg-navy-950 text-gray-400 border border-gray-100 dark:border-navy-800'}`}
+                    >
+                      D-B Yesterday
+                    </button>
+                    <button 
+                      onClick={() => setSelectedBusyDate(yesterday)} 
+                      className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${selectedBusyDate === yesterday ? 'bg-[#003875] text-white shadow-md' : 'bg-white dark:bg-navy-950 text-gray-400 border border-gray-100 dark:border-navy-800'}`}
+                    >
+                      Yesterday
+                    </button>
+                    <button 
+                      onClick={() => setSelectedBusyDate(today)} 
+                      className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${selectedBusyDate === today ? 'bg-[#003875] text-white shadow-md' : 'bg-white dark:bg-navy-950 text-gray-400 border border-gray-100 dark:border-navy-800'}`}
+                    >
+                      Today
+                    </button>
+                  </>
+                );
+              })()}
+
+              <div className="relative">
+                <button 
+                  onClick={() => setIsBusyCalendarOpen(!isBusyCalendarOpen)} 
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${selectedBusyDate && ![0,1,2].some(d => {
+                    const dt = new Date(); dt.setHours(0,0,0,0); dt.setDate(dt.getDate() - d); return dt.toISOString().split('T')[0] === selectedBusyDate;
+                  }) ? 'bg-[#003875] text-white shadow-md' : 'bg-white dark:bg-navy-950 text-gray-400 border border-gray-100 dark:border-navy-800'}`}
+                >
+                  <CalendarDaysIcon className="w-3.5 h-3.5" />
+                  {selectedBusyDate && ![0,1,2].some(d => {
+                    const dt = new Date(); dt.setHours(0,0,0,0); dt.setDate(dt.getDate() - d); return dt.toISOString().split('T')[0] === selectedBusyDate;
+                  }) ? new Date(selectedBusyDate).toLocaleDateString('en-GB') : "Calendar"}
+                </button>
+
+                {isBusyCalendarOpen && (
+                  <div className="absolute top-full left-0 mt-2 z-[9999]">
+                    <PremiumDatePicker 
+                      value={selectedBusyDate} 
+                      onChange={(date) => {
+                        setSelectedBusyDate(date);
+                        setIsBusyCalendarOpen(false);
+                      }}
+                      allowPast={true}
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+
             <SearchableDropdown
               label="Select Orders"
               icon={MagnifyingGlassIcon}
               value=""
               onChange={addOrder}
               options={orderOptions.filter(no => !selectedNos.includes(no))}
-              placeholder="Search order number..."
+              placeholder="Search and select orders..."
               keepOpen={true}
               listPosition="relative"
             />
