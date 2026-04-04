@@ -4,10 +4,10 @@ import { NextResponse, NextRequest } from "next/server";
 
 const { auth } = NextAuth(authConfig);
  
- 
+// Explicitly using the edge runtime for Cloudflare compatibility
+export const runtime = "experimental-edge";
 
-
-export default async function proxy(req: NextRequest) {
+export default async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
   const session = await auth(); 
 
