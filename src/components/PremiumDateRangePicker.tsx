@@ -147,7 +147,8 @@ export default function PremiumDateRangePicker({
     <div className="relative" ref={containerRef}>
       <div 
         onClick={() => setIsOpen(!isOpen)}
-        className="bg-[#FFFDF2] dark:bg-navy-900 border-2 border-[#F0E6D2] dark:border-navy-800 rounded-xl px-4 py-2 flex items-center gap-3 cursor-pointer shadow-sm hover:border-[#003875]/20 group transition-all"
+        style={{ backgroundColor: 'var(--panel-card)', borderColor: 'var(--panel-border)' }}
+        className="border-2 rounded-xl px-4 py-2 flex items-center gap-3 cursor-pointer shadow-sm hover:border-[#003875]/20 group transition-all"
       >
         <CalendarDaysIcon className="w-4 h-4 text-gray-400 group-hover:text-blue-500 transition-colors" />
         <div className="flex items-center gap-2">
@@ -167,7 +168,8 @@ export default function PremiumDateRangePicker({
             initial={{ opacity: 0, y: 10, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 10, scale: 0.95 }}
-            className="absolute right-0 mt-2 bg-white dark:bg-navy-900 border-2 border-[#F0E6D2] dark:border-navy-800 rounded-[2rem] shadow-2xl p-6 z-[200] flex flex-col gap-6 min-w-[580px]"
+            style={{ backgroundColor: 'var(--panel-card)', borderColor: 'var(--panel-border)' }}
+            className="absolute right-0 mt-2 border-2 rounded-[2rem] shadow-2xl p-6 z-[200] flex flex-col gap-6 min-w-[580px]"
           >
              <div className="flex items-center justify-between pb-4 border-b border-gray-100">
                 <h3 className="text-xs font-black text-gray-900 dark:text-white uppercase tracking-[0.2em]">Select Analysis Range</h3>

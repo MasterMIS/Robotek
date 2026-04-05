@@ -174,18 +174,18 @@ export default function Sidebar({ mobileOpen, setMobileOpen }: SidebarProps) {
       {/* Mobile Overlay */}
       {mobileOpen && (
         <div 
-          className="fixed inset-0 bg-black/50 z-20 md:hidden backdrop-blur-sm transition-all duration-300"
+          className="fixed inset-0 bg-black/50 z-40 md:hidden backdrop-blur-sm transition-all duration-300"
           onClick={() => setMobileOpen?.(false)}
         />
       )}
 
       <aside 
-        style={{ background: mobileOpen ? 'var(--background)' : undefined }}
+        style={{ background: 'var(--panel-card)' }}
         className={`
-        fixed left-0 top-0 h-screen z-30 transition-all duration-300 ease-in-out
+        fixed left-0 top-0 h-screen z-50 transition-all duration-300 ease-in-out
         ${mobileOpen 
           ? 'w-60 translate-x-0 shadow-[20px_0_60px_-15px_rgba(0,0,0,0.3)] border-r-4 border-[#FFD500] dark:border-[#FFD500]/50 rounded-r-[2.5rem]' 
-          : 'w-16 -translate-x-full md:translate-x-0 md:bg-transparent md:dark:bg-transparent md:hover:w-56'}
+          : 'w-16 -translate-x-full md:translate-x-0 md:hover:w-56 border-r border-gray-100'}
         flex flex-col group overflow-hidden peer
       `}>
 
@@ -209,7 +209,7 @@ export default function Sidebar({ mobileOpen, setMobileOpen }: SidebarProps) {
           )}
         </div>
         
-        <nav className="flex-1 px-4 md:px-2 pt-4 md:pt-1 pb-4 space-y-2 overflow-y-auto overflow-x-hidden invisible-scrollbar">
+        <nav className="flex-1 px-3 md:px-2 pt-3 md:pt-1 pb-3 space-y-0.5 overflow-y-auto overflow-x-hidden invisible-scrollbar">
           {filteredNavigation.map((item) => {
             const isActive = pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href));
             return (
@@ -218,14 +218,14 @@ export default function Sidebar({ mobileOpen, setMobileOpen }: SidebarProps) {
                 href={item.href}
                 onClick={() => setMobileOpen?.(false)}
                 className={`
-                  flex items-center gap-4 px-4 md:px-3 py-3 rounded-2xl transition-all group/item font-bold overflow-hidden
+                  flex items-center gap-3 px-3 md:px-3 py-1.5 rounded-xl transition-all group/item font-bold overflow-hidden
                   ${isActive 
-                    ? 'bg-[#003875] text-white shadow-lg shadow-[#003875]/20 md:translate-x-1' 
-                    : 'text-gray-600 dark:text-slate-400 hover:text-[#003875] dark:hover:text-[#FFD500] hover:bg-white/40 dark:hover:bg-white/5 active:scale-95 hover:translate-x-1'}
+                    ? 'bg-[#003875] text-white shadow-md md:translate-x-1' 
+                    : 'text-gray-500 dark:text-slate-400 border-l-4 border-transparent hover:text-[#003875] dark:hover:text-sky-400 hover:bg-[#003875]/8 dark:hover:bg-white/5 active:scale-95 hover:translate-x-1'}
                 `}
               >
                 <div className="flex items-center justify-center w-6 min-w-[24px]">
-                  <item.icon className={`w-6 h-6 transition-all font-bold ${isActive ? 'text-white' : 'group-hover/item:text-[#003875] dark:group-hover/item:text-[#FFD500] group-hover/item:scale-110'}`} />
+                  <item.icon className={`w-6 h-6 transition-all font-bold ${isActive ? 'text-white' : 'group-hover/item:text-[#003875] dark:group-hover/item:text-sky-400 group-hover/item:scale-110'}`} />
                 </div>
                 <span className={`flex-1 text-sm tracking-wide transition-all duration-300 whitespace-nowrap ${mobileOpen ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-4 md:group-hover:opacity-100 md:group-hover:translate-x-0'}`}>
                   {item.name}

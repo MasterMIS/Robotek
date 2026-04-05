@@ -100,13 +100,13 @@ const ScoreRow = ({ label, completed, total, percentage, isNegative }: any) => {
   );
 
   return (
-    <div className="flex items-center justify-between gap-3 py-1.5 border-b border-[#003875]/5 dark:border-navy-800/50 last:border-0 grow">
+    <div className="flex items-center justify-between gap-3 py-1.5 border-b border-[#003875]/5 dark:border-navy-800/50 last:border-0 grow font-serif">
       <div className="flex-1">
-        <p className="text-[9px] uppercase tracking-widest font-black text-gray-400 mb-0.5">{label}</p>
+        <p className="text-sm font-medium text-gray-500 uppercase tracking-widest mb-1">{label}</p>
         <div className="flex items-baseline gap-1">
-          <span className="text-[12px] font-black text-gray-900 dark:text-white">{completed}</span>
+          <span className="text-[12px] font-bold text-gray-900 dark:text-white">{completed}</span>
           <span className="text-gray-400 text-[10px]">/</span>
-          <span className="text-[10px] font-bold text-gray-400">{total}</span>
+          <span className="text-sm font-medium text-gray-400">{total}</span>
           <span className="text-gray-400 text-[10px] mx-1"> = </span>
           <span className={`text-[12px] font-black ${color}`}>
             {displayPercentage}%
@@ -258,7 +258,10 @@ const renderTaskTile = (task: any) => {
   const isActuallyLate = delayMs > 0;
 
   return (
-    <div className="bg-white dark:bg-navy-900 rounded-[1.2rem] border-2 border-[#F0E6D2] dark:border-navy-800 p-3 shadow-sm hover:shadow-md transition-all group relative overflow-hidden">
+    <div 
+      style={{ backgroundColor: 'var(--panel-card)', borderColor: 'var(--panel-border)' }}
+      className="rounded-[1.2rem] border-2 p-3 shadow-sm hover:shadow-md transition-all group relative overflow-hidden"
+    >
       <div className={`absolute top-0 left-0 w-1.5 h-full ${
         isActuallyLate ? 'bg-rose-500' : task.actualDate ? 'bg-emerald-500' : 'bg-amber-500'
       }`} />
@@ -334,7 +337,10 @@ const renderCategoryStatusSections = (tasks: any[], title: string, Icon: any, co
 
   return (
     <div className="space-y-4">
-      <div className="bg-white dark:bg-navy-900 px-6 py-4 rounded-[1.8rem] border-[3px] border-[#F0E6D2] dark:border-navy-800 shadow-sm flex items-center gap-4">
+      <div 
+        style={{ backgroundColor: 'var(--panel-card)', borderColor: 'var(--panel-border)' }}
+        className="px-6 py-4 rounded-[1.8rem] border-[3px] shadow-sm flex items-center gap-4"
+      >
          <div className={`p-2 rounded-xl ${colorClass.replace('text-', 'bg-').replace('600', '100').replace('400', '950/30')} ${colorClass}`}>
             <Icon className="w-6 h-6" />
          </div>
@@ -349,8 +355,14 @@ const renderCategoryStatusSections = (tasks: any[], title: string, Icon: any, co
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
         {/* PENDING COLUMN */}
-        <div className="bg-[#FFF9E6]/30 dark:bg-navy-950/30 rounded-[2.2rem] p-5 border-[3px] border-[#F0E6D2] dark:border-navy-800 h-full flex flex-col min-h-[200px]">
-          <div className="flex items-center gap-2 mb-4 border-b-2 border-[#F0E6D2] dark:border-navy-800 pb-2">
+        <div 
+          style={{ backgroundColor: 'var(--panel-card)', borderColor: 'var(--panel-border)' }}
+          className="rounded-[2.2rem] p-5 border-[3px] h-full flex flex-col min-h-[200px]"
+        >
+          <div 
+            style={{ borderColor: 'var(--panel-border)' }}
+            className="flex items-center gap-2 mb-4 border-b-2 pb-2"
+          >
             <ArrowPathIcon className="w-4 h-4 text-amber-500" />
             <span className="text-[11px] font-black text-amber-600 dark:text-amber-400 uppercase tracking-widest">Pending Task</span>
           </div>
@@ -364,8 +376,14 @@ const renderCategoryStatusSections = (tasks: any[], title: string, Icon: any, co
         </div>
 
         {/* COMPLETED COLUMN */}
-        <div className="bg-[#FFF9E6]/30 dark:bg-navy-950/30 rounded-[2.2rem] p-5 border-[3px] border-[#F0E6D2] dark:border-navy-800 h-full flex flex-col min-h-[200px]">
-          <div className="flex items-center gap-2 mb-4 border-b-2 border-[#F0E6D2] dark:border-navy-800 pb-2">
+        <div 
+          style={{ backgroundColor: 'var(--panel-card)', borderColor: 'var(--panel-border)' }}
+          className="rounded-[2.2rem] p-5 border-[3px] h-full flex flex-col min-h-[200px]"
+        >
+          <div 
+            style={{ borderColor: 'var(--panel-border)' }}
+            className="flex items-center gap-2 mb-4 border-b-2 pb-2"
+          >
             <CheckCircleIcon className="w-4 h-4 text-emerald-500" />
             <span className="text-[11px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest">Completed Task</span>
           </div>
@@ -379,7 +397,10 @@ const renderCategoryStatusSections = (tasks: any[], title: string, Icon: any, co
         </div>
 
         {/* DELAYED COLUMN */}
-        <div className="bg-[#FFF9E6]/30 dark:bg-navy-950/30 rounded-[2.2rem] p-5 border-[3px] border-rose-100 dark:border-rose-900/30 h-full flex flex-col min-h-[200px]">
+        <div 
+          style={{ backgroundColor: 'var(--panel-card)', borderColor: 'var(--panel-border)' }}
+          className="rounded-[2.2rem] p-5 border-[3px] h-full flex flex-col min-h-[200px]"
+        >
           <div className="flex items-center gap-2 mb-4 border-b-2 border-rose-100 dark:border-rose-900/30 pb-2">
             <ExclamationCircleIcon className="w-4 h-4 text-rose-500" />
             <span className="text-[11px] font-black text-rose-600 dark:text-rose-400 uppercase tracking-widest">Delayed Task</span>
@@ -496,9 +517,14 @@ const PDFHiddenReport = ({ user, dateRange, userTrendData, isNegativeMode, calcu
   if (!user) return null;
 
   return (
-    <div className="fixed left-[-9999px] top-0 pointer-events-none bg-[#FFFDF2]">
+    <div className="fixed left-[-9999px] top-0 pointer-events-none bg-white">
       {/* Page 1: Dashboard Summary - Using "every corner" */}
-      <div ref={pageRefs.page1} ref-id="pdf-page-1" className="w-[794px] h-[1123px] p-4 flex flex-col bg-[#FFFDF2] overflow-hidden">
+      <div 
+        ref={pageRefs.page1} 
+        ref-id="pdf-page-1" 
+        style={{ backgroundColor: 'var(--panel-card)' }}
+        className="w-[794px] h-[1123px] p-4 flex flex-col overflow-hidden"
+      >
         <PDFReportHeader user={user} dateRange={dateRange} />
         
         {/* Profile Card Overlay - Compact */}
@@ -568,19 +594,19 @@ const PDFHiddenReport = ({ user, dateRange, userTrendData, isNegativeMode, calcu
       </div>
 
       {/* Page 2: Delegations - Using 3 Column Grid */}
-      <div ref={pageRefs.page2} ref-id="pdf-page-2" className="w-[794px] h-[1123px] p-4 flex flex-col bg-[#FFFDF2] overflow-hidden">
+      <div ref={pageRefs.page2} ref-id="pdf-page-2" style={{ backgroundColor: '#ffffff' }} className="w-[794px] h-[1123px] p-4 flex flex-col overflow-hidden">
         <PDFReportHeader user={user} dateRange={dateRange} />
         <PDFTaskGrid tasks={user.delegationStats?.items || []} title="Delegations Snapshot" colorClass="text-orange-600" />
       </div>
 
       {/* Page 3: Checklists - Using 3 Column Grid */}
-      <div ref={pageRefs.page3} ref-id="pdf-page-3" className="w-[794px] h-[1123px] p-4 flex flex-col bg-[#FFFDF2] overflow-hidden">
+      <div ref={pageRefs.page3} ref-id="pdf-page-3" style={{ backgroundColor: '#ffffff' }} className="w-[794px] h-[1123px] p-4 flex flex-col overflow-hidden">
         <PDFReportHeader user={user} dateRange={dateRange} />
         <PDFTaskGrid tasks={user.checklistStats?.items || []} title="Checklists Snapshot" colorClass="text-emerald-600" />
       </div>
 
       {/* Page 4: O2D Jobs - Using 3 Column Grid */}
-      <div ref={pageRefs.page4} ref-id="pdf-page-4" className="w-[794px] h-[1123px] p-4 flex flex-col bg-[#FFFDF2] overflow-hidden">
+      <div ref={pageRefs.page4} ref-id="pdf-page-4" style={{ backgroundColor: '#ffffff' }} className="w-[794px] h-[1123px] p-4 flex flex-col overflow-hidden">
         <PDFReportHeader user={user} dateRange={dateRange} />
         <PDFTaskGrid tasks={user.o2dStats?.items || []} title="O2D FMS Jobs Snapshot" colorClass="text-blue-600" />
       </div>
@@ -652,7 +678,11 @@ const UserDrilldownContent = ({ user, dateRange, chartGranularity, onGranularity
   const pendingCount = user.total - user.completed;
 
   return (
-    <div ref={reportRef} className="space-y-6 animate-in slide-in-from-bottom-4 duration-500 bg-[#FFFDF2] p-4 rounded-[2rem]">
+    <div 
+      ref={reportRef} 
+      style={{ backgroundColor: 'var(--panel-card)' }}
+      className="space-y-6 animate-in slide-in-from-bottom-4 duration-500 p-4 rounded-[2rem]"
+    >
       
       {/* Hidden PDF Container for high-fidelity capture */}
       <PDFHiddenReport 
@@ -665,17 +695,27 @@ const UserDrilldownContent = ({ user, dateRange, chartGranularity, onGranularity
       />
 
       {/* Profile Header Card */}
-      <div className="bg-[#FFFDF2] dark:bg-navy-900 rounded-[2rem] border-2 border-[#003875]/20 dark:border-[#FFD500]/20 shadow-lg p-3 md:p-5 flex flex-col xl:flex-row items-center xl:items-stretch gap-4 relative overflow-visible">
+      <div 
+        style={{ backgroundColor: 'var(--panel-card)', borderColor: 'var(--panel-border)' }}
+        className="rounded-[2rem] border-2 shadow-lg p-3 md:p-5 flex flex-col xl:flex-row items-center xl:items-stretch gap-4 relative overflow-visible"
+      >
          <div className="absolute top-0 left-0 w-2 h-full bg-[#003875] dark:bg-[#FFD500] rounded-l-[2rem]" />
          
          {/* Avatar & Name */}
-         <div data-pdf-section="profile-header" className="flex items-center gap-4 xl:w-64 max-w-sm shrink-0 pl-2 xl:pr-6 xl:border-r border-[#F0E6D2] dark:border-navy-800 pt-2">
+         <div 
+          data-pdf-section="profile-header" 
+          style={{ borderColor: 'var(--panel-border)' }}
+          className="flex items-center gap-4 xl:w-64 max-w-sm shrink-0 pl-2 xl:pr-6 xl:border-r pt-2"
+         >
             <div className="w-16 h-16 rounded-[1.2rem] bg-gradient-to-br from-[#003875] to-blue-700 dark:from-[#FFD500] dark:to-yellow-500 shadow-md flex items-center justify-center text-white dark:text-black font-black text-2xl shrink-0">
                {user.user.username.charAt(0).toUpperCase()}
             </div>
             <div className="min-w-0">
                <h2 className="text-xl font-black text-gray-900 dark:text-white uppercase tracking-tight">{user.user.username}</h2>
-               <div className="px-2.5 py-1 bg-[#F0E6D2]/50 dark:bg-navy-800 rounded-lg text-[9px] font-black text-[#003875] dark:text-[#FFD500] uppercase tracking-widest mt-1.5 inline-block">
+               <div 
+                style={{ backgroundColor: 'white', borderColor: 'var(--panel-border)' }}
+                className="px-2.5 py-1 dark:bg-navy-800 rounded-lg text-[10px] font-black text-[#003875] dark:text-[#FFD500] uppercase tracking-widest mt-1.5 inline-block border shadow-sm"
+               >
                   {user.user.roleName}
                </div>
             </div>
@@ -716,16 +756,26 @@ const UserDrilldownContent = ({ user, dateRange, chartGranularity, onGranularity
          </div>
 
           {/* Gauges */}
-          <div data-pdf-section="gauges" className="flex items-center justify-center gap-6 md:gap-12 shrink-0 xl:pl-8 xl:border-l border-[#F0E6D2] dark:border-navy-800 w-full xl:w-auto mt-4 xl:mt-0 pt-4 xl:pt-0">
+          <div 
+            data-pdf-section="gauges" 
+            style={{ borderColor: 'var(--panel-border)' }}
+            className="flex items-center justify-center gap-6 md:gap-12 shrink-0 xl:pl-8 xl:border-l w-full xl:w-auto mt-4 xl:mt-0 pt-4 xl:pt-0"
+          >
              <div className="w-36 md:w-44 flex flex-col items-center group">
                 <SemiCircleGauge value={user.score} isNegative={isNegativeMode} />
-                <div className="bg-white dark:bg-navy-950 px-4 py-2 rounded-xl border-2 border-[#F0E6D2] dark:border-navy-800 text-[11px] font-black text-[#003875] dark:text-[#FFD500] shadow-sm uppercase tracking-widest mt-0 relative z-10 -translate-y-2">
+                <div 
+                  style={{ backgroundColor: 'var(--panel-card)', borderColor: 'var(--panel-border)' }}
+                  className="px-4 py-2 rounded-xl border-2 text-[11px] font-black text-[#003875] dark:text-[#FFD500] shadow-sm uppercase tracking-widest mt-0 relative z-10 -translate-y-2"
+                >
                    Score %
                 </div>
              </div>
              <div className="w-36 md:w-44 flex flex-col items-center group">
                 <SemiCircleGauge value={user.onTimeRate} isNegative={isNegativeMode} />
-                <div className="bg-white dark:bg-navy-950 px-4 py-2 rounded-xl border-2 border-[#F0E6D2] dark:border-navy-800 text-[11px] font-black text-[#003875] dark:text-[#FFD500] shadow-sm uppercase tracking-widest mt-0 relative z-10 -translate-y-2">
+                <div 
+                  style={{ backgroundColor: 'var(--panel-card)', borderColor: 'var(--panel-border)' }}
+                  className="px-4 py-2 rounded-xl border-2 text-[11px] font-black text-[#003875] dark:text-[#FFD500] shadow-sm uppercase tracking-widest mt-0 relative z-10 -translate-y-2"
+                >
                    On-Time %
                 </div>
              </div>
@@ -735,22 +785,35 @@ const UserDrilldownContent = ({ user, dateRange, chartGranularity, onGranularity
 
        {/* ROW 1: 30% Short Table | 70% Trend Chart */}
        <div className="flex flex-col lg:flex-row gap-6">
-          <div data-pdf-section="breakdown" className="w-full lg:w-[30%] bg-white dark:bg-navy-900 rounded-[2rem] border-2 border-[#F0E6D2] dark:border-navy-800 shadow-sm overflow-hidden flex flex-col">
-             <div className="p-4 border-b border-[#F0E6D2] dark:border-navy-800 bg-[#FFF9E6]/50 dark:bg-navy-950/50">
-                <h3 className="font-black text-xs text-gray-900 dark:text-white uppercase tracking-widest flex items-center gap-2">
+          <div 
+            data-pdf-section="breakdown" 
+            style={{ backgroundColor: 'var(--panel-card)', borderColor: 'var(--panel-border)' }}
+            className="w-full lg:w-[30%] rounded-[2rem] border-2 shadow-sm overflow-hidden flex flex-col"
+          >
+             <div 
+              style={{ borderColor: 'var(--panel-border)' }}
+              className="p-4 border-b bg-gray-50/50 dark:bg-navy-950/50"
+             >
+                <h3 className="font-bold text-lg text-gray-900 dark:text-white uppercase tracking-widest flex items-center gap-2">
                    <span className="w-2 h-2 rounded-full bg-[#FFD500]" /> Category Breakdown
                 </h3>
              </div>
              <div className="flex-1 p-4 flex flex-col justify-center">
                 <table className="w-full text-left">
                   <thead>
-                    <tr className="border-b-2 border-[#F0E6D2] dark:border-navy-800 text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                    <tr 
+                      style={{ borderColor: 'var(--panel-border)' }}
+                      className="border-b-2 text-[10px] font-black text-gray-400 uppercase tracking-widest"
+                    >
                       <th className="pb-3 text-left">Category</th>
                       <th className="pb-3 text-center">Score %</th>
                       <th className="pb-3 text-center">On-Time %</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-[#F0E6D2] dark:divide-navy-800 text-xs md:text-sm font-bold text-gray-700 dark:text-gray-300">
+                  <tbody 
+                    style={{ borderColor: 'var(--panel-border)' }}
+                    className="divide-y text-xs md:text-sm font-bold text-gray-700 dark:text-gray-300"
+                  >
                     <tr>
                       <td className="py-4 flex items-center gap-2 font-black text-xs uppercase text-gray-900 dark:text-white"><DocumentTextIcon className="w-5 h-5 text-orange-500 shrink-0"/> Delegations</td>
                       <td className={`py-4 text-center font-black ${user.delegationStats?.score >= 80 ? 'text-emerald-500' : 'text-amber-500'}`}>{isNegativeMode ? user.delegationStats?.score - 100 : user.delegationStats?.score || 0}%</td>
@@ -771,7 +834,11 @@ const UserDrilldownContent = ({ user, dateRange, chartGranularity, onGranularity
                 </table>
              </div>
           </div>
-         <div data-pdf-section="chart" className="w-full lg:w-[70%] bg-[#FFFDF2] dark:bg-navy-900 rounded-[2rem] border-2 border-[#F0E6D2] dark:border-navy-800 shadow-sm p-4 relative min-h-[350px] flex flex-col justify-center">
+         <div 
+            data-pdf-section="chart" 
+            style={{ backgroundColor: 'var(--panel-card)', borderColor: 'var(--panel-border)' }}
+            className="w-full lg:w-[70%] rounded-[2rem] border-2 shadow-sm p-4 relative min-h-[350px] flex flex-col justify-center"
+          >
             <ScoreTrendChart 
                data={userTrendData} 
                granularity={chartGranularity} 
@@ -782,103 +849,126 @@ const UserDrilldownContent = ({ user, dateRange, chartGranularity, onGranularity
          </div>
        </div>
 
-       {/* 3 Separate Category Score Tables */}
-       {([
-         { catKey: 'delegation' as const, label: 'Delegations', Icon: DocumentTextIcon, accentColor: 'text-orange-500', headerBg: 'bg-orange-50/60 dark:bg-orange-950/20', headerBorder: 'border-orange-100 dark:border-orange-900/30', rowEven: 'bg-orange-50/20 dark:bg-orange-950/10', dot: 'bg-orange-400' },
-         { catKey: 'checklist' as const, label: 'Checklists', Icon: ClipboardDocumentListIcon, accentColor: 'text-emerald-500', headerBg: 'bg-emerald-50/60 dark:bg-emerald-950/20', headerBorder: 'border-emerald-100 dark:border-emerald-900/30', rowEven: 'bg-emerald-50/20 dark:bg-emerald-950/10', dot: 'bg-emerald-400' },
-         { catKey: 'o2d' as const, label: 'O2D FMS Jobs', Icon: ShoppingBagIcon, accentColor: 'text-blue-500', headerBg: 'bg-blue-50/60 dark:bg-blue-950/20', headerBorder: 'border-blue-100 dark:border-blue-900/30', rowEven: 'bg-blue-50/20 dark:bg-blue-950/10', dot: 'bg-blue-400' },
-       ] as const).map((cat) => {
-         const periodLabel = chartGranularity === 'day' ? 'Days' : chartGranularity === 'week' ? 'Weeks' : chartGranularity === 'month' ? 'Months' : chartGranularity === 'quarterly' ? 'Quarters' : 'Years';
-         return (
-           <div key={cat.catKey} className="bg-white dark:bg-navy-900 rounded-[2rem] border-2 border-[#F0E6D2] dark:border-navy-800 shadow-sm overflow-hidden">
-             {/* Table Header */}
-             <div className={`px-5 py-3 border-b border-[#F0E6D2] dark:border-navy-800 ${cat.headerBg} flex items-center gap-3`}>
-               <div className={`p-1.5 rounded-lg bg-white dark:bg-navy-900 border ${cat.headerBorder} shrink-0`}>
-                 <cat.Icon className={`w-4 h-4 ${cat.accentColor}`} />
-               </div>
-               <h3 className={`font-black text-xs uppercase tracking-widest ${cat.accentColor}`}>
-                 {cat.label}
-               </h3>
-               <span className="ml-auto text-[9px] font-bold text-gray-400 uppercase tracking-widest">
-                 Last {categoryTrendData.length} {periodLabel}
-               </span>
-             </div>
+        {/* 3 Separate Category Score Tables */}
+        {([
+          { catKey: 'delegation' as const, label: 'Delegations', Icon: DocumentTextIcon, accentColor: 'text-orange-500', headerBg: 'bg-orange-50/60 dark:bg-orange-950/20', headerBorder: 'border-orange-100 dark:border-orange-900/30', rowEven: 'bg-orange-50/20 dark:bg-orange-950/10', dot: 'bg-orange-400' },
+          { catKey: 'checklist' as const, label: 'Checklists', Icon: ClipboardDocumentListIcon, accentColor: 'text-emerald-500', headerBg: 'bg-emerald-50/60 dark:bg-emerald-950/20', headerBorder: 'border-emerald-100 dark:border-emerald-900/30', rowEven: 'bg-emerald-50/20 dark:bg-emerald-950/10', dot: 'bg-emerald-400' },
+          { catKey: 'o2d' as const, label: 'O2D FMS Jobs', Icon: ShoppingBagIcon, accentColor: 'text-blue-500', headerBg: 'bg-blue-50/60 dark:bg-blue-950/20', headerBorder: 'border-blue-100 dark:border-blue-900/30', rowEven: 'bg-blue-50/20 dark:bg-blue-950/10', dot: 'bg-blue-400' },
+        ] as const).map((cat) => {
+          const periodLabel = chartGranularity === 'day' ? 'Days' : chartGranularity === 'week' ? 'Weeks' : chartGranularity === 'month' ? 'Months' : chartGranularity === 'quarterly' ? 'Quarters' : 'Years';
+          return (
+            <div 
+              key={cat.catKey} 
+              style={{ backgroundColor: 'var(--panel-card)', borderColor: 'var(--panel-border)' }}
+              className="rounded-[2rem] border-2 shadow-sm overflow-hidden"
+            >
+              {/* Table Header */}
+              <div 
+                style={{ borderColor: 'var(--panel-border)' }}
+                className={`px-5 py-3 border-b ${cat.headerBg} flex items-center gap-3`}
+              >
+                <div className={`p-1.5 rounded-lg bg-white dark:bg-navy-900 border ${cat.headerBorder} shrink-0`}>
+                  <cat.Icon className={`w-4 h-4 ${cat.accentColor}`} />
+                </div>
+                <h3 className={`font-black text-xs uppercase tracking-widest ${cat.accentColor}`}>
+                  {cat.label}
+                </h3>
+                <span className="ml-auto text-[9px] font-bold text-gray-400 uppercase tracking-widest">
+                  Last {categoryTrendData.length} {periodLabel}
+                </span>
+              </div>
 
-             <div className="overflow-x-auto">
-               <table className="w-full text-left border-collapse">
-                 <thead>
-                   <tr className="bg-[#FFF9E6]/50 dark:bg-navy-950/40">
-                     <th className="sticky left-0 z-10 bg-[#FFF9E6]/50 dark:bg-navy-950/40 px-4 py-2.5 text-[9px] font-black text-gray-400 uppercase tracking-widest min-w-[110px] border-b border-[#F0E6D2] dark:border-navy-800">
-                       Metric
-                     </th>
-                     {categoryTrendData.map((d, i) => (
-                       <th key={i} className="px-2 py-2.5 text-center text-[9px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap min-w-[64px] border-b border-[#F0E6D2] dark:border-navy-800">
-                         {d.label}
-                       </th>
-                     ))}
-                   </tr>
-                 </thead>
-                 <tbody>
-                   {/* Score % Row */}
-                   <tr className="border-b border-[#F0E6D2] dark:border-navy-800/50 group hover:bg-[#FFF9E6]/40 dark:hover:bg-white/5 transition-colors">
-                     <td className="sticky left-0 z-10 bg-white dark:bg-navy-900 group-hover:bg-[#FFF9E6]/40 px-4 py-3 transition-colors">
-                       <div className="flex items-center gap-1.5">
-                         <span className={`w-2 h-2 rounded-full ${cat.dot}`} />
-                         <span className="text-[10px] font-black text-gray-700 dark:text-gray-200 uppercase tracking-widest">Score %</span>
-                       </div>
-                     </td>
-                     {categoryTrendData.map((d, i) => {
-                       const val = (d[cat.catKey] as { score: number; onTime: number }).score;
-                       const display = isNegativeMode ? val - 100 : val;
-                       const colorClass = val >= 80 ? 'text-emerald-500' : val >= 50 ? 'text-amber-500' : 'text-rose-500';
-                       const bgClass = val >= 80 ? 'bg-emerald-50 dark:bg-emerald-950/20' : val >= 50 ? 'bg-amber-50 dark:bg-amber-950/20' : 'bg-rose-50 dark:bg-rose-950/20';
-                       const barColor = val >= 80 ? 'bg-emerald-400' : val >= 50 ? 'bg-amber-400' : 'bg-rose-400';
-                       return (
-                         <td key={i} className="px-2 py-3 text-center">
-                           <div className={`inline-flex flex-col items-center gap-0.5 px-2 py-1 rounded-xl ${bgClass}`}>
-                             <span className={`text-[11px] font-black leading-none ${colorClass}`}>{display}%</span>
-                             <div className="w-8 h-1 bg-gray-100 dark:bg-navy-800 rounded-full overflow-hidden mt-0.5">
-                               <div className={`h-full rounded-full transition-all duration-500 ${barColor}`}
-                                 style={{ width: `${isNegativeMode ? Math.max(0, 100 - val) : val}%` }} />
-                             </div>
-                           </div>
-                         </td>
-                       );
-                     })}
-                   </tr>
-                   {/* On-Time % Row */}
-                   <tr className="group hover:bg-[#FFF9E6]/40 dark:hover:bg-white/5 transition-colors">
-                     <td className="sticky left-0 z-10 bg-white dark:bg-navy-900 group-hover:bg-[#FFF9E6]/40 px-4 py-3 transition-colors">
-                       <div className="flex items-center gap-1.5">
-                         <span className="w-2 h-2 rounded-full bg-violet-400" />
-                         <span className="text-[10px] font-black text-gray-700 dark:text-gray-200 uppercase tracking-widest">On-Time %</span>
-                       </div>
-                     </td>
-                     {categoryTrendData.map((d, i) => {
-                       const val = (d[cat.catKey] as { score: number; onTime: number }).onTime;
-                       const display = isNegativeMode ? val - 100 : val;
-                       const colorClass = val >= 80 ? 'text-emerald-500' : val >= 50 ? 'text-amber-500' : 'text-rose-500';
-                       const bgClass = val >= 80 ? 'bg-emerald-50 dark:bg-emerald-950/20' : val >= 50 ? 'bg-amber-50 dark:bg-amber-950/20' : 'bg-rose-50 dark:bg-rose-950/20';
-                       const barColor = val >= 80 ? 'bg-emerald-400' : val >= 50 ? 'bg-amber-400' : 'bg-rose-400';
-                       return (
-                         <td key={i} className="px-2 py-3 text-center">
-                           <div className={`inline-flex flex-col items-center gap-0.5 px-2 py-1 rounded-xl ${bgClass}`}>
-                             <span className={`text-[11px] font-black leading-none ${colorClass}`}>{display}%</span>
-                             <div className="w-8 h-1 bg-gray-100 dark:bg-navy-800 rounded-full overflow-hidden mt-0.5">
-                               <div className={`h-full rounded-full transition-all duration-500 ${barColor}`}
-                                 style={{ width: `${isNegativeMode ? Math.max(0, 100 - val) : val}%` }} />
-                             </div>
-                           </div>
-                         </td>
-                       );
-                     })}
-                   </tr>
-                 </tbody>
-               </table>
-             </div>
-           </div>
-         );
-       })}
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-gray-50/50 dark:bg-navy-950/40">
+                      <th 
+                        style={{ backgroundColor: 'var(--panel-card)', borderColor: 'var(--panel-border)' }}
+                        className="sticky left-0 z-10 px-4 py-2.5 text-[9px] font-black text-gray-400 uppercase tracking-widest min-w-[110px] border-b"
+                      >
+                        Metric
+                      </th>
+                      {categoryTrendData.map((d, i) => (
+                        <th 
+                          key={i} 
+                          style={{ borderColor: 'var(--panel-border)' }}
+                          className="px-2 py-2.5 text-center text-[9px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap min-w-[64px] border-b"
+                        >
+                          {d.label}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100 dark:divide-navy-800 text-xs md:text-sm font-bold text-gray-700 dark:text-gray-300">
+                    {/* Score % Row */}
+                    <tr 
+                      style={{ borderColor: 'var(--panel-border)' }}
+                      className="border-b group hover:bg-gray-50/40 dark:hover:bg-white/5 transition-colors"
+                    >
+                      <td 
+                        style={{ backgroundColor: 'var(--panel-card)' }}
+                        className="sticky left-0 z-10 px-4 py-3 transition-colors text-[10px] font-black text-gray-700 dark:text-gray-200 uppercase tracking-widest border-r"
+                      >
+                        <div className="flex items-center gap-1.5">
+                          <span className={`w-2 h-2 rounded-full ${cat.dot}`} />
+                          <span>Score %</span>
+                        </div>
+                      </td>
+                      {categoryTrendData.map((d, i) => {
+                        const val = (d[cat.catKey] as { score: number; onTime: number }).score;
+                        const display = isNegativeMode ? val - 100 : val;
+                        const colorClass = val >= 80 ? 'text-emerald-500' : val >= 50 ? 'text-amber-500' : 'text-rose-500';
+                        const bgClass = val >= 80 ? 'bg-emerald-50 dark:bg-emerald-950/20' : val >= 50 ? 'bg-amber-50 dark:bg-amber-950/20' : 'bg-rose-50 dark:bg-rose-950/20';
+                        const barColor = val >= 80 ? 'bg-emerald-400' : val >= 50 ? 'bg-amber-400' : 'bg-rose-400';
+                        return (
+                          <td key={i} className="px-2 py-3 text-center">
+                            <div className={`inline-flex flex-col items-center gap-0.5 px-2 py-1 rounded-xl ${bgClass}`}>
+                              <span className={`text-[11px] font-black leading-none ${colorClass}`}>{display}%</span>
+                              <div className="w-8 h-1 bg-gray-100 dark:bg-navy-800 rounded-full overflow-hidden mt-0.5">
+                                <div className={`h-full rounded-full transition-all duration-500 ${barColor}`}
+                                  style={{ width: `${isNegativeMode ? Math.max(0, 100 - val) : val}%` }} />
+                              </div>
+                            </div>
+                          </td>
+                        );
+                      })}
+                    </tr>
+                    {/* On-Time % Row */}
+                    <tr className="group hover:bg-gray-50/40 dark:hover:bg-white/5 transition-colors">
+                      <td 
+                        style={{ backgroundColor: 'var(--panel-card)' }}
+                        className="sticky left-0 z-10 px-4 py-3 transition-colors text-[10px] font-black text-gray-700 dark:text-gray-200 uppercase tracking-widest border-r"
+                      >
+                        <div className="flex items-center gap-1.5">
+                          <span className="w-2 h-2 rounded-full bg-violet-400" />
+                          <span>On-Time %</span>
+                        </div>
+                      </td>
+                      {categoryTrendData.map((d, i) => {
+                        const val = (d[cat.catKey] as { score: number; onTime: number }).onTime;
+                        const display = isNegativeMode ? val - 100 : val;
+                        const colorClass = val >= 80 ? 'text-emerald-500' : val >= 50 ? 'text-amber-500' : 'text-rose-500';
+                        const bgClass = val >= 80 ? 'bg-emerald-50 dark:bg-emerald-950/20' : val >= 50 ? 'bg-amber-50 dark:bg-amber-950/20' : 'bg-rose-50 dark:bg-rose-950/20';
+                        const barColor = val >= 80 ? 'bg-emerald-400' : val >= 50 ? 'bg-amber-400' : 'bg-rose-400';
+                        return (
+                          <td key={i} className="px-2 py-3 text-center">
+                            <div className={`inline-flex flex-col items-center gap-0.5 px-2 py-1 rounded-xl ${bgClass}`}>
+                              <span className={`text-[11px] font-black leading-none ${colorClass}`}>{display}%</span>
+                              <div className="w-8 h-1 bg-gray-100 dark:bg-navy-800 rounded-full overflow-hidden mt-0.5">
+                                <div className={`h-full rounded-full transition-all duration-500 ${barColor}`}
+                                  style={{ width: `${isNegativeMode ? Math.max(0, 100 - val) : val}%` }} />
+                              </div>
+                            </div>
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          );
+        })}
 
        <div className="space-y-12">
           <div data-pdf-section="history-delegations">
@@ -915,22 +1005,34 @@ const UserDrilldownContent = ({ user, dateRange, chartGranularity, onGranularity
 const CategoryDrilldownContent = ({ catData, label, onBack, isNegativeMode }: any) => {
   return (
     <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
-      {/* Category Header Card */}
-      <div className="bg-[#FFFDF2] dark:bg-navy-900 rounded-[2rem] border-2 border-[#F0E6D2] dark:border-navy-800 shadow-lg p-6 flex flex-col md:flex-row items-center justify-between gap-6 relative overflow-hidden">
-         <div className="absolute top-0 left-0 w-2 h-full bg-[#FFD500] dark:bg-[#003875]" />
-         
-         <div className="min-w-0 flex-1">
-            <h2 className="text-2xl font-black text-gray-900 dark:text-white uppercase tracking-tight">{label}</h2>
-            <div className="px-3 py-1 bg-[#F0E6D2]/50 dark:bg-navy-800 rounded-lg text-[10px] font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest mt-2 inline-block">
-               Company-Wide Breakdown
-            </div>
-         </div>
+       {/* Category Header Card */}
+       <div 
+        style={{ backgroundColor: 'var(--panel-card)', borderColor: 'var(--panel-border)' }}
+        className="rounded-[2rem] border-2 shadow-lg p-6 flex flex-col md:flex-row items-center justify-between gap-6 relative overflow-hidden"
+       >
+          <div className="absolute top-0 left-0 w-2 h-full bg-[#FFD500] dark:bg-[#003875]" />
+          
+          <div className="min-w-0 flex-1">
+             <h2 className="text-2xl font-black text-gray-900 dark:text-white uppercase tracking-tight">{label}</h2>
+             <div 
+              style={{ backgroundColor: 'white' }}
+              className="px-3 py-1 dark:bg-navy-800 rounded-lg text-[10px] font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest mt-2 inline-block border border-gray-100 dark:border-navy-700"
+             >
+                Company-Wide Breakdown
+             </div>
+          </div>
          <div className="flex gap-4 w-full md:w-auto mt-4 md:mt-0">
-            <div className="flex-1 bg-white dark:bg-navy-950 p-4 rounded-2xl border border-[#F0E6D2] dark:border-navy-800 text-center min-w-[120px]">
+            <div 
+              style={{ backgroundColor: 'var(--panel-card)', borderColor: 'var(--panel-border)' }}
+              className="flex-1 p-4 rounded-2xl border text-center min-w-[120px] shadow-sm"
+            >
                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Efficiency Score</p>
                <p className={`text-3xl font-black ${catData.score >= 80 ? 'text-emerald-500' : 'text-amber-500'}`}>{isNegativeMode ? catData.score - 100 : catData.score}%</p>
             </div>
-            <div className="flex-1 bg-white dark:bg-navy-950 p-4 rounded-2xl border border-[#F0E6D2] dark:border-navy-800 text-center min-w-[120px]">
+            <div 
+              style={{ backgroundColor: 'var(--panel-card)', borderColor: 'var(--panel-border)' }}
+              className="flex-1 p-4 rounded-2xl border text-center min-w-[120px] shadow-sm"
+            >
                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">On-Time Accuracy</p>
                <p className={`text-3xl font-black ${catData.onTimeRate >= 80 ? 'text-emerald-500' : 'text-amber-500'}`}>{isNegativeMode ? catData.onTimeRate - 100 : catData.onTimeRate}%</p>
             </div>
@@ -1253,16 +1355,25 @@ function ScorePageContent() {
   };
 
   const renderTaskTable = (tasks: any[]) => (
-    <div className="overflow-hidden border border-[#F0E6D2] dark:border-navy-800 rounded-xl bg-white dark:bg-navy-900 shadow-sm">
+    <div 
+      style={{ backgroundColor: 'var(--panel-card)', borderColor: 'var(--panel-border)' }}
+      className="overflow-hidden border rounded-xl shadow-sm"
+    >
       <table className="w-full text-left text-[10px]">
         <thead>
-          <tr className="bg-[#FFF9E6] dark:bg-navy-950 border-b border-[#F0E6D2] dark:border-navy-800 text-gray-400 font-black uppercase tracking-widest">
+          <tr 
+            style={{ backgroundColor: 'var(--background)', borderColor: 'var(--panel-border)' }}
+            className="border-b text-gray-400 font-black uppercase tracking-widest"
+          >
             <th className="px-3 py-2">Task</th>
             <th className="px-2 py-2 text-center">Status</th>
             <th className="px-3 py-2 text-right">Target</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-[#F0E6D2] dark:divide-navy-800 font-bold text-gray-700 dark:text-gray-300">
+        <tbody 
+          style={{ borderColor: 'var(--panel-border)' }}
+          className="divide-y font-bold text-gray-700 dark:text-gray-300"
+        >
           {tasks.length === 0 ? (
             <tr>
               <td colSpan={3} className="py-6 text-center italic text-gray-400">No tasks found</td>
@@ -1377,7 +1488,10 @@ function ScorePageContent() {
         <div className="flex flex-wrap items-center gap-2">
           {/* Search - Only for Privileged */}
           {isPrivileged && (
-            <div className="relative group min-w-[180px] bg-[#FFFDF2] dark:bg-navy-900 border-2 border-[#F0E6D2] dark:border-navy-800 rounded-xl overflow-hidden shadow-sm">
+            <div 
+              style={{ backgroundColor: 'var(--panel-card)', borderColor: 'var(--panel-border)' }}
+              className="relative group min-w-[180px] border-2 rounded-xl overflow-hidden shadow-sm"
+            >
               <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
               <input 
                 type="text" 
@@ -1391,7 +1505,8 @@ function ScorePageContent() {
           <div className="relative" ref={filterDropdownRef}>
             <button 
               onClick={() => setIsFilterDropdownOpen(!isFilterDropdownOpen)}
-              className="bg-[#FFFDF2] dark:bg-navy-900 px-4 py-2 rounded-xl border-2 border-[#F0E6D2] dark:border-navy-800 flex items-center justify-between gap-3 shadow-sm hover:border-[#003875]/30 transition-all min-w-[140px]"
+              style={{ backgroundColor: 'var(--panel-card)', borderColor: 'var(--panel-border)' }}
+              className="px-4 py-2 rounded-xl border-2 flex items-center justify-between gap-3 shadow-sm hover:border-[#003875]/30 transition-all min-w-[140px]"
             >
               <div className="flex items-center gap-2">
                 {filterType === 'tillDate' ? <ClockIcon className="w-4 h-4 text-[#003875] dark:text-[#FFD500]" /> : <CalendarDaysIcon className="w-4 h-4 text-[#003875] dark:text-[#FFD500]" />}
@@ -1403,7 +1518,10 @@ function ScorePageContent() {
             </button>
 
             {isFilterDropdownOpen && (
-              <div className="absolute top-full left-0 mt-2 w-full bg-[#FFFDF2] dark:bg-navy-900 border-2 border-[#F0E6D2] dark:border-navy-800 rounded-xl shadow-xl z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+              <div 
+                style={{ backgroundColor: 'var(--panel-card)', borderColor: 'var(--panel-border)' }}
+                className="absolute top-full left-0 mt-2 w-full border-2 rounded-xl shadow-xl z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-200"
+              >
                 {[
                   { id: 'week', label: 'Week', icon: <CalendarDaysIcon className="w-3.5 h-3.5" /> },
                   { id: 'month', label: 'Month', icon: <CalendarDaysIcon className="w-3.5 h-3.5" /> },
@@ -1418,8 +1536,8 @@ function ScorePageContent() {
                         setFilterType(btn.id as any);
                         setIsFilterDropdownOpen(false);
                       }}
-                      className={`w-full px-4 py-2.5 text-left text-[10px] font-black uppercase tracking-widest flex items-center gap-2 hover:bg-[#FFF9E6] dark:hover:bg-white/5 transition-colors ${
-                        isActive ? 'text-[#003875] dark:text-[#FFD500] bg-[#FFF9E6]/50 dark:bg-white/5' : 'text-gray-400'
+                      className={`w-full px-4 py-2.5 text-left text-[10px] font-black uppercase tracking-widest flex items-center gap-2 hover:bg-gray-50 dark:hover:bg-white/5 transition-colors ${
+                        isActive ? 'text-[#003875] dark:text-[#FFD500] bg-gray-50/50 dark:bg-white/5' : 'text-gray-400'
                       }`}
                     >
                       {btn.icon}
@@ -1458,7 +1576,10 @@ function ScorePageContent() {
           </div>
            {/* View Selection Toggle (User / Category) - Privileged Only */}
            {isPrivileged && (
-             <div className="bg-[#FFFDF2] dark:bg-navy-900 p-0.5 rounded-xl border-2 border-[#F0E6D2] dark:border-navy-800 flex shadow-sm transition-all overflow-hidden mr-2">
+             <div 
+              style={{ backgroundColor: 'var(--panel-card)', borderColor: 'var(--panel-border)' }}
+              className="p-0.5 rounded-xl border-2 flex shadow-sm transition-all overflow-hidden mr-2"
+             >
                 <button 
                  onClick={() => setViewSetting('user')}
                  className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${viewSetting === 'user' ? 'bg-[#003875] dark:bg-[#FFD500] text-white dark:text-black shadow-md' : 'text-gray-400 hover:text-gray-600'}`}
@@ -1476,7 +1597,10 @@ function ScorePageContent() {
 
            {/* View Mode Toggle - Pill Style - Privileged Only */}
            {isPrivileged && (
-             <div className="bg-[#FFFDF2] dark:bg-navy-900 p-0 rounded-full border-2 border-[#F0E6D2] dark:border-navy-800 flex shadow-sm overflow-hidden">
+             <div 
+              style={{ backgroundColor: 'var(--panel-card)', borderColor: 'var(--panel-border)' }}
+              className="p-0 rounded-full border-2 flex shadow-sm overflow-hidden"
+             >
                 <button 
                  onClick={() => setViewMode('grid')}
                  className={`p-2 rounded-full transition-all ${viewMode === 'grid' ? 'bg-[#003875] dark:bg-[#FFD500] text-white dark:text-black shadow-md scale-105' : 'text-gray-400 hover:text-gray-600'}`}
@@ -1498,7 +1622,8 @@ function ScorePageContent() {
                   onClick={handleDownloadPDF}
                   disabled={isGeneratingPDF}
                   title={isGeneratingPDF ? "Generating Report..." : "Download MIS Report (PDF)"}
-                  className={`w-10 h-10 rounded-xl bg-[#FFFDF2] dark:bg-navy-900 border-2 border-[#F0E6D2] dark:border-navy-800 shadow-sm flex items-center justify-center text-[#003875] dark:text-[#FFD500] hover:bg-[#FFF9E6] dark:hover:bg-white/5 hover:scale-105 transition-all group active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed`}
+                  style={{ backgroundColor: 'var(--panel-card)', borderColor: 'var(--panel-border)' }}
+                  className={`w-10 h-10 rounded-xl border-2 shadow-sm flex items-center justify-center text-[#003875] dark:text-[#FFD500] hover:bg-gray-50 dark:hover:bg-white/5 hover:scale-105 transition-all group active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed`}
                 >
                   {isGeneratingPDF ? (
                     <ArrowPathIcon className="w-5 h-5 animate-spin" />
@@ -1567,8 +1692,14 @@ function ScorePageContent() {
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 animate-in fade-in duration-500">
               {/* Company Overall Tile */}
               {companyStats && (
-                <div className="group bg-[#FFFDF2] dark:bg-navy-900 rounded-[1.5rem] border-2 border-[#003875]/20 dark:border-[#FFD500]/20 shadow-lg hover:shadow-xl transition-all duration-500 overflow-hidden flex flex-col ring-4 ring-[#003875]/5 dark:ring-[#FFD500]/5">
-                   <div className="p-3 border-b border-[#003875]/20 bg-gradient-to-br from-[#003875]/20 via-[#003875]/10 to-transparent dark:from-[#FFD500]/30 dark:to-transparent flex items-center justify-between">
+                <div 
+                  style={{ backgroundColor: 'var(--panel-card)', borderColor: 'var(--panel-border)' }}
+                  className="group rounded-[1.5rem] border-2 shadow-lg hover:shadow-xl transition-all duration-500 overflow-hidden flex flex-col ring-4 ring-[#003875]/5 dark:ring-[#FFD500]/5"
+                >
+                   <div 
+                     style={{ borderColor: 'var(--panel-border)' }}
+                     className="p-3 border-b bg-gray-50/50 dark:bg-navy-950/30 flex items-center justify-between"
+                   >
                       <div className="flex items-center gap-2">
                          <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-navy-950 to-[#003875] dark:from-[#FFD500] dark:to-yellow-600 shadow-md flex items-center justify-center text-white dark:text-black font-black text-sm shrink-0">
                             C
@@ -1591,7 +1722,10 @@ function ScorePageContent() {
                          </div>
                       </section>
                       {/* Bottom Section: Gauge + Delay Hours */}
-                      <div className="pt-2 border-t border-[#F0E6D2] dark:border-navy-800/50 flex-1 flex flex-row items-end pb-2 px-1 gap-2 relative">
+                      <div 
+                        style={{ borderColor: 'var(--panel-border)' }}
+                        className="pt-2 border-t dark:border-navy-800/50 flex-1 flex flex-row items-end pb-2 px-1 gap-2 relative"
+                      >
                          {/* Average Gauge */}
                          <div className="flex-1 w-full min-w-0">
                             <SemiCircleGauge value={Math.round((companyStats.score + companyStats.onTimeRate) / 2)} isNegative={isNegativeMode} />
@@ -1616,7 +1750,10 @@ function ScorePageContent() {
 
               {/* Score Trend Chart (Spans remaining cols) */}
               {companyStats && (
-                <div className="md:col-span-1 xl:col-span-3 bg-[#FFFDF2] dark:bg-navy-900 rounded-[1.5rem] border-2 border-[#003875]/20 dark:border-[#FFD500]/20 shadow-lg hover:shadow-xl transition-all duration-500 overflow-hidden ring-4 ring-[#003875]/5 dark:ring-[#FFD500]/5 min-h-[180px]">
+                <div 
+                  style={{ backgroundColor: 'var(--panel-card)', borderColor: 'var(--panel-border)' }}
+                  className="md:col-span-1 xl:col-span-3 rounded-[1.5rem] border-2 shadow-lg hover:shadow-xl transition-all duration-500 overflow-hidden ring-4 ring-[#003875]/5 dark:ring-[#FFD500]/5 min-h-[180px]"
+                >
                    <ScoreTrendChart data={chartData} granularity={chartGranularity} onGranularityChange={setChartGranularity} isNegative={isNegativeMode} />
                 </div>
               )}
@@ -1626,9 +1763,17 @@ function ScorePageContent() {
                 /* User Tiles */
                 users.map((item: any) => {
                   return (
-                    <div key={item.user.id} className="group bg-[#FFFDF2] dark:bg-navy-900 rounded-[1.5rem] border-2 border-[#F0E6D2] dark:border-navy-800 shadow-sm hover:shadow-md transition-all duration-500 overflow-hidden flex flex-col cursor-pointer" onClick={() => setSelectedUserId(item.user.id)}>
+                    <div 
+                      key={item.user.id} 
+                      style={{ backgroundColor: 'var(--panel-card)', borderColor: 'var(--panel-border)' }}
+                      className="group rounded-[1.5rem] border-2 shadow-sm hover:shadow-md transition-all duration-500 overflow-hidden flex flex-col cursor-pointer" 
+                      onClick={() => setSelectedUserId(item.user.id)}
+                    >
                       {/* Tile Header */}
-                      <div className="p-3 border-b border-[#F0E6D2] dark:border-navy-800/50 bg-[#FFF9E6]/50 dark:bg-navy-950/30">
+                      <div 
+                        style={{ borderColor: 'var(--panel-border)' }}
+                        className="p-3 border-b dark:border-navy-800/50 bg-gray-50/50 dark:bg-navy-950/30"
+                      >
                          <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2">
                                <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-[#003875] to-blue-700 dark:from-[#FFD500] dark:to-yellow-500 shadow-md flex items-center justify-center text-white dark:text-black font-black text-sm shrink-0">
@@ -1636,13 +1781,19 @@ function ScorePageContent() {
                                </div>
                                <div className="min-w-0">
                                   <h3 className="text-xs font-black text-gray-900 dark:text-white uppercase truncate max-w-[100px] leading-tight group-hover:text-[#003875] dark:group-hover:text-[#FFD500] transition-colors">{item.user.username}</h3>
-                                  <div className="px-1.5 py-0.5 bg-[#F0E6D2]/50 dark:bg-navy-800 rounded-md text-[8px] font-black text-gray-500 dark:text-gray-400 uppercase tracking-tighter mt-0.5 inline-block">
+                                  <div 
+                                    style={{ backgroundColor: 'white', borderColor: 'var(--panel-border)' }}
+                                    className="px-1.5 py-0.5 dark:bg-navy-800 rounded-md text-[8px] font-black text-gray-400 dark:text-gray-400 uppercase tracking-tighter mt-0.5 inline-block border"
+                                  >
                                      {item.user.roleName}
                                   </div>
                                </div>
                             </div>
                             
-                            <div className="w-8 h-8 flex items-center justify-center rounded-full bg-white dark:bg-navy-800 border-2 border-[#F0E6D2] dark:border-navy-700 shadow-sm group-hover:scale-110 group-hover:border-[#003875]/20 dark:group-hover:border-[#FFD500]/20 transition-all">
+                            <div 
+                              style={{ borderColor: 'var(--panel-border)' }}
+                              className="w-8 h-8 flex items-center justify-center rounded-full bg-white dark:bg-navy-800 border-2 shadow-sm group-hover:scale-110 group-hover:border-[#003875]/20 dark:group-hover:border-[#FFD500]/20 transition-all"
+                            >
                                <ChevronRightIcon className="w-4 h-4 text-gray-400 group-hover:text-[#003875] dark:group-hover:text-[#FFD500]" />
                             </div>
                          </div>
@@ -1673,8 +1824,16 @@ function ScorePageContent() {
                 ].filter(cat => cat.label.toLowerCase().includes(searchTerm.toLowerCase())).map(cat => {
                   const data = (companyStats as any)[cat.id];
                   return (
-                    <div key={cat.id} className="group bg-[#FFFDF2] dark:bg-navy-900 rounded-[1.5rem] border-2 border-[#F0E6D2] dark:border-navy-800 shadow-sm hover:shadow-md transition-all duration-500 overflow-hidden flex flex-col cursor-pointer" onClick={() => setSelectedCategoryId(cat.id)}>
-                      <div className={`p-4 bg-gradient-to-br ${cat.bg} dark:bg-navy-950 border-b border-[#F0E6D2] flex items-center gap-4`}>
+                    <div 
+                      key={cat.id} 
+                      style={{ backgroundColor: 'var(--panel-card)', borderColor: 'var(--panel-border)' }}
+                      className="group rounded-[1.5rem] border-2 shadow-sm hover:shadow-md transition-all duration-500 overflow-hidden flex flex-col cursor-pointer" 
+                      onClick={() => setSelectedCategoryId(cat.id)}
+                    >
+                      <div 
+                        style={{ borderColor: 'var(--panel-border)' }}
+                        className={`p-4 bg-gradient-to-br ${cat.bg} dark:bg-navy-950 border-b flex items-center gap-4`}
+                      >
                          <div className={`p-2 rounded-2xl bg-white dark:bg-navy-800 shadow-sm ${cat.color}`}>
                             <cat.icon.type {...cat.icon.props} />
                          </div>
@@ -1695,11 +1854,17 @@ function ScorePageContent() {
             </div>
           ) : (
             /* Table View */
-            <div className="bg-[#FFFDF2] dark:bg-navy-900 rounded-[1.5rem] border-2 border-[#F0E6D2] dark:border-navy-800 shadow-sm overflow-hidden animate-in fade-in duration-500">
+            <div 
+              style={{ backgroundColor: 'var(--panel-card)', borderColor: 'var(--panel-border)' }}
+              className="rounded-[1.5rem] border-2 shadow-sm overflow-hidden animate-in fade-in duration-500"
+            >
                <div className="overflow-x-auto">
                  <table className="w-full text-left">
                    <thead>
-                     <tr className="bg-[#FFF9E6] dark:bg-navy-950 text-[9px] font-black uppercase text-gray-400 tracking-widest border-b border-[#F0E6D2] dark:border-navy-800">
+                     <tr 
+                      style={{ backgroundColor: 'var(--background)', borderColor: 'var(--panel-border)' }}
+                      className="text-[9px] font-black uppercase text-gray-400 tracking-widest border-b"
+                     >
                         <th className="px-6 py-4">User Profile</th>
                         <th className="px-4 py-4 text-center">Score %</th>
                         <th className="px-4 py-4 text-center">On-Time %</th>
@@ -1709,12 +1874,21 @@ function ScorePageContent() {
                         <th className="px-6 py-4 text-right">Rank</th>
                      </tr>
                    </thead>
-                   <tbody className="divide-y divide-[#F0E6D2] dark:divide-navy-800/50">
+                <tbody 
+                  style={{ borderColor: 'var(--panel-border)' }}
+                  className="divide-y dark:divide-navy-800/50"
+                >
                      {users.map((item: any, idx: number) => (
-                        <tr key={item.user.id} className="hover:bg-[#FFF9E6]/50 dark:hover:bg-white/5 transition-colors group">
+                        <tr 
+                          key={item.user.id} 
+                          className="hover:bg-gray-50 dark:hover:bg-white/5 transition-colors group"
+                        >
                            <td className="px-6 py-3">
                               <div className="flex items-center gap-3">
-                                 <div className="w-8 h-8 rounded-xl bg-[#FFF9E6] dark:bg-navy-800 flex items-center justify-center font-black text-[#003875] dark:text-[#FFD500] border border-[#F0E6D2] dark:border-navy-700 shadow-sm transform group-hover:scale-105 transition-transform text-xs">
+                                 <div 
+                                  style={{ backgroundColor: 'var(--panel-card)', borderColor: 'var(--panel-border)' }}
+                                  className="w-8 h-8 rounded-xl flex items-center justify-center font-black text-[#003875] dark:text-[#FFD500] border shadow-sm transform group-hover:scale-105 transition-transform text-xs"
+                                 >
                                     {item.user.username.charAt(0).toUpperCase()}
                                  </div>
                                  <div className="min-w-0">
@@ -1724,12 +1898,18 @@ function ScorePageContent() {
                               </div>
                            </td>
                            <td className="px-4 py-3 text-center">
-                              <div className="inline-flex items-center justify-center p-1.5 rounded-xl bg-[#FFF9E6] dark:bg-navy-950 font-black text-xs w-14">
+                              <div 
+                                style={{ backgroundColor: 'white', borderColor: 'var(--panel-border)' }}
+                                className="inline-flex items-center justify-center p-1.5 rounded-xl font-black text-xs w-14 border shadow-sm"
+                              >
                                  <span className={item.score >= 80 ? 'text-emerald-500' : 'text-amber-500'}>{isNegativeMode ? item.score - 100 : item.score}%</span>
                               </div>
                            </td>
                            <td className="px-4 py-3 text-center">
-                              <div className="inline-flex items-center justify-center p-1.5 rounded-xl bg-[#FFF9E6] dark:bg-navy-950 font-black text-xs w-14">
+                              <div 
+                                style={{ backgroundColor: 'white', borderColor: 'var(--panel-border)' }}
+                                className="inline-flex items-center justify-center p-1.5 rounded-xl font-black text-xs w-14 border shadow-sm"
+                              >
                                  <span className={item.onTimeRate >= 80 ? 'text-emerald-500' : 'text-amber-500'}>{isNegativeMode ? item.onTimeRate - 100 : item.onTimeRate}%</span>
                               </div>
                            </td>

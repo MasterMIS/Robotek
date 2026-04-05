@@ -267,7 +267,8 @@ function ChartHeader({ granularity, onGranularityChange }: { granularity: Granul
         <select
           value={granularity}
           onChange={(e) => onGranularityChange(e.target.value as Granularity)}
-          className="bg-[#FFF9E6] dark:bg-navy-800 border border-[#F0E6D2] dark:border-navy-700 rounded-lg text-[8px] font-black uppercase tracking-tight px-2 py-1 text-gray-600 dark:text-gray-300 outline-none cursor-pointer hover:border-[#003875]/30 transition-colors"
+          style={{ backgroundColor: 'var(--panel-card)', borderColor: 'var(--panel-border)' }}
+          className="rounded-lg text-[8px] font-black uppercase tracking-tight px-2 py-1 text-gray-600 dark:text-gray-300 border outline-none cursor-pointer hover:border-[#003875]/30 transition-colors"
         >
           {GRANULARITY_OPTIONS.map(opt => (
             <option key={opt.id} value={opt.id}>{opt.label}</option>

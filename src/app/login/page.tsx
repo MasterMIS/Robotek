@@ -48,7 +48,7 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#FFF9E6] flex items-center justify-center p-4 font-sans selection:bg-[#CE2029] selection:text-white">
+    <div className="min-h-screen bg-[#fcf9f0] flex items-center justify-center p-4 font-sans selection:bg-[#CE2029] selection:text-white">
       {/* Container Card */}
       <div className="w-full max-w-5xl h-auto lg:h-[640px] bg-white rounded-[30px] lg:rounded-[60px] shadow-[0_50px_120px_-30px_rgba(0,0,0,0.15)] overflow-hidden flex flex-col lg:flex-row relative">
 

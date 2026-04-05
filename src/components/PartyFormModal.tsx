@@ -256,7 +256,8 @@ function SearchableDropdown({
       <button
         type="button"
         onClick={() => setOpen((p) => !p)}
-        className="w-full bg-[#FFFBF0] dark:bg-zinc-900 px-3 py-1.5 rounded-lg border border-orange-100 dark:border-zinc-800 focus:border-[#FFD500] outline-none font-bold text-xs text-gray-800 dark:text-zinc-100 transition-all shadow-sm flex items-center justify-between gap-2"
+        style={{ backgroundColor: 'var(--input-bg)', borderColor: 'var(--panel-border)' }}
+        className="w-full px-3 py-1.5 rounded-lg border focus:border-[#FFD500] outline-none font-bold text-xs text-gray-800 dark:text-zinc-100 transition-all shadow-sm flex items-center justify-between gap-2"
       >
         <span className={value ? "text-gray-800 dark:text-zinc-100" : "text-gray-400 dark:text-zinc-500"}>
           {value || placeholder || "Select..."}
@@ -265,8 +266,14 @@ function SearchableDropdown({
       </button>
 
       {open && (
-        <div className="absolute z-[100] mt-1 w-full bg-white dark:bg-zinc-900 border border-orange-100 dark:border-zinc-700 rounded-lg shadow-lg overflow-hidden">
-          <div className="p-2 border-b border-orange-100 dark:border-zinc-800">
+        <div 
+          style={{ backgroundColor: 'var(--panel-card)', borderColor: 'var(--panel-border)' }}
+          className="absolute z-[100] mt-1 w-full border rounded-lg shadow-lg overflow-hidden"
+        >
+          <div 
+            style={{ borderColor: 'var(--panel-border)' }}
+            className="p-2 border-b"
+          >
             <input
               type="text"
               autoFocus
@@ -442,8 +449,14 @@ export default function PartyFormModal({
   return (
     <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/40 dark:bg-black/60 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative bg-[#FFFBF0] dark:bg-navy-900 w-full max-w-2xl rounded-2xl shadow-2xl border border-orange-100/50 dark:border-white/10 overflow-hidden animate-in fade-in zoom-in duration-300">
-        <div className="p-4 border-b border-orange-100/50 dark:border-zinc-800 flex items-center justify-between">
+      <div 
+        style={{ backgroundColor: 'var(--panel-card)', borderColor: 'var(--panel-border)' }}
+        className="relative w-full max-w-2xl rounded-2xl shadow-2xl border overflow-hidden animate-in fade-in zoom-in duration-300"
+      >
+        <div 
+          style={{ borderColor: 'var(--panel-border)' }}
+          className="p-4 border-b flex items-center justify-between"
+        >
           <div>
             <h2 className="text-lg font-black text-gray-900 dark:text-white tracking-tight">{editingParty ? "Edit Party" : "Add New Party"}</h2>
             <div className="flex items-center gap-2 mt-1">
@@ -483,8 +496,14 @@ export default function PartyFormModal({
               <UserIcon className="w-3.5 h-3.5 text-[#FFFBF0]" />
               Party Name
             </label>
-            <input type="text" value={formData.partyName} onChange={(e) => setFormData({ ...formData, partyName: e.target.value })}
-              className="w-full bg-[#FFFBF0] dark:bg-zinc-900 px-3 py-1.5 rounded-lg border border-orange-100 dark:border-zinc-800 focus:border-[#FFD500] focus:bg-white dark:focus:bg-zinc-900 outline-none font-bold text-xs text-gray-800 dark:text-zinc-100 transition-all shadow-sm" required />
+            <input 
+              type="text" 
+              value={formData.partyName} 
+              onChange={(e) => setFormData({ ...formData, partyName: e.target.value })}
+              style={{ backgroundColor: 'var(--input-bg)', borderColor: 'var(--panel-border)' }}
+              className="w-full px-3 py-1.5 rounded-lg border focus:border-[#FFD500] outline-none font-bold text-xs text-gray-800 dark:text-zinc-100 transition-all shadow-sm" 
+              required 
+            />
           </div>
 
           {isNewCustomer && (
@@ -512,8 +531,14 @@ export default function PartyFormModal({
                   })}
                 </div>
                 {selectedPartyType === "Other" && (
-                  <input type="text" value={customPartyType} onChange={(e) => setCustomPartyType(e.target.value)} placeholder="Enter custom party type..."
-                    className="mt-3 w-full bg-[#FFFBF0] dark:bg-zinc-900 px-3 py-1.5 rounded-lg border border-orange-100 dark:border-zinc-800 focus:border-[#FFD500] focus:bg-white dark:focus:bg-zinc-900 outline-none font-bold text-xs text-gray-800 dark:text-zinc-100 transition-all shadow-sm" />
+                  <input 
+                    type="text" 
+                    value={customPartyType} 
+                    onChange={(e) => setCustomPartyType(e.target.value)} 
+                    placeholder="Enter custom party type..."
+                    style={{ backgroundColor: 'var(--input-bg)', borderColor: 'var(--panel-border)' }}
+                    className="mt-3 w-full px-3 py-1.5 rounded-lg border focus:border-[#FFD500] outline-none font-bold text-xs text-gray-800 dark:text-zinc-100 transition-all shadow-sm" 
+                  />
                 )}
               </div>
 
@@ -523,8 +548,13 @@ export default function PartyFormModal({
                     <Bars3BottomLeftIcon className="w-3.5 h-3.5 text-[#FFFBF0]" />
                     Sales Funnel Unique Num
                   </label>
-                  <input type="text" value={formData.salesFunnelUniqueNum} onChange={(e) => setFormData({ ...formData, salesFunnelUniqueNum: e.target.value })}
-                    className="w-full bg-[#FFFBF0] dark:bg-zinc-900 px-3 py-1.5 rounded-lg border border-orange-100 dark:border-zinc-800 focus:border-[#FFD500] focus:bg-white dark:focus:bg-zinc-900 outline-none font-bold text-xs text-gray-800 dark:text-zinc-100 transition-all shadow-sm" />
+                  <input 
+                    type="text" 
+                    value={formData.salesFunnelUniqueNum} 
+                    onChange={(e) => setFormData({ ...formData, salesFunnelUniqueNum: e.target.value })}
+                    style={{ backgroundColor: 'var(--input-bg)', borderColor: 'var(--panel-border)' }}
+                    className="w-full px-3 py-1.5 rounded-lg border focus:border-[#FFD500] outline-none font-bold text-xs text-gray-800 dark:text-zinc-100 transition-all shadow-sm" 
+                  />
                 </div>
                 <div>
                   <label className="flex items-center gap-1.5 text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">
@@ -563,8 +593,12 @@ export default function PartyFormModal({
               <ChatBubbleBottomCenterTextIcon className="w-3.5 h-3.5 text-[#FFFBF0]" />
               Remarks
             </label>
-            <textarea value={formData.remarks} onChange={(e) => setFormData({ ...formData, remarks: e.target.value })}
-              className="w-full bg-[#FFFBF0] dark:bg-zinc-900 px-3 py-1.5 rounded-lg border border-orange-100 dark:border-zinc-800 focus:border-[#FFD500] focus:bg-white dark:focus:bg-zinc-900 outline-none font-bold text-xs text-gray-800 dark:text-zinc-100 transition-all shadow-sm resize-y min-h-[60px]" />
+            <textarea 
+              value={formData.remarks} 
+              onChange={(e) => setFormData({ ...formData, remarks: e.target.value })}
+              style={{ backgroundColor: 'var(--input-bg)', borderColor: 'var(--panel-border)' }}
+              className="w-full px-3 py-1.5 rounded-lg border focus:border-[#FFD500] outline-none font-bold text-xs text-gray-800 dark:text-zinc-100 transition-all shadow-sm resize-y min-h-[60px]" 
+            />
           </div>
 
           <div className="pt-2 border-t border-orange-100/50 dark:border-zinc-800 flex gap-2">

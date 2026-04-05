@@ -5,22 +5,25 @@
   --color-navy-900: #0B1120;
   --color-navy-800: #1E293B;
   --color-navy-700: #334155;
+  --font-sans: var(--font-inter);
+  --font-serif: var(--font-playfair);
+  --font-mono: var(--font-geist-mono);
 }
 
 @variant dark (&:is(.dark *));
 
 :root {
-  --background: linear-gradient(0deg, #f2b60c 0%, #FFF9E6 100%);
+  --background: #fcf9f0;
   --foreground: #171717;
-  --panel-bg: #FFF9E6;
-  --panel-card: #FFF9E6;
-  --panel-border: rgba(0, 56, 117, 0.04);
-  --header-bg: transparent;
-  --chat-sidebar: #FFF9E6;
-  --chat-window: #FFF9E6;
+  --panel-bg: #fcf9f0;
+  --panel-card: #ffffff;
+  --panel-border: rgba(0, 56, 117, 0.06);
+  --header-bg: #003875;
+  --chat-sidebar: #ffffff;
+  --chat-window: #ffffff;
   --chat-bubble-own: #9A5BFF;
   --chat-bubble-other: #f1f5f9;
-  --input-bg: #FFF9E6;
+  --input-bg: #ffffff;
 }
 
 .dark {
@@ -40,7 +43,29 @@
 body {
   background: var(--background);
   color: var(--foreground);
+  font-family: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
   transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-serif), serif;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+h1 {
+  font-size: 1.5rem; /* text-2xl */
+}
+
+/* Base style for data and labels to match user preference by default */
+p, span, td, th, div {
+  font-family: var(--font-sans), sans-serif;
+}
+
+.sub-header, .data-label {
+  font-family: var(--font-serif), serif;
+  font-size: 0.875rem; /* text-sm */
+  color: #6b7280; /* text-gray-500 */
 }
 
 .panel-transition {

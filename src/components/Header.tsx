@@ -43,10 +43,10 @@ export default function Header({ onMenuClick }: HeaderProps) {
   return (
     <header 
       style={{ 
-        background: 'var(--header-bg)',
-        borderBottom: '1px solid var(--panel-border)'
+        backgroundColor: '#003875',
+        borderBottom: 'none'
       }}
-      className="h-14 flex items-center justify-between px-2 md:px-6 sticky top-0 z-10 transition-all duration-300"
+      className="h-14 flex items-center justify-between px-2 md:px-6 sticky top-0 z-30 transition-all duration-300"
     >
       {/* Left Section: Mobile Menu & Welcome Message */}
       <div className="flex items-center gap-3">
@@ -58,10 +58,10 @@ export default function Header({ onMenuClick }: HeaderProps) {
         </button>
         
         <div className="flex flex-col hidden md:flex">
-          <h1 className="text-xl font-black text-gray-900 dark:text-zinc-100 leading-none">
+          <h1 className="text-2xl font-bold text-white leading-none">
             HI, {(session?.user as any)?.username?.toUpperCase() || session?.user?.name?.toUpperCase() || session?.user?.email?.split("@")[0].toUpperCase() || "USER"}
           </h1>
-          <p className="text-[10px] font-black text-[#CE2029] dark:text-[#FFD500] uppercase tracking-wider mt-1">
+          <p className="font-serif text-[10px] font-medium text-[#FFD500] uppercase tracking-wider mt-1 opacity-80">
             {/* @ts-ignore */}
             {session?.user?.role || "SYSTEM ACCESS"} — WELCOME BACK
           </p>
@@ -74,11 +74,11 @@ export default function Header({ onMenuClick }: HeaderProps) {
       <div className="flex items-center gap-1 md:gap-2 flex-shrink-0">
         {/* Search Input - Hidden on mobile */}
         <div className="relative group hidden lg:block flex-shrink-1">
-          <MagnifyingGlassIcon className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-[#CE2029] dark:group-focus-within:text-[#FFD500] transition-colors" />
+          <MagnifyingGlassIcon className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-white/50 group-focus-within:text-white transition-colors" />
           <input 
             type="text" 
             placeholder="Search..." 
-            className="w-32 lg:w-52 pl-11 pr-4 py-1.5 bg-white/50 dark:bg-navy-900/50 border border-gray-100 dark:border-navy-800 rounded-xl focus:outline-none focus:ring-4 focus:ring-[#FFD500]/10 focus:border-[#FFD500] dark:focus:border-[#FFD500]/50 focus:bg-white dark:focus:bg-navy-900 transition-all text-xs font-bold placeholder:text-gray-400 dark:text-zinc-100"
+            className="w-32 lg:w-52 pl-11 pr-4 py-1.5 bg-white/10 border border-white/20 rounded-xl focus:outline-none focus:ring-2 focus:ring-white/30 focus:border-white/50 focus:bg-white/20 transition-all text-xs font-bold placeholder:text-white/40 text-white"
           />
         </div>
 
@@ -88,12 +88,12 @@ export default function Header({ onMenuClick }: HeaderProps) {
         {/* Chat Notification Icon */}
         <Link 
           href="/chat" 
-          className="relative p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:hover:bg-navy-800 rounded-lg transition-colors ml-0.5 md:ml-1"
+          className="relative p-2 text-white/70 hover:text-white hover:bg-white/10 dark:hover:bg-navy-800 rounded-lg transition-colors ml-0.5 md:ml-1"
           title="Chat Messages"
         >
-          <ChatBubbleLeftRightIcon className="w-5 h-5 dark:text-zinc-300" />
+          <ChatBubbleLeftRightIcon className="w-5 h-5" />
           {chatUnreadCount > 0 && (
-            <span className="absolute top-1 right-1 inline-flex items-center justify-center px-1 py-0.5 text-[9px] font-black leading-none text-white transform translate-x-1/4 -translate-y-1/4 bg-[#CE2029] rounded-full shadow-sm ring-2 ring-white dark:ring-[#001F3F]">
+            <span className="absolute top-1 right-1 inline-flex items-center justify-center px-1 py-0.5 text-[9px] font-black leading-none text-white transform translate-x-1/4 -translate-y-1/4 bg-[#CE2029] rounded-full shadow-sm ring-2 ring-[#003875]">
               {chatUnreadCount}
             </span>
           )}
@@ -120,7 +120,7 @@ export default function Header({ onMenuClick }: HeaderProps) {
 
           <button 
             onClick={() => signOut()}
-            className="p-1 text-gray-400 hover:text-[#CE2029] hover:bg-red-50 rounded-lg md:rounded-xl transition-all group"
+            className="p-1 text-white/60 hover:text-white hover:bg-white/10 rounded-lg md:rounded-xl transition-all group"
             title="Sign Out"
           >
             <ArrowRightOnRectangleIcon className="w-5 h-5 md:w-5.5 md:h-5.5 group-hover:translate-x-0.5 transition-transform" />

@@ -479,20 +479,23 @@ export default function AttendancePage() {
     return (
         <div className="space-y-6 relative">
             {isPageLoading && (
-                <div className="fixed inset-0 z-[999] bg-[#FFFBF0]/60 dark:bg-slate-900/60 backdrop-blur-sm flex flex-col items-center justify-center">
+                <div className="fixed inset-0 z-[999] bg-white/60 dark:bg-slate-900/60 backdrop-blur-sm flex flex-col items-center justify-center">
                     <div className="w-16 h-16 border-4 border-[#003875]/20 border-t-[#003875] dark:border-[#FFD500]/20 dark:border-t-[#FFD500] rounded-full animate-spin mb-4"></div>
                     <div className="text-[#003875] dark:text-[#FFD500] font-black tracking-widest text-sm uppercase animate-pulse">Processing...</div>
                 </div>
             )}
             {/* Page Header with Integrated Pill Tabs */}
             <div className="flex flex-col lg:flex-row items-center gap-4 px-1">
-                <div className="text-center lg:text-left shrink-0 min-w-0">
-                    <h1 className="text-xl md:text-2xl font-black text-gray-900 dark:text-white tracking-tight truncate uppercase">Attendance & Leave</h1>
-                    <p className="text-gray-500 dark:text-slate-300 font-bold text-[8px] md:text-[10px] uppercase tracking-wider">Operational Personnel Tracking</p>
+                <div className="text-center lg:text-left shrink-0 min-w-0 font-serif">
+                    <h1 className="text-2xl font-bold text-gray-900 dark:text-white tracking-tight truncate uppercase">Attendance & Leave</h1>
+                    <p className="text-sm font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">Operational Personnel Tracking</p>
                 </div>
 
                 <div className="flex-1 w-full flex justify-center lg:justify-end">
-                    <div className="rounded-full border-2 border-b-4 border-[#003875] dark:border-[#FFD500] bg-[#FCF9F0] dark:bg-navy-800 shadow-sm transition-all p-1 overflow-x-auto no-scrollbar max-w-full flex items-center gap-1.5">
+                    <div 
+                        style={{ backgroundColor: 'var(--panel-card)' }}
+                        className="rounded-full border-2 border-b-4 border-[#003875] dark:border-[#FFD500] shadow-sm transition-all p-1 overflow-x-auto no-scrollbar max-w-full flex items-center gap-1.5"
+                    >
                         {[
                             { id: 'ATTENDANCE', label: 'Dashboard', icon: CalendarBtnIcon },
                             { id: 'LEAVE', label: 'Leaves', icon: ArrowRightCircleIcon },
@@ -520,10 +523,13 @@ export default function AttendancePage() {
             {activeTab === 'ATTENDANCE' && (
                 <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
                     {/* Calendar Section */}
-                    <div className="lg:col-span-3 bg-[#FCF9F0]/90 dark:bg-[#1E293B]/50 rounded-[32px] shadow-xl border border-white/40 dark:border-white/5 overflow-hidden backdrop-blur-xl">
+                    <div 
+                        style={{ backgroundColor: 'var(--panel-card)' }}
+                        className="lg:col-span-3 rounded-[32px] shadow-xl border border-white/40 dark:border-white/5 overflow-hidden backdrop-blur-xl"
+                    >
                         <div className="p-6 flex justify-between items-center border-b border-white/10">
                             <button onClick={() => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() - 1)))} className="p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-full transition"><ChevronLeftIcon className="w-5 h-5" /></button>
-                            <h2 className="text-xl font-black text-[#003875] dark:text-[#FFD500] uppercase tracking-tighter">
+                            <h2 className="text-lg font-bold text-[#003875] dark:text-[#FFD500] uppercase tracking-tighter">
                                 {currentDate.toLocaleString('default', { month: 'long', year: 'numeric' })}
                             </h2>
                             <button onClick={() => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() + 1)))} className="p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-full transition"><ChevronRightIcon className="w-5 h-5" /></button>
@@ -538,7 +544,10 @@ export default function AttendancePage() {
 
                     {/* Action Panel */}
                     <div className="flex flex-col gap-6">
-                        <div className="bg-[#FCF9F0] dark:bg-slate-800 rounded-[32px] shadow-2xl p-8 border border-white/40 dark:border-white/5 text-center relative group overflow-hidden">
+                        <div 
+                            style={{ backgroundColor: 'var(--panel-card)' }}
+                            className="rounded-[32px] shadow-2xl p-8 border border-white/40 dark:border-white/5 text-center relative group overflow-hidden"
+                        >
                             <div className={`absolute top-0 left-0 w-full h-1 ${currentStatus === 'CHECKED_IN' ? 'bg-[#FFD500] animate-pulse' : 'bg-[#003875] dark:bg-[#FFD500] opacity-30'}`}></div>
                             <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.25em] mb-2 opacity-70">
                                 {currentStatus === 'CHECKED_IN' ? 'Active Shift' : 'Global Work System'}
@@ -579,7 +588,10 @@ export default function AttendancePage() {
                         </div>
 
                         {/* Location Intelligence Section */}
-                        <div className="bg-[#FCF9F0] dark:bg-slate-800 rounded-[32px] shadow-2xl p-8 border border-white/40 dark:border-white/5 flex-grow">
+                        <div 
+                            style={{ backgroundColor: 'var(--panel-card)' }}
+                            className="rounded-[32px] shadow-2xl p-8 border border-white/40 dark:border-white/5 flex-grow"
+                        >
                              <h3 className="text-xs font-black mb-6 flex items-center gap-2 text-gray-800 dark:text-white uppercase border-b border-gray-100 dark:border-white/5 pb-4">
                                 <MapPinIcon className="w-4 h-4 text-[#003875] dark:text-[#FFD500]" /> Location Intelligence
                              </h3>
@@ -686,13 +698,16 @@ export default function AttendancePage() {
             {activeTab === 'LEAVE' && (
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                      {/* Leave Form */}
-                     <div className="bg-[#FCF9F0] dark:bg-slate-800 rounded-[32px] p-8 shadow-xl border border-white/10 h-fit">
+                     <div 
+                        style={{ backgroundColor: 'var(--panel-card)' }}
+                        className="rounded-[32px] p-8 shadow-xl border border-white/10 h-fit"
+                     >
                         <h3 className="text-xl font-black text-[#003875] dark:text-[#FFD500] mb-8 uppercase tracking-tighter">Submit Leave Request</h3>
                         <form onSubmit={handleLeaveSubmit} className="space-y-6">
                             <CustomDateTimePicker label="From Date" dateOnly value={leaveForm.startDate} onChange={v => setLeaveForm({...leaveForm, startDate: v})} required />
                             <CustomDateTimePicker label="To Date" dateOnly value={leaveForm.endDate} onChange={v => setLeaveForm({...leaveForm, endDate: v})} required />
                             <div className="space-y-1.5">
-                                <label className="text-[10px] font-black uppercase tracking-widest text-[#003875]/60 dark:text-[#FFD500]/60 pl-1">Detailed Reason</label>
+                                <label className="text-sm font-medium text-gray-500 uppercase tracking-widest pl-1">Detailed Reason</label>
                                 <textarea 
                                     className="w-full h-32 p-4 rounded-2xl bg-gray-50 dark:bg-slate-900 border-2 border-[#003875]/5 dark:border-white/5 focus:border-[#003875] dark:focus:border-[#FFD500] outline-none text-sm font-medium transition-all"
                                     value={leaveForm.reason}
@@ -707,7 +722,12 @@ export default function AttendancePage() {
                      {/* Leave History */}
                      <div className="lg:col-span-2 space-y-4">
                         {leaves.map(lv => (
-                            <div key={lv.id} onClick={() => { setSelectedLeave(lv); fetchRemarks(lv.id); }} className="p-6 bg-[#FCF9F0] dark:bg-slate-800 rounded-[28px] border border-white/10 hover:border-[#003875]/30 cursor-pointer group transition-all shadow-sm">
+                            <div 
+                                key={lv.id} 
+                                onClick={() => { setSelectedLeave(lv); fetchRemarks(lv.id); }} 
+                                style={{ backgroundColor: 'var(--panel-card)' }}
+                                className="p-6 rounded-[28px] border border-white/10 hover:border-[#003875]/30 cursor-pointer group transition-all shadow-sm"
+                            >
                                 <div className="flex justify-between items-center mb-4">
                                      <div className="flex items-center gap-3">
                                          <div className="w-10 h-10 bg-[#003875]/5 rounded-xl flex items-center justify-center font-black text-[#003875] dark:text-[#FFD500]">
@@ -731,7 +751,10 @@ export default function AttendancePage() {
 
             {/* MASTER LIST */}
             {activeTab === 'ATTENDANCE_MASTER' && (
-                <div className="bg-[#FCF9F0] dark:bg-slate-800 rounded-[32px] p-4 md:p-8 shadow-xl border border-white/10 overflow-x-auto min-h-[600px]">
+                <div 
+                    style={{ backgroundColor: 'var(--panel-card)' }}
+                    className="rounded-[32px] p-4 md:p-8 shadow-xl border border-white/10 overflow-x-auto min-h-[600px]"
+                >
                     <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
                         <div className="flex items-center gap-4 bg-white dark:bg-slate-900 px-4 py-2 rounded-full shadow-sm border border-gray-100 dark:border-white/5">
                             <button onClick={() => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() - 1)))} className="p-1 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-full transition"><ChevronLeftIcon className="w-5 h-5 text-gray-500" /></button>
@@ -751,9 +774,9 @@ export default function AttendancePage() {
                     {!masterData ? (
                         <div className="text-gray-400 text-sm animate-pulse font-black text-center py-20">SYNCING DATA...</div>
                     ) : (
-                        <table className="w-full text-left border-separate border-spacing-y-4 min-w-[1000px]">
+                        <table className="w-full text-left border-separate border-spacing-y-4 min-w-[1000px] font-serif">
                             <thead>
-                                <tr className="text-[9px] font-black text-gray-400 uppercase tracking-widest text-center">
+                                <tr className="text-sm font-medium text-gray-500 uppercase tracking-widest text-center">
                                     <th className="px-6 py-2 text-left">Employee Details</th>
                                     <th className="px-4 py-2">Presents</th>
                                     <th className="px-4 py-2">Absents</th>
@@ -975,17 +998,27 @@ export default function AttendancePage() {
                     {!masterData ? (
                         <div className="flex-1 flex items-center justify-center text-gray-400 text-sm animate-pulse font-black">SYNCING DATA...</div>
                     ) : (
-                        <div className="flex-1 overflow-auto custom-scrollbar relative bg-[#FCF9F0] dark:bg-slate-800">
+                        <div 
+                           style={{ backgroundColor: 'var(--panel-card)', borderColor: 'var(--panel-border)' }}
+                           className="flex-1 overflow-auto custom-scrollbar relative"
+                         >
                             <table className="w-full text-left border-collapse min-w-max">
                                 <thead>
                                     <tr>
-                                        <th className="sticky top-0 left-0 z-50 bg-[#F5F0E6] dark:bg-slate-900 p-4 min-w-[200px] border-b border-r border-[#E8E2D2] dark:border-white/10 text-xs font-black text-[#003875] dark:text-[#FFD500] uppercase tracking-widest flex flex-col justify-center shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">USER DETAILS / DAYS</th>
+                                        <th 
+                                          style={{ backgroundColor: 'var(--background)', borderColor: 'var(--panel-border)' }}
+                                          className="sticky top-0 left-0 z-50 p-4 min-w-[200px] border-b border-r text-xs font-black text-[#003875] dark:text-[#FFD500] uppercase tracking-widest flex flex-col justify-center shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]"
+                                        >USER DETAILS / DAYS</th>
                                         {(() => {
                                             const year = currentDate.getFullYear();
                                             const month = currentDate.getMonth();
                                             const days = new Date(year, month + 1, 0).getDate();
                                             return Array.from({length: days}, (_, i) => i + 1).map(d => (
-                                                <th key={d} className="sticky top-0 z-40 bg-[#F5F0E6] dark:bg-slate-900 p-3 border-b border-r border-[#E8E2D2] dark:border-white/10 text-center text-xs font-black text-gray-800 dark:text-white">{d}</th>
+                                                <th 
+                                                  key={d} 
+                                                  style={{ backgroundColor: 'var(--background)', borderColor: 'var(--panel-border)' }}
+                                                  className="sticky top-0 z-40 p-3 border-b border-r text-center text-xs font-black text-gray-800 dark:text-white"
+                                                >{d}</th>
                                             ));
                                         })()}
                                     </tr>
@@ -1060,10 +1093,16 @@ export default function AttendancePage() {
                                             const cumP = totalWorkingDays > 0 ? ((monthlyScore / totalWorkingDays) * 100).toFixed(0) : "0";
 
                                             return (
-                                                <tr key={u.id} className="hover:bg-[#F5F0E6]/50 dark:hover:bg-slate-700/50 transition-colors">
-                                                    <td className="sticky left-0 z-30 bg-[#FCF9F0] dark:bg-slate-800 p-4 border-b border-r border-[#E8E2D2] dark:border-white/10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)]">
+                                                <tr key={u.id} className="hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors">
+                                                    <td 
+                                                      style={{ backgroundColor: 'white', borderColor: 'var(--panel-border)' }}
+                                                      className="sticky left-0 z-30 p-4 border-b border-r shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)]"
+                                                    >
                                                         <div className="flex items-center gap-4">
-                                                            <div className="w-10 h-10 rounded-full bg-white dark:bg-slate-900 border border-[#E8E2D2] dark:border-white/10 flex items-center justify-center font-black overflow-hidden shrink-0">
+                                                            <div 
+                                                              style={{ borderColor: 'var(--panel-border)' }}
+                                                              className="w-10 h-10 rounded-full bg-white dark:bg-slate-900 border flex items-center justify-center font-black overflow-hidden shrink-0"
+                                                            >
                                                                 {u.image_url ? <img src={u.image_url} alt="" className="w-full h-full object-cover" /> : <UserBtnIcon className="w-5 h-5 text-[#FFD500]" />}
                                                             </div>
                                                             <div>
@@ -1073,7 +1112,11 @@ export default function AttendancePage() {
                                                         </div>
                                                     </td>
                                                     {dayCells.map((c, idx) => (
-                                                        <td key={idx} className="p-2 border-b border-r border-[#E8E2D2] dark:border-white/5 text-center min-w-[60px] align-middle">
+                                                        <td 
+                                                          key={idx} 
+                                                          style={{ borderColor: 'var(--panel-border)' }}
+                                                          className="p-2 border-b border-r text-center min-w-[60px] align-middle"
+                                                        >
                                                             {reportViewMode === 'STATUS' ? (
                                                                 <div className="flex flex-col items-center justify-center gap-1">
                                                                     <div className={`text-xs font-black uppercase tracking-tighter ${c.statusColor}`}>{c.statusChar}</div>
