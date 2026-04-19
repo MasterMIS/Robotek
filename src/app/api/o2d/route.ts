@@ -1,13 +1,91 @@
 import { NextRequest, NextResponse } from "next/server";
+import { generateClient } from 'aws-amplify/api';
+import { uploadData } from 'aws-amplify/storage';
+import { Schema } from '@/../amplify/data/resource';
+import { auth } from "@/auth";
+
+const client = generateClient<Schema>({ authMode: 'apiKey' });
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
-import { getO2Ds, addO2D, addO2Ds, getO2DDetails, addItem, getO2DsPaginated, getO2DSummary, getScotDashboardMetrics } from "@/lib/o2d-sheets";
-import { uploadFileToDrive } from "@/lib/google-drive";
-import { O2D } from "@/types/o2d";
-import { auth } from "@/auth";
 
-const O2D_FOLDER_ID = "19ZqWS5zYD2P4SIpcGNQR8gXcDiagH2rq";
+// Helper: Fetch ALL records from DynamoDB using nextToken iteration
+async function fetchAllO2DRecords() {
+  let allRecords: any[] = [];
+  let nextToken: string | null | undefined = undefined;
+
+  do {
+    const response: any = await client.models.O2DRecord.list({
+      nextToken,
+      limit: 1000 // Maximize per-page fetch
+    });
+    allRecords = [...allRecords, ...response.data];
+    nextToken = response.nextToken;
+  } while (nextToken);
+
+  return allRecords;
+}
+
+// Helper: Get pending step index for an order (same logic as sheet but for AWS data)
+function getPendingStepIdx(orderItems: any[]): number {
+  const firstItem = orderItems[0];
+  for (let i = 1; i <= 11; i++) {
+    const pVal = (firstItem[`planned_${i}`] || "").toString().trim();
+    const aVal = (firstItem[`actual_${i}`] || (firstItem as any)[`acual_${i}`] || "").toString().trim();
+    const sVal = (firstItem[`status_${i}`] || "").toString().trim();
+
+    if (pVal && pVal !== "-") {
+      const hasActual = aVal && aVal !== "-";
+      const isStep3CompletedNo = i === 3 && sVal === "No";
+      const isStep4CompletedNo = i === 4 && sVal === "No";
+
+      let stepDone = hasActual && sVal !== "No";
+      if (isStep3CompletedNo) {
+        const step4Plan = (firstItem[`planned_4`] || "").toString().trim();
+        if (step4Plan && step4Plan !== "-") stepDone = true;
+      }
+      if (isStep4CompletedNo) stepDone = true;
+
+      if (!stepDone) return i;
+      if (isStep4CompletedNo) return -1;
+    }
+  }
+  return -1;
+}
+
+// Helper: Check if order matches date filters
+function orderMatchesDateFilter(orderItems: any[], filter: string) {
+  if (!filter) return true;
+  const firstItem = orderItems[0];
+  if (filter === "Hold") return !!firstItem.hold && !firstItem.cancelled;
+  if (filter === "Cancelled") return !!firstItem.cancelled;
+
+  const now = new Date();
+  const today = new Date(now);
+  today.setHours(0, 0, 0, 0);
+
+  const pendingStepIdx = getPendingStepIdx(orderItems);
+  if (pendingStepIdx === -1) return false;
+
+  const plannedRaw = firstItem[`planned_${pendingStepIdx}`];
+  if (!plannedRaw || plannedRaw === "-" || plannedRaw.trim() === "") return false;
+
+  const pd = new Date(plannedRaw);
+  if (isNaN(pd.getTime())) return false;
+
+  const pdDay = new Date(pd);
+  pdDay.setHours(0, 0, 0, 0);
+
+  const diffDays = Math.round((pdDay.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+
+  if (filter === "Delayed") return pd < now;
+  if (filter === "Today") return diffDays === 0;
+  if (filter === "Tomorrow") return diffDays === 1;
+  if (filter === "Next5") return diffDays > 0 && diffDays <= 5;
+  if (filter === "Next10") return diffDays > 0 && diffDays <= 10;
+
+  return false;
+}
 
 export async function GET(req: NextRequest) {
   const session = await auth();
@@ -17,77 +95,88 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const type = searchParams.get("type");
   const allData = searchParams.get("all");
-  
-  if (type === "details") {
-    const details = await getO2DDetails();
-    return NextResponse.json(details);
-  }
-
-  if (type === "scotDashboard") {
-    const metrics = await getScotDashboardMetrics();
-    return NextResponse.json(metrics, {
-      headers: { 'Cache-Control': 'private, max-age=60, stale-while-revalidate=300' },
-    });
-  }
-
-  // Return all unique order numbers for filter dropdowns
-  if (type === "ordernumbers") {
-    const o2ds = await getO2Ds();
-    const orderNumbers = Array.from(new Set(o2ds.map((o) => o.order_no).filter(Boolean))).sort((a, b) => b.localeCompare(a));
-    return NextResponse.json(orderNumbers, {
-      headers: { 'Cache-Control': 'private, max-age=60, stale-while-revalidate=300' },
-    });
-  }
-
-  // If ?all=true is passed, return all data without pagination (for sidebar counting)
-  if (allData === "true") {
-    const o2ds = await getO2Ds();
-    return NextResponse.json(o2ds, {
-      headers: { 'Cache-Control': 'private, max-age=60, stale-while-revalidate=300' },
-    });
-  }
-
-  // Get pagination params
-  const page = parseInt(searchParams.get("page") || "1", 10);
-  const limit = parseInt(searchParams.get("limit") || "10", 10);
-  const search = searchParams.get("search") || "";
-  
-  // Get filter params
-  const dateFiltersStr = searchParams.get("dateFilters") || "[]";
-  const stepFiltersStr = searchParams.get("stepFilters") || "[]";
-  const partyFilter = searchParams.get("partyFilter") || "";
-  const orderFilter = searchParams.get("orderFilter") || "";
-  const itemNameFilter = searchParams.get("itemNameFilter") || "";
-  const pendingFilter = searchParams.get("pendingFilter") === "true";
-  const startDate = searchParams.get("startDate") || "";
-  const endDate = searchParams.get("endDate") || "";
 
   try {
-    const dateFilters = JSON.parse(dateFiltersStr);
-    const stepFilters = JSON.parse(stepFiltersStr);
+    if (type === "ordernumbers") {
+      const o2ds = await fetchAllO2DRecords();
+      const orderNumbers = Array.from(new Set(o2ds.map((o) => o.order_no).filter(Boolean))).sort((a, b) => b.localeCompare(a));
+      return NextResponse.json(orderNumbers);
+    }
 
-    // Return paginated data with metadata (with all filters applied server-side)
-    const result = await getO2DsPaginated(
+    if (allData === "true") {
+      const o2ds = await fetchAllO2DRecords();
+      return NextResponse.json(o2ds);
+    }
+
+    // Pagination and Filtering logic (same implementation as sheets but on AWS data)
+    const page = parseInt(searchParams.get("page") || "1", 10);
+    const limit = parseInt(searchParams.get("limit") || "10", 10);
+    const search = (searchParams.get("search") || "").toLowerCase();
+    const dateFilters = JSON.parse(searchParams.get("dateFilters") || "[]");
+    const stepFilters = JSON.parse(searchParams.get("stepFilters") || "[]").map((s: any) => parseInt(s));
+    const partyFilter = (searchParams.get("partyFilter") || "").toLowerCase();
+    const orderFilter = (searchParams.get("orderFilter") || "").toLowerCase();
+    const itemNameFilter = (searchParams.get("itemNameFilter") || "").toLowerCase();
+    const pendingFilter = searchParams.get("pendingFilter") === "true";
+    const startDate = searchParams.get("startDate") || "";
+    const endDate = searchParams.get("endDate") || "";
+
+    const allO2Ds = await fetchAllO2DRecords();
+
+    // 1. Group by order_no
+    const groupedByOrder: Record<string, any[]> = {};
+    allO2Ds.forEach((item) => {
+      const orderNo = item.order_no || "Unknown";
+      if (!groupedByOrder[orderNo]) groupedByOrder[orderNo] = [];
+      groupedByOrder[orderNo].push(item);
+    });
+
+    // 2. Filter orders
+    let orderNumbers = Object.keys(groupedByOrder).sort((a, b) => b.localeCompare(a));
+
+    orderNumbers = orderNumbers.filter((orderNo) => {
+      const items = groupedByOrder[orderNo];
+      const firstItem = items[0];
+      const pIdx = getPendingStepIdx(items);
+      const isHold = !!firstItem.hold;
+      const isCancelled = !!firstItem.cancelled;
+
+      if (search && !(orderNo.toLowerCase().includes(search) || firstItem?.party_name?.toLowerCase().includes(search) || items.some(i => i.item_name?.toLowerCase().includes(search)))) return false;
+      if (partyFilter && !firstItem.party_name?.toLowerCase().includes(partyFilter)) return false;
+      if (orderFilter && !orderNo.toLowerCase().includes(orderFilter)) return false;
+      if (itemNameFilter && !items.some(i => i.item_name?.toLowerCase().includes(itemNameFilter))) return false;
+
+      if (startDate || endDate) {
+        const itemDate = new Date(firstItem.created_at || firstItem.updated_at || "");
+        if (startDate && itemDate < new Date(startDate)) return false;
+        if (endDate && itemDate > new Date(endDate)) return false;
+      }
+
+      if (pendingFilter && (isHold || isCancelled || pIdx === -1)) return false;
+      if (stepFilters.length > 0 && !stepFilters.includes(pIdx)) return false;
+      if (dateFilters.length > 0 && !dateFilters.some(f => orderMatchesDateFilter(items, f))) return false;
+
+      return true;
+    });
+
+    // 3. Paginate
+    const startIdx = (page - 1) * limit;
+    const paginatedOrderNumbers = orderNumbers.slice(startIdx, startIdx + limit);
+    const paginatedData = paginatedOrderNumbers.flatMap((orderNo) => groupedByOrder[orderNo]);
+
+    return NextResponse.json({
+      data: paginatedData,
+      orders: paginatedOrderNumbers,
+      total: orderNumbers.length,
       page,
       limit,
-      search,
-      dateFilters,
-      stepFilters,
-      partyFilter,
-      orderFilter,
-      itemNameFilter,
-      pendingFilter,
-      startDate,
-      endDate,
-      currentUser,
-      userRole
-    );
-    return NextResponse.json(result, {
-      headers: { 'Cache-Control': 'private, max-age=60, stale-while-revalidate=300' },
+      totalPages: Math.ceil(orderNumbers.length / limit),
+      totalRows: allO2Ds.length
     });
-  } catch (error) {
-    console.error("Pagination error:", error);
-    return NextResponse.json({ error: "Pagination failed" }, { status: 500 });
+
+  } catch (error: any) {
+    console.error("GET /api/o2d error:", error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
 
@@ -98,46 +187,53 @@ export async function POST(req: NextRequest) {
 
     if (type === "item") {
       const { name, price, gst, finalPrice } = await req.json();
-      const success = await addItem(name, price, gst, finalPrice);
-      if (success) {
-        return NextResponse.json({ message: "Item added successfully" });
-      } else {
-        return NextResponse.json({ error: "Failed to add item" }, { status: 500 });
-      }
+      // Dropdown pattern
+      await client.models.Dropdown.create({
+        type: 'o2d_item',
+        value: JSON.stringify({ name, price, gst, finalPrice })
+      });
+      return NextResponse.json({ message: "Item added successfully" });
     }
 
     const contentType = req.headers.get("content-type") || "";
-    
     if (contentType.includes("multipart/form-data")) {
       const formData = await req.formData();
-      const o2dDataArray = JSON.parse(formData.get("o2dData") as string) as Partial<O2D>[];
+      const o2dDataArray = JSON.parse(formData.get("o2dData") as string) as any[];
       const screenshotFile = formData.get("order_screenshot") as File;
 
-      let screenshotId = "";
+      let screenshotUrl = "";
       if (screenshotFile && screenshotFile.size > 0) {
-        screenshotId = await uploadFileToDrive(screenshotFile, O2D_FOLDER_ID) || "";
+        const path = `o2d/${Date.now()}-${screenshotFile.name}`;
+        await uploadData({
+          path,
+          data: await screenshotFile.arrayBuffer(),
+          options: { contentType: screenshotFile.type }
+        }).result;
+        screenshotUrl = path;
       }
 
-      const o2dsToSave = o2dDataArray.map(item => ({
-        ...item,
-        order_screenshot: screenshotId,
-      } as O2D));
-
-      const success = await addO2Ds(o2dsToSave);
-      if (!success) throw new Error("Failed to add O2D records");
+      for (const item of o2dDataArray) {
+        await client.models.O2DRecord.create({
+          ...item,
+          id: item.id || `O2D-${Date.now()}-${Math.random()}`,
+          order_screenshot: screenshotUrl || item.order_screenshot || "",
+          created_at: item.created_at || new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        });
+      }
 
       return NextResponse.json({ message: "O2D records added successfully" });
     } else {
       const o2dData = await req.json();
-      const success = await addO2D(o2dData as O2D);
-      if (success) {
-        return NextResponse.json({ message: "O2D record added successfully" });
-      } else {
-        return NextResponse.json({ error: "Failed to add O2D" }, { status: 500 });
-      }
+      await client.models.O2DRecord.create({
+        ...o2dData,
+        id: o2dData.id || `O2D-${Date.now()}`,
+        updated_at: new Date().toISOString()
+      });
+      return NextResponse.json({ message: "O2D record added successfully" });
     }
-  } catch (error) {
-    console.error("API Error:", error);
-    return NextResponse.json({ error: "Invalid request" }, { status: 400 });
+  } catch (error: any) {
+    console.error("POST /api/o2d error:", error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

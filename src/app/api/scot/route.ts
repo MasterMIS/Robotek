@@ -1,167 +1,186 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getScotData, appendScotData, getCallData, updateCallData, getFollowUpData, addCallRecord } from "@/lib/scot-sheets";
-import { getO2Ds } from "@/lib/o2d-sheets";
+import { generateClient } from 'aws-amplify/api';
+import { Schema } from '@/../amplify/data/resource';
 import { auth } from "@/auth";
+
+const client = generateClient<Schema>({ authMode: 'apiKey' });
+
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
+// ---- Helpers ----
+
+async function fetchAll<T>(model: any): Promise<any[]> {
+  let all: any[] = [];
+  let nextToken: string | null | undefined = undefined;
+  do {
+    const response: any = await model.list({ nextToken, limit: 1000 });
+    all = [...all, ...response.data];
+    nextToken = response.nextToken;
+  } while (nextToken);
+  return all;
+}
 
 export async function GET(req: NextRequest) {
   const session = await auth();
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { searchParams } = new URL(req.url);
   const tab = searchParams.get('tab') || 'feeder';
   const skipO2D = searchParams.get('skipO2D') === 'true';
 
-  if (tab === 'calls' || tab === 'lost') {
-    const allCalls = await getCallData();
-    const allFollowUps = await getFollowUpData();
+  try {
+    if (tab === 'calls' || tab === 'lost') {
+      const [allCalls, allFollowUps, allO2Ds] = await Promise.all([
+        fetchAll(client.models.CallRecord),
+        fetchAll(client.models.FollowUpRecord),
+        skipO2D ? Promise.resolve([]) : fetchAll(client.models.O2DRecord)
+      ]);
 
-    // skipO2D=true skips the heavy O2D fetch (used by dashboard tab which fetches O2D separately)
-    const allO2Ds = skipO2D ? [] : await getO2Ds();
+      // Latest follow-up per party
+      const latestFollowUps = allFollowUps.reduce((acc: any, curr: any) => {
+        const existing = acc[curr.partyName];
+        if (!existing || new Date(curr.createdAt) > new Date(existing.createdAt)) {
+          acc[curr.partyName] = curr;
+        }
+        return acc;
+      }, {} as Record<string, any>);
 
-    // Group follow-ups by partyName and find the latest one for each
-    const latestFollowUps = allFollowUps.reduce((acc, curr) => {
-      const existing = acc[curr.partyName];
-      if (!existing || new Date(curr.createdAt) > new Date(existing.createdAt)) {
-        acc[curr.partyName] = curr;
-      }
-      return acc;
-    }, {} as Record<string, any>);
+      const mergedData = allCalls.map(call => {
+        const latest = latestFollowUps[call.partyName];
+        const partyO2Ds = allO2Ds.filter(o =>
+          o.party_name?.trim().toLowerCase() === call.partyName?.trim().toLowerCase()
+        );
 
-    // Merge latest follow-up info into each call record
-    const mergedData = allCalls.map(call => {
-      const latest = latestFollowUps[call.partyName];
-      const partyO2Ds = allO2Ds.filter(o => o.party_name?.trim().toLowerCase() === call.partyName?.trim().toLowerCase());
-      
-      let dynamicMetrics: any = {};
-      if (partyO2Ds.length > 0) {
-        // Group by unique order_no to avoid counting multiple items per order as separate orders
-        const uniqueOrderNos = [...new Set(partyO2Ds.map(o => (o.order_no || '').trim()).filter(Boolean))];
-        const uniqueCount = uniqueOrderNos.length;
+        let dynamicMetrics: any = {};
+        if (partyO2Ds.length > 0) {
+          const uniqueOrderNos = [...new Set(partyO2Ds.map((o: any) => (o.order_no || '').trim()).filter(Boolean))];
+          const totalAmt = partyO2Ds.reduce((sum: number, o: any) => {
+            const amt = parseFloat(String(o.est_amount || "0").replace(/[^0-9.]/g, ''));
+            return sum + (isNaN(amt) ? 0 : amt);
+          }, 0);
 
-        // For average order size: total amount across all rows / unique orders
-        const totalAmt = partyO2Ds.reduce((sum, o) => {
-          const amt = parseFloat(String(o.est_amount || "0").replace(/[^0-9.]/g, ''));
-          return sum + (isNaN(amt) ? 0 : amt);
-        }, 0);
+          const monthOrderSets: Record<string, Set<string>> = {};
+          partyO2Ds.forEach((o: any) => {
+            const orderNo = (o.order_no || '').trim();
+            if (!orderNo) return;
+            const d = new Date(o.created_at);
+            if (isNaN(d.getTime())) return;
+            const key = `${d.getFullYear()}-${d.getMonth()}`;
+            if (!monthOrderSets[key]) monthOrderSets[key] = new Set();
+            monthOrderSets[key].add(orderNo);
+          });
 
-        // Build per-month unique order sets for historical average
-        const monthOrderSets: Record<string, Set<string>> = {};
-        partyO2Ds.forEach(o => {
-          const orderNo = (o.order_no || '').trim();
-          if (!orderNo) return;
-          const d = new Date(o.created_at);
-          if (isNaN(d.getTime())) return;
-          const key = `${d.getFullYear()}-${d.getMonth()}`;
-          if (!monthOrderSets[key]) monthOrderSets[key] = new Set();
-          monthOrderSets[key].add(orderNo);
-        });
-        const monthlyUniqueCounts = Object.values(monthOrderSets).map(s => s.size);
-        const calcMonthly = monthlyUniqueCounts.length > 0
-          ? monthlyUniqueCounts.reduce((a, b) => a + b, 0) / monthlyUniqueCounts.length
-          : 0;
+          const monthlyUniqueCounts = Object.values(monthOrderSets).map(s => s.size);
+          const calcMonthly = monthlyUniqueCounts.length > 0
+            ? monthlyUniqueCounts.reduce((a, b) => a + b, 0) / monthlyUniqueCounts.length
+            : 0;
 
-        // Frequency: average days between consecutive unique orders (by first occurrence date)
-        const orderFirstDates = uniqueOrderNos
-          .map(no => {
-            const rows = partyO2Ds.filter(o => (o.order_no || '').trim() === no);
-            const dates = rows.map(o => new Date(o.created_at)).filter(d => !isNaN(d.getTime()));
-            return dates.length ? dates.reduce((a, b) => a < b ? a : b) : null;
-          })
-          .filter(Boolean) as Date[];
-        orderFirstDates.sort((a, b) => a.getTime() - b.getTime());
+          const orderFirstDates = (uniqueOrderNos as string[])
+            .map(no => {
+              const rows = partyO2Ds.filter((o: any) => (o.order_no || '').trim() === no);
+              const dates = rows.map((o: any) => new Date(o.created_at)).filter(d => !isNaN(d.getTime()));
+              return dates.length ? dates.reduce((a, b) => a < b ? a : b) : null;
+            })
+            .filter(Boolean) as Date[];
+          orderFirstDates.sort((a, b) => a.getTime() - b.getTime());
 
-        const gaps = orderFirstDates.map((d, i) =>
-          i > 0 ? (d.getTime() - orderFirstDates[i-1].getTime()) / (1000 * 60 * 60 * 24) : null
-        ).filter(g => g !== null) as number[];
+          const gaps = orderFirstDates.map((d, i) =>
+            i > 0 ? (d.getTime() - orderFirstDates[i-1].getTime()) / (1000 * 60 * 60 * 24) : null
+          ).filter(g => g !== null) as number[];
 
-        const lastOrderDate = orderFirstDates.length > 0
-          ? orderFirstDates[orderFirstDates.length - 1].toISOString().split('T')[0]
-          : "";
+          const lastOrderDate = orderFirstDates.length > 0
+            ? orderFirstDates[orderFirstDates.length - 1].toISOString().split('T')[0]
+            : "";
 
-        const calcOrderSize = uniqueCount > 0 ? totalAmt / uniqueCount : 0;
-        const calcFreq = gaps.length > 0 ? gaps.reduce((a, b) => a + b, 0) / gaps.length : 0;
+          const calcOrderSize = uniqueOrderNos.length > 0 ? totalAmt / uniqueOrderNos.length : 0;
+          const calcFreq = gaps.length > 0 ? gaps.reduce((a, b) => a + b, 0) / gaps.length : 0;
 
-        dynamicMetrics = {
-          averageOrderSize: calcOrderSize > 0 ? calcOrderSize.toFixed(2) : call.averageOrderSize,
-          usuallyNoOfOrderMonthly: calcMonthly > 0 ? Math.round(calcMonthly).toString() : call.usuallyNoOfOrderMonthly,
-          frequencyOfCallingAfterOrderPlaced: calcFreq > 0 ? calcFreq.toFixed(0) : call.frequencyOfCallingAfterOrderPlaced,
-          lastOrderDate: lastOrderDate,
-          
-          isAvgDynamic: calcOrderSize > 0,
-          isMonthlyDynamic: calcMonthly > 0,
-          isFreqDynamic: calcFreq > 0,
-          isDynamic: true
+          dynamicMetrics = {
+            averageOrderSize: calcOrderSize > 0 ? calcOrderSize.toFixed(2) : call.averageOrderSize,
+            usuallyNoOfOrderMonthly: calcMonthly > 0 ? Math.round(calcMonthly).toString() : call.usuallyNoOfOrderMonthly,
+            frequencyOfCallingAfterOrderPlaced: calcFreq > 0 ? calcFreq.toFixed(0) : call.frequencyOfCallingAfterOrderPlaced,
+            lastOrderDate,
+            isAvgDynamic: calcOrderSize > 0,
+            isMonthlyDynamic: calcMonthly > 0,
+            isFreqDynamic: calcFreq > 0,
+            isDynamic: true
+          };
+        }
+
+        return {
+          ...call,
+          ...dynamicMetrics,
+          latestStatus: latest?.status || "Pending",
+          latestNextDate: latest?.nextFollowUpDate || "",
+          followUpHistoryCount: allFollowUps.filter(f => f.partyName === call.partyName).length
         };
-      }
+      });
 
-      return {
-        ...call,
-        ...dynamicMetrics,
-        latestStatus: latest?.status || "Pending",
-        latestNextDate: latest?.nextFollowUpDate || "",
-        followUpHistoryCount: allFollowUps.filter(f => f.partyName === call.partyName).length
-      };
-    });
-
-    if (tab === 'calls') {
-      return NextResponse.json(mergedData.filter(c => (c as any).latestStatus !== 'Order Lost'));
-    }
-    
-    if (tab === 'lost') {
-      return NextResponse.json(mergedData.filter(c => (c as any).latestStatus === 'Order Lost'));
+      if (tab === 'calls') return NextResponse.json(mergedData.filter(c => c.latestStatus !== 'Order Lost'));
+      if (tab === 'lost') return NextResponse.json(mergedData.filter(c => c.latestStatus === 'Order Lost'));
+      return NextResponse.json(mergedData);
     }
 
-    return NextResponse.json(mergedData);
+    // Default: feeder / scot records
+    const scotRecords = await fetchAll(client.models.ScotRecord);
+    return NextResponse.json(scotRecords);
+
+  } catch (error: any) {
+    console.error("Scot GET Error:", error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
-
-  const data = await getScotData();
-  return NextResponse.json(data);
 }
 
 export async function POST(req: NextRequest) {
   const session = await auth();
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   try {
     const body = await req.json();
-    
-    // Check if this is a single party add request
+    const timestamp = new Date().toISOString();
+
     if (body.type === 'party') {
-      const success = await addCallRecord(body.data);
-      if (success) {
-        return NextResponse.json({ message: "Party added successfully" });
-      } else {
-        return NextResponse.json({ error: "Failed to add party" }, { status: 500 });
-      }
+      const id = body.data?.id || `CALL-${Date.now()}`;
+      const { errors } = await client.models.CallRecord.create({
+        ...body.data,
+        id,
+        created_at: timestamp,
+        updated_at: timestamp
+      });
+      if (errors) return NextResponse.json({ error: "Failed to add party" }, { status: 500 });
+      return NextResponse.json({ message: "Party added successfully" });
     }
 
-    // Default to bulk records import
+    // Bulk records import
     const { records } = body;
     if (!records || !Array.isArray(records)) {
       return NextResponse.json({ error: "Invalid data format" }, { status: 400 });
     }
 
-    const success = await appendScotData(records);
-    if (success) {
-      return NextResponse.json({ message: "Data imported successfully" });
-    } else {
-      return NextResponse.json({ error: "Failed to import data" }, { status: 500 });
+    const chunkSize = 25;
+    for (let i = 0; i < records.length; i += chunkSize) {
+      const chunk = records.slice(i, i + chunkSize);
+      await Promise.all(chunk.map((record: any) =>
+        client.models.ScotRecord.create({
+          ...record,
+          id: record.id || `SCOT-${Date.now()}-${Math.random()}`,
+          created_at: record.created_at || timestamp,
+          updated_at: timestamp
+        })
+      ));
     }
-  } catch (error) {
-    console.error("API Scot POST Error:", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+
+    return NextResponse.json({ message: "Data imported successfully" });
+  } catch (error: any) {
+    console.error("Scot POST Error:", error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
 
 export async function PUT(req: NextRequest) {
   const session = await auth();
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   try {
     const { searchParams } = new URL(req.url);
@@ -172,16 +191,28 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: "Invalid request parameters" }, { status: 400 });
     }
 
-    const data = await req.json();
-    const success = await updateCallData(partyName, data);
+    // Find the record by partyName
+    const allCalls = await fetchAll(client.models.CallRecord);
+    const record = allCalls.find(c => c.partyName === partyName);
+    if (!record) return NextResponse.json({ error: "Record not found" }, { status: 404 });
 
-    if (success) {
-      return NextResponse.json({ message: "Record updated successfully" });
-    } else {
+    const data = await req.json();
+    const { id, createdAt, updatedAt, ...rest } = data;
+
+    const { errors } = await client.models.CallRecord.update({
+      id: record.id,
+      ...rest,
+      updated_at: new Date().toISOString()
+    });
+
+    if (errors) {
+      console.error("Amplify Update Error:", errors);
       return NextResponse.json({ error: "Failed to update record" }, { status: 500 });
     }
-  } catch (error) {
-    console.error("API Scot PUT Error:", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+
+    return NextResponse.json({ message: "Record updated successfully" });
+  } catch (error: any) {
+    console.error("Scot PUT Error:", error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

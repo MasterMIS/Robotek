@@ -1,11 +1,14 @@
 import { NextResponse } from 'next/server';
-import { getTicketHistory, addTicketHistory, getTickets, TicketHistory } from '@/lib/ticket-sheets';
-import { uploadFileToDrive } from '@/lib/google-drive';
+import { Amplify } from "aws-amplify";
+import { generateClient } from 'aws-amplify/data';
+import { uploadData, getUrl } from 'aws-amplify/storage';
+import outputs from '@/../amplify_outputs.json';
+import type { Schema } from '@/../amplify/data/resource';
 import { sendWhatsAppMessage } from '@/lib/maytapi';
-import { getUserByUsernameOrEmail } from '@/lib/google-sheets';
 import { formatDate } from '@/lib/dateUtils';
 
-const TICKET_FOLDER_ID = "1zNEIi62bxuCP2g5KadniAWp4hSNpfVzq";
+Amplify.configure(outputs);
+const client = generateClient<Schema>();
 
 export async function GET(
   request: Request,
@@ -13,11 +16,27 @@ export async function GET(
 ) {
   const { id } = await params;
   try {
-    const history = await getTicketHistory(id);
-    return NextResponse.json(history);
-  } catch (error) {
+    let allHistory: any[] = [];
+    let nextToken: string | null | undefined = null;
+
+    do {
+      const result: any = await client.models.HelpTicketHistory.list({
+        filter: { ticket_id: { eq: id } },
+        nextToken: nextToken,
+        limit: 1000
+      });
+      if (result.errors) throw new Error(result.errors[0].message);
+      allHistory = [...allHistory, ...result.data];
+      nextToken = result.nextToken;
+    } while (nextToken);
+
+    // Sort by created_at descending (newest first)
+    allHistory.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    
+    return NextResponse.json(allHistory);
+  } catch (error: any) {
     console.error(`GET /api/tickets/${id}/history error:`, error);
-    return NextResponse.json({ error: "Failed to fetch ticket history" }, { status: 500 });
+    return NextResponse.json({ error: error.message || "Failed to fetch ticket history" }, { status: 500 });
   }
 }
 
@@ -40,13 +59,8 @@ export async function POST(
     } else {
       data = await request.json();
     }
-
-    const timestamp = Date.now();
-    const randomSuffix = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
-    const newId = `LOG-${timestamp}-${randomSuffix}`;
     
-    const newHistory: TicketHistory = {
-      id: newId,
+    const newHistoryRecord: any = {
       ticket_id: id,
       action_type: data.action_type || "COMMENT", // 'STATUS_CHANGE' | 'COMMENT'
       actor_username: data.actor_username || "System",
@@ -59,54 +73,56 @@ export async function POST(
     };
 
     if (voiceNoteFile && voiceNoteFile.size > 0) {
-      const fileId = await uploadFileToDrive(voiceNoteFile, TICKET_FOLDER_ID);
-      if (fileId) newHistory.voice_note = fileId;
+      const path = `tickets/history/${Date.now()}_${voiceNoteFile.name}`;
+      await uploadData({ path, data: voiceNoteFile }).result;
+      const { url } = await getUrl({ path });
+      newHistoryRecord.voice_note = url.toString();
     }
 
     if (docFile && docFile.size > 0) {
-      const fileId = await uploadFileToDrive(docFile, TICKET_FOLDER_ID);
-      if (fileId) newHistory.attachment_url = fileId;
+      const path = `tickets/history/${Date.now()}_${docFile.name}`;
+      await uploadData({ path, data: docFile }).result;
+      const { url } = await getUrl({ path });
+      newHistoryRecord.attachment_url = url.toString();
     }
 
-    const success = await addTicketHistory(newHistory);
+    const { data: createdHistory, errors } = await client.models.HelpTicketHistory.create(newHistoryRecord);
+    if (errors) throw new Error(errors[0].message);
     
-    if (success) {
-      // Send WhatsApp Notification for comment/status change
-      try {
-        const allTickets = await getTickets();
-        const ticket = allTickets.find(t => String(t.id) === String(id));
-        if (ticket) {
-          const formattedNow = formatDate(new Date().toISOString());
-          const isStatusChange = newHistory.action_type === 'STATUS_CHANGE';
-          const header = isStatusChange ? '🔄 *Ticket Status Updated*' : '💬 *New Ticket Comment*';
-          const statusLine = isStatusChange
-            ? `📉 *Status Changed:* ${newHistory.old_status} ➡️ ${newHistory.new_status}\n`
-            : '';
-          const commentLine = newHistory.comment_text
-            ? `🗣️ *Comment:* _${newHistory.comment_text}_\n`
-            : '';
-          const message = `${header}\n━━━━━━━━━━━━━━━━━\n🔖 *Ticket ID:* ${ticket.id}\n📌 *Title:* ${ticket.title}\n🏷️ *Category:* ${ticket.category}\n🎯 *Priority:* ${ticket.priority}\n👤 *Raised By:* ${ticket.raised_by}\n👨‍🔧 *Assigned To:* ${ticket.solver_person || 'Unassigned'}\n📊 *Current Status:* ${isStatusChange ? newHistory.new_status : ticket.status}\n${statusLine}${commentLine}👤 *Updated By:* ${newHistory.actor_username}\n⏱️ *Updated At:* ${formattedNow}`;
+    // Send WhatsApp Notification for comment/status change
+    try {
+      const { data: ticket } = await client.models.HelpTicket.get({ id });
+      if (ticket) {
+        const formattedNow = formatDate(new Date().toISOString());
+        const isStatusChange = createdHistory.action_type === 'STATUS_CHANGE';
+        const header = isStatusChange ? '🔄 *Ticket Status Updated*' : '💬 *New Ticket Comment*';
+        const statusLine = isStatusChange
+          ? `📉 *Status Changed:* ${createdHistory.old_status} ➡️ ${createdHistory.new_status}\n`
+          : '';
+        const commentLine = createdHistory.comment_text
+          ? `🗣️ *Comment:* _${createdHistory.comment_text}_\n`
+          : '';
+        const message = `${header}\n━━━━━━━━━━━━━━━━━\n🔖 *Ticket ID:* ${ticket.id}\n📌 *Title:* ${ticket.title}\n🏷️ *Category:* ${ticket.category}\n🎯 *Priority:* ${ticket.priority}\n👤 *Raised By:* ${ticket.raised_by}\n👨‍🔧 *Assigned To:* ${ticket.solver_person || 'Unassigned'}\n📊 *Current Status:* ${isStatusChange ? createdHistory.new_status : ticket.status}\n${statusLine}${commentLine}👤 *Updated By:* ${createdHistory.actor_username}\n⏱️ *Updated At:* ${formattedNow}`;
 
-          const parties = [ticket.raised_by, ticket.solver_person];
-          const uniqueParties = [...new Set(parties)];
-          for (const username of uniqueParties) {
-            if (!username) continue;
-            const user = await getUserByUsernameOrEmail(username);
-            if (user && user.phone) {
-              await sendWhatsAppMessage(user.phone, message);
-            }
+        const parties = [ticket.raised_by, ticket.solver_person].filter(Boolean);
+        const uniqueParties = [...new Set(parties)];
+        for (const username of uniqueParties) {
+          const usersRes = await client.models.User.list({
+            filter: { username: { eq: username || "" } }
+          });
+          const user = usersRes.data?.[0];
+          if (user && user.phone) {
+            await sendWhatsAppMessage(user.phone, message);
           }
         }
-      } catch (err) {
-        console.error('Error sending WhatsApp notification for history:', err);
       }
-
-      return NextResponse.json({ success: true, history: newHistory });
-    } else {
-      return NextResponse.json({ error: "Failed to add ticket history" }, { status: 500 });
+    } catch (err) {
+      console.error('Error sending WhatsApp notification for history:', err);
     }
-  } catch (error) {
+
+    return NextResponse.json({ success: true, history: createdHistory });
+  } catch (error: any) {
     console.error(`POST /api/tickets/${id}/history error:`, error);
-    return NextResponse.json({ error: "Invalid request data" }, { status: 400 });
+    return NextResponse.json({ error: error.message || "Invalid request data" }, { status: 400 });
   }
 }

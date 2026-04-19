@@ -1,11 +1,14 @@
 import { NextResponse } from 'next/server';
-import { updateTicket, deleteTicket, getTickets, Ticket } from '@/lib/ticket-sheets';
-import { getUserByUsernameOrEmail } from "@/lib/google-sheets";
-import { uploadFileToDrive } from '@/lib/google-drive';
+import { Amplify } from "aws-amplify";
+import { generateClient } from 'aws-amplify/data';
+import { uploadData, getUrl } from 'aws-amplify/storage';
+import outputs from '@/../amplify_outputs.json';
+import type { Schema } from '@/../amplify/data/resource';
 import { sendWhatsAppMessage } from "@/lib/maytapi";
 import { formatDate } from "@/lib/dateUtils";
 
-const TICKET_FOLDER_ID = "1zNEIi62bxuCP2g5KadniAWp4hSNpfVzq";
+Amplify.configure(outputs);
+const client = generateClient<Schema>();
 
 export async function PUT(
   request: Request,
@@ -27,61 +30,65 @@ export async function PUT(
       data = await request.json();
     }
 
-    // Merge with existing ticket data if needed, or just use what's provided
-    // The sheet update handles partial updates if we only send what's changed, 
-    // but here we usually send the whole object from the frontend.
+    // 1. Fetch current record from AWS to check for changes
+    const { data: current } = await client.models.HelpTicket.get({ id });
+    if (!current) {
+      return NextResponse.json({ error: "Ticket not found" }, { status: 404 });
+    }
+
+    // 2. Prepare updates
+    const { __typename, createdAt, updatedAt, ...clean } = data;
+    const finalUpdate: any = { ...clean, id, updated_at: new Date().toISOString() };
 
     if (voiceNoteFile && voiceNoteFile.size > 0) {
-      const fileId = await uploadFileToDrive(voiceNoteFile, TICKET_FOLDER_ID);
-      if (fileId) data.voice_note = fileId;
+      const path = `tickets/${Date.now()}_${voiceNoteFile.name}`;
+      await uploadData({ path, data: voiceNoteFile }).result;
+      const { url } = await getUrl({ path });
+      finalUpdate.voice_note = url.toString();
     }
 
     if (docFile && docFile.size > 0) {
-      const fileId = await uploadFileToDrive(docFile, TICKET_FOLDER_ID);
-      if (fileId) data.attachment_url = fileId;
+      const path = `tickets/${Date.now()}_${docFile.name}`;
+      await uploadData({ path, data: docFile }).result;
+      const { url } = await getUrl({ path });
+      finalUpdate.attachment_url = url.toString();
     }
 
-    const existingTickets = await getTickets();
-    const current = existingTickets.find(t => String(t.id) === String(id));
-
-    const success = await updateTicket(id, data);
+    const { data: updatedTicket, errors } = await client.models.HelpTicket.update(finalUpdate);
+    if (errors) throw new Error(errors[0].message);
     
-    if (success) {
-      // Send WhatsApp Notification for Ticket Update/Status Change
-      try {
-        if (current) {
-          const isStatusChange = data.status && data.status !== current.status;
-          const branding = isStatusChange ? "🔄 *Ticket Status Changed*" : "📝 *Ticket Details Updated*";
-          const formattedUpdate = formatDate(new Date().toISOString());
-          const oldStatus = current.status;
-          const newStatus = data.status || current.status;
-          const statusLine = isStatusChange ? `📉 *Status Changed:* ${oldStatus} ➡️ ${newStatus}\n` : `📊 *Status:* ${newStatus}\n`;
-          const commentLine = data.comment_text ? `🗣️ *Comment:* _${data.comment_text}_\n` : '';
+    // 3. Send WhatsApp Notification for Ticket Update/Status Change
+    try {
+      const isStatusChange = data.status && data.status !== current.status;
+      const branding = isStatusChange ? "🔄 *Ticket Status Changed*" : "📝 *Ticket Details Updated*";
+      const formattedUpdate = formatDate(new Date().toISOString());
+      const oldStatus = current.status || 'Unknown';
+      const newStatus = data.status || current.status || 'Unknown';
+      const statusLine = isStatusChange ? `📉 *Status Changed:* ${oldStatus} ➡️ ${newStatus}\n` : `📊 *Status:* ${newStatus}\n`;
+      const commentLine = data.comment_text ? `🗣️ *Comment:* _${data.comment_text}_\n` : '';
 
-          const message = `${branding}\n━━━━━━━━━━━━━━━━━\n🔖 *Ticket ID:* ${current.id}\n📌 *Title:* ${data.title || current.title}\n🏷️ *Category:* ${data.category || current.category}\n🎯 *Priority:* ${data.priority || current.priority}\n👤 *Raised By:* ${data.raised_by || current.raised_by}\n👨‍🔧 *Assigned To:* ${data.solver_person || current.solver_person || 'Unassigned'}\n${statusLine}${commentLine}⏱️ *Updated At:* ${formattedUpdate}`;
+      const message = `${branding}\n━━━━━━━━━━━━━━━━━\n🔖 *Ticket ID:* ${current.id}\n📌 *Title:* ${data.title || current.title}\n🏷️ *Category:* ${data.category || current.category}\n🎯 *Priority:* ${data.priority || current.priority}\n👤 *Raised By:* ${data.raised_by || current.raised_by}\n👨‍🔧 *Assigned To:* ${data.solver_person || current.solver_person || 'Unassigned'}\n${statusLine}${commentLine}⏱️ *Updated At:* ${formattedUpdate}`;
 
-          const parties = [data.raised_by || current.raised_by, data.solver_person || current.solver_person];
-          const uniqueParties = [...new Set(parties)];
+      const parties = [data.raised_by || current.raised_by, data.solver_person || current.solver_person];
+      const uniqueParties = [...new Set(parties)].filter(Boolean);
 
-          for (const username of uniqueParties) {
-            if (!username) continue;
-            const user = await getUserByUsernameOrEmail(username);
-            if (user && user.phone) {
-              await sendWhatsAppMessage(user.phone, message);
-            }
-          }
+      for (const username of uniqueParties) {
+        const usersRes = await client.models.User.list({
+          filter: { username: { eq: username || "" } }
+        });
+        const user = usersRes.data?.[0];
+        if (user && user.phone) {
+          await sendWhatsAppMessage(user.phone, message);
         }
-      } catch (err) {
-        console.error("Error sending WhatsApp notification:", err);
       }
-
-      return NextResponse.json({ success: true, ticket: data });
-    } else {
-      return NextResponse.json({ error: "Failed to update ticket" }, { status: 404 });
+    } catch (err) {
+      console.error("Error sending WhatsApp notification:", err);
     }
-  } catch (error) {
+
+    return NextResponse.json({ success: true, ticket: updatedTicket });
+  } catch (error: any) {
     console.error("PUT /api/tickets/[id] error:", error);
-    return NextResponse.json({ error: "Update operation failed" }, { status: 500 });
+    return NextResponse.json({ error: error.message || "Update operation failed" }, { status: 500 });
   }
 }
 
@@ -91,29 +98,33 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
-    const existingTickets = await getTickets();
-    const current = existingTickets.find(t => String(t.id) === String(id));
-
-    const success = await deleteTicket(id);
-    if (success) {
-      // Send WhatsApp Notification for Deletion
-      try {
-        if (current) {
-          const solver = await getUserByUsernameOrEmail(current.solver_person || "");
-          if (solver && solver.phone) {
-            const message = `🗑️ *Help Ticket Deleted*\n━━━━━━━━━━━━━━━━━\n🔖 *Ticket ID:* ${current.id}\n📌 *Title:* ${current.title}\n\n_This ticket has been removed from the system._`;
-            await sendWhatsAppMessage(solver.phone, message);
-          }
-        }
-      } catch (err) {
-        console.error("Error sending WhatsApp notification:", err);
-      }
-      return NextResponse.json({ success: true });
-    } else {
-      return NextResponse.json({ error: "Failed to delete ticket" }, { status: 404 });
+    
+    const { data: current } = await client.models.HelpTicket.get({ id });
+    if (!current) {
+      return NextResponse.json({ error: "Ticket not found" }, { status: 404 });
     }
-  } catch (error) {
+
+    const { errors } = await client.models.HelpTicket.delete({ id });
+    if (errors) throw new Error(errors[0].message);
+
+    // Send WhatsApp Notification for Deletion
+    try {
+      if (current.solver_person) {
+        const usersRes = await client.models.User.list({
+          filter: { username: { eq: current.solver_person } }
+        });
+        const solver = usersRes.data?.[0];
+        if (solver && solver.phone) {
+          const message = `🗑️ *Help Ticket Deleted*\n━━━━━━━━━━━━━━━━━\n🔖 *Ticket ID:* ${current.id}\n📌 *Title:* ${current.title}\n\n_This ticket has been removed from the system._`;
+          await sendWhatsAppMessage(solver.phone, message);
+        }
+      }
+    } catch (err) {
+      console.error("Error sending WhatsApp notification:", err);
+    }
+    return NextResponse.json({ success: true });
+  } catch (error: any) {
     console.error("DELETE /api/tickets/[id] error:", error);
-    return NextResponse.json({ error: "Delete operation failed" }, { status: 500 });
+    return NextResponse.json({ error: error.message || "Delete operation failed" }, { status: 500 });
   }
 }

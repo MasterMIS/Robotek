@@ -237,8 +237,9 @@ export default function TicketsPage() {
     return `${min}:${sec.toString().padStart(2, '0')}`;
   };
 
-  const toggleAudio = (fileId: string, id: string) => {
-    const url = `/api/audio/${fileId}`;
+  const toggleAudio = (voiceNote: string, id: string) => {
+    // Determine the URL based on source (AWS S3 URLs start with http, legacy are just IDs)
+    const url = voiceNote?.startsWith("http") ? voiceNote : `/api/audio/${voiceNote}`;
 
     if (playingAudioId === id) {
       audioRef.current?.pause();
@@ -983,7 +984,11 @@ export default function TicketsPage() {
                       </button>
                     )}
                     {selectedTicket.attachment_url && (
-                      <a href={`https://drive.google.com/file/d/${selectedTicket.attachment_url}/view?usp=sharing`} target="_blank" className="flex items-center gap-2 bg-white dark:bg-navy-800 text-blue-600 dark:text-blue-400 px-3 py-1.5 rounded-lg border border-blue-200 dark:border-blue-800/50 shadow-sm transition-all hover:bg-blue-50 dark:hover:bg-navy-700 text-[9px] font-black uppercase tracking-widest no-underline">
+                      <a 
+                        href={selectedTicket.attachment_url.startsWith("http") ? selectedTicket.attachment_url : `https://drive.google.com/file/d/${selectedTicket.attachment_url}/view?usp=sharing`} 
+                        target="_blank" 
+                        className="flex items-center gap-2 bg-white dark:bg-navy-800 text-blue-600 dark:text-blue-400 px-3 py-1.5 rounded-lg border border-blue-200 dark:border-blue-800/50 shadow-sm transition-all hover:bg-blue-50 dark:hover:bg-navy-700 text-[9px] font-black uppercase tracking-widest no-underline"
+                      >
                         <PaperClipIcon className="w-3.5 h-3.5" /> Document
                       </a>
                     )}
@@ -1087,7 +1092,11 @@ export default function TicketsPage() {
                                 </button>
                               )}
                               {log.attachment_url && (
-                                <a href={`https://drive.google.com/file/d/${log.attachment_url}/view?usp=sharing`} target="_blank" className="flex items-center gap-1 text-blue-600 text-[9px] font-black uppercase tracking-widest hover:underline">
+                                <a 
+                                  href={log.attachment_url.startsWith("http") ? log.attachment_url : `https://drive.google.com/file/d/${log.attachment_url}/view?usp=sharing`} 
+                                  target="_blank" 
+                                  className="flex items-center gap-1 text-blue-600 text-[9px] font-black uppercase tracking-widest hover:underline"
+                                >
                                   <PaperClipIcon className="w-3 h-3" /> View Attachment
                                 </a>
                               )}

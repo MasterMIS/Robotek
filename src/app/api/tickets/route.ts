@@ -1,49 +1,72 @@
 import { NextResponse } from 'next/server';
-import { getTickets, addTicket, ticketHistoryService } from '@/lib/ticket-sheets';
-import { getUserByUsernameOrEmail } from "@/lib/google-sheets";
-import { uploadFileToDrive } from '@/lib/google-drive';
+import { Amplify } from "aws-amplify";
+import { generateClient } from 'aws-amplify/data';
+import { uploadData, getUrl } from 'aws-amplify/storage';
+import outputs from '@/../amplify_outputs.json';
+import type { Schema } from '@/../amplify/data/resource';
 import { sendWhatsAppMessage } from "@/lib/maytapi";
 import { formatDate } from "@/lib/dateUtils";
 
-const TICKET_FOLDER_ID = "1zNEIi62bxuCP2g5KadniAWp4hSNpfVzq";
+Amplify.configure(outputs);
+const client = generateClient<Schema>();
 
 export async function GET() {
   try {
-    const tickets = await getTickets();
-    try {
-      const history = await ticketHistoryService.getAll();
-      
-      // Group history by ticket
-      const historyByTicket: Record<string, any[]> = {};
-      for (const h of history) {
-        if (!h.comment_text) continue;
-        if (!historyByTicket[h.ticket_id]) historyByTicket[h.ticket_id] = [];
-        historyByTicket[h.ticket_id].push(h);
-      }
+    let allTickets: any[] = [];
+    let nextToken: string | null | undefined = null;
 
-      // Add latest comment to each ticket
-      for (const ticket of tickets) {
-        const ticketHistory = historyByTicket[ticket.id] || [];
-        if (ticketHistory.length > 0) {
-          // Sort by latest first
-          ticketHistory.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-          (ticket as any).latest_comment = {
-            text: ticketHistory[0].comment_text,
-            actor: ticketHistory[0].actor_username,
-            created_at: ticketHistory[0].created_at
-          };
-        }
+    // 1. Fetch all tickets with pagination handling
+    do {
+      const result: any = await client.models.HelpTicket.list({
+        nextToken: nextToken,
+        limit: 1000
+      });
+      if (result.errors) throw new Error(result.errors[0].message);
+      allTickets = [...allTickets, ...result.data];
+      nextToken = result.nextToken;
+    } while (nextToken);
+
+    // 2. Fetch all history to find latest comments (in-memory join for performance on moderate datasets)
+    // For very large datasets, this should be optimized to fetch per-ticket or use a specialized query
+    let allHistory: any[] = [];
+    let historyNextToken: string | null | undefined = null;
+    do {
+      const result: any = await client.models.HelpTicketHistory.list({
+        nextToken: historyNextToken,
+        limit: 1000
+      });
+      if (result.errors) throw new Error(result.errors[0].message);
+      allHistory = [...allHistory, ...result.data];
+      historyNextToken = result.nextToken;
+    } while (historyNextToken);
+
+    // Group history by ticket
+    const historyByTicket: Record<string, any[]> = {};
+    for (const h of allHistory) {
+      if (!h.comment_text) continue;
+      if (!historyByTicket[h.ticket_id]) historyByTicket[h.ticket_id] = [];
+      historyByTicket[h.ticket_id].push(h);
+    }
+
+    // Add latest comment to each ticket
+    for (const ticket of allTickets) {
+      const ticketHistory = historyByTicket[ticket.id] || [];
+      if (ticketHistory.length > 0) {
+        ticketHistory.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+        ticket.latest_comment = {
+          text: ticketHistory[0].comment_text,
+          actor: ticketHistory[0].actor_username,
+          created_at: ticketHistory[0].created_at
+        };
       }
-    } catch (err) {
-      console.error("Error fetching ticket history for latest comments:", err);
     }
     
-    return NextResponse.json(tickets, {
+    return NextResponse.json(allTickets, {
       headers: { 'Cache-Control': 'private, max-age=60, stale-while-revalidate=300' },
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error("GET /api/tickets error:", error);
-    return NextResponse.json({ error: "Failed to fetch tickets" }, { status: 500 });
+    return NextResponse.json({ error: error.message || "Failed to fetch tickets" }, { status: 500 });
   }
 }
 
@@ -63,9 +86,12 @@ export async function POST(request: Request) {
       data = await request.json();
     }
 
+    // Generate numeric-style ID for consistency if needed, though Amplify provides auto-ID
+    // Let's use numeric string if available, or timestamp
+    const ticketId = data.id || `TKT-${Date.now()}`;
     
-     // Create new ticket object without ID (assigned on server-side)
-     const newTicket: any = {
+    const newTicketRecord: any = {
+      id: ticketId,
       title: data.title || "",
       description: data.description || "",
       category: data.category || "Other",
@@ -81,37 +107,43 @@ export async function POST(request: Request) {
     };
 
     if (voiceNoteFile && voiceNoteFile.size > 0) {
-      const fileId = await uploadFileToDrive(voiceNoteFile, TICKET_FOLDER_ID);
-      if (fileId) newTicket.voice_note = fileId;
+      const path = `tickets/${Date.now()}_${voiceNoteFile.name}`;
+      await uploadData({ path, data: voiceNoteFile }).result;
+      const { url } = await getUrl({ path });
+      newTicketRecord.voice_note = url.toString();
     }
 
     if (docFile && docFile.size > 0) {
-      const fileId = await uploadFileToDrive(docFile, TICKET_FOLDER_ID);
-      if (fileId) newTicket.attachment_url = fileId;
+      const path = `tickets/${Date.now()}_${docFile.name}`;
+      await uploadData({ path, data: docFile }).result;
+      const { url } = await getUrl({ path });
+      newTicketRecord.attachment_url = url.toString();
     }
 
-    const success = await addTicket(newTicket);
+    const { data: createdTicket, errors } = await client.models.HelpTicket.create(newTicketRecord);
+    if (errors) throw new Error(errors[0].message);
     
-    if (success) {
-      // Send WhatsApp Notification for New Ticket
-      try {
-        const solver = await getUserByUsernameOrEmail(newTicket.solver_person || "");
-        if (solver && solver.phone) {
-          const formattedDate = formatDate(newTicket.created_at);
-          const dueDate = newTicket.planned_resolution ? formatDate(newTicket.planned_resolution) : "Not Set";
-          const message = `🎫 *New Help Ticket Raised*\n━━━━━━━━━━━━━━━━━\n🔖 *Ticket ID:* ${newTicket.id}\n📌 *Title:* ${newTicket.title}\n🏷️ *Category:* ${newTicket.category}\n🎯 *Priority:* ${newTicket.priority}\n👤 *Raised By:* ${newTicket.raised_by}\n👨‍🔧 *Assigned To:* ${newTicket.solver_person || 'Unassigned'}\n⏳ *Due Date:* ${dueDate}\n⏱️ *Created At:* ${formattedDate}\n\n📝 *Description:* _${newTicket.description}_`;
-          await sendWhatsAppMessage(solver.phone, message);
-        }
-      } catch (err) {
-        console.error("Error sending WhatsApp notification:", err);
-      }
+    // Send WhatsApp Notification for New Ticket
+    try {
+      // Find solver user in AWS
+      const usersRes = await client.models.User.list({
+        filter: { username: { eq: newTicketRecord.solver_person || "" } }
+      });
+      const solver = usersRes.data?.[0];
 
-      return NextResponse.json({ success: true, ticket: newTicket });
-    } else {
-      return NextResponse.json({ error: "Failed to save ticket" }, { status: 500 });
+      if (solver && solver.phone) {
+        const formattedDate = formatDate(newTicketRecord.created_at);
+        const dueDate = newTicketRecord.planned_resolution ? formatDate(newTicketRecord.planned_resolution) : "Not Set";
+        const message = `🎫 *New Help Ticket Raised*\n━━━━━━━━━━━━━━━━━\n🔖 *Ticket ID:* ${newTicketRecord.id}\n📌 *Title:* ${newTicketRecord.title}\n🏷️ *Category:* ${newTicketRecord.category}\n🎯 *Priority:* ${newTicketRecord.priority}\n👤 *Raised By:* ${newTicketRecord.raised_by}\n👨‍🔧 *Assigned To:* ${newTicketRecord.solver_person || 'Unassigned'}\n⏳ *Due Date:* ${dueDate}\n⏱️ *Created At:* ${formattedDate}\n\n📝 *Description:* _${newTicketRecord.description}_`;
+        await sendWhatsAppMessage(solver.phone, message);
+      }
+    } catch (err) {
+      console.error("Error sending WhatsApp notification:", err);
     }
-  } catch (error) {
+
+    return NextResponse.json({ success: true, ticket: createdTicket });
+  } catch (error: any) {
     console.error("POST /api/tickets error:", error);
-    return NextResponse.json({ error: "Invalid request data" }, { status: 400 });
+    return NextResponse.json({ error: error.message || "Invalid request data" }, { status: 400 });
   }
 }

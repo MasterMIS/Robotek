@@ -1,144 +1,162 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getAttendanceRecords, addAttendanceRecord, updateAttendanceRecord } from "@/lib/sheets/attendance-sheets";
+import { generateClient } from 'aws-amplify/api';
+import { uploadData, getUrl } from 'aws-amplify/storage';
+import { Schema } from '@/../amplify/data/resource';
 import { getUsers } from "@/lib/google-sheets";
 import { parseLatLong, getShortestDistance } from "@/lib/locationUtils";
-import { uploadBase64ToDrive } from "@/lib/google-drive";
+
+const client = generateClient<Schema>({ authMode: 'apiKey' });
+
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
+async function fetchAllAttendance() {
+  let allRecords: any[] = [];
+  let nextToken: string | null | undefined = undefined;
+  do {
+    const response: any = await client.models.AttendanceRecord.list({ nextToken, limit: 1000 });
+    allRecords = [...allRecords, ...response.data];
+    nextToken = response.nextToken;
+  } while (nextToken);
+  return allRecords;
+}
 
 export async function GET(req: NextRequest) {
-    try {
-        const { searchParams } = new URL(req.url);
-        const userId = searchParams.get('userId');
+  try {
+    const { searchParams } = new URL(req.url);
+    const userId = searchParams.get('userId');
+    if (!userId) return NextResponse.json({ error: "User ID required" }, { status: 400 });
 
-        if (!userId) return NextResponse.json({ error: "User ID required" }, { status: 400 });
+    const records = await fetchAllAttendance();
+    const userRecords = records.filter(r => String(r.userId) === String(userId));
 
-        const records = await getAttendanceRecords();
-        const userRecords = records.filter(r => String(r.userId) === String(userId));
+    // Get today in IST (UTC+5:30)
+    const now = new Date();
+    const istOffset = 5.5 * 60 * 60 * 1000;
+    const istNow = new Date(now.getTime() + istOffset);
+    const todayStr = istNow.toISOString().split('T')[0];
 
-        // Normalize date: handle both DD/MM/YYYY and YYYY-MM-DD from Google Sheets
-        const normalizeDate = (dateStr: string): string => {
-            if (!dateStr) return '';
-            // DD/MM/YYYY → YYYY-MM-DD
-            if (/^\d{2}\/\d{2}\/\d{4}$/.test(dateStr)) {
-                const [dd, mm, yyyy] = dateStr.split('/');
-                return `${yyyy}-${mm}-${dd}`;
-            }
-            // Already YYYY-MM-DD (possibly with time)
-            return dateStr.split('T')[0];
-        };
+    const normalizedHistory = userRecords.map(r => ({
+      ...r,
+      date: (r.date || '').split('T')[0]
+    }));
 
-        // Get today in IST (UTC+5:30)
-        const now = new Date();
-        const istOffset = 5.5 * 60 * 60 * 1000;
-        const istNow = new Date(now.getTime() + istOffset);
-        const todayStr = istNow.toISOString().split('T')[0]; // YYYY-MM-DD in IST
+    const todayRecord = normalizedHistory.find(r => r.date === todayStr);
 
-        // Normalize history dates for frontend
-        const normalizedHistory = userRecords.map(r => ({
-            ...r,
-            date: normalizeDate(r.date)
-        }));
+    let currentStatus: 'IDLE' | 'CHECKED_IN' | 'COMPLETED' = 'IDLE';
+    let lastCheckIn = null;
 
-        // Find today's record using normalized date
-        const todayRecord = normalizedHistory.find(r => r.date === todayStr);
-
-        let currentStatus: 'IDLE' | 'CHECKED_IN' | 'COMPLETED' = 'IDLE';
-        let lastCheckIn = null;
-
-        if (todayRecord) {
-            if (todayRecord.outTime) {
-                currentStatus = 'COMPLETED';
-            } else if (todayRecord.inTime) {
-                currentStatus = 'CHECKED_IN';
-                lastCheckIn = todayRecord.inTime;
-            }
-        }
-
-        return NextResponse.json({
-            history: normalizedHistory,
-            currentStatus,
-            lastCheckIn
-        });
-    } catch (error) {
-        return NextResponse.json({ error: "Failed to fetch attendance" }, { status: 500 });
+    if (todayRecord) {
+      if (todayRecord.outTime) {
+        currentStatus = 'COMPLETED';
+      } else if (todayRecord.inTime) {
+        currentStatus = 'CHECKED_IN';
+        lastCheckIn = todayRecord.inTime;
+      }
     }
+
+    return NextResponse.json({ history: normalizedHistory, currentStatus, lastCheckIn });
+  } catch (error) {
+    return NextResponse.json({ error: "Failed to fetch attendance" }, { status: 500 });
+  }
 }
 
 export async function POST(req: NextRequest) {
-    try {
-        const { action, userId, userName, latitude, longitude, photo } = await req.json();
+  try {
+    const { action, userId, userName, latitude, longitude, photo } = await req.json();
+    if (!userId || !action) return NextResponse.json({ error: "Missing data" }, { status: 400 });
 
-        if (!userId || !action) return NextResponse.json({ error: "Missing data" }, { status: 400 });
+    // Photo upload: base64 → S3. Hybrid approach: old Drive URLs stored as-is
+    let photoUrl = "";
+    if (photo && photo.startsWith('data:')) {
+      // New photo — upload to S3
+      const base64Data = photo.split(',')[1];
+      const buffer = Buffer.from(base64Data, 'base64');
+      const contentType = photo.split(';')[0].split(':')[1] || 'image/jpeg';
+      const ext = contentType.split('/')[1] || 'jpg';
+      const path = `attendance/${userId}/${Date.now()}.${ext}`;
 
-        let photoUrl = "";
-        if (photo) {
-            const driveFileId = await uploadBase64ToDrive(photo, "1mQbuPp111m-fz3x2JCBecFZHMoRzDYPw");
-            if (driveFileId) {
-                photoUrl = `https://drive.google.com/uc?export=view&id=${driveFileId}`;
-            }
-        }
+      await uploadData({
+        path,
+        data: buffer,
+        options: { contentType }
+      }).result;
 
-        // Extract Date in IST to match calendar days properly
-        const now = new Date();
-        const istOffset = 5.5 * 60 * 60 * 1000;
-        const istNow = new Date(now.getTime() + istOffset);
-        const dateStr = istNow.toISOString().split('T')[0]; 
-        const timeStr = now.toISOString();
-
-        // Helper to normalize Google Sheets dates
-        const normalizeDate = (dStr: string): string => {
-            if (!dStr) return '';
-            if (/^\d{2}\/\d{2}\/\d{4}$/.test(dStr)) {
-                const [dd, mm, yyyy] = dStr.split('/');
-                return `${yyyy}-${mm}-${dd}`;
-            }
-            return dStr.split('T')[0];
-        };
-
-        if (action === 'CHECK_IN') {
-            // Validate location if coordinates provided
-            const allUsers = await getUsers();
-            const user = allUsers.find(u => String(u.id) === String(userId));
-            
-            if (user && user.late_long) {
-                const registeredPoints = parseLatLong(user.late_long);
-                if (registeredPoints && latitude && longitude) {
-                    const { distance } = getShortestDistance(latitude, longitude, registeredPoints);
-                    // threshold logic can be applied here if strictly enforced server-side
-                }
-            }
-
-            const newRecord = {
-                id: `ATT-${Date.now()}`,
-                userId: String(userId),
-                userName,
-                date: dateStr,
-                inTime: timeStr,
-                outTime: "",
-                status: "IN",
-                inPhoto: photoUrl,
-                outPhoto: ""
-            };
-
-            await addAttendanceRecord(newRecord);
-            return NextResponse.json({ success: true });
-
-        } else if (action === 'CHECK_OUT') {
-            const records = await getAttendanceRecords();
-            const todayRecord = records.find(r => 
-                String(r.userId) === String(userId) && 
-                normalizeDate(r.date) === dateStr && 
-                r.status === 'IN'
-            );
-
-            if (!todayRecord) return NextResponse.json({ error: "Active check-in not found" }, { status: 404 });
-
-            await updateAttendanceRecord(todayRecord.id, timeStr, "COMPLETED", photoUrl);
-            return NextResponse.json({ success: true });
-        }
-
-        return NextResponse.json({ error: "Invalid action" }, { status: 400 });
-    } catch (error) {
-        console.error(error);
-        return NextResponse.json({ error: "Failed to update attendance" }, { status: 500 });
+      photoUrl = path; // Store path; UI will resolve via S3 signed URL
+    } else if (photo) {
+      // Old Google Drive URL — keep as-is
+      photoUrl = photo;
     }
+
+    // Get today's IST date
+    const now = new Date();
+    const istOffset = 5.5 * 60 * 60 * 1000;
+    const istNow = new Date(now.getTime() + istOffset);
+    const dateStr = istNow.toISOString().split('T')[0];
+    const timeStr = now.toISOString();
+
+    if (action === 'CHECK_IN') {
+      // Optional: validate location
+      const allUsers = await getUsers();
+      const user = allUsers.find(u => String(u.id) === String(userId));
+      if (user?.late_long) {
+        const registeredPoints = parseLatLong(user.late_long);
+        if (registeredPoints && latitude && longitude) {
+          getShortestDistance(latitude, longitude, registeredPoints);
+        }
+      }
+
+      const id = `ATT-${Date.now()}`;
+      const { errors } = await client.models.AttendanceRecord.create({
+        id,
+        userId: String(userId),
+        userName,
+        date: dateStr,
+        inTime: timeStr,
+        outTime: "",
+        status: "IN",
+        inPhoto: photoUrl,
+        outPhoto: "",
+        created_at: timeStr,
+        updated_at: timeStr
+      });
+
+      if (errors) {
+        console.error("Amplify Create Error:", errors);
+        return NextResponse.json({ error: "Failed to check in" }, { status: 500 });
+      }
+
+      return NextResponse.json({ success: true });
+
+    } else if (action === 'CHECK_OUT') {
+      const records = await fetchAllAttendance();
+      const todayRecord = records.find(r =>
+        String(r.userId) === String(userId) &&
+        (r.date || '').split('T')[0] === dateStr &&
+        r.status === 'IN'
+      );
+
+      if (!todayRecord) return NextResponse.json({ error: "Active check-in not found" }, { status: 404 });
+
+      const { errors } = await client.models.AttendanceRecord.update({
+        id: todayRecord.id,
+        outTime: timeStr,
+        status: "COMPLETED",
+        outPhoto: photoUrl,
+        updated_at: timeStr
+      });
+
+      if (errors) {
+        console.error("Amplify Update Error:", errors);
+        return NextResponse.json({ error: "Failed to check out" }, { status: 500 });
+      }
+
+      return NextResponse.json({ success: true });
+    }
+
+    return NextResponse.json({ error: "Invalid action" }, { status: 400 });
+  } catch (error: any) {
+    console.error(error);
+    return NextResponse.json({ error: "Failed to update attendance" }, { status: 500 });
+  }
 }

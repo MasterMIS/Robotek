@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { uploadFileToDrive } from "@/lib/google-drive";
-
-const O2D_FOLDER_ID = "19ZqWS5zYD2P4SIpcGNQR8gXcDiagH2rq";
+import { uploadData } from 'aws-amplify/storage';
+import { Schema } from '@/../amplify/data/resource';
 
 export async function POST(req: NextRequest) {
   try {
@@ -14,14 +13,19 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "No file uploaded" }, { status: 400 });
     }
 
-    // Explicitly upload to the O2D folder
-    const fileId = await uploadFileToDrive(file, O2D_FOLDER_ID);
+    const path = `o2d/steps/${orderNo || 'global'}/${step || 'other'}/${Date.now()}-${file.name}`;
     
-    if (!fileId) {
-      throw new Error("Failed to upload file to Google Drive");
-    }
+    const { result } = await uploadData({
+      path,
+      data: await file.arrayBuffer(),
+      options: {
+        contentType: file.type,
+      }
+    });
+    
+    const uploadResult = await result;
 
-    return NextResponse.json({ fileId });
+    return NextResponse.json({ fileId: uploadResult.path });
   } catch (error: any) {
     console.error("Upload Step Error:", error);
     return NextResponse.json({ error: error.message || "Failed to upload" }, { status: 500 });

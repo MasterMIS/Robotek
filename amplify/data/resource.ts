@@ -126,6 +126,237 @@ const schema = a.schema({
     remark: a.string(),
     created_at: a.string(),
   }).authorization(allow => [allow.publicApiKey()]),
+
+  // ── HELP TICKET TABLES ───────────────────────────────────────────────────
+
+  HelpTicket: a.model({
+    id: a.string().required(), // Using numerical/string IDs to match legacy
+    title: a.string(),
+    description: a.string(),
+    category: a.string(),
+    priority: a.string(),
+    raised_by: a.string(),
+    solver_person: a.string(),
+    planned_resolution: a.string(),
+    status: a.string(),
+    attachment_url: a.string(),
+    voice_note: a.string(),
+    created_at: a.string(),
+    updated_at: a.string(),
+  }).authorization(allow => [allow.publicApiKey()]),
+
+  HelpTicketHistory: a.model({
+    ticket_id: a.string().required(),
+    action_type: a.string(), // 'STATUS_CHANGE' | 'COMMENT'
+    actor_username: a.string(),
+    old_status: a.string(),
+    new_status: a.string(),
+    comment_text: a.string(),
+    attachment_url: a.string(),
+    voice_note: a.string(),
+    created_at: a.string(),
+  }).authorization(allow => [allow.publicApiKey()]),
+
+  // ── O2D MODULE ────────────────────────────────────────────────────────────
+  O2DRecord: a.model({
+    id: a.string().required(),
+    order_no: a.string(),
+    party_name: a.string(),
+    item_name: a.string(),
+    item_qty: a.string(),
+    est_amount: a.string(),
+    item_specification: a.string(),
+    remark: a.string(),
+    order_screenshot: a.string(),
+    filled_by: a.string(),
+    created_at: a.string(),
+    updated_at: a.string(),
+    hold: a.string(),
+    cancelled: a.string(),
+    // Steps 1-11
+    planned_1: a.string(), acual_1: a.string(), status_1: a.string(),
+    planned_2: a.string(), acual_2: a.string(), status_2: a.string(),
+    planned_3: a.string(), acual_3: a.string(), status_3: a.string(),
+    planned_4: a.string(), acual_4: a.string(), status_4: a.string(),
+    planned_5: a.string(), acual_5: a.string(), status_5: a.string(),
+    planned_6: a.string(), acual_6: a.string(), status_6: a.string(),
+    planned_7: a.string(), acual_7: a.string(), status_7: a.string(),
+    planned_8: a.string(), acual_8: a.string(), status_8: a.string(),
+    planned_9: a.string(), acual_9: a.string(), status_9: a.string(),
+    planned_10: a.string(), acual_10: a.string(), status_10: a.string(),
+    planned_11: a.string(), acual_11: a.string(), status_11: a.string(),
+    // Step specific extras
+    final_amount_1: a.string(), so_number_1: a.string(), merge_order_with_1: a.string(), upload_so_1: a.string(),
+    num_of_parcel_5: a.string(), upload_pi_5: a.string(), actual_date_of_order_packed_5: a.string(),
+    voucher_num_7: a.string(),
+    order_details_checked_8: a.string(), voucher_num_51_8: a.string(), t_amt_8: a.string(),
+    attach_bilty_9: a.string(), num_of_parcel_9: a.string(),
+  }).authorization(allow => [allow.publicApiKey()]),
+
+  // ── I2R MODULE ────────────────────────────────────────────────────────────
+  I2RRecord: a.model({
+    id: a.string().required(),
+    indend_num: a.string(),
+    item_name: a.string(),
+    quantity: a.string(),
+    category: a.string(),
+    filled_by: a.string(),
+    created_at: a.string(),
+    updated_at: a.string(),
+    cancelled: a.string(),
+    // Steps 1-9
+    planned_1: a.string(), acual_1: a.string(), status_1: a.string(),
+    planned_2: a.string(), acual_2: a.string(), status_2: a.string(),
+    planned_3: a.string(), acual_3: a.string(), status_3: a.string(),
+    planned_4: a.string(), acual_4: a.string(), status_4: a.string(),
+    planned_5: a.string(), acual_5: a.string(), status_5: a.string(),
+    planned_6: a.string(), acual_6: a.string(), status_6: a.string(),
+    planned_7: a.string(), acual_7: a.string(), status_7: a.string(),
+    planned_8: a.string(), acual_8: a.string(), status_8: a.string(),
+    planned_9: a.string(), acual_9: a.string(), status_9: a.string(),
+  }).authorization(allow => [allow.publicApiKey()]),
+
+  // ── IMS & PARTY ───────────────────────────────────────────────────────────
+  IMSItem: a.model({
+    id: a.string().required(),
+    item_name: a.string(),
+    est_amount_item: a.string(),
+    gst: a.string(),
+    final_amount: a.string(),
+  }).authorization(allow => [allow.publicApiKey()]),
+
+  Party: a.model({
+    id: a.string().required(),
+    customerType: a.string(),
+    partyName: a.string(),
+    dateOfBirth: a.string(),
+    partyType: a.string(),
+    salesFunnelUniqueNum: a.string(),
+    salePersonName: a.string(),
+    firstOrderItems: a.string(),
+    detailsAndInstructions: a.string(),
+    remarks: a.string(),
+    filledBy: a.string(),
+    timestamp: a.string(),
+  }).authorization(allow => [allow.publicApiKey()]),
+
+  // ── ATTENDANCE & LEAVE ────────────────────────────────────────────────────
+  AttendanceRecord: a.model({
+    id: a.string().required(),
+    userId: a.string(),
+    userName: a.string(),
+    date: a.string(), // YYYY-MM-DD
+    inTime: a.string(),
+    outTime: a.string(),
+    status: a.string(),
+    inPhoto: a.string(),
+    outPhoto: a.string(),
+  }).authorization(allow => [allow.publicApiKey()]),
+
+  LeaveRequest: a.model({
+    id: a.string().required(),
+    userId: a.string(),
+    userName: a.string(),
+    startDate: a.string(),
+    endDate: a.string(),
+    reason: a.string(),
+    status: a.string(),
+    responsibility1: a.string(),
+    responsibility2: a.string(),
+    responsibility3: a.string(),
+    acceptedBy: a.string(),
+    updatedAt: a.string(),
+  }).authorization(allow => [allow.publicApiKey()]),
+
+  LeaveRemark: a.model({
+    id: a.string().required(),
+    leaveId: a.string(),
+    userName: a.string(),
+    comment: a.string(),
+    createdAt: a.string(),
+  }).authorization(allow => [allow.publicApiKey()]),
+
+  // ── CHAT MODULE ───────────────────────────────────────────────────────────
+  ChatMessage: a.model({
+    id: a.string().required(),
+    sender_id: a.string(),
+    receiver_id: a.string(),
+    text: a.string(),
+    type: a.string(), // "text" | "image" | "file" | "audio"
+    media_url: a.string(),
+    read_by: a.string(), // Comma separated usernames
+    created_at: a.string(),
+  }).authorization(allow => [allow.publicApiKey()]),
+
+  ChatGroup: a.model({
+    id: a.string().required(),
+    name: a.string(),
+    participants: a.string(), // Comma separated usernames
+    admins: a.string(), // Comma separated usernames
+    created_by: a.string(),
+    created_at: a.string(),
+  }).authorization(allow => [allow.publicApiKey()]),
+
+  // ── SCOT MODULE ───────────────────────────────────────────────────────────
+  ScotRecord: a.model({
+    id: a.string().required(), // UniqueId
+    employeeName: a.string(),
+    employeeNumber: a.string(),
+    toName: a.string(),
+    countryCode: a.string(),
+    toNumber: a.string(),
+    callType: a.string(),
+    duration: a.string(),
+    callDate: a.string(),
+    callTime: a.string(),
+    notes: a.string(),
+    audioUrl: a.string(),
+  }).authorization(allow => [allow.publicApiKey()]),
+
+  CallRecord: a.model({
+    id: a.string().required(), // partyName
+    concernPerson: a.string(),
+    mobileNum: a.string(),
+    firmName: a.string(),
+    district: a.string(),
+    state: a.string(),
+    region: a.string(),
+    creditDaysNew: a.string(),
+    limit: a.string(),
+    collectionRating: a.string(),
+    customerType: a.string(),
+    salesPerson: a.string(),
+    salesCoordinator: a.string(),
+    averageOrderSize: a.string(),
+    targetAvgOrderSize: a.string(),
+    usuallyNoOfOrderMonthly: a.string(),
+    frequencyOfCallingAfterOrderPlaced: a.string(),
+    specialRemarkJSON: a.string(),
+  }).authorization(allow => [allow.publicApiKey()]),
+
+  FollowUpRecord: a.model({
+    id: a.string().required(),
+    partyName: a.string(),
+    status: a.string(),
+    nextFollowUpDate: a.string(),
+    remarks: a.string(),
+    createdBy: a.string(),
+    createdAt: a.string(),
+    lastFollowUpDate: a.string(),
+  }).authorization(allow => [allow.publicApiKey()]),
+
+  // ── SCHEDULER MODULE ──────────────────────────────────────────────────────
+  Meeting: a.model({
+    id: a.string().required(),
+    date: a.string(),
+    time: a.string(),
+    location: a.string(),
+    agenda: a.string(),
+    decisions: a.string(),
+    actionItems: a.string(),
+    notes: a.string(),
+    timestamp: a.string(),
+  }).authorization(allow => [allow.publicApiKey()]),
 });
 
 export type Schema = ClientSchema<typeof schema>;

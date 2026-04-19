@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { updateOrder, deleteOrderByNo } from "@/lib/o2d-sheets";
-import { O2D } from "@/types/o2d";
+import { generateClient } from 'aws-amplify/api';
+import { uploadData } from 'aws-amplify/storage';
+import { Schema } from '@/../amplify/data/resource';
 
-const O2D_FOLDER_ID = "19ZqWS5zYD2P4SIpcGNQR8gXcDiagH2rq";
-import { uploadFileToDrive } from "@/lib/google-drive";
+const client = generateClient<Schema>({ authMode: 'apiKey' });
 
 export async function PUT(
   req: NextRequest,
@@ -13,40 +13,74 @@ export async function PUT(
     const { orderNo } = await params;
     const contentType = req.headers.get("content-type") || "";
     
-    let updatedItems: O2D[] = [];
-    let screenshotId = "";
+    let updatedItems: any[] = [];
+    let screenshotUrl = "";
 
     if (contentType.includes("multipart/form-data")) {
       const formData = await req.formData();
-      updatedItems = JSON.parse(formData.get("o2dData") as string) as O2D[];
+      updatedItems = JSON.parse(formData.get("o2dData") as string) as any[];
       const screenshotFile = formData.get("order_screenshot") as File;
 
       if (screenshotFile && screenshotFile.size > 0) {
-        screenshotId = await uploadFileToDrive(screenshotFile, O2D_FOLDER_ID) || "";
+        const path = `o2d/${Date.now()}-${screenshotFile.name}`;
+        await uploadData({
+          path,
+          data: await screenshotFile.arrayBuffer(),
+          options: { contentType: screenshotFile.type }
+        }).result;
+        screenshotUrl = path;
       } else {
         // Keep existing screenshot if not provided
-        screenshotId = updatedItems[0]?.order_screenshot || "";
+        screenshotUrl = updatedItems[0]?.order_screenshot || "";
       }
     } else {
       updatedItems = await req.json();
-      screenshotId = updatedItems[0]?.order_screenshot || "";
+      screenshotUrl = updatedItems[0]?.order_screenshot || "";
     }
 
-    // Apply screenshot ID to all items in the order
-    const finalItems = updatedItems.map(item => ({
-      ...item,
-      order_screenshot: screenshotId
+    // 1. Get existing records for this order to handle deletions/updates
+    let existingRecords: any[] = [];
+    let nextToken: string | null | undefined = undefined;
+    do {
+      const response: any = await client.models.O2DRecord.list({
+        filter: { order_no: { eq: orderNo } },
+        nextToken
+      });
+      existingRecords = [...existingRecords, ...response.data];
+      nextToken = response.nextToken;
+    } while (nextToken);
+
+    const existingIds = new Set(existingRecords.map(r => r.id));
+    const incomingIds = new Set(updatedItems.map(r => r.id).filter(id => !!id));
+
+    // 2. Perform updates and creations
+    await Promise.all(updatedItems.map(item => {
+      const itemData = {
+        ...item,
+        order_screenshot: screenshotUrl,
+        updated_at: new Date().toISOString()
+      };
+
+      if (item.id && existingIds.has(item.id)) {
+        const { id, createdAt, updatedAt, ...updateRest } = itemData;
+        return client.models.O2DRecord.update({ id, ...updateRest });
+      } else {
+        return client.models.O2DRecord.create({
+            ...itemData,
+            id: item.id || `O2D-${Date.now()}-${Math.random()}`,
+            created_at: new Date().toISOString()
+        });
+      }
     }));
 
-    const success = await updateOrder(orderNo, finalItems);
-    if (success) {
-      return NextResponse.json({ message: "Order updated successfully" });
-    } else {
-      return NextResponse.json({ error: "Failed to update order" }, { status: 500 });
-    }
-  } catch (error) {
+    // 3. Perform deletions for items no longer in the list
+    const idsToDelete = [...existingIds].filter(id => !incomingIds.has(id));
+    await Promise.all(idsToDelete.map(id => client.models.O2DRecord.delete({ id })));
+
+    return NextResponse.json({ message: "Order updated successfully" });
+  } catch (error: any) {
     console.error("API Error:", error);
-    return NextResponse.json({ error: "Invalid request" }, { status: 400 });
+    return NextResponse.json({ error: error.message }, { status: 400 });
   }
 }
 
@@ -56,14 +90,25 @@ export async function DELETE(
 ) {
   try {
     const { orderNo } = await params;
-    const success = await deleteOrderByNo(orderNo);
-    if (success) {
-      return NextResponse.json({ message: "Order deleted successfully" });
-    } else {
-      return NextResponse.json({ error: "Failed to delete order" }, { status: 500 });
-    }
-  } catch (error) {
+    
+    // 1. Find all records with this orderNo
+    let allMatching: any[] = [];
+    let nextToken: string | null | undefined = undefined;
+    do {
+      const response: any = await client.models.O2DRecord.list({
+        filter: { order_no: { eq: orderNo } },
+        nextToken
+      });
+      allMatching = [...allMatching, ...response.data];
+      nextToken = response.nextToken;
+    } while (nextToken);
+
+    // 2. Delete all matching records
+    await Promise.all(allMatching.map(item => client.models.O2DRecord.delete({ id: item.id })));
+
+    return NextResponse.json({ message: "Order deleted successfully" });
+  } catch (error: any) {
     console.error("API Error:", error);
-    return NextResponse.json({ error: "Invalid request" }, { status: 400 });
+    return NextResponse.json({ error: error.message }, { status: 400 });
   }
 }
