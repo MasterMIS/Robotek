@@ -10,6 +10,19 @@ const client = generateClient<Schema>({ authMode: 'apiKey' });
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
+// Helper: Resolve hybrid image URLs (Drive or S3)
+async function resolveUrl(path: string | null | undefined): Promise<string> {
+  if (!path) return "";
+  if (path.startsWith("http") || path.startsWith("data:")) return path;
+  try {
+    const url = await getUrl({ path, options: { validateObjectExistence: false, expiresIn: 3600 } });
+    return url.url.toString();
+  } catch (err) {
+    console.error(`Error resolving S3 path: ${path}`, err);
+    return path;
+  }
+}
+
 async function fetchAllAttendance() {
   let allRecords: any[] = [];
   let nextToken: string | null | undefined = undefined;
@@ -18,7 +31,14 @@ async function fetchAllAttendance() {
     allRecords = [...allRecords, ...response.data];
     nextToken = response.nextToken;
   } while (nextToken);
-  return allRecords;
+
+  // Resolve media URLs
+  return await Promise.all(allRecords.map(async (row) => {
+    const resolvedRow = { ...row };
+    if (row.inPhoto) resolvedRow.inPhoto = await resolveUrl(row.inPhoto);
+    if (row.outPhoto) resolvedRow.outPhoto = await resolveUrl(row.outPhoto);
+    return resolvedRow;
+  }));
 }
 
 export async function GET(req: NextRequest) {

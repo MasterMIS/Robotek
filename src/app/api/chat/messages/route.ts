@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { generateClient } from 'aws-amplify/api';
+import { getUrl } from 'aws-amplify/storage';
 import { Schema } from '@/../amplify/data/resource';
 import { auth } from "@/auth";
 import { v4 as uuidv4 } from "uuid";
@@ -8,6 +9,19 @@ const client = generateClient<Schema>({ authMode: 'apiKey' });
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
+
+// Helper: Resolve hybrid image URLs (Drive or S3)
+async function resolveUrl(path: string | null | undefined): Promise<string> {
+  if (!path) return "";
+  if (path.startsWith("http") || path.startsWith("data:")) return path;
+  try {
+    const url = await getUrl({ path, options: { validateObjectExistence: false, expiresIn: 3600 } });
+    return url.url.toString();
+  } catch (err) {
+    console.error(`Error resolving S3 path: ${path}`, err);
+    return path;
+  }
+}
 
 async function fetchConversationMessages(userA: string, userB: string) {
   let allRecords: any[] = [];
@@ -19,10 +33,17 @@ async function fetchConversationMessages(userA: string, userB: string) {
   } while (nextToken);
 
   // Filter for messages between userA and userB (in either direction)
-  return allRecords.filter(m =>
+  const filtered = allRecords.filter(m =>
     (m.sender_id === userA && m.receiver_id === userB) ||
     (m.sender_id === userB && m.receiver_id === userA)
   );
+
+  // Resolve media URLs
+  return await Promise.all(filtered.map(async (row) => {
+    const resolvedRow = { ...row };
+    if (row.media_url) resolvedRow.media_url = await resolveUrl(row.media_url);
+    return resolvedRow;
+  }));
 }
 
 export async function GET(req: Request) {

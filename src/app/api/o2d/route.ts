@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { generateClient } from 'aws-amplify/api';
-import { uploadData } from 'aws-amplify/storage';
+import { getUrl } from 'aws-amplify/storage';
 import { Schema } from '@/../amplify/data/resource';
 import { auth } from "@/auth";
 
@@ -8,6 +8,19 @@ const client = generateClient<Schema>({ authMode: 'apiKey' });
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
+
+// Helper: Resolve hybrid image URLs (Drive or S3)
+async function resolveUrl(path: string | null | undefined): Promise<string> {
+  if (!path) return "";
+  if (path.startsWith("http") || path.startsWith("data:")) return path; // Already a URL or base64
+  try {
+    const url = await getUrl({ path, options: { validateObjectExistence: false, expiresIn: 3600 } });
+    return url.url.toString();
+  } catch (err) {
+    console.error(`Error resolving S3 path: ${path}`, err);
+    return path;
+  }
+}
 
 // Helper: Fetch ALL records from DynamoDB using nextToken iteration
 async function fetchAllO2DRecords() {
@@ -23,7 +36,20 @@ async function fetchAllO2DRecords() {
     nextToken = response.nextToken;
   } while (nextToken);
 
-  return allRecords;
+  // Resolve media URLs for all records
+  return await Promise.all(allRecords.map(async (row) => {
+    const resolvedRow = { ...row };
+    if (row.order_screenshot) resolvedRow.order_screenshot = await resolveUrl(row.order_screenshot);
+    
+    // Resolve any step attachments if they are S3 paths
+    for (let i = 1; i <= 11; i++) {
+        const attachKey = i === 1 ? 'upload_so_1' : i === 5 ? 'upload_pi_5' : i === 9 ? 'attach_bilty_9' : null;
+        if (attachKey && (row as any)[attachKey]) {
+            (resolvedRow as any)[attachKey] = await resolveUrl((row as any)[attachKey]);
+        }
+    }
+    return resolvedRow;
+  }));
 }
 
 // Helper: Get pending step index for an order (same logic as sheet but for AWS data)
