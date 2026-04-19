@@ -14,11 +14,22 @@ const client = generateClient<Schema>();
 
 export async function GET() {
   try {
-    const { data: delegations, errors } = await client.models.Delegation.list();
-    if (errors) throw new Error(errors[0].message);
-    
-    // Sort logic from existing app (usually happens client-side or implicit in getDelegations)
-    return NextResponse.json(delegations, {
+    let allDelegations: any[] = [];
+    let nextToken: string | null | undefined = null;
+
+    do {
+      const result: any = await client.models.Delegation.list({
+        nextToken: nextToken,
+        limit: 1000 // Increase batch size for efficiency
+      });
+      
+      if (result.errors) throw new Error(result.errors[0].message);
+      
+      allDelegations = [...allDelegations, ...result.data];
+      nextToken = result.nextToken;
+    } while (nextToken);
+
+    return NextResponse.json(allDelegations, {
       headers: { 'Cache-Control': 'private, max-age=60, stale-while-revalidate=300' },
     });
   } catch (error: any) {

@@ -11,9 +11,22 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    const { data, errors } = await client.models.EaMdWeeklyUpdate.list();
-    if (errors) throw new Error(errors[0].message);
-    return NextResponse.json({ items: data });
+    let allItems: any[] = [];
+    let nextToken: string | null | undefined = null;
+
+    do {
+      const result: any = await client.models.EaMdWeeklyUpdate.list({
+        nextToken: nextToken,
+        limit: 1000
+      });
+      
+      if (result.errors) throw new Error(result.errors[0].message);
+      
+      allItems = [...allItems, ...result.data];
+      nextToken = result.nextToken;
+    } while (nextToken);
+
+    return NextResponse.json({ items: allItems });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }

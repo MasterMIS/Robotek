@@ -10,12 +10,24 @@ const client = generateClient<Schema>();
 
 export async function GET() {
   try {
-    const { data: dropdowns, errors } = await client.models.Dropdown.list();
-    if (errors) throw new Error(errors[0].message);
+    let allDropdowns: any[] = [];
+    let nextToken: string | null | undefined = null;
+
+    do {
+      const result: any = await client.models.Dropdown.list({
+        nextToken: nextToken,
+        limit: 1000
+      });
+      
+      if (result.errors) throw new Error(result.errors[0].message);
+      
+      allDropdowns = [...allDropdowns, ...result.data];
+      nextToken = result.nextToken;
+    } while (nextToken);
 
     const data = {
-      departments: dropdowns.filter(d => d.type === 'department').map(d => d.value),
-      designations: dropdowns.filter(d => d.type === 'designation').map(d => d.value),
+      departments: allDropdowns.filter(d => d.type === 'department').map(d => d.value),
+      designations: allDropdowns.filter(d => d.type === 'designation').map(d => d.value),
     };
 
     return NextResponse.json(data);

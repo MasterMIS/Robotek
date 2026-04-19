@@ -17,11 +17,22 @@ function sanitizeUser(userData: any) {
 
 export async function GET() {
   try {
-    const { data: users, errors } = await client.models.User.list();
-    if (errors) throw new Error(errors[0].message);
-    
-    // The UI expects permissions to be on the user object, which they are in our AWS model
-    return NextResponse.json(users);
+    let allUsers: any[] = [];
+    let nextToken: string | null | undefined = null;
+
+    do {
+      const result: any = await client.models.User.list({
+        nextToken: nextToken,
+        limit: 1000
+      });
+      
+      if (result.errors) throw new Error(result.errors[0].message);
+      
+      allUsers = [...allUsers, ...result.data];
+      nextToken = result.nextToken;
+    } while (nextToken);
+
+    return NextResponse.json(allUsers);
   } catch (error: any) {
     console.error("AWS GET Users Error:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
