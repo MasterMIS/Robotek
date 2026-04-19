@@ -274,8 +274,123 @@ export async function POST(req: NextRequest) {
         break;
       }
 
+      case "user": {
+        console.log("Fetching User data from Google Sheets...");
+        const { getUsers, getDropdownData } = await import("@/lib/google-sheets");
+        const [fullUsers, fullDropdown] = await Promise.all([getUsers(), getDropdownData()]);
+
+        const users = fullUsers.slice(offset, offset + limit);
+        console.log(`Migrating ${users.length} users (offset: ${offset})...`);
+        const userModel = getModel("User");
+        
+        const dropdownModel = getModel("Dropdown");
+        const dropdownPayload = [
+            ...(fullDropdown.departments || []).map(d => ({ type: "department", value: d })),
+            ...(fullDropdown.designations || []).map(d => ({ type: "designation", value: d }))
+        ].slice(offset, offset + limit);
+
+        const userCount = await batchInsert(users, (item) => userModel.create({
+            id: item.id || `USR-${Date.now()}-${Math.random()}`,
+            username: item.username || "Unknown",
+            email: item.email || "unknown@example.com",
+            password: item.password || "",
+            phone: item.phone || "",
+            role_name: item.role_name || "",
+            late_long: item.late_long || "",
+            image_url: item.image_url || "",
+            dob: item.dob || "",
+            office: item.office || "",
+            designation: item.designation || "",
+            department: item.department || "",
+            last_active: item.last_active || "",
+            permissions: item.permissions || []
+        }));
+
+        const dropCount = await batchInsert(dropdownPayload, (item) => dropdownModel.create({
+            type: item.type,
+            value: item.value
+        }));
+
+        count = Math.max(userCount, dropCount);
+        break;
+      }
+
+      case "eamd": {
+        console.log("Fetching EA-MD data from Google Sheets...");
+        const { getWeeklyUpdateItems } = await import("@/lib/ea-md-sheets");
+        const { getUrgentLogs } = await import("@/lib/urgent-log-sheets");
+        const { getActionLogItems } = await import("@/lib/action-log-sheets");
+        const { getSyncMeetings } = await import("@/lib/sync-meeting-sheets");
+        const { getTeamQueryItems } = await import("@/lib/team-queries-sheets");
+
+        const [fullWeekly, fullUrgent, fullAction, fullSync, fullTeam] = await Promise.all([
+            getWeeklyUpdateItems(), getUrgentLogs(), getActionLogItems(), getSyncMeetings(), getTeamQueryItems()
+        ]).catch(() => [[], [], [], [], []]); // Safe fallback if any sheet is inaccessible
+
+        const weekly = (fullWeekly || []).slice(offset, offset + limit);
+        const urgent = (fullUrgent || []).slice(offset, offset + limit);
+        const action = (fullAction || []).slice(offset, offset + limit);
+        const sync = (fullSync || []).slice(offset, offset + limit);
+        const team = (fullTeam || []).slice(offset, offset + limit);
+
+        const wModel = getModel("EaMdWeeklyUpdate");
+        const wCount = await batchInsert(weekly, (i) => wModel.create({
+            weekOf: i.weekOf || "", preparedBy: i.preparedBy || "", periodCovered: i.periodCovered || "", category: i.category || "", description: i.description || "", date: i.date || "", teamMember: i.teamMember || "", timestamp: i.timestamp || timestamp
+        }));
+
+        const uModel = getModel("EaMdUrgentLog");
+        const uCount = await batchInsert(urgent, (i) => uModel.create({
+            issueSummary: i.issueSummary || "", urgencyLevel: i.urgencyLevel || "", channelUsed: i.channelUsed || "", requiredFromMD: i.requiredFromMD || "", deadline: i.deadline || "", status: i.status || ""
+        }));
+
+        const aModel = getModel("EaMdActionLog");
+        const aCount = await batchInsert(action, (i) => aModel.create({
+            task: i.task || "", owner: i.owner || "", priority: i.priority || "", status: i.status || "", due: i.due || "", notes: i.notes || "", timestamp: i.timestamp || timestamp
+        }));
+
+        const sModel = getModel("EaMdSyncMeeting");
+        const sCount = await batchInsert(sync, (i) => sModel.create({
+            date: i.date || "", time: i.time || "", location: i.location || "", agenda: JSON.stringify(i.agenda || []), decisions: i.decisions || "", actionItems: JSON.stringify(i.actionItems || []), notes: i.notes || "", timestamp: i.timestamp || timestamp
+        }));
+
+        const tModel = getModel("EaMdTeamQuery");
+        const tCount = await batchInsert(team, (i) => tModel.create({
+            teamMember: i.teamMember || "", query: i.query || "", category: i.category || "", eaResolve: i.eaResolve?.toString() || "", status: i.status || "", eaNotes: i.eaNotes || "", timestamp: i.timestamp || timestamp
+        }));
+
+        count = Math.max(wCount, uCount, aCount, sCount, tCount);
+        break;
+      }
+
+      case "delegation": {
+        console.log("Fetching Delegation data from Google Sheets...");
+        const { getDelegations } = await import("@/lib/delegation-sheets");
+        const fullDelegations = await getDelegations();
+        const dels = (fullDelegations || []).slice(offset, offset + limit);
+        
+        console.log(`Migrating ${dels.length} delegations (offset: ${offset})...`);
+        const delModel = getModel("Delegation");
+
+        count = await batchInsert(dels, (item) => delModel.create({
+            id: item.id || `DEL-${Date.now()}-${Math.random()}`,
+            title: item.title || "",
+            description: item.description || "",
+            assigned_by: item.assigned_by || "",
+            assigned_to: item.assigned_to || "",
+            department: String(item.department || ""),
+            priority: item.priority || "",
+            due_date: item.due_date || "",
+            status: item.status || "",
+            voice_note_url: item.voice_note_url || "",
+            reference_docs: item.reference_docs || "",
+            evidence_required: String(item.evidence_required || ""),
+            created_at: item.created_at || timestamp,
+            updated_at: item.updated_at || timestamp
+        }));
+        break;
+      }
+
       default:
-        return NextResponse.json({ error: `Unknown module: ${module}` }, { status: 400 });
     }
 
     return NextResponse.json({ message: "Migration successful", count, hasMore: count === limit });

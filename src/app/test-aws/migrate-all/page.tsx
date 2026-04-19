@@ -12,6 +12,9 @@ export default function MigrateAllPage() {
   };
 
   const modules = [
+    { name: "User", endpoint: "user" },
+    { name: "EA-MD Hub", endpoint: "eamd" },
+    { name: "Delegation", endpoint: "delegation" },
     { name: "O2D", endpoint: "o2d" },
     { name: "I2R", endpoint: "i2r" },
     { name: "IMS", endpoint: "ims" },
@@ -28,17 +31,30 @@ export default function MigrateAllPage() {
       setIsMigrating(true);
       log(`Starting migration for ${moduleName}...`);
       
-      const response = await fetch(`/api/migrate-data?module=${endpoint}`, {
-        method: "POST",
-      });
-      
-      const result = await response.json();
-      
-      if (response.ok) {
-        log(`SUCCESS: Migrated ${result.count || ''} records for ${moduleName}`);
-      } else {
-        log(`ERROR: Failed to migrate ${moduleName} - ${result.error}`);
+      let offset = 0;
+      const limit = 500;
+      let hasMore = true;
+      let totalMigrated = 0;
+
+      while (hasMore) {
+        log(`Syncing chunk... (offset: ${offset})`);
+        const response = await fetch(`/api/migrate-data?module=${endpoint}&offset=${offset}&limit=${limit}`, {
+          method: "POST",
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok) {
+          totalMigrated += result.count || 0;
+          hasMore = result.hasMore;
+          offset += limit;
+          if (hasMore) log(`Chunk complete. Migrated ${result.count}. Fetching next...`);
+        } else {
+          log(`ERROR: Failed to migrate ${moduleName} - ${result.error}`);
+          break;
+        }
       }
+      log(`SUCCESS: Migrated total ${totalMigrated} records targetting ${moduleName}`);
     } catch (err: any) {
       log(`SYSTEM ERROR: ${err.message}`);
     } finally {
@@ -53,15 +69,30 @@ export default function MigrateAllPage() {
     for (const mod of modules) {
       try {
         log(`Starting batch migration for ${mod.name}...`);
-        const response = await fetch(`/api/migrate-data?module=${mod.endpoint}`, {
-          method: "POST",
-        });
-        const result = await response.json();
         
-        if (response.ok) {
-          log(`SUCCESS: Migrated ${mod.name}`);
-        } else {
-          log(`ERROR: Failed to migrate ${mod.name} - ${result.error}`);
+        let offset = 0;
+        const limit = 500;
+        let hasMore = true;
+        let totalMigrated = 0;
+
+        while (hasMore) {
+          log(`Syncing chunk for ${mod.name}... (offset: ${offset})`);
+          const response = await fetch(`/api/migrate-data?module=${mod.endpoint}&offset=${offset}&limit=${limit}`, {
+            method: "POST",
+          });
+          const result = await response.json();
+          
+          if (response.ok) {
+            totalMigrated += result.count || 0;
+            hasMore = result.hasMore;
+            offset += limit;
+          } else {
+            log(`ERROR: Failed to migrate ${mod.name} - ${result.error}`);
+            break;
+          }
+        }
+        if (!hasMore) {
+           log(`SUCCESS: Migrated ${mod.name} with ${totalMigrated} records.`);
         }
       } catch (err: any) {
         log(`SYSTEM ERROR on ${mod.name}: ${err.message}`);
