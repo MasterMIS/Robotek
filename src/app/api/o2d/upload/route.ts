@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { uploadData } from 'aws-amplify/storage';
 import { Schema } from '@/../amplify/data/resource';
+import { Amplify } from 'aws-amplify';
+import outputs from '@/../amplify_outputs.json';
+
+Amplify.configure(outputs);
 
 export async function POST(req: NextRequest) {
   try {

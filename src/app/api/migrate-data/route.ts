@@ -11,6 +11,10 @@ import { getAttendanceRecords } from "@/lib/sheets/attendance-sheets";
 import { getMessages } from "@/lib/chat-sheets";
 import { getCallData, getFollowUpData } from "@/lib/scot-sheets";
 import { getMeetings } from "@/lib/meeting-sheets";
+import { Amplify } from 'aws-amplify';
+import outputs from '@/../amplify_outputs.json';
+
+Amplify.configure(outputs);
 
 const client = generateClient<Schema>({ authMode: 'apiKey' });
 

@@ -3,6 +3,10 @@ import { generateClient } from 'aws-amplify/api';
 import { getUrl } from 'aws-amplify/storage';
 import { Schema } from '@/../amplify/data/resource';
 import { auth } from "@/auth";
+import { Amplify } from 'aws-amplify';
+import outputs from '@/../amplify_outputs.json';
+
+Amplify.configure(outputs);
 
 const client = generateClient<Schema>({ authMode: 'apiKey' });
 

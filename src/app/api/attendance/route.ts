@@ -4,6 +4,10 @@ import { uploadData, getUrl } from 'aws-amplify/storage';
 import { Schema } from '@/../amplify/data/resource';
 import { getUsers } from "@/lib/google-sheets";
 import { parseLatLong, getShortestDistance } from "@/lib/locationUtils";
+import { Amplify } from 'aws-amplify';
+import outputs from '@/../amplify_outputs.json';
+
+Amplify.configure(outputs);
 
 const client = generateClient<Schema>({ authMode: 'apiKey' });
 

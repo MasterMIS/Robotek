@@ -3,6 +3,10 @@ import { generateClient } from 'aws-amplify/api';
 import { Schema } from '@/../amplify/data/resource';
 import { v4 as uuidv4 } from "uuid";
 import { auth } from "@/auth";
+import { Amplify } from 'aws-amplify';
+import outputs from '@/../amplify_outputs.json';
+
+Amplify.configure(outputs);
 
 const client = generateClient<Schema>({ authMode: 'apiKey' });
 
