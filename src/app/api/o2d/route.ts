@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { generateClient } from 'aws-amplify/api';
+import { generateClient } from 'aws-amplify/data';
 import { getUrl } from 'aws-amplify/storage';
 import { Schema } from '@/../amplify/data/resource';
 import { auth } from "@/auth";

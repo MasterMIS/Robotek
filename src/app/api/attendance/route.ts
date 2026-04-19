@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { generateClient } from 'aws-amplify/api';
+import { generateClient } from 'aws-amplify/data';
 import { uploadData, getUrl } from 'aws-amplify/storage';
 import { Schema } from '@/../amplify/data/resource';
 import { getUsers } from "@/lib/google-sheets";

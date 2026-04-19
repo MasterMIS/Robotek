@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { generateClient } from 'aws-amplify/api';
+import { generateClient } from 'aws-amplify/data';
 import { Schema } from '@/../amplify/data/resource';
 import { v4 as uuidv4 } from "uuid";
 import { auth } from "@/auth";

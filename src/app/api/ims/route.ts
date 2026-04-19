@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { generateClient } from 'aws-amplify/api';
+import { generateClient } from 'aws-amplify/data';
 import { Schema } from '@/../amplify/data/resource';
 import { IMS } from "@/types/ims";
 import { Amplify } from 'aws-amplify';
