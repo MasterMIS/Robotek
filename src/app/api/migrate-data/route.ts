@@ -82,7 +82,7 @@ export async function POST(req: NextRequest) {
         const data = await getIMSItems();
         console.log(`Migrating ${data.length} IMS records...`);
         count = await batchInsert(data, (item) =>
-          client.models.IMSRecord.create({
+          client.models.IMSItem.create({
             ...item,
             id: item.id || `IMS-${Date.now()}-${Math.random()}`,
             created_at: item.created_at || timestamp,
@@ -97,7 +97,7 @@ export async function POST(req: NextRequest) {
         const data = await getParties();
         console.log(`Migrating ${data.length} party records...`);
         count = await batchInsert(data, (item) =>
-          client.models.PartyRecord.create({
+          client.models.Party.create({
             ...item,
             id: item.id || `PARTY-${Date.now()}-${Math.random()}`,
             created_at: item.created_at || timestamp,
@@ -130,9 +130,9 @@ export async function POST(req: NextRequest) {
         console.log("Fetching Chat messages from Google Sheets...");
         // Get all messages - we use a broad fetch since getMessages requires sender/receiver
         // For migration, we directly read from the sheet service
-        const { ChatService } = await import("@/lib/chat-sheets");
-        const chatService = new (ChatService as any)();
-        const data = await chatService.getAll?.() || [];
+        const { messageService } = await import("@/lib/chat-sheets");
+        
+        const data = await messageService.getAll() || [];
         console.log(`Migrating ${data.length} chat messages...`);
         count = await batchInsert(data, (item) =>
           client.models.ChatMessage.create({
@@ -180,7 +180,7 @@ export async function POST(req: NextRequest) {
         const data = await getMeetings();
         console.log(`Migrating ${data.length} meeting records...`);
         count = await batchInsert(data, (item) =>
-          client.models.SchedulerMeeting.create({
+          client.models.Meeting.create({
             ...item,
             id: item.id || `MEET-${Date.now()}-${Math.random()}`,
             created_at: item.created_at || timestamp,

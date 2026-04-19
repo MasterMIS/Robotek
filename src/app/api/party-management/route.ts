@@ -15,7 +15,7 @@ async function fetchAllParties() {
   let allRecords: any[] = [];
   let nextToken: string | null | undefined = undefined;
   do {
-    const response: any = await client.models.PartyRecord.list({ nextToken, limit: 1000 });
+    const response: any = await client.models.Party.list({ nextToken, limit: 1000 });
     allRecords = [...allRecords, ...response.data];
     nextToken = response.nextToken;
   } while (nextToken);
@@ -39,7 +39,7 @@ export async function POST(req: NextRequest) {
     const id = body.id || `PARTY-${Date.now()}`;
     const timestamp = new Date().toISOString();
 
-    const { errors } = await client.models.PartyRecord.create({
+    const { errors } = await client.models.Party.create({
       ...body,
       id,
       created_at: body.created_at || timestamp,
@@ -63,7 +63,7 @@ export async function PUT(req: NextRequest) {
     const timestamp = new Date().toISOString();
     const { id, createdAt, updatedAt, ...rest } = body;
 
-    const { errors } = await client.models.PartyRecord.update({
+    const { errors } = await client.models.Party.update({
       id: body.id,
       ...rest,
       updated_at: timestamp
@@ -87,7 +87,7 @@ export async function DELETE(req: NextRequest) {
 
     if (!id) return NextResponse.json({ error: "ID is required" }, { status: 400 });
 
-    const { errors } = await client.models.PartyRecord.delete({ id });
+    const { errors } = await client.models.Party.delete({ id });
 
     if (errors) {
       console.error("Amplify Delete Error:", errors);

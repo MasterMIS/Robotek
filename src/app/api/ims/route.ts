@@ -12,12 +12,12 @@ const client = generateClient<Schema>({ authMode: 'apiKey' });
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-async function fetchAllIMSRecords() {
+async function fetchAllIMSItems() {
   let allRecords: any[] = [];
   let nextToken: string | null | undefined = undefined;
 
   do {
-    const response: any = await client.models.IMSRecord.list({
+    const response: any = await client.models.IMSItem.list({
       nextToken,
       limit: 1000
     });
@@ -30,7 +30,7 @@ async function fetchAllIMSRecords() {
 
 export async function GET(request: NextRequest) {
   try {
-    const items = await fetchAllIMSRecords();
+    const items = await fetchAllIMSItems();
     return NextResponse.json(items, {
       headers: { 'Cache-Control': 'private, max-age=60, stale-while-revalidate=300' },
     });
@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
     const id = data.id || `IMS-${Date.now()}`;
     const timestamp = new Date().toISOString();
 
-    const { errors } = await client.models.IMSRecord.create({
+    const { errors } = await client.models.IMSItem.create({
         ...data,
         id,
         created_at: data.created_at || timestamp,
@@ -73,7 +73,7 @@ export async function PUT(request: NextRequest) {
     // Remove internal fields if present
     const { id, createdAt, updatedAt, ...updateRest } = data as any;
     
-    const { errors } = await client.models.IMSRecord.update({
+    const { errors } = await client.models.IMSItem.update({
         id: data.id,
         ...updateRest,
         updated_at: timestamp
@@ -100,7 +100,7 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: "ID is required" }, { status: 400 });
     }
 
-    const { errors } = await client.models.IMSRecord.delete({ id });
+    const { errors } = await client.models.IMSItem.delete({ id });
     
     if (errors) {
         console.error("Amplify Delete Error:", errors);

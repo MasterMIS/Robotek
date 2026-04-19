@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { generateClient } from 'aws-amplify/data';
-import { getUrl } from 'aws-amplify/storage';
+import { getUrl, uploadData } from 'aws-amplify/storage';
 import { Schema } from '@/../amplify/data/resource';
 import { auth } from "@/auth";
 import { Amplify } from 'aws-amplify';
@@ -184,7 +184,7 @@ export async function GET(req: NextRequest) {
 
       if (pendingFilter && (isHold || isCancelled || pIdx === -1)) return false;
       if (stepFilters.length > 0 && !stepFilters.includes(pIdx)) return false;
-      if (dateFilters.length > 0 && !dateFilters.some(f => orderMatchesDateFilter(items, f))) return false;
+      if (dateFilters.length > 0 && !dateFilters.some((f: any) => orderMatchesDateFilter(items, f))) return false;
 
       return true;
     });

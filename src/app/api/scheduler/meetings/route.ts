@@ -17,7 +17,7 @@ async function fetchAllMeetings() {
   let allRecords: any[] = [];
   let nextToken: string | null | undefined = undefined;
   do {
-    const response: any = await client.models.SchedulerMeeting.list({ nextToken, limit: 1000 });
+    const response: any = await client.models.Meeting.list({ nextToken, limit: 1000 });
     allRecords = [...allRecords, ...response.data];
     nextToken = response.nextToken;
   } while (nextToken);
@@ -48,7 +48,7 @@ export async function POST(req: Request) {
       updated_at: timestamp
     };
 
-    const { errors } = await client.models.SchedulerMeeting.create(newMeeting);
+    const { errors } = await client.models.Meeting.create(newMeeting);
     if (errors) {
       console.error("Amplify Create Error:", errors);
       return NextResponse.json({ error: "Failed to add meeting" }, { status: 500 });
@@ -68,7 +68,7 @@ export async function PUT(req: Request) {
     const data = await req.json();
     const { id, createdAt, updatedAt, ...rest } = data;
 
-    const { errors } = await client.models.SchedulerMeeting.update({
+    const { errors } = await client.models.Meeting.update({
       id: data.id,
       ...rest,
       updated_at: new Date().toISOString()
@@ -91,7 +91,7 @@ export async function DELETE(req: Request) {
     const id = searchParams.get("id");
     if (!id) return NextResponse.json({ error: "ID is required" }, { status: 400 });
 
-    const { errors } = await client.models.SchedulerMeeting.delete({ id });
+    const { errors } = await client.models.Meeting.delete({ id });
     if (errors) {
       console.error("Amplify Delete Error:", errors);
       return NextResponse.json({ error: "Failed to delete meeting" }, { status: 500 });

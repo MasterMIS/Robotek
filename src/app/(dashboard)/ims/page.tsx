@@ -644,18 +644,18 @@ export default function IMSPage() {
         isOpen={isStatusModalOpen}
         status={actionStatus}
         message={actionMessage}
-        onClose={() => setIsStatusModalOpen(false)}
       />
 
       {/* Confirmation Modal */}
       <ConfirmModal
         isOpen={isConfirmOpen}
+        title="Confirm Delete"
         message={`Are you sure you want to delete this item?`}
         onConfirm={() => {
           performDelete();
           setIsConfirmOpen(false);
         }}
-        onCancel={() => setIsConfirmOpen(false)}
+        onClose={() => setIsConfirmOpen(false)}
       />
     </div>
   );

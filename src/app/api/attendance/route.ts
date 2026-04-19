@@ -141,8 +141,8 @@ export async function POST(req: NextRequest) {
         status: "IN",
         inPhoto: photoUrl,
         outPhoto: "",
-        created_at: timeStr,
-        updated_at: timeStr
+        
+        
       });
 
       if (errors) {
@@ -167,7 +167,7 @@ export async function POST(req: NextRequest) {
         outTime: timeStr,
         status: "COMPLETED",
         outPhoto: photoUrl,
-        updated_at: timeStr
+        
       });
 
       if (errors) {

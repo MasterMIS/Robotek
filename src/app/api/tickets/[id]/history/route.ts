@@ -94,15 +94,15 @@ export async function POST(
       const { data: ticket } = await client.models.HelpTicket.get({ id });
       if (ticket) {
         const formattedNow = formatDate(new Date().toISOString());
-        const isStatusChange = createdHistory.action_type === 'STATUS_CHANGE';
+        const isStatusChange = createdHistory?.action_type === 'STATUS_CHANGE';
         const header = isStatusChange ? '🔄 *Ticket Status Updated*' : '💬 *New Ticket Comment*';
         const statusLine = isStatusChange
-          ? `📉 *Status Changed:* ${createdHistory.old_status} ➡️ ${createdHistory.new_status}\n`
+          ? `📉 *Status Changed:* ${createdHistory?.old_status} ➡️ ${createdHistory?.new_status}\n`
           : '';
-        const commentLine = createdHistory.comment_text
-          ? `🗣️ *Comment:* _${createdHistory.comment_text}_\n`
+        const commentLine = createdHistory?.comment_text
+          ? `🗣️ *Comment:* _${createdHistory?.comment_text}_\n`
           : '';
-        const message = `${header}\n━━━━━━━━━━━━━━━━━\n🔖 *Ticket ID:* ${ticket.id}\n📌 *Title:* ${ticket.title}\n🏷️ *Category:* ${ticket.category}\n🎯 *Priority:* ${ticket.priority}\n👤 *Raised By:* ${ticket.raised_by}\n👨‍🔧 *Assigned To:* ${ticket.solver_person || 'Unassigned'}\n📊 *Current Status:* ${isStatusChange ? createdHistory.new_status : ticket.status}\n${statusLine}${commentLine}👤 *Updated By:* ${createdHistory.actor_username}\n⏱️ *Updated At:* ${formattedNow}`;
+        const message = `${header}\n━━━━━━━━━━━━━━━━━\n🔖 *Ticket ID:* ${ticket.id}\n📌 *Title:* ${ticket.title}\n🏷️ *Category:* ${ticket.category}\n🎯 *Priority:* ${ticket.priority}\n👤 *Raised By:* ${ticket.raised_by}\n👨‍🔧 *Assigned To:* ${ticket.solver_person || 'Unassigned'}\n📊 *Current Status:* ${isStatusChange ? createdHistory?.new_status : ticket.status}\n${statusLine}${commentLine}👤 *Updated By:* ${createdHistory?.actor_username}\n⏱️ *Updated At:* ${formattedNow}`;
 
         const parties = [ticket.raised_by, ticket.solver_person].filter(Boolean);
         const uniqueParties = [...new Set(parties)];

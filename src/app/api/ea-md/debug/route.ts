@@ -101,7 +101,7 @@ export async function GET() {
           details: envCheck,
           error: error.message,
           code: error.code,
-          status: error.status,
+          
         },
         { status: 500 }
       );
