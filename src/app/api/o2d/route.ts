@@ -40,19 +40,21 @@ async function fetchAllO2DRecords() {
     nextToken = response.nextToken;
   } while (nextToken);
 
-  // Resolve media URLs for all records
-  return await Promise.all(allRecords.map(async (row) => {
-    const resolvedRow = { ...row };
-    if (row.order_screenshot) resolvedRow.order_screenshot = await resolveUrl(row.order_screenshot);
-    
-    // Resolve any step attachments if they are S3 paths
-    for (let i = 1; i <= 11; i++) {
-        const attachKey = i === 1 ? 'upload_so_1' : i === 5 ? 'upload_pi_5' : i === 9 ? 'attach_bilty_9' : null;
-        if (attachKey && (row as any)[attachKey]) {
-            (resolvedRow as any)[attachKey] = await resolveUrl((row as any)[attachKey]);
-        }
-    }
-    return resolvedRow;
+  // Normalize field names: DynamoDB records imported from Sheets use
+  // sheet_created_at / sheet_updated_at — map them to created_at / updated_at
+  // so the frontend always gets consistent field names.
+  // Priority: custom created_at > sheet_created_at > AWS auto createdAt
+  return allRecords.map((row) => ({
+    ...row,
+    created_at: row.created_at || row.sheet_created_at || row.createdAt || null,
+    updated_at: row.updated_at || row.sheet_updated_at || row.updatedAt || null,
+    // Also normalise actual_N from the old typo "acual_N"
+    ...Object.fromEntries(
+      Array.from({ length: 11 }, (_, i) => i + 1).map((i) => [
+        `actual_${i}`,
+        row[`actual_${i}`] || row[`acual_${i}`] || "",
+      ])
+    ),
   }));
 }
 

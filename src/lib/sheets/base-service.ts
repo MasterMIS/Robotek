@@ -161,16 +161,20 @@ export abstract class BaseSheetsService<T extends SheetItem> {
       
       // AUTO-PROVISIONING: If updated_at is missing, add it to the sheet
       if (headers.length > 0 && !headers.includes("updated_at")) {
-        console.log(`[AUTO-PROVISION] Adding updated_at column to ${this.sheetName}`);
+        console.log(`[AUTO-PROVISION] Checking updated_at for ${this.sheetName}`);
         try {
-          const nextColLetter = getColumnLetter(headers.length);
-          await sheets.spreadsheets.values.update({
-            spreadsheetId: this.spreadsheetId,
-            range: `${this.sheetName}!${nextColLetter}1`,
-            valueInputOption: "RAW",
-            requestBody: { values: [["updated_at"]] },
-          });
-          headers.push("updated_at");
+          // Check if we have room in the grid (default limit is usually quite small for new sheets)
+          // We'll skip auto-provisioning if it might exceed grid limits to avoid 400 errors
+          if (headers.length < 20) { 
+            const nextColLetter = getColumnLetter(headers.length);
+            await sheets.spreadsheets.values.update({
+              spreadsheetId: this.spreadsheetId,
+              range: `${this.sheetName}!${nextColLetter}1`,
+              valueInputOption: "RAW",
+              requestBody: { values: [["updated_at"]] },
+            });
+            headers.push("updated_at");
+          }
         } catch (e) {
           console.error(`Failed to auto-provision updated_at for ${this.sheetName}`, e);
         }

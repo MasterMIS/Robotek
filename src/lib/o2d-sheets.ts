@@ -10,14 +10,12 @@ const CONFIG_SHEET_NAME = "Step Configuration";
 class O2DService extends BaseSheetsService<O2D> {
   protected spreadsheetId = GOOGLE_SHEET_ID;
   protected sheetName = SHEET_NAME;
-  protected range = "A:ZZ"; // Wide range for fetching to be safe
+  protected range = "A:ZZ";
   protected idColumnIndex = 0;
-
 
   mapRowToItem(row: any[]): O2D {
     const get = (h: string) => row[this.hMap[h.toLowerCase()]] || "";
-
-    const item: any = {
+    const item: O2D = {
       id: get("id"),
       order_no: get("order_no."),
       party_name: get("party_name"),
@@ -34,12 +32,10 @@ class O2DService extends BaseSheetsService<O2D> {
       cancelled: get("cancelled"),
     };
 
-    // Map steps 1-11
     for (let i = 1; i <= 11; i++) {
-      item[`planned_${i}`] = get(`planned_${i}`);
-      item[`actual_${i}`] = get(`acual_${i}`); // Note the typo "acual" from sheet
-      item[`status_${i}`] = get(`status_${i}`);
-
+      (item as any)[`planned_${i}`] = get(`planned_${i}`);
+      (item as any)[`actual_${i}`] = get(`actual_${i}`);
+      (item as any)[`status_${i}`] = get(`status_${i}`);
       if (i === 1) {
         item.final_amount_1 = get("final_amount_1");
         item.so_number_1 = get("so_number_1");
@@ -47,7 +43,7 @@ class O2DService extends BaseSheetsService<O2D> {
         item.upload_so_1 = get("upload_so_(attachment)_1");
       } else if (i === 5) {
         item.num_of_parcel_5 = get("num_of_parcel_5");
-        item.upload_pi_5 = get("upoad_pi_(attachment)_5"); // User provided spelling: upoad
+        item.upload_pi_5 = get("upoad_pi_(attachment)_5");
         item.actual_date_of_order_packed_5 = get("actual_date_of_order_packed_5");
       } else if (i === 7) {
         item.voucher_num_7 = get("voucher_num_7");
@@ -60,8 +56,7 @@ class O2DService extends BaseSheetsService<O2D> {
         item.num_of_parcel_9 = get("num_of_parcel_9");
       }
     }
-
-    return item as O2D;
+    return item;
   }
 
   mapItemToRow(o2d: O2D): any[] {
@@ -70,7 +65,6 @@ class O2DService extends BaseSheetsService<O2D> {
       const idx = this.hMap[h.toLowerCase()];
       if (idx !== undefined) row[idx] = val;
     };
-
     set("id", o2d.id);
     set("order_no.", o2d.order_no);
     set("party_name", o2d.party_name);
@@ -85,12 +79,10 @@ class O2DService extends BaseSheetsService<O2D> {
     set("updated_at", o2d.updated_at);
     set("hold", o2d.hold || "");
     set("cancelled", o2d.cancelled || "");
-
     for (let i = 1; i <= 11; i++) {
       set(`planned_${i}`, (o2d as any)[`planned_${i}`]);
-      set(`acual_${i}`, (o2d as any)[`actual_${i}`]);
+      set(`actual_${i}`, (o2d as any)[`actual_${i}`]);
       set(`status_${i}`, (o2d as any)[`status_${i}`]);
-
       if (i === 1) {
         set("final_amount_1", o2d.final_amount_1);
         set("so_number_1", o2d.so_number_1);
@@ -111,13 +103,10 @@ class O2DService extends BaseSheetsService<O2D> {
         set("num_of_parcel_9", o2d.num_of_parcel_9);
       }
     }
-
-    // Fill gaps with empty string
     const maxIdx = Math.max(...Object.values(this.hMap));
     for (let i = 0; i <= maxIdx; i++) {
       if (row[i] === undefined) row[i] = "";
     }
-
     return row;
   }
 
@@ -746,7 +735,7 @@ export async function getO2DSummary(currentUser: string = "", userRole: string =
     groupedByOrder[orderNo].push(item);
   });
 
-  // Count orders by step — exclude hold/cancelled (matches left panel default view)
+  // Count orders by step â€” exclude hold/cancelled (matches left panel default view)
   const stepCounts = Array(11).fill(0);
 
   Object.values(groupedByOrder).forEach((orderItems) => {

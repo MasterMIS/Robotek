@@ -158,6 +158,7 @@ const schema = a.schema({
   }).authorization(allow => [allow.publicApiKey()]),
 
   // ── O2D MODULE ────────────────────────────────────────────────────────────
+  // FORCE REFRESH: Schema sync trigger
   O2DRecord: a.model({
     id: a.string().required(),
     order_no: a.string(),
@@ -173,24 +174,25 @@ const schema = a.schema({
     updated_at: a.string(),
     hold: a.string(),
     cancelled: a.string(),
-    // Steps 1-11
-    planned_1: a.string(), acual_1: a.string(), status_1: a.string(),
-    planned_2: a.string(), acual_2: a.string(), status_2: a.string(),
-    planned_3: a.string(), acual_3: a.string(), status_3: a.string(),
-    planned_4: a.string(), acual_4: a.string(), status_4: a.string(),
-    planned_5: a.string(), acual_5: a.string(), status_5: a.string(),
-    planned_6: a.string(), acual_6: a.string(), status_6: a.string(),
-    planned_7: a.string(), acual_7: a.string(), status_7: a.string(),
-    planned_8: a.string(), acual_8: a.string(), status_8: a.string(),
-    planned_9: a.string(), acual_9: a.string(), status_9: a.string(),
-    planned_10: a.string(), acual_10: a.string(), status_10: a.string(),
-    planned_11: a.string(), acual_11: a.string(), status_11: a.string(),
+    // Steps 1-11 (Corrected to 'actual_X')
+    planned_1: a.string(), actual_1: a.string(), status_1: a.string(),
+    planned_2: a.string(), actual_2: a.string(), status_2: a.string(),
+    planned_3: a.string(), actual_3: a.string(), status_3: a.string(),
+    planned_4: a.string(), actual_4: a.string(), status_4: a.string(),
+    planned_5: a.string(), actual_5: a.string(), status_5: a.string(),
+    planned_6: a.string(), actual_6: a.string(), status_6: a.string(),
+    planned_7: a.string(), actual_7: a.string(), status_7: a.string(),
+    planned_8: a.string(), actual_8: a.string(), status_8: a.string(),
+    planned_9: a.string(), actual_9: a.string(), status_9: a.string(),
+    planned_10: a.string(), actual_10: a.string(), status_10: a.string(),
+    planned_11: a.string(), actual_11: a.string(), status_11: a.string(),
     // Step specific extras
     final_amount_1: a.string(), so_number_1: a.string(), merge_order_with_1: a.string(), upload_so_1: a.string(),
     num_of_parcel_5: a.string(), upload_pi_5: a.string(), actual_date_of_order_packed_5: a.string(),
     voucher_num_7: a.string(),
     order_details_checked_8: a.string(), voucher_num_51_8: a.string(), t_amt_8: a.string(),
     attach_bilty_9: a.string(), num_of_parcel_9: a.string(),
+    sheet_created_at: a.string(), sheet_updated_at: a.string(),
   }).authorization(allow => [allow.publicApiKey()]),
 
   // ── I2R MODULE ────────────────────────────────────────────────────────────
@@ -205,15 +207,16 @@ const schema = a.schema({
     updated_at: a.string(),
     cancelled: a.string(),
     // Steps 1-9
-    planned_1: a.string(), acual_1: a.string(), status_1: a.string(),
-    planned_2: a.string(), acual_2: a.string(), status_2: a.string(),
-    planned_3: a.string(), acual_3: a.string(), status_3: a.string(),
-    planned_4: a.string(), acual_4: a.string(), status_4: a.string(),
-    planned_5: a.string(), acual_5: a.string(), status_5: a.string(),
-    planned_6: a.string(), acual_6: a.string(), status_6: a.string(),
-    planned_7: a.string(), acual_7: a.string(), status_7: a.string(),
-    planned_8: a.string(), acual_8: a.string(), status_8: a.string(),
-    planned_9: a.string(), acual_9: a.string(), status_9: a.string(),
+    planned_1: a.string(), actual_1: a.string(), status_1: a.string(),
+    planned_2: a.string(), actual_2: a.string(), status_2: a.string(),
+    planned_3: a.string(), actual_3: a.string(), status_3: a.string(),
+    planned_4: a.string(), actual_4: a.string(), status_4: a.string(),
+    planned_5: a.string(), actual_5: a.string(), status_5: a.string(),
+    planned_6: a.string(), actual_6: a.string(), status_6: a.string(),
+    planned_7: a.string(), actual_7: a.string(), status_7: a.string(),
+    planned_8: a.string(), actual_8: a.string(), status_8: a.string(),
+    planned_9: a.string(), actual_9: a.string(), status_9: a.string(),
+    sheet_created_at: a.string(), sheet_updated_at: a.string(),
   }).authorization(allow => [allow.publicApiKey()]),
 
   // ── IMS & PARTY ───────────────────────────────────────────────────────────

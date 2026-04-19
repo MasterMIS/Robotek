@@ -1,3 +1,69 @@
+// --- DRY RUN ENDPOINT FOR O2D MIGRATION ---
+export async function POST_DRY_RUN(req: NextRequest) {
+  const session = await auth();
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  try {
+    const body = await req.json();
+    const { records } = body;
+    if (!records || !Array.isArray(records)) {
+      return NextResponse.json({ error: "Invalid data format" }, { status: 400 });
+    }
+
+    // Fetch all current O2D records from DynamoDB
+    const allO2D = await fetchAll(client.models.O2DRecord);
+    const o2dById = Object.fromEntries(allO2D.map((r: any) => [r.id, r]));
+
+    // Fields to check for changes
+    const fieldsToCheck = [
+      "created_at",
+      "updated_at",
+      "num_of_parcel_5",
+      "upload_pi_5",
+      "actual_date_of_order_packed_5",
+      "planned_6",
+      "acual_6",
+      "status_6"
+    ];
+
+    // Map Google Sheet columns to DynamoDB field names
+    function mapFields(record: any) {
+      return {
+        ...record,
+        num_of_parcel_5: record.Num_of_Parcel_5,
+        upload_pi_5: record.Upoad_PI_Attachment_5,
+        actual_date_of_order_packed_5: record.Actual_Date_of_Order_Packed_5,
+        planned_6: record.Planned_6,
+        acual_6: record.Actual_6,
+        status_6: record.Status_6
+      };
+    }
+
+    const preview = records.map((rec: any) => {
+      const mapped = mapFields(rec);
+      const db = o2dById[mapped.id];
+      if (!db) return { id: mapped.id, error: "Not found in DB" };
+      const changes: any = { id: mapped.id };
+      fieldsToCheck.forEach(field => {
+        if (
+          mapped[field] !== undefined &&
+          mapped[field] !== null &&
+          mapped[field] !== db[field]
+        ) {
+          changes[field] = { old: db[field], new: mapped[field] };
+        }
+      });
+      // Only return if there are changes
+      if (Object.keys(changes).length > 1) return changes;
+      return null;
+    }).filter(Boolean);
+
+    return NextResponse.json({ preview });
+  } catch (error: any) {
+    console.error("O2D Dry Run Error:", error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
 import { NextRequest, NextResponse } from "next/server";
 import { generateClient } from 'aws-amplify/data';
 import { Schema } from '@/../amplify/data/resource';
@@ -162,17 +228,33 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Invalid data format" }, { status: 400 });
     }
 
-    const chunkSize = 25;
+    const chunkSize = 50;
     for (let i = 0; i < records.length; i += chunkSize) {
       const chunk = records.slice(i, i + chunkSize);
-      await Promise.all(chunk.map((record: any) =>
-        client.models.ScotRecord.create({
-          ...record,
+      await Promise.all(chunk.map((record: any) => {
+        // Map Google Sheet columns to DynamoDB field names
+        const {
+          Num_of_Parcel_5,
+          Upoad_PI_Attachment_5,
+          Actual_Date_of_Order_Packed_5,
+          Planned_6,
+          Actual_6,
+          Status_6,
+          ...rest
+        } = record;
+        return client.models.ScotRecord.create({
+          ...rest,
+          num_of_parcel_5: Num_of_Parcel_5,
+          upload_pi_5: Upoad_PI_Attachment_5,
+          actual_date_of_order_packed_5: Actual_Date_of_Order_Packed_5,
+          planned_6: Planned_6,
+          acual_6: Actual_6,
+          status_6: Status_6,
           id: record.id || `SCOT-${Date.now()}-${Math.random()}`,
           created_at: record.created_at || timestamp,
           updated_at: timestamp
-        })
-      ));
+        });
+      }));
     }
 
     return NextResponse.json({ message: "Data imported successfully" });

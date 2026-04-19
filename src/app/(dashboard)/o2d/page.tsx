@@ -13,6 +13,7 @@ import { PartyManagement } from "@/types/party-management";
 import useSWR, { mutate, useSWRConfig } from "swr";
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
 import { useSSE } from "@/hooks/useSSE";
+import { getUrl } from "aws-amplify/storage";
 import {
   PlusIcon,
   PencilSquareIcon,
@@ -279,10 +280,8 @@ export default function O2DPage() {
   const { data: session } = useSession();
   const currentUser = (session?.user as any)?.username || "";
 
-  // Search and pagination state
+  // Search and general filters
   const [searchTerm, setSearchTerm] = useState("");
-  const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage] = useState(10);
 
   // Filter states - MUST be before SWR hook that uses them
   const [filterStartDate, setFilterStartDate] = useState("");
@@ -294,25 +293,17 @@ export default function O2DPage() {
   const [selectedDateFilters, setSelectedDateFilters] = useState<string[]>([]);
   const [selectedStepFilters, setSelectedStepFilters] = useState<number[]>([]);
 
-  // Fetch paginated data from server
-  const { data: paginationData, isLoading: isPageLoading } = useSWR<{
-    data: O2D[];
-    orders: string[];
-    total: number;
-    page: number;
-    limit: number;
-    totalPages: number;
-    totalRows: number;
-  }>(
-    `/api/o2d?page=${currentPage}&limit=${itemsPerPage}&search=${encodeURIComponent(searchTerm)}&dateFilters=${encodeURIComponent(JSON.stringify(selectedDateFilters))}&stepFilters=${encodeURIComponent(JSON.stringify(selectedStepFilters))}&partyFilter=${encodeURIComponent(tableFilterParty)}&orderFilter=${encodeURIComponent(tableFilterOrderNo)}&itemNameFilter=${encodeURIComponent(tableFilterItemName)}&pendingFilter=${tableFilterPending}&startDate=${encodeURIComponent(filterStartDate)}&endDate=${encodeURIComponent(filterEndDate)}`,
+  // Fetch ALL data from server (No longer paginated)
+  const { data: allO2DData, isLoading: isAllLoading } = useSWR<O2D[]>(
+    "/api/o2d?all=true",
     fetcher,
     {
       revalidateOnFocus: true,
-      refreshInterval: 300000,
+      refreshInterval: 120000, // Every 2 mins for full sync
     }
   );
 
-  // Fetch summary data for step counts (does not depend on pagination)
+  // Fetch summary data for step counts
   const { data: summaryData } = useSWR<{
     stepCounts: number[];
     totalOrders: number;
@@ -326,7 +317,7 @@ export default function O2DPage() {
     }
   );
 
-  // Fetch all order numbers for the Order ID filter dropdown (not paginated)
+  // Fetch all order numbers for the Order ID filter dropdown
   const { data: allOrderNumbers } = useSWR<string[]>(
     "/api/o2d?type=ordernumbers",
     fetcher,
@@ -338,34 +329,34 @@ export default function O2DPage() {
 
   const { mutate: globalMutate } = useSWRConfig();
 
-  // SSE: Incremental real-time updates for O2D
+  // SSE: Incremental real-time updates for O2D and IMS
   useSSE({
-    modules: ["o2d"],
+    modules: ["o2d", "ims"],
     onUpdate: (incremental) => {
-      const updates = incremental.find((m) => m.module === "o2d");
-      if (updates) {
-        // 1. Update the paginated cache incrementally (only for items already in view)
+      // 1. Update O2D Cache
+      const o2dUpdates = incremental.find((m) => m.module === "o2d");
+      if (o2dUpdates) {
         globalMutate(
-          (key: any) => typeof key === "string" && key.includes("/api/o2d?page="),
+          "/api/o2d?all=true",
           (current: any) => {
-            if (!current?.data) return current;
-            const nextData = [...current.data];
+            if (!current) return current;
+            const nextData = [...current];
             let changed = false;
 
             // Merge modified rows
-            updates.upserts.forEach((item: O2D) => {
+            o2dUpdates.upserts.forEach((item: O2D) => {
               const idx = nextData.findIndex((o) => String(o.id) === String(item.id));
               if (idx !== -1) {
                 nextData[idx] = item;
                 changed = true;
+              } else {
+                nextData.unshift(item);
+                changed = true;
               }
-              // Note: We don't blindly unshift new items into the paginated view 
-              // because it might break server-side pagination/ordering. 
-              // New items will appear on the next manual or focus-based refetch.
             });
 
-            // Handle deletions (IDs no longer present in currentIds)
-            const currentIdsSet = new Set(updates.currentIds.map(String));
+            // Handle deletions
+            const currentIdsSet = new Set(o2dUpdates.currentIds.map(String));
             const filteredData = nextData.filter((o) => {
               const keep = currentIdsSet.has(String(o.id));
               if (!keep) changed = true;
@@ -373,23 +364,33 @@ export default function O2DPage() {
             });
 
             if (!changed) return current;
-            return { ...current, data: filteredData };
+            return filteredData;
           },
           false
         );
-
-        // 2. Revalidate counts and order list (these are hard to sync incrementally)
         globalMutate("/api/o2d/summary");
         globalMutate("/api/o2d?type=ordernumbers");
+      }
+
+      // 2. Update IMS Cache
+      const imsUpdates = incremental.find((m) => m.module === "ims");
+      if (imsUpdates) {
+        globalMutate("/api/ims");
       }
     },
   });
 
-  // Extract paginated O2D data
-  const o2ds = paginationData?.data || [];
-  const paginatedOrderNumbers = paginationData?.orders || [];
-  const totalOrders = paginationData?.total || 0;
-  const totalPages = paginationData?.totalPages || 1;
+  // Extract O2D data
+  const allO2DsRaw = allO2DData || [];
+
+  const groupedOrders = useMemo(() => {
+    return allO2DsRaw.reduce((acc: Record<string, O2D[]>, o2d: O2D) => {
+      const orderNo = o2d.order_no || "Unknown";
+      if (!acc[orderNo]) acc[orderNo] = [];
+      acc[orderNo].push(o2d);
+      return acc;
+    }, {});
+  }, [allO2DsRaw]);
   
   // State for loading during page transitions
   const [isTransitioning, setIsTransitioning] = useState(false);
@@ -401,6 +402,19 @@ export default function O2DPage() {
   const isSpecialRole =
     userRole.toUpperCase() === "ADMIN" || userRole.toUpperCase() === "EA";
   const [selectedOrderNo, setSelectedOrderNo] = useState<string | null>(null);
+
+  // Auto-resolve media URLs for selected order
+  useEffect(() => {
+    if (selectedOrderNo && groupedOrders[selectedOrderNo]) {
+      const items = groupedOrders[selectedOrderNo];
+      items.forEach(item => {
+        if (item.order_screenshot) resolveS3Path(item.order_screenshot);
+        if (item.upload_so_1) resolveS3Path(item.upload_so_1);
+        if (item.upload_pi_5) resolveS3Path(item.upload_pi_5);
+        if (item.attach_bilty_9) resolveS3Path(item.attach_bilty_9);
+      });
+    }
+  }, [selectedOrderNo, groupedOrders]);
 
   // Data
   const [parties, setParties] = useState<string[]>([]);
@@ -446,18 +460,56 @@ export default function O2DPage() {
   const [isBusyModalOpen, setIsBusyModalOpen] = useState(false);
   const [busySearchQuery, setBusySearchQuery] = useState("");
 
+  // Media resolution cache (path -> signedURL)
+  const [resolvedUrls, setResolvedUrls] = useState<Record<string, string>>({});
+
+  const resolveS3Path = async (path: string | null | undefined) => {
+    if (!path || path.startsWith("http") || path.startsWith("data:")) return path || "";
+    if (resolvedUrls[path]) return resolvedUrls[path];
+    try {
+      const url = await getUrl({ 
+        path, 
+        options: { validateObjectExistence: false, expiresIn: 3600 } 
+      });
+      const resolved = url.url.toString();
+      setResolvedUrls(prev => ({ ...prev, [path]: resolved }));
+      return resolved;
+    } catch (err) {
+      console.error("Error resolving S3 path:", path, err);
+      return path;
+    }
+  };
+
+  const getEffectiveUrl = (path: string | null | undefined) => {
+    if (!path) return "#";
+    if (path.startsWith("http") || path.startsWith("data:")) return path;
+    // For S3 paths, we might have already resolved it
+    return resolvedUrls[path] || "#";
+  };
+
   const [detailViewMode, setDetailViewMode] = useState<"full" | "table">(
     "full",
   );
   const [pageViewMode, setPageViewMode] = useState<"panels" | "table">(
     "panels",
   );
-  const [tableCurrentPage, setTableCurrentPage] = useState(1);
-  const tableItemsPerPage = 25;
 
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [exportIncludeDetails, setExportIncludeDetails] = useState(true);
   const [exportSelectedSteps, setExportSelectedSteps] = useState<number[]>([]);
+
+  // Pagination State
+  const [sidebarCurrentPage, setSidebarCurrentPage] = useState(1);
+  const [sidebarItemsPerPage] = useState(20);
+  const [tableCurrentPage, setTableCurrentPage] = useState(1);
+  const [tableItemsPerPage] = useState(100);
+
+  // Reset page when filters change
+  useEffect(() => {
+    setSidebarCurrentPage(1);
+    setTableCurrentPage(1);
+  }, [searchTerm, selectedDateFilters, selectedStepFilters, tableFilterParty, tableFilterOrderNo, tableFilterItemName, tableFilterPending, filterStartDate, filterEndDate]);
+
 
   const [showFilters, setShowFilters] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -497,32 +549,35 @@ export default function O2DPage() {
 
   const fetchDetails = async () => {
     try {
-      const [detailsRes, configRes, partiesRes] = await Promise.all([
-        fetch("/api/o2d?type=details"),
+      const [imsRes, configRes, partiesRes] = await Promise.all([
+        fetch("/api/ims"),
         fetch("/api/o2d/config"),
         fetch("/api/party-management"),
       ]);
-      const data = await detailsRes.json();
+
+      const imsData = await imsRes.json();
       const configData = await configRes.json();
       const partiesData = await partiesRes.json();
 
       if (Array.isArray(partiesData) && partiesData.length > 0) {
         setFullParties(partiesData);
-        const partyNames = partiesData
-          .map((p: any) => p.partyName)
-          .filter(Boolean);
-        setParties(partyNames.length > 0 ? partyNames : data.parties || []);
-      } else {
-        setFullParties([]);
-        setParties(data.parties || []);
+        setParties(partiesData.map((p: any) => p.partyName).filter(Boolean));
       }
 
-      setDropdownItems(data.items || []);
+      if (Array.isArray(imsData)) {
+        setDropdownItems(
+          imsData.map((item: any) => ({
+            name: item.item_name,
+            amount: item.final_amount,
+            gst: item.gst,
+          }))
+        );
+      }
 
       if (configData && Array.isArray(configData)) {
         const mergedConfigs = O2D_STEPS.map((step, idx) => {
           const found =
-            configData.find((c) => c.step_name === step) || configData[idx];
+            configData.find((c: any) => c.step_name === step) || configData[idx];
           return {
             step_name: step,
             tat: found?.tat || "24 Hrs",
@@ -531,17 +586,9 @@ export default function O2DPage() {
         });
         setGlobalConfigs(mergedConfigs);
         setStepConfigs(mergedConfigs);
-      } else {
-        const fallback = O2D_STEPS.map((step) => ({
-          step_name: step,
-          tat: "24 Hrs",
-          responsible_person: "",
-        }));
-        setGlobalConfigs(fallback);
-        setStepConfigs(fallback);
       }
     } catch (error) {
-      console.error(error);
+      console.error("Error fetching o2d details:", error);
     }
   };
 
@@ -555,96 +602,72 @@ export default function O2DPage() {
     return `OR-${(maxNum + 1).toString().padStart(2, "0")}`;
   };
 
-  const groupedOrders = useMemo(() => {
-    return o2ds.reduce((acc: Record<string, O2D[]>, o2d: O2D) => {
-      const orderNo = o2d.order_no || "Unknown";
-      if (!acc[orderNo]) acc[orderNo] = [];
-      acc[orderNo].push(o2d);
-      return acc;
-    }, {});
-  }, [o2ds]);
+  const calculatePlannedDate = (baseDate: string | Date, tatString: string) => {
+    if (!baseDate || !tatString) return "";
+    let date = new Date(baseDate);
+    if (isNaN(date.getTime())) return "";
 
-  const memoizedOrderOptions = useMemo(() => {
-    return allOrderNumbers || [];
-  }, [allOrderNumbers]);
+    const parts = tatString.trim().split(" ");
+    let val = parseFloat(parts[0]);
+    const unit = parts[1]?.toLowerCase() || "hrs";
+    if (isNaN(val)) return date.toISOString();
 
-  const memoizedItemOptions = useMemo(() => {
-    return Array.from(new Set(dropdownItems.map((di) => di.name))).sort();
-  }, [dropdownItems]);
+    // Convert everything to minutes to consume
+    let totalMinutesToConsume = unit.includes("day") ? val * 10 * 60 : val * 60;
 
-  // Note: Filtering now works on the current page only
-  // For comprehensive filtering across all orders, users should search in Google Sheets
-  // This is a necessary trade-off for server-side pagination to handle 4500+ rows
+    const WORK_START_HOUR = 9.5; // 9:30 AM
+    const WORK_END_HOUR = 19.5; // 7:30 PM
+    const MINS_PER_WORK_DAY = (WORK_END_HOUR - WORK_START_HOUR) * 60;
 
-  // Pagination Reset - Note: With server-side pagination, filtering is limited to current page
-  useEffect(() => {
-    setCurrentPage(1);
-  }, []);
+    while (totalMinutesToConsume > 0) {
+      // 1. Skip Sunday
+      if (date.getDay() === 0) {
+        date.setDate(date.getDate() + 1);
+        date.setHours(9, 30, 0, 0);
+        continue;
+      }
 
-  // Reset to page 1 when any filter changes
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchTerm, selectedDateFilters, selectedStepFilters, tableFilterParty, tableFilterOrderNo, tableFilterItemName, tableFilterPending, filterStartDate, filterEndDate]);
+      // 2. Adjust current time to working window if outside
+      let hours = date.getHours();
+      let mins = date.getMinutes();
+      let currentTimeVal = hours + mins / 60;
 
-  const toggleDateFilter = (id: string) => {
-    if (id === "") {
-      setSelectedDateFilters([]);
-      return;
+      if (currentTimeVal >= WORK_END_HOUR) {
+        // Move to next day 9:30 AM
+        date.setDate(date.getDate() + 1);
+        date.setHours(9, 30, 0, 0);
+        continue;
+      }
+
+      if (currentTimeVal < WORK_START_HOUR) {
+        date.setHours(9, 30, 0, 0);
+        currentTimeVal = WORK_START_HOUR;
+      }
+
+      // 3. Calculate available minutes in the current window
+      const endOfToday = new Date(date);
+      endOfToday.setHours(19, 30, 0, 0);
+      const availableMinutesToday =
+        (endOfToday.getTime() - date.getTime()) / (1000 * 60);
+
+      if (totalMinutesToConsume <= availableMinutesToday) {
+        date.setMinutes(date.getMinutes() + totalMinutesToConsume);
+        totalMinutesToConsume = 0;
+      } else {
+        totalMinutesToConsume -= availableMinutesToday;
+        // Move to next day 9:30 AM
+        date.setDate(date.getDate() + 1);
+        date.setHours(9, 30, 0, 0);
+      }
     }
-    setSelectedDateFilters((prev) =>
-      prev.includes(id) ? prev.filter((f) => f !== id) : [...prev, id],
-    );
-  };
 
-  const toggleStepFilter = (stepIdx: number) => {
-    setSelectedStepFilters((prev) =>
-      prev.includes(stepIdx)
-        ? prev.filter((s) => s !== stepIdx)
-        : [...prev, stepIdx],
-    );
-  };
+    // Final check: if final date falls on Sunday, move to Monday
+    if (date.getDay() === 0) {
+      date.setDate(date.getDate() + 1);
+      date.setHours(9, 30, 0, 0);
+    }
 
-  // Helper: check if an order matches the date filter based on planned times of steps
-  const orderMatchesDateFilter = (
-    orderItems: O2D[],
-    filter: string,
-  ): boolean => {
-    if (!filter) return true; // Status-based filters
-    if (filter === "Hold")
-      return !!orderItems[0].hold && !orderItems[0].cancelled;
-    if (filter === "Cancelled") return !!orderItems[0].cancelled;
-
-    const now = new Date();
-    const today = new Date(now);
-    today.setHours(0, 0, 0, 0);
-
-    const pendingStepIdx = getPendingStepIdx(orderItems);
-
-    // If fully completed, it doesn't show in active date filters
-    if (pendingStepIdx === -1) return false;
-
-    const firstItem = orderItems[0] as any;
-    const plannedRaw = firstItem[`planned_${pendingStepIdx}`] as string;
-    if (!plannedRaw || plannedRaw === "-" || plannedRaw.trim() === "")
-      return false;
-
-    const pd = new Date(plannedRaw);
-    if (isNaN(pd.getTime())) return false;
-
-    const pdDay = new Date(pd);
-    pdDay.setHours(0, 0, 0, 0);
-
-    const diffDays = Math.round(
-      (pdDay.getTime() - today.getTime()) / (1000 * 60 * 60 * 24),
-    );
-
-    if (filter === "Delayed") return pd < now;
-    if (filter === "Today") return diffDays === 0;
-    if (filter === "Tomorrow") return diffDays === 1;
-    if (filter === "Next5") return diffDays > 0 && diffDays <= 5;
-    if (filter === "Next10") return diffDays > 0 && diffDays <= 10;
-
-    return false;
+    return date.toISOString();
   };
 
   const getPendingStepIdx = (orderItems: O2D[]): number => {
@@ -717,12 +740,54 @@ export default function O2DPage() {
       }
     }
 
-    // Role-based Configuration Checking is now done server-side
     return true;
   };
 
-  const orderMatchesAnyFilter = (no: string): boolean => {
-    const items = groupedOrders[no];
+  // Helper: check if an order matches the date filter based on planned times of steps
+  const orderMatchesDateFilter = (
+    orderItems: O2D[],
+    filter: string,
+  ): boolean => {
+    if (!filter) return true; // Status-based filters
+    if (filter === "Hold")
+      return !!orderItems[0].hold && !orderItems[0].cancelled;
+    if (filter === "Cancelled") return !!orderItems[0].cancelled;
+
+    const now = new Date();
+    const today = new Date(now);
+    today.setHours(0, 0, 0, 0);
+
+    const pendingStepIdx = getPendingStepIdx(orderItems);
+
+    // If fully completed, it doesn't show in active date filters
+    if (pendingStepIdx === -1) return false;
+
+    const firstItem = orderItems[0] as any;
+    const plannedRaw = firstItem[`planned_${pendingStepIdx}`] as string;
+    if (!plannedRaw || plannedRaw === "-" || plannedRaw.trim() === "")
+      return false;
+
+    const pd = new Date(plannedRaw);
+    if (isNaN(pd.getTime())) return false;
+
+    const pdDay = new Date(pd);
+    pdDay.setHours(0, 0, 0, 0);
+
+    const diffDays = Math.round(
+      (pdDay.getTime() - today.getTime()) / (1000 * 60 * 60 * 24),
+    );
+
+    if (filter === "Delayed") return pd < now;
+    if (filter === "Today") return diffDays === 0;
+    if (filter === "Tomorrow") return diffDays === 1;
+    if (filter === "Next5") return diffDays > 0 && diffDays <= 5;
+    if (filter === "Next10") return diffDays > 0 && diffDays <= 10;
+
+    return false;
+  };
+
+  const orderMatchesAnyFilter = (no: string, sourceGrouped: Record<string, O2D[]>): boolean => {
+    const items = sourceGrouped[no];
     if (!items || items.length === 0) return false;
 
     if (!getBaseFilterMatch(no, items)) return false;
@@ -772,20 +837,57 @@ export default function O2DPage() {
   };
 
   const getStepFilterCount = (stepIdx: number): number => {
-    // Use pre-computed summary data for accurate counts across ALL orders
     if (summaryData?.stepCounts && stepIdx >= 1 && stepIdx <= 11) {
       return summaryData.stepCounts[stepIdx - 1] || 0;
     }
     return 0;
   };
 
-  const sortedOrderNumbers = useMemo(() => {
-    // With server-side pagination, we use the server-provided order numbers
-    // These are already sorted and paginated
-    return paginatedOrderNumbers;
-  }, [paginatedOrderNumbers]);
 
-  // paginatedOrderNumbers is provided by the server, no client-side slicing needed
+
+
+  const memoizedOrderOptions = useMemo(() => {
+    return allOrderNumbers || [];
+  }, [allOrderNumbers]);
+
+  const memoizedItemOptions = useMemo(() => {
+    return Array.from(new Set(dropdownItems.map((di) => di.name))).sort();
+  }, [dropdownItems]);
+
+  // Client-side filtering logic across ALL orders
+  const filteredOrderNumbers = useMemo(() => {
+    return Object.keys(groupedOrders)
+      .filter((no) => orderMatchesAnyFilter(no, groupedOrders))
+      .sort((a, b) => b.localeCompare(a));
+  }, [groupedOrders, searchTerm, selectedDateFilters, selectedStepFilters, tableFilterParty, tableFilterOrderNo, tableFilterItemName, tableFilterPending, filterStartDate, filterEndDate]);
+
+  const totalOrdersCount = filteredOrderNumbers.length;
+  const totalItemsCount = allO2DsRaw.length;
+
+  useEffect(() => {
+    // Scroll to top on filter change
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }, [searchTerm, selectedDateFilters, selectedStepFilters]);
+
+  const toggleDateFilter = (id: string) => {
+    if (id === "") {
+      setSelectedDateFilters([]);
+      return;
+    }
+    setSelectedDateFilters((prev) =>
+      prev.includes(id) ? prev.filter((f) => f !== id) : [...prev, id],
+    );
+  };
+
+  const toggleStepFilter = (stepIdx: number) => {
+    setSelectedStepFilters((prev) =>
+      prev.includes(stepIdx)
+        ? prev.filter((s) => s !== stepIdx)
+        : [...prev, stepIdx],
+    );
+  };
+
+
 
   const addItemRow = () =>
     setItems([
@@ -835,73 +937,6 @@ export default function O2DPage() {
     setEditingOrderNo(null);
   };
 
-  const calculatePlannedDate = (baseDate: string | Date, tatString: string) => {
-    if (!baseDate || !tatString) return "";
-    let date = new Date(baseDate);
-    if (isNaN(date.getTime())) return "";
-
-    const parts = tatString.trim().split(" ");
-    let val = parseFloat(parts[0]);
-    const unit = parts[1]?.toLowerCase() || "hrs";
-    if (isNaN(val)) return date.toISOString();
-
-    // Convert everything to minutes to consume
-    let totalMinutesToConsume = unit.includes("day") ? val * 10 * 60 : val * 60;
-
-    const WORK_START_HOUR = 9.5; // 9:30 AM
-    const WORK_END_HOUR = 19.5; // 7:30 PM
-    const MINS_PER_WORK_DAY = (WORK_END_HOUR - WORK_START_HOUR) * 60;
-
-    while (totalMinutesToConsume > 0) {
-      // 1. Skip Sunday
-      if (date.getDay() === 0) {
-        date.setDate(date.getDate() + 1);
-        date.setHours(9, 30, 0, 0);
-        continue;
-      }
-
-      // 2. Adjust current time to working window if outside
-      let hours = date.getHours();
-      let mins = date.getMinutes();
-      let currentTimeVal = hours + mins / 60;
-
-      if (currentTimeVal >= WORK_END_HOUR) {
-        // Move to next day 9:30 AM
-        date.setDate(date.getDate() + 1);
-        date.setHours(9, 30, 0, 0);
-        continue;
-      }
-
-      if (currentTimeVal < WORK_START_HOUR) {
-        date.setHours(9, 30, 0, 0);
-        currentTimeVal = WORK_START_HOUR;
-      }
-
-      // 3. Calculate available minutes in the current window
-      const endOfToday = new Date(date);
-      endOfToday.setHours(19, 30, 0, 0);
-      const availableMinutesToday =
-        (endOfToday.getTime() - date.getTime()) / (1000 * 60);
-
-      if (totalMinutesToConsume <= availableMinutesToday) {
-        date.setMinutes(date.getMinutes() + totalMinutesToConsume);
-        totalMinutesToConsume = 0;
-      } else {
-        totalMinutesToConsume -= availableMinutesToday;
-        // Move to next day 9:30 AM
-        date.setDate(date.getDate() + 1);
-        date.setHours(9, 30, 0, 0);
-      }
-    }
-
-    // Final check: if final date falls on Sunday (unlikely due to loop logic but safe), move to Monday
-    if (date.getDay() === 0) {
-      date.setDate(date.getDate() + 1);
-      date.setHours(9, 30, 0, 0);
-    }
-
-    return date.toISOString();
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -915,10 +950,10 @@ export default function O2DPage() {
     setIsStatusModalOpen(true);
 
     // Optimistic Update
-    const currentO2Ds = o2ds;
-    let optimisticO2Ds = [...o2ds];
+    const currentO2Ds = allO2DsRaw;
+    let optimisticO2Ds = [...allO2DsRaw];
     let currentMaxId =
-      o2ds.length > 0 ? Math.max(...o2ds.map((o) => parseInt(o.id) || 0)) : 0;
+      allO2DsRaw.length > 0 ? Math.max(...allO2DsRaw.map((o: any) => parseInt(o.id) || 0)) : 0;
 
     try {
       if (editingOrderNo) {
@@ -1030,7 +1065,7 @@ export default function O2DPage() {
         if (!res.ok) throw new Error("Update failed");
       } else {
         const tat1 = globalConfigs[0]?.tat || "24 Hrs";
-        const finalOrderNo = generateOrderNo(o2ds);
+        const finalOrderNo = generateOrderNo(allO2DsRaw);
         let initRecord: any = { planned_1: calculatePlannedDate(now, tat1) };
         for (let i = 2; i <= 11; i++) initRecord[`planned_${i}`] = "";
 
@@ -1128,8 +1163,8 @@ export default function O2DPage() {
     const orderNo = confirmPayload?.orderNo;
     if (!orderNo) return;
 
-    const currentO2Ds = o2ds;
-    const optimisticO2Ds = o2ds.filter((o) => o.order_no !== orderNo);
+    const currentO2Ds = allO2DsRaw;
+    const optimisticO2Ds = allO2DsRaw.filter((o: any) => o.order_no !== orderNo);
 
     mutate("O2D", optimisticO2Ds, false);
     setSelectedOrderNo(null);
@@ -1238,8 +1273,8 @@ export default function O2DPage() {
     if (!orderNo) return;
 
     const newValue = !currentValue ? new Date().toISOString() : "";
-    const currentO2Ds = o2ds;
-    const optimisticO2Ds = o2ds.map((o) =>
+    const currentO2Ds = allO2DsRaw;
+    const optimisticO2Ds = allO2DsRaw.map((o: any) =>
       o.order_no === orderNo ? { ...o, [action]: newValue } : o,
     );
 
@@ -1285,11 +1320,11 @@ export default function O2DPage() {
   }, [groupedOrders, selectedOrderNo]);
 
   const flattenedO2Ds = useMemo(() => {
-    if (!o2ds || o2ds.length === 0) return [];
+    if (!allO2DsRaw || allO2DsRaw.length === 0) return [];
 
     // 1. Group by order_no
     const groups: Record<string, O2D[]> = {};
-    o2ds.forEach((item) => {
+    allO2DsRaw.forEach((item: any) => {
       const no = item.order_no || "Unknown";
       if (!groups[no]) groups[no] = [];
       groups[no].push(item);
@@ -1323,7 +1358,7 @@ export default function O2DPage() {
     });
 
     return result;
-  }, [o2ds]);
+  }, [allO2DsRaw]);
 
   const filteredTableData = useMemo(() => {
     return flattenedO2Ds.filter((item) => {
@@ -1401,10 +1436,9 @@ export default function O2DPage() {
   const tableTotalPages = Math.ceil(
     filteredTableData.length / tableItemsPerPage,
   );
-  const paginatedTableData = useMemo(() => {
-    const start = (tableCurrentPage - 1) * tableItemsPerPage;
-    return filteredTableData.slice(start, start + tableItemsPerPage);
-  }, [filteredTableData, tableCurrentPage]);
+  const tableData = useMemo(() => {
+    return filteredTableData;
+  }, [filteredTableData]);
 
   const handleRemoveFollowUp = async () => {
     if (!selectedOrderNo) return;
@@ -1568,10 +1602,10 @@ export default function O2DPage() {
     if (!selectedOrderNo) return;
 
     const timestamp = new Date().toISOString();
-    const currentO2Ds = o2ds;
+    const currentO2Ds = allO2DsRaw;
 
     // Prepare optimistic update
-    const updatedO2Ds = o2ds.map((o2d) => {
+    const updatedO2Ds = allO2DsRaw.map((o2d: any) => {
       if (o2d.order_no !== selectedOrderNo) return o2d;
 
       const updated = { ...o2d };
@@ -1989,7 +2023,7 @@ export default function O2DPage() {
           )}
 
           {/* Loading Bar Indicator */}
-          {(isPageLoading || isTransitioning) && (
+          {(isAllLoading || isTransitioning) && (
             <div className="h-1 bg-gradient-to-r from-[#003875] via-[#FFD500] to-[#003875] animate-pulse shrink-0" />
           )}
 
@@ -2011,8 +2045,8 @@ export default function O2DPage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-50 dark:divide-navy-800/20">
-                      {paginatedTableData.length > 0 ? (
-                        paginatedTableData.map((item, idx) => (
+                      {tableData.length > 0 ? (
+                        tableData.slice((tableCurrentPage - 1) * tableItemsPerPage, tableCurrentPage * tableItemsPerPage).map((item, idx) => (
                           <tr
                             key={idx}
                             className="group hover:bg-[#003875]/[0.02] dark:hover:bg-white/5 transition-colors"
@@ -2109,86 +2143,46 @@ export default function O2DPage() {
                     </tbody>
                   </table>
                 </div>
-
-                {/* Table View Pagination Footer */}
-                {!isLoading && filteredTableData.length > tableItemsPerPage && (
-                  <div className="shrink-0 px-6 py-4 bg-gray-50 dark:bg-navy-950 border-t border-gray-100 dark:border-navy-800 flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
-                        Showing{" "}
-                        <span className="text-[#003875] dark:text-[#FFD500]">
-                          {(tableCurrentPage - 1) * tableItemsPerPage + 1}
-                        </span>{" "}
-                        to{" "}
-                        <span className="text-[#003875] dark:text-[#FFD500]">
-                          {Math.min(
-                            tableCurrentPage * tableItemsPerPage,
-                            filteredTableData.length,
-                          )}
-                        </span>{" "}
-                        of{" "}
-                        <span className="text-gray-600 dark:text-gray-300 font-black">
-                          {filteredTableData.length}
-                        </span>{" "}
-                        entries
-                      </span>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <button
-                        disabled={tableCurrentPage === 1}
-                        onClick={() =>
-                          setTableCurrentPage((prev) => Math.max(1, prev - 1))
-                        }
-                        className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white dark:bg-navy-900 border border-gray-200 dark:border-navy-800 text-[10px] font-black uppercase tracking-widest text-[#003875] dark:text-[#FFD500] disabled:opacity-30 hover:shadow-md transition-all active:scale-95 shadow-sm"
-                      >
-                        <ChevronLeftIcon className="w-3.5 h-3.5" />
-                        Prev
-                      </button>
-
-                      <div className="flex items-center gap-1">
-                        {Array.from(
-                          { length: Math.min(5, tableTotalPages) },
-                          (_, i) => {
-                            let pageNum = tableCurrentPage;
-                            if (tableTotalPages <= 5) pageNum = i + 1;
-                            else if (tableCurrentPage <= 3) pageNum = i + 1;
-                            else if (tableCurrentPage >= tableTotalPages - 2)
-                              pageNum = tableTotalPages - 4 + i;
-                            else pageNum = tableCurrentPage - 2 + i;
-
-                            return (
-                              <button
-                                key={pageNum}
-                                onClick={() => setTableCurrentPage(pageNum)}
-                                className={`w-9 h-9 rounded-xl text-[11px] font-black transition-all ${
-                                  tableCurrentPage === pageNum
-                                    ? "bg-[#003875] text-[#FFD500] shadow-lg scale-110 z-10"
-                                    : "bg-white dark:bg-navy-900 text-gray-400 border border-gray-100 dark:border-navy-800 hover:border-[#003875] dark:hover:border-[#FFD500]"
-                                }`}
-                              >
-                                {pageNum}
-                              </button>
-                            );
-                          },
-                        )}
-                      </div>
-
-                      <button
-                        disabled={tableCurrentPage === tableTotalPages}
-                        onClick={() =>
-                          setTableCurrentPage((prev) =>
-                            Math.min(tableTotalPages, prev + 1),
-                          )
-                        }
-                        className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white dark:bg-navy-900 border border-gray-200 dark:border-navy-800 text-[10px] font-black uppercase tracking-widest text-[#003875] dark:text-[#FFD500] disabled:opacity-30 hover:shadow-md transition-all active:scale-95 shadow-sm"
-                      >
-                        Next
-                        <ChevronRightIcon className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
+                {/* Table Pagination Footer */}
+                <div className="p-4 bg-gray-50 dark:bg-navy-950 border-t border-gray-100 dark:border-navy-800 flex items-center justify-between shrink-0">
+                  <div className="text-[11px] font-black text-gray-400 uppercase tracking-widest">
+                    Showing <span className="text-[#003875] dark:text-[#FFD500]">{(tableCurrentPage - 1) * tableItemsPerPage + 1}</span> to <span className="text-[#003875] dark:text-[#FFD500]">{Math.min(tableCurrentPage * tableItemsPerPage, tableData.length)}</span> of <span className="text-[#003875] dark:text-[#FFD500]">{tableData.length}</span> entries
                   </div>
-                )}
+                  
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setTableCurrentPage(p => Math.max(1, p - 1))}
+                      disabled={tableCurrentPage === 1}
+                      className="flex items-center gap-1.5 px-4 py-2 bg-white dark:bg-black border border-gray-100 dark:border-navy-700 rounded-xl text-[10px] font-black uppercase tracking-widest hover:border-[#FFD500] disabled:opacity-30 transition-all shadow-sm group"
+                    >
+                      <ChevronLeftIcon className="w-4 h-4 transition-transform group-hover:-translate-x-0.5" />
+                      Prev
+                    </button>
+                    
+                    <div className="flex items-center gap-1 mx-2">
+                      {/* Show current, first, last, and some relative pages if many exist */}
+                      {(() => {
+                        const totalPages = Math.ceil(tableData.length / tableItemsPerPage);
+                        if (totalPages <= 1) return null;
+                        
+                        return (
+                          <span className="px-4 py-2 bg-[#003875]/5 dark:bg-[#FFD500]/5 rounded-xl border border-[#003875]/10 dark:border-[#FFD500]/10 text-[11px] font-black text-[#003875] dark:text-[#FFD500]">
+                            Page {tableCurrentPage} of {totalPages}
+                          </span>
+                        );
+                      })()}
+                    </div>
+
+                    <button
+                      onClick={() => setTableCurrentPage(p => Math.min(Math.ceil(tableData.length / tableItemsPerPage), p + 1))}
+                      disabled={tableCurrentPage >= Math.ceil(tableData.length / tableItemsPerPage)}
+                      className="flex items-center gap-1.5 px-4 py-2 bg-white dark:bg-black border border-gray-100 dark:border-navy-700 rounded-xl text-[10px] font-black uppercase tracking-widest hover:border-[#FFD500] disabled:opacity-30 transition-all shadow-sm group"
+                    >
+                      Next
+                      <ChevronRightIcon className="w-4 h-4 transition-transform group-hover:translate-x-0.5" />
+                    </button>
+                  </div>
+                </div>
               </div>
             ) : (
               <>
@@ -2209,56 +2203,35 @@ export default function O2DPage() {
                     </div>
 
                     {/* Sidebar Pagination - Top Position */}
-                    {!isPageLoading && totalPages > 1 && (
-                      <div className="flex items-center justify-between gap-2 px-1 py-1 bg-white/50 dark:bg-navy-800/50 rounded-xl border border-gray-100 dark:border-navy-700 shadow-sm">
-                        <button
-                          disabled={currentPage === 1 || isTransitioning}
-                          onClick={() => {
-                            setIsTransitioning(true);
-                            setCurrentPage((prev) => Math.max(1, prev - 1));
-                            setTimeout(() => setIsTransitioning(false), 500);
-                          }}
-                          className="p-1.5 rounded-lg bg-white dark:bg-navy-800 border border-gray-200 dark:border-navy-700 disabled:opacity-30 text-[#003875] dark:text-[#FFD500] hover:shadow-md transition-all active:scale-95"
-                        >
-                          <ChevronLeftIcon className="w-3.5 h-3.5" />
-                        </button>
-                        <div className="flex items-center gap-2">
-                          <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">
-                            Page
-                          </span>
-                          <span className="text-[11px] font-black text-[#003875] dark:text-white leading-none">
-                            {currentPage}{" "}
-                            <span className="text-gray-300 dark:text-gray-600 mx-0.5">
-                              /
-                            </span>{" "}
-                            {totalPages}
-                          </span>
-                        </div>
-                        <button
-                          disabled={currentPage === totalPages || isTransitioning}
-                          onClick={() => {
-                            setIsTransitioning(true);
-                            setCurrentPage((prev) =>
-                              Math.min(totalPages, prev + 1),
-                            );
-                            setTimeout(() => setIsTransitioning(false), 500);
-                          }}
-                          className="p-1.5 rounded-lg bg-white dark:bg-navy-800 border border-gray-200 dark:border-navy-700 disabled:opacity-30 text-[#003875] dark:text-[#FFD500] hover:shadow-md transition-all active:scale-95"
-                        >
-                          <ChevronRightIcon className="w-3.5 h-3.5" />
-                        </button>
+                    {/* Sidebar Header Stats */}
+                    <div className="flex items-center justify-between px-2 py-1.5 bg-[#003875]/5 dark:bg-[#FFD500]/5 rounded-xl border border-[#003875]/10 dark:border-[#FFD500]/10 shadow-sm">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                          Matches:
+                        </span>
+                        <span className="text-[11px] font-black text-[#003875] dark:text-[#FFD500]">
+                          {filteredOrderNumbers.length}
+                        </span>
                       </div>
-                    )}
+                      <div className="flex items-center gap-2">
+                         <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                          Total:
+                        </span>
+                        <span className="text-[11px] font-black text-gray-600 dark:text-gray-300">
+                          {allO2DsRaw.length}
+                        </span>
+                      </div>
+                    </div>
                   </div>
                   <div className="flex-1 overflow-y-auto no-scrollbar p-2 space-y-1.5">
-                    {isPageLoading || isTransitioning ? (
+                    {isAllLoading ? (
                       <div className="flex flex-col items-center justify-center h-40 space-y-3">
                         <div className="w-8 h-8 border-3 border-[#FFD500]/20 border-t-[#FFD500] rounded-full animate-spin" />
                         <p className="text-[10px] font-black text-gray-400 tracking-widest uppercase">
                           Loading Orders...
                         </p>
                       </div>
-                    ) : paginatedOrderNumbers.length === 0 ? (
+                    ) : filteredOrderNumbers.length === 0 ? (
                       <div className="text-center py-20 opacity-50">
                         <ShoppingBagIcon className="w-10 h-10 text-gray-100 mx-auto mb-2" />
                         <p className="text-[11px] font-black uppercase tracking-widest italic text-gray-400">
@@ -2266,8 +2239,9 @@ export default function O2DPage() {
                         </p>
                       </div>
                     ) : (
-                      paginatedOrderNumbers.map((no) => {
-                        const orderItems = groupedOrders[no];
+                      <>
+                        {filteredOrderNumbers.slice((sidebarCurrentPage - 1) * sidebarItemsPerPage, sidebarCurrentPage * sidebarItemsPerPage).map((no) => {
+                          const orderItems = groupedOrders[no];
                         const first = orderItems[0];
                         const totalQty = orderItems.reduce(
                           (sum: number, item: O2D) =>
@@ -2421,9 +2395,32 @@ export default function O2DPage() {
                             </div>
                           </div>
                         );
-                      })
-                    )}
-                  </div>
+                      })}
+                      {/* Sidebar Pagination Footer */}
+                      <div className="mt-auto p-3 bg-gray-50/50 dark:bg-navy-900/50 border-t border-gray-100 dark:border-navy-800 flex items-center justify-between shrink-0">
+                        <div className="text-[9px] font-black text-gray-400 uppercase tracking-widest">
+                          Page {sidebarCurrentPage} / {Math.ceil(filteredOrderNumbers.length / sidebarItemsPerPage) || 1}
+                        </div>
+                        <div className="flex gap-1.5">
+                          <button
+                            onClick={() => setSidebarCurrentPage(p => Math.max(1, p - 1))}
+                            disabled={sidebarCurrentPage === 1}
+                            className="p-1.5 bg-white dark:bg-black border border-gray-100 dark:border-navy-700 rounded-lg hover:border-[#FFD500] disabled:opacity-30 transition-all shadow-sm"
+                          >
+                            <ChevronLeftIcon className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => setSidebarCurrentPage(p => Math.min(Math.ceil(filteredOrderNumbers.length / sidebarItemsPerPage), p + 1))}
+                            disabled={sidebarCurrentPage >= Math.ceil(filteredOrderNumbers.length / sidebarItemsPerPage)}
+                            className="p-1.5 bg-white dark:bg-black border border-gray-100 dark:border-navy-700 rounded-lg hover:border-[#FFD500] disabled:opacity-30 transition-all shadow-sm"
+                          >
+                            <ChevronRightIcon className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
                 </div>
 
                 {/* Thick Dark Blue Divider Line */}
@@ -2434,7 +2431,7 @@ export default function O2DPage() {
                   className={`flex-1 flex flex-col min-w-0 bg-white dark:bg-navy-900/20 relative ${!selectedOrderNo ? "hidden lg:flex" : "flex"}`}
                 >
                   {/* Loading Overlay */}
-                  {(isPageLoading || isTransitioning) && (
+                  {(isAllLoading || isTransitioning) && (
                     <div className="absolute inset-0 bg-white/60 dark:bg-navy-900/60 backdrop-blur-sm flex items-center justify-center z-40 rounded-lg">
                       <div className="flex flex-col items-center gap-3">
                         <div className="w-8 h-8 border-3 border-[#003875]/20 dark:border-[#FFD500]/20 border-t-[#003875] dark:border-t-[#FFD500] rounded-full animate-spin" />
@@ -2681,7 +2678,7 @@ export default function O2DPage() {
                                 <div className="relative h-full bg-white dark:bg-black border-4 border-white dark:border-navy-800 rounded-xl overflow-hidden shadow-xl group-hover:scale-105 transition-transform">
                                   {selectedOrder[0]?.order_screenshot ? (
                                     <img
-                                      src={getDriveImageUrl(
+                                      src={getEffectiveUrl(
                                         selectedOrder[0]?.order_screenshot,
                                       )}
                                       className="w-full h-full object-cover"
@@ -2691,14 +2688,9 @@ export default function O2DPage() {
                                   )}
                                   <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
                                     <a
-                                      href={
-                                        selectedOrder[0]?.order_screenshot
-                                          ? getDriveImageUrl(
-                                              selectedOrder[0]
-                                                ?.order_screenshot,
-                                            )
-                                          : "#"
-                                      }
+                                      href={getEffectiveUrl(
+                                        selectedOrder[0]?.order_screenshot,
+                                      )}
                                       target="_blank"
                                       className="p-2 bg-white rounded-full transition-transform hover:scale-110"
                                       title="View"
@@ -2707,7 +2699,9 @@ export default function O2DPage() {
                                     </a>
                                     {selectedOrder[0]?.order_screenshot && (
                                       <a
-                                        href={`https://drive.google.com/uc?export=download&id=${selectedOrder[0]?.order_screenshot}`}
+                                        href={getEffectiveUrl(
+                                          selectedOrder[0]?.order_screenshot,
+                                        )}
                                         target="_blank"
                                         className="p-2 bg-white rounded-full transition-transform hover:scale-110"
                                         title="Download"
@@ -2972,16 +2966,19 @@ export default function O2DPage() {
                                 {selectedOrder[0]?.upload_so_1 && (
                                   <div className="flex items-center gap-2 mt-1">
                                     <a
-                                      href={getDriveImageUrl(
+                                      href={getEffectiveUrl(
                                         selectedOrder[0]?.upload_so_1,
                                       )}
                                       target="_blank"
-                                      className="flex items-center gap-2 px-4 py-2 bg-[#003875]/5 rounded-lg text-[11px] font-black text-[#003875] hover:bg-[#003875]/10 transition-all uppercase tracking-widest"
+                                      className="p-1 px-2.5 bg-[#003875]/5 dark:bg-[#FFD500]/5 text-[#003875] dark:text-[#FFD500] rounded-full text-[9px] font-black uppercase tracking-widest hover:bg-[#003875] hover:text-white dark:hover:bg-[#FFD500] dark:hover:text-black transition-all flex items-center gap-1"
                                     >
-                                      <EyeIcon className="w-4 h-4" /> View SO Doc
+                                      <EyeIcon className="w-3 h-3" />
+                                      View
                                     </a>
                                     <a
-                                      href={`https://drive.google.com/uc?export=download&id=${selectedOrder[0]?.upload_so_1}`}
+                                      href={getEffectiveUrl(
+                                        selectedOrder[0]?.upload_so_1,
+                                      )}
                                       target="_blank"
                                       className="flex items-center gap-1.5 px-3 py-2 bg-[#003875]/5 rounded-lg text-[11px] font-black text-[#003875] hover:bg-[#003875]/10 transition-all uppercase tracking-widest"
                                       title="Download SO Doc"
@@ -3025,16 +3022,19 @@ export default function O2DPage() {
                                 {selectedOrder[0]?.upload_pi_5 && (
                                   <div className="flex items-center gap-2 mt-1">
                                     <a
-                                      href={getDriveImageUrl(
+                                      href={getEffectiveUrl(
                                         selectedOrder[0]?.upload_pi_5,
                                       )}
                                       target="_blank"
-                                      className="flex items-center gap-2 px-4 py-2 bg-[#003875]/5 rounded-lg text-[11px] font-black text-[#003875] hover:bg-[#003875]/10 transition-all uppercase tracking-widest"
+                                      className="p-1 px-2.5 bg-[#003875]/5 dark:bg-[#FFD500]/5 text-[#003875] dark:text-[#FFD500] rounded-full text-[9px] font-black uppercase tracking-widest hover:bg-[#003875] hover:text-white dark:hover:bg-[#FFD500] dark:hover:text-black transition-all flex items-center gap-1"
                                     >
-                                      <EyeIcon className="w-4 h-4" /> View PI Doc
+                                      <EyeIcon className="w-3 h-3" />
+                                      View
                                     </a>
                                     <a
-                                      href={`https://drive.google.com/uc?export=download&id=${selectedOrder[0]?.upload_pi_5}`}
+                                      href={getEffectiveUrl(
+                                        selectedOrder[0]?.upload_pi_5,
+                                      )}
                                       target="_blank"
                                       className="flex items-center gap-1.5 px-3 py-2 bg-[#003875]/5 rounded-lg text-[11px] font-black text-[#003875] hover:bg-[#003875]/10 transition-all uppercase tracking-widest"
                                       title="Download PI Doc"
@@ -3078,7 +3078,7 @@ export default function O2DPage() {
                                     </div>
                                     {selectedOrder[0]?.attach_bilty_9 && (
                                       <a
-                                        href={getDriveImageUrl(
+                                        href={getEffectiveUrl(
                                           selectedOrder[0]?.attach_bilty_9,
                                         )}
                                         target="_blank"
@@ -3733,7 +3733,12 @@ export default function O2DPage() {
                                   e.target.value,
                                 )
                               }
-                              className="w-full h-[34px] bg-[#FEF6DB] dark:bg-black px-3 rounded-lg border border-orange-100 dark:border-navy-700 focus:border-[#FFD500] outline-none font-bold text-[11px] text-[#003875] dark:text-[#FFD500] shadow-sm transition-all"
+                              readOnly={!!dropdownItems.find(di => di.name === item.item_name)}
+                              className={`w-full h-[34px] px-3 rounded-lg border focus:border-[#FFD500] outline-none font-bold text-[11px] shadow-sm transition-all ${
+                                dropdownItems.find(di => di.name === item.item_name) 
+                                ? "bg-gray-100 dark:bg-navy-950 text-gray-500 cursor-not-allowed border-gray-200 dark:border-navy-700" 
+                                : "bg-[#FEF6DB] dark:bg-black text-[#003875] dark:text-[#FFD500] border-orange-100 dark:border-navy-700"
+                              }`}
                             />
                           </div>
                         </div>
@@ -4589,27 +4594,17 @@ function BusyModal({
   const [copyStatus, setCopyStatus] = useState("Copy All for Busy");
   const [selectedBusyDate, setSelectedBusyDate] = useState<string>("");
   const [isBusyCalendarOpen, setIsBusyCalendarOpen] = useState(false);
-  const [allGroupedOrders, setAllGroupedOrders] = useState<any>(groupedOrders);
-  const [isLoadingOrders, setIsLoadingOrders] = useState(false);
+  const [isLoadingOrders] = useState(false);
 
+  // Use the groupedOrders prop directly — it's already populated from the
+  // parent's SWR cache and contains normalized field names.
+  const allGroupedOrders = groupedOrders;
+
+  // Reset selections when modal opens
   useEffect(() => {
     if (!isOpen) return;
-    setIsLoadingOrders(true);
-    fetch("/api/o2d?all=true")
-      .then((res) => res.json())
-      .then((data) => {
-        if (Array.isArray(data)) {
-          const grouped = data.reduce((acc: Record<string, any[]>, o2d: any) => {
-            const orderNo = o2d.order_no || "Unknown";
-            if (!acc[orderNo]) acc[orderNo] = [];
-            acc[orderNo].push(o2d);
-            return acc;
-          }, {});
-          setAllGroupedOrders(grouped);
-        }
-      })
-      .catch(console.error)
-      .finally(() => setIsLoadingOrders(false));
+    setSelectedNos([]);
+    setSelectedBusyDate("");
   }, [isOpen]);
 
   const orderOptions = useMemo(() => {
@@ -4688,7 +4683,7 @@ function BusyModal({
         found: true,
       };
     });
-  }, [selectedNos, groupedOrders, fullParties]);
+  }, [selectedNos, allGroupedOrders, fullParties]);
 
   const handleCopy = () => {
     // Format as Tab-Separated Values for easy pasting into grids

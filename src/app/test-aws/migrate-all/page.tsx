@@ -1,11 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
+import * as XLSX from "xlsx";
 
 export default function MigrateAllPage() {
   const [logs, setLogs] = useState<string[]>([]);
   const [isMigrating, setIsMigrating] = useState(false);
   const [progress, setProgress] = useState(0);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const log = (msg: string) => {
     setLogs((prev) => [...prev, `${new Date().toLocaleTimeString()} - ${msg}`]);
@@ -24,6 +26,7 @@ export default function MigrateAllPage() {
     { name: "Chat", endpoint: "chat" },
     { name: "Scheduler", endpoint: "scheduler" },
     { name: "Scot", endpoint: "scot" },
+    { name: "Help Tickets", endpoint: "help-ticket" },
   ];
 
   const handleMigrate = async (moduleName: string, endpoint: string) => {
@@ -59,6 +62,61 @@ export default function MigrateAllPage() {
       log(`SYSTEM ERROR: ${err.message}`);
     } finally {
       setIsMigrating(false);
+    }
+  };
+
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    try {
+      setIsMigrating(true);
+      log(`Reading file: ${file.name}...`);
+      const reader = new FileReader();
+      
+      reader.onload = async (e) => {
+        const data = new Uint8Array(e.target?.result as ArrayBuffer);
+        const workbook = XLSX.read(data, { type: "array" });
+        const firstSheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[firstSheetName];
+        const jsonData = XLSX.utils.sheet_to_json(worksheet);
+
+        log(`Parsed ${jsonData.length} records from file.`);
+        
+        // Ask user to confirm module type (for simplicity we'll assume it's O2D for now if it has order_no)
+        let endpoint = "o2d";
+        const sample: any = jsonData[0];
+        if (sample?.indend_num) endpoint = "i2r";
+        if (sample?.employee_code) endpoint = "user";
+
+        log(`Targeting module: ${endpoint}`);
+
+        // Chunk and send
+        const chunkSize = 100;
+        for (let i = 0; i < jsonData.length; i += chunkSize) {
+          const chunk = jsonData.slice(i, i + chunkSize);
+          log(`Migrating chunk ${Math.floor(i/chunkSize) + 1}...`);
+          
+          const response = await fetch(`/api/migrate-data?module=${endpoint}&isManual=true`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ data: chunk }),
+          });
+
+          if (!response.ok) {
+            const error = await response.json();
+            log(`ERROR in chunk: ${error.message}`);
+            break;
+          }
+        }
+        log("CSV/Excel Migration Complete.");
+      };
+      reader.readAsArrayBuffer(file);
+    } catch (err: any) {
+      log(`FILE ERROR: ${err.message}`);
+    } finally {
+      setIsMigrating(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };
 
@@ -106,11 +164,29 @@ export default function MigrateAllPage() {
 
   return (
     <div className="p-8 max-w-6xl mx-auto space-y-8 bg-zinc-950 min-h-screen text-zinc-100">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight text-white">Master Data Migration</h1>
-        <p className="text-zinc-400 mt-2">
-          Sync data from legacy Google Sheets directly into AWS DynamoDB.
-        </p>
+      <div className="flex justify-between items-start">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight text-white">Master Data Migration</h1>
+          <p className="text-zinc-400 mt-2">
+            Sync data from legacy Google Sheets directly into AWS DynamoDB.
+          </p>
+        </div>
+        <div className="flex gap-4">
+          <input 
+            type="file" 
+            ref={fileInputRef} 
+            onChange={handleFileUpload} 
+            className="hidden" 
+            accept=".csv,.xlsx,.xls"
+          />
+          <button 
+            onClick={() => fileInputRef.current?.click()}
+            disabled={isMigrating}
+            className="px-6 py-2 bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg font-medium transition-all disabled:opacity-50 border border-zinc-700"
+          >
+            IMPORT CSV/EXCEL
+          </button>
+        </div>
       </div>
 
       {progress > 0 && (
