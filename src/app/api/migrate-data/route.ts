@@ -46,13 +46,23 @@ export async function POST(req: NextRequest) {
     const timestamp = new Date().toISOString();
     let count = 0;
 
+    // Safety Check: Ensure the requested model exists in the generated client
+    const getModel = (name: string) => {
+      const model = (client.models as any)[name];
+      if (!model) {
+        throw new Error(`CRITICAL: Model '${name}' is not defined in the Amplify client. This usually means the backend deployment skipped this table or your amplify_outputs.json is outdated.`);
+      }
+      return model;
+    };
+
     switch (module) {
       case "o2d": {
         console.log("Fetching O2D data from Google Sheets...");
         const data = await getO2Ds();
         console.log(`Migrating ${data.length} O2D records...`);
+        const model = getModel("O2DRecord");
         count = await batchInsert(data, (item) =>
-          client.models.O2DRecord.create({
+          model.create({
             ...item,
             id: item.id || `O2D-${Date.now()}-${Math.random()}`,
             created_at: item.created_at || timestamp,
@@ -66,8 +76,9 @@ export async function POST(req: NextRequest) {
         console.log("Fetching I2R data from Google Sheets...");
         const data = await getI2RItems();
         console.log(`Migrating ${data.length} I2R records...`);
+        const model = getModel("I2RRecord");
         count = await batchInsert(data, (item) =>
-          client.models.I2RRecord.create({
+          model.create({
             ...item,
             id: item.id || `I2R-${Date.now()}-${Math.random()}`,
             created_at: item.created_at || timestamp,
@@ -81,8 +92,9 @@ export async function POST(req: NextRequest) {
         console.log("Fetching IMS data from Google Sheets...");
         const data = await getIMSItems();
         console.log(`Migrating ${data.length} IMS records...`);
+        const model = getModel("IMSItem");
         count = await batchInsert(data, (item) =>
-          client.models.IMSItem.create({
+          model.create({
             ...item,
             id: item.id || `IMS-${Date.now()}-${Math.random()}`,
             created_at: item.created_at || timestamp,
@@ -96,8 +108,9 @@ export async function POST(req: NextRequest) {
         console.log("Fetching Party Management data from Google Sheets...");
         const data = await getParties();
         console.log(`Migrating ${data.length} party records...`);
+        const model = getModel("Party");
         count = await batchInsert(data, (item) =>
-          client.models.Party.create({
+          model.create({
             ...item,
             id: item.id || `PARTY-${Date.now()}-${Math.random()}`,
             created_at: item.created_at || timestamp,
@@ -111,8 +124,9 @@ export async function POST(req: NextRequest) {
         console.log("Fetching Attendance data from Google Sheets...");
         const data = await getAttendanceRecords();
         console.log(`Migrating ${data.length} attendance records...`);
+        const model = getModel("AttendanceRecord");
         count = await batchInsert(data, (item) =>
-          client.models.AttendanceRecord.create({
+          model.create({
             ...item,
             id: item.id || `ATT-${Date.now()}-${Math.random()}`,
             userId: String(item.userId || item.user_id || ""),
@@ -134,8 +148,9 @@ export async function POST(req: NextRequest) {
         
         const data = await messageService.getAll() || [];
         console.log(`Migrating ${data.length} chat messages...`);
+        const model = getModel("ChatMessage");
         count = await batchInsert(data, (item) =>
-          client.models.ChatMessage.create({
+          model.create({
             ...item,
             id: item.id || `MSG-${Date.now()}-${Math.random()}`,
             created_at: item.created_at || timestamp,
@@ -153,8 +168,11 @@ export async function POST(req: NextRequest) {
         ]);
         console.log(`Migrating ${calls.length} call records and ${followUps.length} follow-ups...`);
 
+        const callModel = getModel("CallRecord");
+        const followUpModel = getModel("FollowUpRecord");
+
         const callCount = await batchInsert(calls, (item) =>
-          client.models.CallRecord.create({
+          callModel.create({
             ...item,
             id: item.id || `CALL-${Date.now()}-${Math.random()}`,
             created_at: item.created_at || timestamp,
@@ -163,7 +181,7 @@ export async function POST(req: NextRequest) {
         );
 
         const fupCount = await batchInsert(followUps, (item) =>
-          client.models.FollowUpRecord.create({
+          followUpModel.create({
             ...item,
             id: item.id || `FUP-${Date.now()}-${Math.random()}`,
             createdAt: item.createdAt || timestamp,
@@ -179,8 +197,9 @@ export async function POST(req: NextRequest) {
         console.log("Fetching Scheduler Meetings from Google Sheets...");
         const data = await getMeetings();
         console.log(`Migrating ${data.length} meeting records...`);
+        const model = getModel("Meeting");
         count = await batchInsert(data, (item) =>
-          client.models.Meeting.create({
+          model.create({
             ...item,
             id: item.id || `MEET-${Date.now()}-${Math.random()}`,
             created_at: item.created_at || timestamp,
