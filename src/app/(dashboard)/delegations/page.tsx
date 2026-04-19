@@ -1561,7 +1561,7 @@ const fetcher = (url: string) => fetch(url).then((res) => res.json());
                         
                         <audio 
                           ref={audioRef}
-                          src={`/api/audio/${selectedTask.voice_note_url}`} 
+                          src={selectedTask.voice_note_url.startsWith('http') ? selectedTask.voice_note_url : `/api/audio/${selectedTask.voice_note_url}`} 
                           onTimeUpdate={handleTimeUpdate}
                           onLoadedMetadata={handleLoadedMetadata}
                           onEnded={() => setIsPlaying(false)}
@@ -1623,18 +1623,31 @@ const fetcher = (url: string) => fetch(url).then((res) => res.json());
                   <div className="col-span-1">
                     {selectedTask.reference_docs ? (
                       <a 
-                        href={`https://drive.google.com/file/d/${selectedTask.reference_docs}/view?usp=sharing`} 
+                        href={selectedTask.reference_docs.startsWith('http') ? selectedTask.reference_docs : `https://drive.google.com/file/d/${selectedTask.reference_docs}/view?usp=sharing`} 
                         target="_blank" 
                         rel="noopener noreferrer"
                         className="flex flex-col items-center justify-center p-4 bg-red-50/30 dark:bg-red-900/10 rounded-2xl border border-red-100/50 dark:border-red-900/30 transition-all group shadow-sm h-full hover:bg-red-50 dark:hover:bg-red-900/20"
                         title="View Reference Document"
                       >
-                        <div className="p-2.5 bg-white dark:bg-white/10 rounded-xl shadow-inner group-hover:scale-110 transition-transform mb-2">
-                          <PaperClipIcon className="w-5 h-5 text-red-500" />
+                        <div className="p-2.5 bg-white dark:bg-white/10 rounded-xl shadow-inner group-hover:scale-110 transition-transform mb-2 overflow-hidden w-full aspect-square flex items-center justify-center">
+                          {!selectedTask.reference_docs.startsWith('http') ? (
+                             <img 
+                               src={`https://drive.google.com/thumbnail?sz=w400&id=${selectedTask.reference_docs}`}
+                               alt="Preview"
+                               className="w-full h-full object-cover"
+                               onError={(e) => {
+                                 (e.target as any).style.display = 'none';
+                                 (e.target as any).parentElement.innerHTML = '<svg class="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path></svg>';
+                               }}
+                             />
+                          ) : (
+                             <PaperClipIcon className="w-5 h-5 text-red-500" />
+                          )}
                         </div>
                         <p className="text-[8px] font-black uppercase tracking-tighter text-red-600 dark:text-red-400 text-center">Open Doc</p>
                       </a>
                     ) : (
+
                       <div className="p-4 bg-red-50/10 dark:bg-red-950/5 rounded-2xl border border-dashed border-red-100 dark:border-red-900/20 text-center flex flex-col items-center justify-center h-full">
                         <PaperClipIcon className="w-6 h-6 text-gray-300 mb-2" />
                         <p className="text-[8px] font-black text-gray-400 uppercase tracking-tighter">No Doc</p>
@@ -1786,7 +1799,7 @@ const fetcher = (url: string) => fetch(url).then((res) => res.json());
                                 </div>
                                 {item.evidence_urls && (
                                   <a 
-                                    href={`https://drive.google.com/file/d/${item.evidence_urls}/view`} 
+                                    href={item.evidence_urls.startsWith('http') ? item.evidence_urls : `https://drive.google.com/file/d/${item.evidence_urls}/view`} 
                                     target="_blank" 
                                     className="mt-2 inline-flex items-center gap-1.5 text-[9px] font-black text-amber-600 uppercase tracking-widest hover:underline"
                                   >
