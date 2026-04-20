@@ -131,6 +131,33 @@ export async function GET(req: NextRequest) {
   const allData = searchParams.get("all");
 
   try {
+    if (type === "chunk") {
+      const pageLimit = parseInt(searchParams.get("limit") || "1000", 10);
+      const token = searchParams.get("nextToken") || undefined;
+      
+      const response: any = await client.models.O2DRecord.list({
+        nextToken: token,
+        limit: pageLimit
+      });
+
+      const mappedData = response.data.map((row: any) => ({
+        ...row,
+        created_at: row.sheet_created_at || row.sheetCreatedAt || row.created_at || null,
+        updated_at: row.updated_at || row.sheet_updated_at || row.sheetUpdatedAt || row.updated_at || null,
+        ...Object.fromEntries(
+          Array.from({ length: 11 }, (_, i) => i + 1).map((i) => [
+            `actual_${i}`,
+            row[`actual_${i}`] || row[`acual_${i}`] || "",
+          ])
+        ),
+      }));
+
+      return NextResponse.json({
+        data: mappedData,
+        nextToken: response.nextToken
+      });
+    }
+
     if (type === "ordernumbers") {
       const o2ds = await fetchAllO2DRecords();
       const orderNumbers = Array.from(new Set(o2ds.map((o) => o.order_no).filter(Boolean))).sort((a, b) => b.localeCompare(a));

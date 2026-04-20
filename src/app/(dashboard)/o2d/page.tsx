@@ -300,17 +300,12 @@ export default function O2DPage() {
   const [selectedDateFilters, setSelectedDateFilters] = useState<string[]>([]);
   const [selectedStepFilters, setSelectedStepFilters] = useState<number[]>([]);
 
-  // Fetch ALL data from server (No longer paginated)
-  const { data: allO2DData, isLoading: isAllLoading } = useSWR<O2D[]>(
-    "/api/o2d?chunked=true",
-    fetcher,
-    {
-      revalidateOnFocus: true,
-      refreshInterval: 120000, // Every 2 mins for full sync
-    }
-  );
+  const [allO2Ds, setAllO2Ds] = useState<O2D[]>([]);
+  const [isAllLoading, setIsAllLoading] = useState(true);
+  const [chunkProgress, setChunkProgress] = useState(0);
+  const [totalRowsServer, setTotalRowsServer] = useState(0);
 
-  // Fetch summary data for step counts
+  // Fetch summary data first to know total count
   const { data: summaryData } = useSWR<{
     stepCounts: number[];
     totalOrders: number;
@@ -318,11 +313,65 @@ export default function O2DPage() {
   }>(
     "/api/o2d/summary",
     fetcher,
-    {
-      revalidateOnFocus: true,
-      refreshInterval: 300000,
-    }
+    { revalidateOnFocus: true, refreshInterval: 600000 }
   );
+
+  // Use summaryData to set total rows
+  useEffect(() => {
+    if (summaryData?.totalRows) {
+      setTotalRowsServer(summaryData.totalRows);
+    }
+  }, [summaryData]);
+
+  // SEQUENTIAL CHUNK FECHING LOGIC
+  useEffect(() => {
+    let isMounted = true;
+    let nextToken: string | null = null;
+    let cumulative: O2D[] = [];
+
+    async function fetchChunks() {
+      setIsAllLoading(true);
+      try {
+        do {
+          const url = `/api/o2d?type=chunk&limit=1000${nextToken ? `&nextToken=${encodeURIComponent(nextToken)}` : ""}`;
+          const res = await fetch(url);
+          if (!res.ok) throw new Error("Chunk fetch failed");
+          const result = await res.json();
+          
+          if (!isMounted) return;
+
+          cumulative = [...cumulative, ...result.data];
+          setAllO2Ds([...cumulative]); // Progressive update
+          setChunkProgress(cumulative.length);
+          nextToken = result.nextToken;
+          
+          // Small delay to prevent flooding the network if needed
+        } while (nextToken);
+        
+        setIsAllLoading(false);
+      } catch (err) {
+        console.error("Batch loading error:", err);
+        setIsAllLoading(false);
+      }
+    }
+
+    fetchChunks();
+
+    // Re-sync every 5 mins
+    const interval = setInterval(() => {
+      nextToken = null;
+      cumulative = [];
+      fetchChunks();
+    }, 300000);
+
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, []);
+
+  const allO2DData = allO2Ds;
+
 
   // Fetch all order numbers for the Order ID filter dropdown
   const { data: allOrderNumbers } = useSWR<string[]>(
@@ -2224,22 +2273,39 @@ export default function O2DPage() {
 
                     {/* Sidebar Pagination - Top Position */}
                     {/* Sidebar Header Stats */}
-                    <div className="flex items-center justify-between px-2 py-1.5 bg-[#003875]/5 dark:bg-[#FFD500]/5 rounded-xl border border-[#003875]/10 dark:border-[#FFD500]/10 shadow-sm">
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
-                          Matches:
-                        </span>
-                        <span className="text-[11px] font-black text-[#003875] dark:text-[#FFD500]">
-                          {filteredOrderNumbers.length}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                         <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
-                          Total:
-                        </span>
-                        <span className="text-[11px] font-black text-gray-600 dark:text-gray-300">
-                          {allO2DsRaw.length}
-                        </span>
+                    <div className="flex flex-col gap-2 px-2 py-1.5 bg-[#003875]/5 dark:bg-[#FFD500]/5 rounded-xl border border-[#003875]/10 dark:border-[#FFD500]/10 shadow-sm">
+                      {isAllLoading && (
+                        <div className="w-full space-y-1 mb-1">
+                          <div className="flex justify-between items-center px-0.5">
+                            <span className="text-[8px] font-black text-[#003875] dark:text-[#FFD500] uppercase animate-pulse">Syncing Cloud Data...</span>
+                            <span className="text-[8px] font-black text-gray-500">{chunkProgress} / {totalRowsServer}</span>
+                          </div>
+                          <div className="h-1 w-full bg-gray-200 dark:bg-navy-800 rounded-full overflow-hidden">
+                            <div 
+                              className="h-full bg-gradient-to-r from-[#003875] to-[#FFD500] transition-all duration-300" 
+                              style={{ width: `${Math.min(100, (chunkProgress / (totalRowsServer || 1)) * 100)}%` }}
+                            />
+                          </div>
+                        </div>
+                      )}
+                      
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                            Matches:
+                          </span>
+                          <span className="text-[11px] font-black text-[#003875] dark:text-[#FFD500]">
+                            {filteredOrderNumbers.length}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                            Total:
+                          </span>
+                          <span className="text-[11px] font-black text-gray-600 dark:text-gray-300">
+                            {allO2DsRaw.length}
+                          </span>
+                        </div>
                       </div>
                     </div>
                   </div>
