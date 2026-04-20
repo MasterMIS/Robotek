@@ -11,6 +11,8 @@ export interface O2D {
   filled_by: string;
   created_at: string;
   updated_at: string;
+  sheet_created_at?: string;
+  sheet_updated_at?: string;
   // Step 1
   planned_1?: string; actual_1?: string; status_1?: string;
   final_amount_1?: string;

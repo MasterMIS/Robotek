@@ -11,9 +11,16 @@ import {
 } from "@/types/o2d";
 import { PartyManagement } from "@/types/party-management";
 import useSWR, { mutate, useSWRConfig } from "swr";
-const fetcher = (url: string) => fetch(url).then((res) => res.json());
+const fetcher = async (url: string) => {
+  const res = await fetch(url);
+  return res.json();
+};
 import { useSSE } from "@/hooks/useSSE";
 import { getUrl } from "aws-amplify/storage";
+import { generateClient } from "aws-amplify/data";
+import type { Schema } from "@/../amplify/data/resource";
+
+const client = generateClient<Schema>();
 import {
   PlusIcon,
   PencilSquareIcon,
@@ -295,7 +302,7 @@ export default function O2DPage() {
 
   // Fetch ALL data from server (No longer paginated)
   const { data: allO2DData, isLoading: isAllLoading } = useSWR<O2D[]>(
-    "/api/o2d?all=true",
+    "/api/o2d?chunked=true",
     fetcher,
     {
       revalidateOnFocus: true,
@@ -329,56 +336,69 @@ export default function O2DPage() {
 
   const { mutate: globalMutate } = useSWRConfig();
 
-  // SSE: Incremental real-time updates for O2D and IMS
+  // SSE: Incremental real-time updates for IMS
   useSSE({
-    modules: ["o2d", "ims"],
+    modules: ["ims"],
     onUpdate: (incremental) => {
-      // 1. Update O2D Cache
-      const o2dUpdates = incremental.find((m) => m.module === "o2d");
-      if (o2dUpdates) {
-        globalMutate(
-          "/api/o2d?all=true",
-          (current: any) => {
-            if (!current) return current;
-            const nextData = [...current];
-            let changed = false;
-
-            // Merge modified rows
-            o2dUpdates.upserts.forEach((item: O2D) => {
-              const idx = nextData.findIndex((o) => String(o.id) === String(item.id));
-              if (idx !== -1) {
-                nextData[idx] = item;
-                changed = true;
-              } else {
-                nextData.unshift(item);
-                changed = true;
-              }
-            });
-
-            // Handle deletions
-            const currentIdsSet = new Set(o2dUpdates.currentIds.map(String));
-            const filteredData = nextData.filter((o) => {
-              const keep = currentIdsSet.has(String(o.id));
-              if (!keep) changed = true;
-              return keep;
-            });
-
-            if (!changed) return current;
-            return filteredData;
-          },
-          false
-        );
-        globalMutate("/api/o2d/summary");
-        globalMutate("/api/o2d?type=ordernumbers");
-      }
-
-      // 2. Update IMS Cache
+      // 1. Update IMS Cache
       const imsUpdates = incremental.find((m) => m.module === "ims");
       if (imsUpdates) {
         globalMutate("/api/ims");
       }
     },
   });
+
+  // AWS AppSync Native Real-Time Subscriptions for O2D (True Big Software Approach)
+  useEffect(() => {
+    if (!globalMutate) return;
+
+    const handleUpdate = (item: any) => {
+      const mappedItem = {
+        ...item,
+        created_at: item.sheet_created_at || item.sheetCreatedAt || item.created_at || null,
+        updated_at: item.sheet_updated_at || item.sheetUpdatedAt || item.updated_at || null,
+        sheet_created_at: item.sheet_created_at || item.sheetCreatedAt || null,
+        sheet_updated_at: item.sheet_updated_at || item.sheetUpdatedAt || null,
+        ...Object.fromEntries(
+          Array.from({ length: 11 }, (_, i) => i + 1).map((i) => [
+            `actual_${i}`, item[`actual_${i}`] || item[`acual_${i}`] || "",
+          ])
+        )
+      };
+
+      globalMutate("/api/o2d?chunked=true", (current: O2D[] | undefined) => {
+        if (!current) return current;
+        const nextData = [...current];
+        const idx = nextData.findIndex(o => String(o.id) === String(mappedItem.id));
+        if (idx !== -1) {
+          nextData[idx] = mappedItem as any;
+        } else {
+          nextData.unshift(mappedItem as any);
+        }
+        return nextData;
+      }, false);
+
+      globalMutate("/api/o2d/summary");
+      globalMutate("/api/o2d?type=ordernumbers");
+    };
+
+    const handleDelete = (item: any) => {
+      globalMutate("/api/o2d?chunked=true", (current: O2D[] | undefined) => {
+        if (!current) return current;
+        return current.filter(o => String(o.id) !== String(item.id));
+      }, false);
+    };
+
+    const subCreate = client.models.O2DRecord.onCreate().subscribe({ next: handleUpdate });
+    const subUpdate = client.models.O2DRecord.onUpdate().subscribe({ next: handleUpdate });
+    const subDelete = client.models.O2DRecord.onDelete().subscribe({ next: handleDelete });
+
+    return () => {
+      subCreate.unsubscribe();
+      subUpdate.unsubscribe();
+      subDelete.unsubscribe();
+    };
+  }, [globalMutate]);
 
   // Extract O2D data
   const allO2DsRaw = allO2DData || [];
@@ -2599,12 +2619,17 @@ export default function O2DPage() {
                                     </span>
                                     <div className="flex items-center gap-2">
                                       <span className="text-[13px] font-black text-gray-700 dark:text-gray-100">
-                                        {new Date(
-                                          selectedOrder[0]?.created_at,
-                                        ).toLocaleString(undefined, {
-                                          dateStyle: "short",
-                                          timeStyle: "short",
-                                        })}
+                                        {(() => {
+                                          const o = selectedOrder[0];
+                                          const d = o?.created_at || (o as any)?.actual_1 || (o as any)?.planned_1;
+                                          if (!d) return "N/A";
+                                          const ts = new Date(d);
+                                          if (isNaN(ts.getTime()) || ts.getFullYear() <= 1970) return "N/A";
+                                          return ts.toLocaleString(undefined, {
+                                            dateStyle: "short",
+                                            timeStyle: "short",
+                                          });
+                                        })()}
                                       </span>
                                       {isStep1Lockout && (
                                         <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 border border-red-100 dark:border-red-800 text-[12px] font-black shadow-sm">

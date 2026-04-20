@@ -59,20 +59,23 @@ export async function PUT(
 
     // 2. Perform updates and creations
     await Promise.all(updatedItems.map(item => {
+      const timestamp = new Date().toISOString();
       const itemData = {
         ...item,
         order_screenshot: screenshotUrl,
-        updated_at: new Date().toISOString()
+        updated_at: timestamp,
+        sheet_updated_at: timestamp
       };
 
       if (item.id && existingIds.has(item.id)) {
-        const { id, createdAt, updatedAt, ...updateRest } = itemData;
+        const { id, createdAt, updatedAt, sheet_created_at, ...updateRest } = itemData;
         return client.models.O2DRecord.update({ id, ...updateRest });
       } else {
         return client.models.O2DRecord.create({
             ...itemData,
             id: item.id || `O2D-${Date.now()}-${Math.random()}`,
-            created_at: new Date().toISOString()
+            created_at: timestamp,
+            sheet_created_at: timestamp
         });
       }
     }));

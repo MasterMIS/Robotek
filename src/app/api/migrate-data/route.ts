@@ -142,12 +142,14 @@ export async function POST(req: NextRequest) {
             }
           }
 
-          // Only add sheet_created_at and sheet_updated_at if they exist in the schema
-          if (o2dFields.includes("sheet_created_at")) {
-            payload.sheet_created_at = item.created_at || "";
+          // Sync both created_at and sheet_created_at to ensure AWS schema recognition
+          if (o2dFields.includes("sheet_created_at") || row.created_at) {
+            payload.sheet_created_at = item.created_at || item.updated_at || "";
+            payload.created_at = item.created_at || item.updated_at || "";
           }
-          if (o2dFields.includes("sheet_updated_at")) {
+          if (o2dFields.includes("sheet_updated_at") || row.updated_at) {
             payload.sheet_updated_at = item.updated_at || "";
+            payload.updated_at = item.updated_at || "";
           }
 
           if (!payload.id) {

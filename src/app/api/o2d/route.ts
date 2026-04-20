@@ -46,8 +46,10 @@ async function fetchAllO2DRecords() {
   // Priority: custom created_at > sheet_created_at > AWS auto createdAt
   return allRecords.map((row) => ({
     ...row,
-    created_at: row.created_at || row.sheet_created_at || row.createdAt || null,
-    updated_at: row.updated_at || row.sheet_updated_at || row.updatedAt || null,
+    created_at: row.sheet_created_at || row.sheetCreatedAt || row.created_at || null,
+    updated_at: row.sheet_updated_at || row.sheetUpdatedAt || row.updated_at || null,
+    sheet_created_at: row.sheet_created_at || row.sheetCreatedAt || null,
+    sheet_updated_at: row.sheet_updated_at || row.sheetUpdatedAt || null,
     // Also normalise actual_N from the old typo "acual_N"
     ...Object.fromEntries(
       Array.from({ length: 11 }, (_, i) => i + 1).map((i) => [
@@ -135,9 +137,55 @@ export async function GET(req: NextRequest) {
       return NextResponse.json(orderNumbers);
     }
 
-    if (allData === "true") {
-      const o2ds = await fetchAllO2DRecords();
-      return NextResponse.json(o2ds);
+    if (allData === "true" || searchParams.get("chunked") === "true") {
+      const encoder = new TextEncoder();
+      const stream = new ReadableStream({
+        async start(controller) {
+          try {
+            let nextToken: string | null | undefined = undefined;
+            let isFirst = true;
+            controller.enqueue(encoder.encode('['));
+            do {
+              const response: any = await client.models.O2DRecord.list({
+                nextToken,
+                limit: 1000
+              });
+              
+              for (const row of response.data) {
+                const mappedRow = {
+                  ...row,
+                  created_at: row.sheet_created_at || row.sheetCreatedAt || row.created_at || null,
+                  updated_at: row.sheet_updated_at || row.sheetUpdatedAt || row.updated_at || null,
+                  sheet_created_at: row.sheet_created_at || row.sheetCreatedAt || null,
+                  sheet_updated_at: row.sheet_updated_at || row.sheetUpdatedAt || null,
+                  ...Object.fromEntries(
+                    Array.from({ length: 11 }, (_, i) => i + 1).map((i) => [
+                      `actual_${i}`,
+                      row[`actual_${i}`] || row[`acual_${i}`] || "",
+                    ])
+                  ),
+                };
+                try {
+                  controller.enqueue(encoder.encode((isFirst ? "" : ",") + JSON.stringify(mappedRow)));
+                } catch (enqueueErr) {
+                  // Controller closed remotely (e.g. client aborted request)
+                  return; 
+                }
+                isFirst = false;
+              }
+              nextToken = response.nextToken;
+            } while (nextToken);
+            
+            try { controller.enqueue(encoder.encode(']')); } catch (e) {}
+          } catch (err) {
+            console.error("Streaming error:", err);
+            // If it errors halfway, the JSON will be broken, which fetcher will catch.
+          } finally {
+            try { controller.close(); } catch {}
+          }
+        }
+      });
+      return new Response(stream, { headers: { "Content-Type": "application/json" } });
     }
 
     // Pagination and Filtering logic (same implementation as sheets but on AWS data)
@@ -245,22 +293,29 @@ export async function POST(req: NextRequest) {
       }
 
       for (const item of o2dDataArray) {
+        const timestamp = new Date().toISOString();
         await client.models.O2DRecord.create({
           ...item,
           id: item.id || `O2D-${Date.now()}-${Math.random()}`,
           order_screenshot: screenshotUrl || item.order_screenshot || "",
-          created_at: item.created_at || new Date().toISOString(),
-          updated_at: new Date().toISOString()
+          created_at: item.created_at || timestamp,
+          updated_at: timestamp,
+          sheet_created_at: item.sheet_created_at || item.created_at || timestamp,
+          sheet_updated_at: timestamp
         });
       }
 
       return NextResponse.json({ message: "O2D records added successfully" });
     } else {
       const o2dData = await req.json();
+      const timestamp = new Date().toISOString();
       await client.models.O2DRecord.create({
         ...o2dData,
         id: o2dData.id || `O2D-${Date.now()}`,
-        updated_at: new Date().toISOString()
+        created_at: o2dData.created_at || timestamp,
+        updated_at: timestamp,
+        sheet_created_at: o2dData.sheet_created_at || o2dData.created_at || timestamp,
+        sheet_updated_at: timestamp
       });
       return NextResponse.json({ message: "O2D record added successfully" });
     }
