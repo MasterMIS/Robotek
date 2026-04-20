@@ -64,12 +64,13 @@ export async function POST_DRY_RUN(req: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
+
 import { NextRequest, NextResponse } from "next/server";
 import { generateClient } from 'aws-amplify/data';
-import { Schema } from '@/../amplify/data/resource';
-import { auth } from "@/auth";
+import { Schema } from '../../../../amplify/data/resource.js';
+import { auth } from '../../../auth.js';
 import { Amplify } from 'aws-amplify';
-import outputs from '@/../amplify_outputs.json';
+import outputs from '../../../../amplify_outputs.json';
 
 Amplify.configure(outputs);
 

@@ -109,8 +109,7 @@ export async function POST(req: NextRequest) {
 
     switch (module) {
       case "o2d": {
-        const fullData = isManual ? manualData : await getO2Ds();
-        const data = isManual ? fullData : fullData.slice(offset, offset + limit);
+        const data = isManual ? manualData : [];
         const model = getModel("O2DRecord");
         
         const o2dFields = [

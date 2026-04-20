@@ -163,20 +163,39 @@ export abstract class BaseSheetsService<T extends SheetItem> {
       if (headers.length > 0 && !headers.includes("updated_at")) {
         console.log(`[AUTO-PROVISION] Checking updated_at for ${this.sheetName}`);
         try {
-          // Check if we have room in the grid (default limit is usually quite small for new sheets)
-          // We'll skip auto-provisioning if it might exceed grid limits to avoid 400 errors
-          if (headers.length < 20) { 
-            const nextColLetter = getColumnLetter(headers.length);
-            await sheets.spreadsheets.values.update({
-              spreadsheetId: this.spreadsheetId,
-              range: `${this.sheetName}!${nextColLetter}1`,
-              valueInputOption: "RAW",
-              requestBody: { values: [["updated_at"]] },
-            });
-            headers.push("updated_at");
+          const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId: this.spreadsheetId });
+          const sheetInfo = spreadsheet.data.sheets?.find(s => s.properties?.title === this.sheetName);
+          const sheetId = sheetInfo?.properties?.sheetId;
+          const maxCols = sheetInfo?.properties?.gridProperties?.columnCount || 0;
+
+          if (sheetId !== undefined) {
+             if (headers.length >= maxCols) {
+                // Append a new column if we've reached the grid limits
+                await sheets.spreadsheets.batchUpdate({
+                  spreadsheetId: this.spreadsheetId,
+                  requestBody: {
+                    requests: [{
+                      appendDimension: {
+                        sheetId: sheetId,
+                        dimension: "COLUMNS",
+                        length: 1
+                      }
+                    }]
+                  }
+                });
+             }
+             
+             const nextColLetter = getColumnLetter(headers.length);
+             await sheets.spreadsheets.values.update({
+               spreadsheetId: this.spreadsheetId,
+               range: `${this.sheetName}!${nextColLetter}1`,
+               valueInputOption: "RAW",
+               requestBody: { values: [["updated_at"]] },
+             });
+             headers.push("updated_at");
           }
-        } catch (e) {
-          console.error(`Failed to auto-provision updated_at for ${this.sheetName}`, e);
+        } catch (e: any) {
+          console.error(`Failed to auto-provision updated_at for ${this.sheetName}: ${e.message}`);
         }
       }
 
