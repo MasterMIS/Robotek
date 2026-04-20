@@ -67,10 +67,10 @@ export async function POST_DRY_RUN(req: NextRequest) {
 
 import { NextRequest, NextResponse } from "next/server";
 import { generateClient } from 'aws-amplify/data';
-import { Schema } from '../../../../amplify/data/resource.js';
-import { auth } from '../../../auth.js';
+import { Schema } from '@/../amplify/data/resource';
+import { auth } from '@/auth';
 import { Amplify } from 'aws-amplify';
-import outputs from '../../../../amplify_outputs.json';
+import outputs from '@/../amplify_outputs.json';
 
 Amplify.configure(outputs);
 
