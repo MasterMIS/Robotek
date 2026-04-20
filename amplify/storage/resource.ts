@@ -1,7 +1,7 @@
 import { defineStorage } from '@aws-amplify/backend';
 
 export const storage = defineStorage({
-  name: 'robotekDrive.mts',
+  name: 'robotekDrive',
   access: (allow) => ({
     'general/*': [
       allow.authenticated.to(['read', 'write', 'delete']),

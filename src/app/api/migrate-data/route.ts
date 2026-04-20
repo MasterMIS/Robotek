@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { generateClient } from 'aws-amplify/data';
-import { Schema } from '@/../amplify/data/resource';
+import { Schema } from '../../../../amplify/data/resource';
 
 // Google Sheets data sources
 import { getO2Ds } from "@/lib/o2d-sheets";
@@ -21,7 +21,7 @@ import { getDelegations, getDelegationRevisions, getDelegationRemarks } from "@/
 import { getTickets, ticketHistoryService } from "@/lib/ticket-sheets";
 import { getScotData, getCallData, getFollowUpData } from "@/lib/scot-sheets";
 import { Amplify } from 'aws-amplify';
-import outputs from '@/../amplify_outputs.json';
+import outputs from '../../../../amplify_outputs.json';
 
 // Migration API Route - Force Refresh
 Amplify.configure(outputs);
@@ -102,14 +102,15 @@ export async function POST(req: NextRequest) {
     const getModel = (name: keyof typeof client.models) => {
       const model = (client.models as any)[name];
       if (!model) {
-        throw new Error(`CRITICAL: Model '${name}' is not defined in the Amplify client.`);
+        throw new Error(`CRITICAL: Model '${String(name)}' is not defined in the Amplify client.`);
       }
       return model;
     };
 
     switch (module) {
       case "o2d": {
-        const data = isManual ? manualData : [];
+        const fullData = isManual ? manualData : await getO2Ds();
+        const data = isManual ? fullData : fullData.slice(offset, offset + limit);
         const model = getModel("O2DRecord");
         
         const o2dFields = [
@@ -324,8 +325,8 @@ export async function POST(req: NextRequest) {
         
         const userFields = ["id", "username", "email", "password", "phone", "role_name", "late_long", "image_url", "dob", "office", "designation", "department", "last_active", "permissions"];
         const dropdownPayload = [
-            ...(fullDropdown.departments || []).map(d => ({ type: "department", value: d })),
-            ...(fullDropdown.designations || []).map(d => ({ type: "designation", value: d }))
+            ...(fullDropdown.departments || []).map((d: any) => ({ type: "department", value: d })),
+            ...(fullDropdown.designations || []).map((d: any) => ({ type: "designation", value: d }))
         ];
 
         const c1 = await batchInsert(fullUsers.slice(offset, offset + limit), (item) => userModel.create(pick(item, userFields)));
