@@ -12,16 +12,46 @@ const client = generateClient<Schema>({ authMode: 'apiKey' });
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-// Helper: Fetch ALL records from DynamoDB
+// Cache variables to prevent "thundering herd" full-scans
+let globalFetchPromise: Promise<any[]> | null = null;
+let lastFetchTime = 0;
+let cachedData: any[] | null = null;
+const CACHE_TTL = 5000; // 5 seconds
+
+// Helper: Fetch ALL records from DynamoDB with caching and deduplication
 async function fetchAllO2DRecords() {
-  let allRecords: any[] = [];
-  let nextToken: string | null | undefined = undefined;
-  do {
-    const response: any = await client.models.O2DRecord.list({ nextToken });
-    allRecords = [...allRecords, ...response.data];
-    nextToken = response.nextToken;
-  } while (nextToken);
-  return allRecords;
+  const now = Date.now();
+  
+  if (cachedData && (now - lastFetchTime < CACHE_TTL)) {
+    return cachedData;
+  }
+
+  if (globalFetchPromise) {
+    return globalFetchPromise;
+  }
+
+  globalFetchPromise = (async () => {
+    try {
+      let allRecords: any[] = [];
+      let nextToken: string | null | undefined = undefined;
+      do {
+        const response: any = await client.models.O2DRecord.list({ 
+            nextToken,
+            limit: 1000
+        });
+        allRecords = [...allRecords, ...response.data];
+        nextToken = response.nextToken;
+      } while (nextToken);
+      
+      cachedData = allRecords;
+      lastFetchTime = Date.now();
+      return allRecords;
+    } finally {
+      globalFetchPromise = null;
+    }
+  })();
+
+  return globalFetchPromise;
 }
 
 // Helper: Get step config (TAT/Person) - Mocked or extracted from Dropdowns
@@ -75,11 +105,19 @@ export async function GET(req: NextRequest) {
       groupedByOrder[orderNo].push(item);
     });
 
-    const stepCounts = Array(11).fill(0);
+    const stepCounts = Array(13).fill(0); // 0-10: steps 1-11, 11: Hold, 12: Cancelled
 
     Object.values(groupedByOrder).forEach((orderItems) => {
       const firstItem = orderItems[0];
-      if (firstItem.hold || firstItem.cancelled) return;
+      
+      if (firstItem.cancelled) {
+        stepCounts[12]++;
+        return;
+      }
+      if (firstItem.hold) {
+        stepCounts[11]++;
+        return;
+      }
 
       const pendingStep = getPendingStepIdx(orderItems);
       if (pendingStep >= 1 && pendingStep <= 11) {

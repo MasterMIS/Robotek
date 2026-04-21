@@ -215,6 +215,29 @@ export abstract class BaseSheetsService<T extends SheetItem> {
     return map;
   }
 
+  private updateInMemoryCache(action: 'add' | 'update' | 'delete', items: T | T[]) {
+    const cacheKey = `${this.spreadsheetId}_${this.sheetName}`;
+    const cachedData = globalCache.get<T[]>(cacheKey);
+    
+    if (cachedData) {
+      let newData: T[];
+      const itemsArray = Array.isArray(items) ? items : [items];
+      const itemIds = new Set(itemsArray.map(i => String(i.id)));
+
+      if (action === 'add') {
+        newData = [...itemsArray, ...cachedData];
+      } else if (action === 'update') {
+        newData = cachedData.map(i => {
+          const updatedItem = itemsArray.find(newItem => String(newItem.id) === String(i.id));
+          return updatedItem || i;
+        });
+      } else { // delete
+        newData = cachedData.filter(i => !itemIds.has(String(i.id)));
+      }
+      globalCache.set(cacheKey, newData, this.CACHE_TTL);
+    }
+  }
+
   async add(item: T): Promise<boolean> {
     await this.ensureHeaders();
     try {
@@ -235,11 +258,44 @@ export abstract class BaseSheetsService<T extends SheetItem> {
         },
       });
 
-      this.invalidateCache();
+      this.updateInMemoryCache('add', item);
       void this.writeLastModified(); // meta-level heartbeat
       return true;
     } catch (error) {
       console.error(`Error adding to ${this.sheetName}:`, error);
+      return false;
+    }
+  }
+
+  async addMany(items: T[]): Promise<boolean> {
+    if (items.length === 0) return true;
+    await this.ensureHeaders();
+    try {
+      console.log(`[API CALL] Adding multiple to ${this.sheetName}...`);
+      const sheets = await this.getSheetsClient();
+
+      const now = new Date().toISOString();
+      const rows = items.map(item => {
+        if (this.hMap['updated_at'] !== undefined) {
+          (item as any).updated_at = now;
+        }
+        return this.mapItemToRow(item);
+      });
+
+      await sheets.spreadsheets.values.append({
+        spreadsheetId: this.spreadsheetId,
+        range: `${this.sheetName}!A:A`,
+        valueInputOption: "USER_ENTERED",
+        requestBody: {
+          values: rows,
+        },
+      });
+
+      this.updateInMemoryCache('add', items);
+      void this.writeLastModified();
+      return true;
+    } catch (error) {
+      console.error(`Error adding multiple to ${this.sheetName}:`, error);
       return false;
     }
   }
@@ -280,7 +336,7 @@ export abstract class BaseSheetsService<T extends SheetItem> {
         },
       });
 
-      this.invalidateCache();
+      this.updateInMemoryCache('update', item);
       void this.writeLastModified(); // meta-level heartbeat
       return true;
     } catch (error) {
@@ -321,11 +377,67 @@ export abstract class BaseSheetsService<T extends SheetItem> {
         }
       });
 
-      this.invalidateCache();
+      this.updateInMemoryCache('delete', { id } as T);
       void this.writeLastModified(); // stamp timestamp — non-blocking
       return true;
     } catch (error) {
       console.error(`Error deleting from ${this.sheetName}:`, error);
+      return false;
+    }
+  }
+
+  async deleteMany(ids: (string | number)[]): Promise<boolean> {
+    if (ids.length === 0) return true;
+    try {
+      console.log(`[API CALL] Deleting multiple from ${this.sheetName}...`);
+      const sheets = await this.getSheetsClient();
+      const idColLetter = getColumnLetter(this.idColumnIndex);
+      const response = await sheets.spreadsheets.values.get({
+        spreadsheetId: this.spreadsheetId,
+        range: `${this.sheetName}!${idColLetter}:${idColLetter}`,
+      });
+
+      const rows = response.data.values;
+      if (!rows) return false;
+
+      const stringIds = ids.map(id => String(id).trim());
+      const indicesToDelete: number[] = [];
+      
+      rows.forEach((row, index) => {
+        if (stringIds.includes(String(row[0]).trim())) {
+          indicesToDelete.push(index);
+        }
+      });
+
+      if (indicesToDelete.length === 0) return true;
+
+      const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId: this.spreadsheetId });
+      const sheetId = spreadsheet.data.sheets?.find(s => s.properties?.title === this.sheetName)?.properties?.sheetId;
+
+      if (sheetId === undefined) return false;
+
+      // Sort indices in descending order to prevent shifting
+      indicesToDelete.sort((a, b) => b - a);
+
+      const requests = indicesToDelete.map(rowIndex => ({
+        deleteDimension: {
+          range: { sheetId, dimension: "ROWS", startIndex: rowIndex, endIndex: rowIndex + 1 }
+        }
+      }));
+
+      await sheets.spreadsheets.batchUpdate({
+        spreadsheetId: this.spreadsheetId,
+        requestBody: {
+          requests
+        }
+      });
+
+      const deletedItems = ids.map(id => ({ id } as T));
+      this.updateInMemoryCache('delete', deletedItems);
+      void this.writeLastModified();
+      return true;
+    } catch (error) {
+      console.error(`Error deleting multiple from ${this.sheetName}:`, error);
       return false;
     }
   }

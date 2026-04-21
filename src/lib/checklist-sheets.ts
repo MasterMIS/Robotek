@@ -65,6 +65,13 @@ class ChecklistService extends BaseSheetsService<Checklist> {
      const numericIds = ids.map(id => parseInt(String(id)) || 0);
      return numericIds.length > 0 ? Math.max(...numericIds) + 1 : 1;
    }
+
+  async getNextNumericalIds(count: number): Promise<number[]> {
+    const ids = await this.getLatestIds();
+    const numericIds = ids.map(id => parseInt(String(id)) || 0);
+    const startId = numericIds.length > 0 ? Math.max(...numericIds) + 1 : 1;
+    return Array.from({ length: count }, (_, i) => startId + i);
+  }
  }
  export const checklistService = new ChecklistService();
  
@@ -85,6 +92,21 @@ class ChecklistService extends BaseSheetsService<Checklist> {
      return false;
    });
  }
+
+export async function addChecklists(items: Partial<Checklist>[]): Promise<boolean> {
+  return checklistLock = checklistLock.then(async () => {
+    const nextIds = await checklistService.getNextNumericalIds(items.length);
+    const finalItems = items.map((item, i) => ({
+      ...item,
+      id: item.id || nextIds[i].toString(),
+    })) as Checklist[];
+    
+    return checklistService.addMany(finalItems);
+  }).catch(err => {
+    console.error("Error in addChecklists lock:", err);
+    return false;
+  });
+}
 
 export async function updateChecklist(id: string, data: Checklist): Promise<boolean> {
   return checklistService.update(id, data);
@@ -196,7 +218,10 @@ export async function updateChecklistByGroup(groupId: string, data: any) {
 export async function deleteChecklistByGroup(groupId: string) {
   const all = await checklistService.getAll();
   const toDelete = all.filter(c => c.group_id === groupId);
-  for (const item of toDelete) { await checklistService.delete(item.id); }
+  const ids = toDelete.map(item => item.id);
+  if (ids.length > 0) {
+    await checklistService.deleteMany(ids);
+  }
   return true;
 }
 

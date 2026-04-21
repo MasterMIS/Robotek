@@ -65,25 +65,30 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const checklistData: Checklist = await req.json();
+    const body = await req.json();
+    const isBulk = Array.isArray(body);
+    const items = isBulk ? body : [body];
 
-    const success = await addChecklist(checklistData);
+    const success = isBulk ? await addChecklists(items) : await addChecklist(items[0]);
+
     if (success) {
-      // Send WhatsApp Notification
-      try {
-        const assignedUser = await getUserByUsernameOrEmail(checklistData.assigned_to || "");
-        if (assignedUser && assignedUser.phone) {
-          const formattedDueDate = formatDate(checklistData.due_date || "");
-          const message = `🔔 *New Checklist Assigned*\n━━━━━━━━━━━━━━━━━\n📌 *Task:* ${checklistData.task}\n🎯 *Priority:* ${checklistData.priority}\n🏢 *Department:* ${checklistData.department}\n⏳ *Due Date:* ${formattedDueDate}\n👨‍💼 *Assigned By:* ${checklistData.assigned_by}`;
-          await sendWhatsAppMessage(assignedUser.phone, message);
+      // Send WhatsApp Notifications (Background)
+      Promise.all(items.map(async (item: Checklist) => {
+        try {
+          const assignedUser = await getUserByUsernameOrEmail(item.assigned_to || "");
+          if (assignedUser && assignedUser.phone) {
+            const formattedDueDate = formatDate(item.due_date || "");
+            const message = `🔔 *New Checklist Assigned*\n━━━━━━━━━━━━━━━━━\n📌 *Task:* ${item.task}\n🎯 *Priority:* ${item.priority}\n🏢 *Department:* ${item.department}\n⏳ *Due Date:* ${formattedDueDate}\n👨‍💼 *Assigned By:* ${item.assigned_by}`;
+            await sendWhatsAppMessage(assignedUser.phone, message);
+          }
+        } catch (err) {
+          console.error("Error sending WhatsApp notification:", err);
         }
-      } catch (err) {
-        console.error("Error sending WhatsApp notification:", err);
-      }
+      })).catch(e => console.error("Bulk WhatsApp error:", e));
 
-      return NextResponse.json({ message: "Checklist added successfully" });
+      return NextResponse.json({ message: isBulk ? "Checklists added successfully" : "Checklist added successfully" });
     } else {
-      return NextResponse.json({ error: "Failed to add checklist" }, { status: 500 });
+      return NextResponse.json({ error: "Failed to add checklist(s)" }, { status: 500 });
     }
   } catch (error) {
     console.error("API Error:", error);

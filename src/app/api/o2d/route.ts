@@ -26,38 +26,65 @@ async function resolveUrl(path: string | null | undefined): Promise<string> {
   }
 }
 
-// Helper: Fetch ALL records from DynamoDB using nextToken iteration
+// Cache variables to prevent "thundering herd" full-scans
+let globalFetchPromise: Promise<any[]> | null = null;
+let lastFetchTime = 0;
+let cachedData: any[] | null = null;
+const CACHE_TTL = 5000; // 5 seconds
+
+// Helper: Fetch ALL records from DynamoDB with caching and deduplication
 async function fetchAllO2DRecords() {
-  let allRecords: any[] = [];
-  let nextToken: string | null | undefined = undefined;
+  const now = Date.now();
+  
+  // 1. If we have fresh cached data, return it immediately
+  if (cachedData && (now - lastFetchTime < CACHE_TTL)) {
+    return cachedData;
+  }
 
-  do {
-    const response: any = await client.models.O2DRecord.list({
-      nextToken,
-      limit: 1000 // Maximize per-page fetch
-    });
-    allRecords = [...allRecords, ...response.data];
-    nextToken = response.nextToken;
-  } while (nextToken);
+  // 2. If a fetch is already in progress, wait for it
+  if (globalFetchPromise) {
+    return globalFetchPromise;
+  }
 
-  // Normalize field names: DynamoDB records imported from Sheets use
-  // sheet_created_at / sheet_updated_at — map them to created_at / updated_at
-  // so the frontend always gets consistent field names.
-  // Priority: custom created_at > sheet_created_at > AWS auto createdAt
-  return allRecords.map((row) => ({
-    ...row,
-    created_at: row.sheet_created_at || row.sheetCreatedAt || row.created_at || null,
-    updated_at: row.sheet_updated_at || row.sheetUpdatedAt || row.updated_at || null,
-    sheet_created_at: row.sheet_created_at || row.sheetCreatedAt || null,
-    sheet_updated_at: row.sheet_updated_at || row.sheetUpdatedAt || null,
-    // Also normalise actual_N from the old typo "acual_N"
-    ...Object.fromEntries(
-      Array.from({ length: 11 }, (_, i) => i + 1).map((i) => [
-        `actual_${i}`,
-        row[`actual_${i}`] || row[`acual_${i}`] || "",
-      ])
-    ),
-  }));
+  // 3. Start a new fetch
+  globalFetchPromise = (async () => {
+    try {
+      let allRecords: any[] = [];
+      let nextToken: string | null | undefined = undefined;
+
+      do {
+        const response: any = await client.models.O2DRecord.list({
+          nextToken,
+          limit: 1000 // Maximize per-page fetch
+        });
+        allRecords = [...allRecords, ...response.data];
+        nextToken = response.nextToken;
+      } while (nextToken);
+
+      // Normalize field names
+      const normalized = allRecords.map((row) => ({
+        ...row,
+        created_at: row.sheet_created_at || row.sheetCreatedAt || row.created_at || null,
+        updated_at: row.sheet_updated_at || row.sheetUpdatedAt || row.updated_at || null,
+        sheet_created_at: row.sheet_created_at || row.sheetCreatedAt || null,
+        sheet_updated_at: row.sheet_updated_at || row.sheetUpdatedAt || null,
+        ...Object.fromEntries(
+          Array.from({ length: 11 }, (_, i) => i + 1).map((i) => [
+            `actual_${i}`,
+            row[`actual_${i}`] || row[`acual_${i}`] || "",
+          ])
+        ),
+      }));
+
+      cachedData = normalized;
+      lastFetchTime = Date.now();
+      return normalized;
+    } finally {
+      globalFetchPromise = null;
+    }
+  })();
+
+  return globalFetchPromise;
 }
 
 // Helper: Get pending step index for an order (same logic as sheet but for AWS data)
@@ -215,7 +242,7 @@ export async function GET(req: NextRequest) {
       return new Response(stream, { headers: { "Content-Type": "application/json" } });
     }
 
-    // Pagination and Filtering logic (same implementation as sheets but on AWS data)
+    // Pagination and Filtering logic
     const page = parseInt(searchParams.get("page") || "1", 10);
     const limit = parseInt(searchParams.get("limit") || "10", 10);
     const search = (searchParams.get("search") || "").toLowerCase();
@@ -228,9 +255,11 @@ export async function GET(req: NextRequest) {
     const startDate = searchParams.get("startDate") || "";
     const endDate = searchParams.get("endDate") || "";
 
+    // Optimization: If a page is requested, we fetch all but we return only the requested chunk.
+    // This solves the 413 error because the response payload is small.
     const allO2Ds = await fetchAllO2DRecords();
 
-    // 1. Group by order_no
+    // 1. Group by order_no to maintain order integrity
     const groupedByOrder: Record<string, any[]> = {};
     allO2Ds.forEach((item) => {
       const orderNo = item.order_no || "Unknown";
@@ -239,9 +268,9 @@ export async function GET(req: NextRequest) {
     });
 
     // 2. Filter orders
-    let orderNumbers = Object.keys(groupedByOrder).sort((a, b) => b.localeCompare(a));
+    let filteredOrderNumbers = Object.keys(groupedByOrder).sort((a, b) => b.localeCompare(a));
 
-    orderNumbers = orderNumbers.filter((orderNo) => {
+    filteredOrderNumbers = filteredOrderNumbers.filter((orderNo) => {
       const items = groupedByOrder[orderNo];
       const firstItem = items[0];
       const pIdx = getPendingStepIdx(items);
@@ -267,18 +296,20 @@ export async function GET(req: NextRequest) {
     });
 
     // 3. Paginate
+    const totalOrders = filteredOrderNumbers.length;
+    const totalPages = Math.ceil(totalOrders / limit);
     const startIdx = (page - 1) * limit;
-    const paginatedOrderNumbers = orderNumbers.slice(startIdx, startIdx + limit);
+    const paginatedOrderNumbers = filteredOrderNumbers.slice(startIdx, startIdx + limit);
     const paginatedData = paginatedOrderNumbers.flatMap((orderNo) => groupedByOrder[orderNo]);
 
     return NextResponse.json({
       data: paginatedData,
-      orders: paginatedOrderNumbers,
-      total: orderNumbers.length,
+      orders: paginatedOrderNumbers, // List of order numbers on this page
+      total: totalOrders,           // Total filtered orders
       page,
       limit,
-      totalPages: Math.ceil(orderNumbers.length / limit),
-      totalRows: allO2Ds.length
+      totalPages,
+      totalRows: allO2Ds.length      // Total raw records in database
     });
 
   } catch (error: any) {

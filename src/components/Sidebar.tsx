@@ -43,12 +43,11 @@ export default function Sidebar({ mobileOpen, setMobileOpen }: SidebarProps) {
           return null;
         };
 
-        const [delData, checkData, tickData, o2dData, configData, chatData] = await Promise.all([
+        const [delData, checkData, tickData, o2dSummary, chatData] = await Promise.all([
           safeFetch('/api/delegations'),
           safeFetch('/api/checklists'),
           safeFetch('/api/tickets'),
-          safeFetch('/api/o2d?all=true'),
-          safeFetch('/api/o2d/config'),
+          safeFetch('/api/o2d/summary'),   // lightweight — just aggregate counts, not all rows
           safeFetch('/api/chat/users')
         ]);
         
@@ -80,63 +79,24 @@ export default function Sidebar({ mobileOpen, setMobileOpen }: SidebarProps) {
         const isDelayedOrToday = (item: any) => {
           const s = item.status;
           if (s === 'Completed' || s === 'Approved') return false;
-          
           if (!item.due_date) return false;
-          
           const due = getEarliestDate(item.due_date);
           if (!due || isNaN(due.getTime())) return false;
-          
           due.setHours(0, 0, 0, 0);
           const diffDays = Math.round((due.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-          
-          return diffDays <= 0; // Negative is delayed, 0 is today
+          return diffDays <= 0;
         };
 
         setDelegationsPendingCount(baseDel.filter(isDelayedOrToday).length);
         setChecklistsPendingCount(baseCheck.filter(isDelayedOrToday).length);
-        setTicketsOpenCount(tickData.filter((t: any) => t.status !== 'Resolved').length);
+        setTicketsOpenCount((tickData || []).filter((t: any) => t.status !== 'Resolved').length);
 
-        // O2D Logic
-        let delayed = 0;
-        let today = 0;
-
-        (o2dData || []).forEach((order: any) => {
-          if (order.hold || order.cancelled) return;
-
-          // Find pending step
-          let pendingStepIdx = -1;
-          for (let i = 1; i <= 11; i++) {
-            const status = order[`status_${i}`];
-            if (status !== 'Yes' && status !== 'Done') {
-              pendingStepIdx = i;
-              break;
-            }
-          }
-
-          if (pendingStepIdx !== -1) {
-            // Role Filter
-            const stepConfig = configData.configs?.find((c: any) => c.step === pendingStepIdx);
-            if (userRole.toUpperCase() === 'USER' && stepConfig) {
-              const responsibleList = stepConfig.responsible_person
-                ? stepConfig.responsible_person.split(",").map((s: string) => s.trim())
-                : [];
-              if (stepConfig.responsible_person && !responsibleList.includes(currentUser)) return;
-            }
-
-            // Date Filter
-            const plannedDateStr = order[`planned_${pendingStepIdx}`];
-            if (plannedDateStr) {
-              const plannedDate = new Date(plannedDateStr);
-              plannedDate.setHours(0, 0, 0, 0);
-              const diff = Math.round((plannedDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-              
-              if (diff < 0) delayed++;
-              else if (diff === 0) today++;
-            }
-          }
-        });
-
-        setO2dPendingCount(delayed + today);
+        // O2D badge: use summary stepCounts (steps 1-11 that are incomplete = pending)
+        // stepCounts[i] = number of orders currently at step i+1
+        // Total pending = sum of all steps 1..11 that have active orders (not completed)
+        const stepCounts: number[] = o2dSummary?.stepCounts || [];
+        const totalPending = stepCounts.slice(0, 11).reduce((sum: number, c: number) => sum + (c || 0), 0);
+        setO2dPendingCount(totalPending);
 
         // Chat Logic
         const totalUnreadChat = Array.isArray(chatData) ? chatData.reduce((acc, user) => acc + (user.unreadCount || 0), 0) : 0;

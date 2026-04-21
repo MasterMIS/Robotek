@@ -19,8 +19,6 @@ import { useSSE } from "@/hooks/useSSE";
 import { getUrl } from "aws-amplify/storage";
 import { generateClient } from "aws-amplify/data";
 import type { Schema } from "@/../amplify/data/resource";
-
-const client = generateClient<Schema>();
 import {
   PlusIcon,
   PencilSquareIcon,
@@ -83,6 +81,7 @@ interface SearchableDropdownProps {
   listPosition?: "absolute" | "relative";
   hideLabel?: boolean;
   isMulti?: boolean;
+  onFocus?: (e: React.FocusEvent) => void;
 }
 
 function SearchableDropdown({
@@ -97,13 +96,30 @@ function SearchableDropdown({
   listPosition = "absolute",
   hideLabel = false,
   isMulti = false,
+  onFocus,
 }: SearchableDropdownProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [activeIndex, setActiveIndex] = useState(-1);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const itemRefs = useRef<(HTMLDivElement | null)[]>([]);
+
+  // Open on Tab/Focus
+  const handleFocus = (e: React.FocusEvent) => {
+    if (!isOpen && !dropdownRef.current?.contains(e.relatedTarget as Node)) {
+        setIsOpen(true);
+    }
+    onFocus?.(e);
+  };
+
+  const handleTriggerKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      setIsOpen(!isOpen);
+    }
+  };
 
   const selectedValues = useMemo(() => {
     if (!isMulti) return value ? [value] : [];
@@ -189,8 +205,16 @@ function SearchableDropdown({
         </label>
       )}
       <div
-        onClick={() => setIsOpen(!isOpen)}
-        className={`w-full ${isMulti ? "min-h-[34px] py-1" : "h-[34px]"} bg-[#FEF6DB] dark:bg-black px-3 rounded-lg border border-orange-100 dark:border-navy-700 focus-within:border-[#FFD500] cursor-pointer flex items-center justify-between shadow-sm transition-all`}
+        ref={triggerRef}
+        tabIndex={0}
+        onMouseDown={(e) => {
+            setIsOpen(!isOpen);
+            // Small timeout to allow focus to settle if needed
+            setTimeout(() => triggerRef.current?.focus(), 0);
+        }}
+        onFocus={handleFocus}
+        onKeyDown={handleTriggerKeyDown}
+        className={`w-full ${isMulti ? "min-h-[34px] py-1" : "h-[34px]"} bg-[#FEF6DB] dark:bg-black px-3 rounded-lg border border-orange-100 dark:border-navy-700 focus:border-[#FFD500] focus:ring-1 focus:ring-[#FFD500] outline-none cursor-pointer flex items-center justify-between shadow-sm transition-all`}
       >
         <div className="flex flex-wrap gap-1 items-center min-w-0 flex-1">
           {isMulti && selectedValues.length > 0 ? (
@@ -233,6 +257,7 @@ function SearchableDropdown({
                 placeholder="Search... (↑↓ to navigate, Enter to select)"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
+                onFocus={onFocus}
                 onKeyDown={handleKeyDown}
                 className="w-full pl-7 pr-3 py-1.5 bg-gray-50 dark:bg-navy-950 border-none outline-none text-[11px] font-bold text-gray-700 dark:text-white rounded-md"
               />
@@ -257,13 +282,12 @@ function SearchableDropdown({
                       }
                     }}
                     onMouseEnter={() => setActiveIndex(i)}
-                    className={`px-4 py-2 text-[11px] font-bold cursor-pointer transition-colors flex items-center justify-between ${
-                      i === activeIndex
+                    className={`px-4 py-2 text-[11px] font-bold cursor-pointer transition-colors flex items-center justify-between ${i === activeIndex
                         ? "bg-[#003875] text-white dark:bg-[#FFD500] dark:text-black"
                         : isSelected
                           ? "bg-orange-50 text-[#003875] dark:bg-white/10 dark:text-[#FFD500]"
                           : "text-gray-600 dark:text-gray-300 hover:bg-orange-50 dark:hover:bg-white/5"
-                    }`}
+                      }`}
                   >
                     <span>{opt}</span>
                     {isSelected && <CheckCircleIcon className="w-3.5 h-3.5" />}
@@ -284,6 +308,13 @@ function SearchableDropdown({
 
 // --- Main Page ---
 export default function O2DPage() {
+  // Lazy-init so generateClient() only runs after Amplify.configure() in <Providers>
+  const amplifyClient = useRef<ReturnType<typeof generateClient<Schema>> | null>(null);
+  if (!amplifyClient.current) {
+    try { amplifyClient.current = generateClient<Schema>(); } catch { /* not yet configured */ }
+  }
+  const client = amplifyClient.current;
+
   const { data: session } = useSession();
   const currentUser = (session?.user as any)?.username || "";
 
@@ -296,14 +327,69 @@ export default function O2DPage() {
   const [tableFilterParty, setTableFilterParty] = useState("");
   const [tableFilterOrderNo, setTableFilterOrderNo] = useState("");
   const [tableFilterItemName, setTableFilterItemName] = useState("");
+  const [multiRowQty, setMultiRowQty] = useState(1);
+  const lastFocusedRowRef = useRef<number>(-1);
+  const modalScrollRef = useRef<HTMLFormElement>(null);
+  const partnerNameRef = useRef<any>(null);
+
+
+
+  const centerOnFocus = (e: React.FocusEvent | HTMLElement) => {
+    const target = "target" in e ? (e.target as HTMLElement) : e;
+    if (!target) return;
+    
+    // Use a small delay to handle layout shifts (like dropdowns opening)
+    setTimeout(() => {
+        target.scrollIntoView({ 
+            block: "center", 
+            behavior: "smooth" 
+        });
+    }, 100);
+  };
   const [tableFilterPending, setTableFilterPending] = useState(false);
   const [selectedDateFilters, setSelectedDateFilters] = useState<string[]>([]);
   const [selectedStepFilters, setSelectedStepFilters] = useState<number[]>([]);
 
   const [allO2Ds, setAllO2Ds] = useState<O2D[]>([]);
-  const [isAllLoading, setIsAllLoading] = useState(true);
-  const [chunkProgress, setChunkProgress] = useState(0);
-  const [totalRowsServer, setTotalRowsServer] = useState(0);
+  const [isAllLoading, setIsAllLoading] = useState(false);
+  const [totalOrdersServer, setTotalOrdersServer] = useState(0);
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+
+  // Debounce search
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(searchTerm), 500);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
+  // --- TABLE view: 100 items per page, server-side ---
+  const [tableCurrentPage, setTableCurrentPage] = useState(1);
+  const [tableItemsPerPage] = useState(100);
+  const tableQueryKey = `/api/o2d?page=${tableCurrentPage}&limit=${tableItemsPerPage}&search=${debouncedSearch}&dateFilters=${encodeURIComponent(JSON.stringify(selectedDateFilters))}&stepFilters=${encodeURIComponent(JSON.stringify(selectedStepFilters))}&partyFilter=${tableFilterParty}&orderFilter=${tableFilterOrderNo}&itemNameFilter=${tableFilterItemName}&pendingFilter=${tableFilterPending}&startDate=${filterStartDate}&endDate=${filterEndDate}`;
+  const { data: paginatedResponse, error: paginatedError } = useSWR(
+    tableQueryKey,
+    fetcher,
+    { revalidateOnFocus: true, refreshInterval: 60000 }
+  );
+
+  useEffect(() => {
+    if (paginatedResponse) {
+      setAllO2Ds(paginatedResponse.data || []);
+      setTotalOrdersServer(paginatedResponse.total || 0);
+      setIsAllLoading(false);
+    } else if (!paginatedError) {
+      setIsAllLoading(true);
+    }
+  }, [paginatedResponse, paginatedError]);
+
+  // --- SIDEBAR/PANELS view: 10 orders per page, lazy server-side ---
+  const [sidebarCurrentPage, setSidebarCurrentPage] = useState(1);
+  const [sidebarItemsPerPage] = useState(10);
+  const sidebarQueryKey = `/api/o2d?page=${sidebarCurrentPage}&limit=${sidebarItemsPerPage}&search=${debouncedSearch}&dateFilters=${encodeURIComponent(JSON.stringify(selectedDateFilters))}&stepFilters=${encodeURIComponent(JSON.stringify(selectedStepFilters))}&partyFilter=${tableFilterParty}&orderFilter=${tableFilterOrderNo}&itemNameFilter=${tableFilterItemName}&pendingFilter=${tableFilterPending}&startDate=${filterStartDate}&endDate=${filterEndDate}`;
+  const { data: sidebarResponse, isLoading: isSidebarLoading } = useSWR(
+    sidebarQueryKey,
+    fetcher,
+    { revalidateOnFocus: true, refreshInterval: 60000, keepPreviousData: true }
+  );
 
   // Fetch summary data first to know total count
   const { data: summaryData } = useSWR<{
@@ -316,59 +402,14 @@ export default function O2DPage() {
     { revalidateOnFocus: true, refreshInterval: 600000 }
   );
 
-  // Use summaryData to set total rows
+  // Use summaryData to set total rows if not already set by paginated fetch
   useEffect(() => {
-    if (summaryData?.totalRows) {
-      setTotalRowsServer(summaryData.totalRows);
+    if (summaryData?.totalOrders && !totalOrdersServer) {
+      setTotalOrdersServer(summaryData.totalOrders);
     }
-  }, [summaryData]);
+  }, [summaryData, totalOrdersServer]);
 
-  // SEQUENTIAL CHUNK FECHING LOGIC
-  useEffect(() => {
-    let isMounted = true;
-    let nextToken: string | null = null;
-    let cumulative: O2D[] = [];
-
-    async function fetchChunks() {
-      setIsAllLoading(true);
-      try {
-        do {
-          const url = `/api/o2d?type=chunk&limit=1000${nextToken ? `&nextToken=${encodeURIComponent(nextToken)}` : ""}`;
-          const res = await fetch(url);
-          if (!res.ok) throw new Error("Chunk fetch failed");
-          const result = await res.json();
-          
-          if (!isMounted) return;
-
-          cumulative = [...cumulative, ...result.data];
-          setAllO2Ds([...cumulative]); // Progressive update
-          setChunkProgress(cumulative.length);
-          nextToken = result.nextToken;
-          
-          // Small delay to prevent flooding the network if needed
-        } while (nextToken);
-        
-        setIsAllLoading(false);
-      } catch (err) {
-        console.error("Batch loading error:", err);
-        setIsAllLoading(false);
-      }
-    }
-
-    fetchChunks();
-
-    // Re-sync every 5 mins
-    const interval = setInterval(() => {
-      nextToken = null;
-      cumulative = [];
-      fetchChunks();
-    }, 300000);
-
-    return () => {
-      isMounted = false;
-      clearInterval(interval);
-    };
-  }, []);
+  // Removed sequential chunk fetching logic - now using server-side pagination above
 
   const allO2DData = allO2Ds;
 
@@ -415,28 +456,55 @@ export default function O2DPage() {
         )
       };
 
-      globalMutate("/api/o2d?chunked=true", (current: O2D[] | undefined) => {
-        if (!current) return current;
-        const nextData = [...current];
-        const idx = nextData.findIndex(o => String(o.id) === String(mappedItem.id));
+      // SURGICAL UPDATE: Update local cache without hitting the server
+      const updateFn = (current: any) => {
+        if (!current?.data) return current;
+        const nextData = [...current.data];
+        const idx = nextData.findIndex((d: any) => d.id === mappedItem.id);
+        
         if (idx !== -1) {
-          nextData[idx] = mappedItem as any;
+          nextData[idx] = { ...nextData[idx], ...mappedItem };
         } else {
-          nextData.unshift(mappedItem as any);
+          // Prepend new item
+          nextData.unshift(mappedItem);
         }
-        return nextData;
-      }, false);
 
+        return {
+          ...current,
+          data: nextData,
+          orders: Array.from(new Set([mappedItem.order_no, ...(current.orders || [])])),
+          total: idx === -1 ? (current.total || 0) + 1 : current.total
+        };
+      };
+
+      // Patch active keys
+      globalMutate(tableQueryKey, updateFn, false);
+      globalMutate(sidebarQueryKey, updateFn, false);
+      
+      // Background revalidation for summary (lightweight)
       globalMutate("/api/o2d/summary");
-      globalMutate("/api/o2d?type=ordernumbers");
     };
 
-    const handleDelete = (item: any) => {
-      globalMutate("/api/o2d?chunked=true", (current: O2D[] | undefined) => {
-        if (!current) return current;
-        return current.filter(o => String(o.id) !== String(item.id));
-      }, false);
+    const handleDelete = (deletedItem: any) => {
+      const filterFn = (current: any) => {
+        if (!current?.data) return current;
+        const nextData = current.data.filter((d: any) => d.id !== deletedItem.id);
+        const hasOrderStill = nextData.some((d: any) => d.order_no === deletedItem.order_no);
+        
+        return {
+          ...current,
+          data: nextData,
+          orders: hasOrderStill ? current.orders : (current.orders || []).filter((no: string) => no !== deletedItem.order_no),
+          total: hasOrderStill ? current.total : Math.max(0, (current.total || 0) - 1)
+        };
+      };
+
+      globalMutate(tableQueryKey, filterFn, false);
+      globalMutate(sidebarQueryKey, filterFn, false);
+      globalMutate("/api/o2d/summary");
     };
+
+    if (!client) return;
 
     const subCreate = client.models.O2DRecord.onCreate().subscribe({ next: handleUpdate });
     const subUpdate = client.models.O2DRecord.onUpdate().subscribe({ next: handleUpdate });
@@ -447,7 +515,7 @@ export default function O2DPage() {
       subUpdate.unsubscribe();
       subDelete.unsubscribe();
     };
-  }, [globalMutate]);
+  }, [globalMutate, client]);
 
   // Extract O2D data
   const allO2DsRaw = allO2DData || [];
@@ -460,12 +528,37 @@ export default function O2DPage() {
       return acc;
     }, {});
   }, [allO2DsRaw]);
-  
+
+  // Dedicated grouped map for the SIDEBAR — built from the sidebar's own page data
+  // This avoids crashes when sidebar is on page N but table is on page 1
+  const sidebarGroupedOrders = useMemo(() => {
+    const rows: O2D[] = sidebarResponse?.data || [];
+    return rows.reduce((acc: Record<string, O2D[]>, o2d: O2D) => {
+      const orderNo = o2d.order_no || "Unknown";
+      if (!acc[orderNo]) acc[orderNo] = [];
+      acc[orderNo].push(o2d);
+      return acc;
+    }, {});
+  }, [sidebarResponse]);
+
   // State for loading during page transitions
   const [isTransitioning, setIsTransitioning] = useState(false);
 
   const [isLoading, setIsLoading] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
+
+  useEffect(() => {
+    if (isModalOpen) {
+      // Focus the first meaningful field when modal opens
+      setTimeout(() => {
+        const firstField = document.querySelector('[data-initial-focus]') as HTMLElement;
+        if (firstField) {
+            firstField.focus();
+            centerOnFocus(firstField);
+        }
+      }, 300);
+    }
+  }, [isModalOpen]);
   const [editingOrderNo, setEditingOrderNo] = useState<string | null>(null);
   const userRole = (session?.user as any)?.role || "User";
   const isSpecialRole =
@@ -498,9 +591,7 @@ export default function O2DPage() {
     party_name: "",
     remark: "",
   });
-  const [items, setItems] = useState<O2DItem[]>([
-    { item_name: "", item_qty: "", est_amount: "", item_specification: "" },
-  ]);
+  const [items, setItems] = useState<O2DItem[]>([]);
   const [newPartyDraft, setNewPartyDraft] =
     useState<Partial<PartyManagement> | null>(null);
   const [screenshotFile, setScreenshotFile] = useState<File | null>(null);
@@ -536,9 +627,9 @@ export default function O2DPage() {
     if (!path || path.startsWith("http") || path.startsWith("data:")) return path || "";
     if (resolvedUrls[path]) return resolvedUrls[path];
     try {
-      const url = await getUrl({ 
-        path, 
-        options: { validateObjectExistence: false, expiresIn: 3600 } 
+      const url = await getUrl({
+        path,
+        options: { validateObjectExistence: false, expiresIn: 3600 }
       });
       const resolved = url.url.toString();
       setResolvedUrls(prev => ({ ...prev, [path]: resolved }));
@@ -567,13 +658,7 @@ export default function O2DPage() {
   const [exportIncludeDetails, setExportIncludeDetails] = useState(true);
   const [exportSelectedSteps, setExportSelectedSteps] = useState<number[]>([]);
 
-  // Pagination State
-  const [sidebarCurrentPage, setSidebarCurrentPage] = useState(1);
-  const [sidebarItemsPerPage] = useState(20);
-  const [tableCurrentPage, setTableCurrentPage] = useState(1);
-  const [tableItemsPerPage] = useState(100);
-
-  // Reset page when filters change
+  // Reset BOTH sidebar and table pages when filters change
   useEffect(() => {
     setSidebarCurrentPage(1);
     setTableCurrentPage(1);
@@ -621,12 +706,15 @@ export default function O2DPage() {
       const [imsRes, configRes, partiesRes] = await Promise.all([
         fetch("/api/ims"),
         fetch("/api/o2d/config"),
-        fetch("/api/party-management"),
+        fetch("/api/party-management?limit=9999"), // get all party names for dropdown
       ]);
 
       const imsData = await imsRes.json();
       const configData = await configRes.json();
-      const partiesData = await partiesRes.json();
+      const partiesRaw = await partiesRes.json();
+
+      // API returns paginated { data: [], total: N } — unwrap .data
+      const partiesData = Array.isArray(partiesRaw) ? partiesRaw : (partiesRaw?.data || []);
 
       if (Array.isArray(partiesData) && partiesData.length > 0) {
         setFullParties(partiesData);
@@ -760,7 +848,7 @@ export default function O2DPage() {
             stepDone = true;
           }
         }
-        
+
         // Step 4 with "No" is always "done" (it terminates the process)
         if (isStep4CompletedNo) stepDone = true;
 
@@ -776,39 +864,7 @@ export default function O2DPage() {
   };
 
   const getBaseFilterMatch = (no: string, items: O2D[]): boolean => {
-    const pIdx = getPendingStepIdx(items);
-    const isHold = !!items[0].hold;
-    const isCancelled = !!items[0].cancelled;
-
-    // Search Bar
-    const matchesSearch =
-      no.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      items[0].party_name.toLowerCase().includes(searchTerm.toLowerCase());
-    if (!matchesSearch) return false;
-
-    // Advanced Filters
-    if (tableFilterPending && (isHold || isCancelled || pIdx === -1)) return false;
-    if (tableFilterParty && !items[0].party_name.toLowerCase().includes(tableFilterParty.toLowerCase())) return false;
-    if (tableFilterOrderNo && !no.toLowerCase().includes(tableFilterOrderNo.toLowerCase())) return false;
-    
-    if (tableFilterItemName && !items.some(item => 
-      item.item_name.toLowerCase().includes(tableFilterItemName.toLowerCase())
-    )) return false;
-
-    if (filterStartDate || filterEndDate) {
-      const itemDate = new Date(items[0].created_at || items[0].updated_at);
-      if (filterStartDate) {
-        const start = new Date(filterStartDate);
-        start.setHours(0, 0, 0, 0);
-        if (itemDate < start) return false;
-      }
-      if (filterEndDate) {
-        const end = new Date(filterEndDate);
-        end.setHours(23, 59, 59, 999);
-        if (itemDate > end) return false;
-      }
-    }
-
+    // With server-side filtering, we just return true here as the data is already filtered
     return true;
   };
 
@@ -855,56 +911,6 @@ export default function O2DPage() {
     return false;
   };
 
-  const orderMatchesAnyFilter = (no: string, sourceGrouped: Record<string, O2D[]>): boolean => {
-    const items = sourceGrouped[no];
-    if (!items || items.length === 0) return false;
-
-    if (!getBaseFilterMatch(no, items)) return false;
-
-    const pIdx = getPendingStepIdx(items);
-    const isHold = !!items[0].hold;
-    const isCancelled = !!items[0].cancelled;
-
-    // Role-based visibility
-    if (!isSpecialRole) {
-      const hasStatusFilter = selectedDateFilters.includes("Hold") || selectedDateFilters.includes("Cancelled");
-      if ((isHold || isCancelled) && !hasStatusFilter) return false;
-      if (pIdx === -1 && !isHold && !isCancelled) return false;
-    }
-
-    // Step Filtering
-    if (selectedStepFilters.length > 0 && !selectedStepFilters.includes(pIdx)) return false;
-
-    // Date/Status Filtering
-    if (selectedDateFilters.length > 0) {
-      if (!selectedDateFilters.some((f) => orderMatchesDateFilter(items, f))) return false;
-    } else if (!isSpecialRole) {
-      if (isHold || isCancelled || pIdx === -1) return false;
-    }
-
-    return true;
-  };
-
-  const getDateFilterCount = (filter: string): number => {
-    return Object.keys(groupedOrders).filter((no) => {
-      const items = groupedOrders[no];
-      if (!getBaseFilterMatch(no, items)) return false;
-
-      const pIdx = getPendingStepIdx(items);
-      const isHold = !!items[0].hold;
-      const isCancelled = !!items[0].cancelled;
-
-      if (!isSpecialRole) {
-        if (pIdx === -1 && !isHold && !isCancelled) return false;
-        if ((isHold || isCancelled) && filter !== "Hold" && filter !== "Cancelled") return false;
-      }
-
-      if (selectedStepFilters.length > 0 && !selectedStepFilters.includes(pIdx)) return false;
-
-      return orderMatchesDateFilter(items, filter);
-    }).length;
-  };
-
   const getStepFilterCount = (stepIdx: number): number => {
     if (summaryData?.stepCounts && stepIdx >= 1 && stepIdx <= 11) {
       return summaryData.stepCounts[stepIdx - 1] || 0;
@@ -912,26 +918,36 @@ export default function O2DPage() {
     return 0;
   };
 
+  const getDateFilterCount = (filter: string): number => {
+    if (!summaryData) return 0;
+    if (filter === "Hold") return summaryData.stepCounts?.[11] || 0; // Assuming we add this to summary API
+    if (filter === "Cancelled") return summaryData.stepCounts?.[12] || 0;
 
-
+    // For other date filters like Today, Tomorrow, etc.
+    // If the summary API doesn't provide them, we might need to calculate from current page
+    // but the user wants the "overall" count.
+    // For now, let's return 0 or a placeholder if not in summaryData
+    return 0;
+  };
 
   const memoizedOrderOptions = useMemo(() => {
     return allOrderNumbers || [];
   }, [allOrderNumbers]);
 
   const memoizedItemOptions = useMemo(() => {
-    return Array.from(new Set(dropdownItems.map((di) => di.name))).sort();
-  }, [dropdownItems]);
+    return Array.from(new Set(allO2Ds.map((o) => o.item_name))).sort();
+  }, [allO2Ds]);
 
-  // Client-side filtering logic across ALL orders
+  // Sidebar uses its own server-driven page of order numbers
   const filteredOrderNumbers = useMemo(() => {
-    return Object.keys(groupedOrders)
-      .filter((no) => orderMatchesAnyFilter(no, groupedOrders))
-      .sort((a, b) => b.localeCompare(a));
-  }, [groupedOrders, searchTerm, selectedDateFilters, selectedStepFilters, tableFilterParty, tableFilterOrderNo, tableFilterItemName, tableFilterPending, filterStartDate, filterEndDate]);
+    return sidebarResponse?.orders || [];
+  }, [sidebarResponse]);
 
-  const totalOrdersCount = filteredOrderNumbers.length;
-  const totalItemsCount = allO2DsRaw.length;
+  const sidebarTotalOrders = sidebarResponse?.total ?? totalOrdersServer;
+  const sidebarTotalPages = Math.ceil(sidebarTotalOrders / sidebarItemsPerPage) || 1;
+
+  const totalOrdersCount = totalOrdersServer;
+  const totalItemsCount = paginatedResponse?.totalRows || 0;
 
   useEffect(() => {
     // Scroll to top on filter change
@@ -958,11 +974,33 @@ export default function O2DPage() {
 
 
 
-  const addItemRow = () =>
-    setItems([
-      ...items,
-      { item_name: "", item_qty: "", est_amount: "", item_specification: "" },
-    ]);
+  const addItemRow = (count = 1) => {
+    const newRows = Array.from({ length: count }).map(() => ({ 
+        item_name: "", 
+        item_qty: "", 
+        est_amount: "", 
+        item_specification: "" 
+    }));
+    setItems([...items, ...newRows]);
+    lastFocusedRowRef.current = items.length; // Focus the first new item
+  };
+
+  // Effect to handle auto-focusing newly added rows
+  useEffect(() => {
+    if (lastFocusedRowRef.current !== -1) {
+      const targetIndex = lastFocusedRowRef.current;
+      // Small timeout to wait for render
+      setTimeout(() => {
+        const nomenclatureFields = document.querySelectorAll('[data-nomenclature-trigger]');
+        const target = nomenclatureFields[targetIndex] as HTMLElement;
+        if (target) {
+            target.focus();
+            centerOnFocus(target);
+        }
+      }, 50);
+      lastFocusedRowRef.current = -1;
+    }
+  }, [items.length]);
   const removeItemRow = (index: number) =>
     items.length > 1 && setItems(items.filter((_, i) => i !== index));
 
@@ -1119,7 +1157,27 @@ export default function O2DPage() {
         );
         optimisticO2Ds = [...updatedItems, ...optimisticO2Ds];
 
-        mutate("O2D", optimisticO2Ds, false);
+        // Merge into existing data
+        const sidebarOptimistic = { 
+          ...sidebarResponse, 
+          data: [
+            ...updatedItems, 
+            ...(sidebarResponse?.data || []).filter((o: any) => o.order_no !== editingOrderNo)
+          ],
+          orders: Array.from(new Set([editingOrderNo, ...(sidebarResponse?.orders || [])]))
+        };
+
+        const tableOptimistic = { 
+          ...paginatedResponse, 
+          data: [
+            ...updatedItems, 
+            ...(paginatedResponse?.data || []).filter((o: any) => o.order_no !== editingOrderNo)
+          ]
+        };
+
+        globalMutate(tableQueryKey, tableOptimistic, false);
+        globalMutate(sidebarQueryKey, sidebarOptimistic, false);
+        
         setIsModalOpen(false);
         resetForm();
 
@@ -1157,7 +1215,24 @@ export default function O2DPage() {
         });
 
         optimisticO2Ds = [...newItems, ...optimisticO2Ds];
-        mutate("O2D", optimisticO2Ds, false);
+
+        // Merge into existing data and prepend new order
+        const sidebarOptimistic = { 
+          ...sidebarResponse, 
+          data: [...newItems, ...(sidebarResponse?.data || [])].slice(0, sidebarItemsPerPage),
+          orders: [finalOrderNo, ...(sidebarResponse?.orders || [])].slice(0, sidebarItemsPerPage),
+          total: (sidebarResponse?.total || 0) + 1
+        };
+
+        const tableOptimistic = { 
+          ...paginatedResponse, 
+          data: [...newItems, ...(paginatedResponse?.data || [])].slice(0, tableItemsPerPage),
+          total: (paginatedResponse?.total || 0) + 1
+        };
+
+        globalMutate(tableQueryKey, tableOptimistic, false);
+        globalMutate(sidebarQueryKey, sidebarOptimistic, false);
+
         setIsModalOpen(false);
         resetForm();
 
@@ -1186,11 +1261,18 @@ export default function O2DPage() {
       }
       setActionStatus("success");
       setActionMessage(editingOrderNo ? "Order Updated!" : "Order Created!");
-      mutate("O2D"); // Revalidate to get real IDs/Server state
+      
+      // No broad revalidation here - AppSync or local mutation handles it
+      // Just refresh the summary (lightweight)
+      globalMutate("/api/o2d/summary");
+
       setTimeout(() => setIsStatusModalOpen(false), 1500);
     } catch (error: any) {
       console.error(error);
-      mutate("O2D", currentO2Ds, false); // Rollback
+      // Rollback
+      globalMutate(tableQueryKey, paginatedResponse, false);
+      globalMutate(sidebarQueryKey, sidebarResponse, false);
+      
       setActionStatus("error");
       setActionMessage(error.message);
       setIsStatusModalOpen(true);
@@ -1232,10 +1314,21 @@ export default function O2DPage() {
     const orderNo = confirmPayload?.orderNo;
     if (!orderNo) return;
 
-    const currentO2Ds = allO2DsRaw;
-    const optimisticO2Ds = allO2DsRaw.filter((o: any) => o.order_no !== orderNo);
+    const tableOptimistic = { 
+      ...paginatedResponse, 
+      data: (paginatedResponse?.data || []).filter((o: any) => o.order_no !== orderNo), 
+      total: Math.max(0, (paginatedResponse?.total || 0) - 1) 
+    };
+    const sidebarOptimistic = { 
+      ...sidebarResponse, 
+      data: (sidebarResponse?.data || []).filter((o: any) => o.order_no !== orderNo), 
+      orders: (sidebarResponse?.orders || []).filter((no: string) => no !== orderNo),
+      total: Math.max(0, (sidebarResponse?.total || 0) - 1) 
+    };
 
-    mutate("O2D", optimisticO2Ds, false);
+    globalMutate(tableQueryKey, tableOptimistic, false);
+    globalMutate(sidebarQueryKey, sidebarOptimistic, false);
+
     setSelectedOrderNo(null);
     setConfirmPayload(null);
     setIsConfirmOpen(false);
@@ -1252,10 +1345,16 @@ export default function O2DPage() {
       if (!res.ok) throw new Error("Delete failed");
       setActionStatus("success");
       setActionMessage("Order Deleted");
-      mutate("O2D");
+      
+      // Simple summary refresh
+      globalMutate("/api/o2d/summary");
+      
       setTimeout(() => setIsStatusModalOpen(false), 1500);
     } catch (error) {
-      mutate("O2D", currentO2Ds, false);
+      // Rollback
+      globalMutate(tableQueryKey, paginatedResponse, false);
+      globalMutate(sidebarQueryKey, sidebarResponse, false);
+
       setActionStatus("error");
       setActionMessage("Delete Failed");
       setTimeout(() => setIsStatusModalOpen(false), 2000);
@@ -1401,19 +1500,9 @@ export default function O2DPage() {
 
     // 2. Sort groups by their latest item's created_at (descending) -> "latest order on top"
     // Also ensuring items within group are chronological (original order usually)
-    const sortedNos = Object.keys(groups).sort((a, b) => {
-      const latestA = Math.max(
-        ...groups[a].map((i) =>
-          new Date(i.created_at || i.updated_at || 0).getTime(),
-        ),
-      );
-      const latestB = Math.max(
-        ...groups[b].map((i) =>
-          new Date(i.created_at || i.updated_at || 0).getTime(),
-        ),
-      );
-      return latestB - latestA;
-    });
+    const sortedNos = Object.keys(groups).sort((a, b) =>
+      b.localeCompare(a, undefined, { numeric: true, sensitivity: 'base' })
+    );
 
     // 3. Flatten back, items in groups should be ASCENDING created_at (first entry on top)
     const result: O2D[] = [];
@@ -1502,12 +1591,8 @@ export default function O2DPage() {
     tableFilterPending,
   ]);
 
-  const tableTotalPages = Math.ceil(
-    filteredTableData.length / tableItemsPerPage,
-  );
-  const tableData = useMemo(() => {
-    return filteredTableData;
-  }, [filteredTableData]);
+  const tableTotalPages = Math.ceil(totalOrdersServer / tableItemsPerPage);
+  const tableData = paginatedResponse?.data || [];
 
   const handleRemoveFollowUp = async () => {
     if (!selectedOrderNo) return;
@@ -1872,11 +1957,10 @@ export default function O2DPage() {
               onClick={() =>
                 setPageViewMode(pageViewMode === "panels" ? "table" : "panels")
               }
-              className={`flex items-center gap-2 px-2 sm:px-3 py-1.5 font-black text-[11px] uppercase tracking-widest rounded-full transition-all border-2 ${
-                pageViewMode === "table"
+              className={`flex items-center gap-2 px-2 sm:px-3 py-1.5 font-black text-[11px] uppercase tracking-widest rounded-full transition-all border-2 ${pageViewMode === "table"
                   ? "bg-[#003875] text-[#FFD500] border-[#003875]"
                   : "text-[#003875] dark:text-[#FFD500] border-transparent hover:bg-[#003875]/5 dark:hover:bg-navy-700"
-              }`}
+                }`}
             >
               {pageViewMode === "panels" ? (
                 <Squares2X2Icon className="w-4 h-4 stroke-[3]" />
@@ -1959,11 +2043,10 @@ export default function O2DPage() {
                     <button
                       key={stepIdx}
                       onClick={() => toggleStepFilter(stepIdx)}
-                      className={`flex items-center gap-2 px-3 py-1.5 rounded-full border transition-all whitespace-nowrap ${
-                        isActive
+                      className={`flex items-center gap-2 px-3 py-1.5 rounded-full border transition-all whitespace-nowrap ${isActive
                           ? "bg-[#CE2029] border-[#CE2029] text-white shadow-lg scale-105"
                           : "bg-white dark:bg-navy-800 border-gray-100 dark:border-navy-700 text-gray-500 hover:border-[#CE2029]/30"
-                      }`}
+                        }`}
                     >
                       <span
                         className={`text-[10px] font-black uppercase tracking-widest ${isActive ? "text-white" : "text-gray-600 dark:text-gray-300"}`}
@@ -2062,11 +2145,10 @@ export default function O2DPage() {
                 <div className="h-4 w-[1px] bg-gray-200 dark:bg-navy-700" />
                 <button
                   onClick={() => setTableFilterPending(!tableFilterPending)}
-                  className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all flex items-center gap-1.5 border ${
-                    tableFilterPending
+                  className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all flex items-center gap-1.5 border ${tableFilterPending
                       ? "bg-[#003875] text-[#FFD500] border-[#003875] shadow-md"
                       : "bg-white dark:bg-navy-800 text-gray-400 border-gray-200 dark:border-navy-700 hover:border-[#003875]"
-                  }`}
+                    }`}
                 >
                   <ClockIcon
                     className={`w-3.5 h-3.5 ${tableFilterPending ? "text-[#FFD500]" : "text-gray-400"}`}
@@ -2115,7 +2197,7 @@ export default function O2DPage() {
                     </thead>
                     <tbody className="divide-y divide-gray-50 dark:divide-navy-800/20">
                       {tableData.length > 0 ? (
-                        tableData.slice((tableCurrentPage - 1) * tableItemsPerPage, tableCurrentPage * tableItemsPerPage).map((item, idx) => (
+                        tableData.slice((tableCurrentPage - 1) * tableItemsPerPage, tableCurrentPage * tableItemsPerPage).map((item: O2D, idx: number) => (
                           <tr
                             key={idx}
                             className="group hover:bg-[#003875]/[0.02] dark:hover:bg-white/5 transition-colors"
@@ -2217,7 +2299,7 @@ export default function O2DPage() {
                   <div className="text-[11px] font-black text-gray-400 uppercase tracking-widest">
                     Showing <span className="text-[#003875] dark:text-[#FFD500]">{(tableCurrentPage - 1) * tableItemsPerPage + 1}</span> to <span className="text-[#003875] dark:text-[#FFD500]">{Math.min(tableCurrentPage * tableItemsPerPage, tableData.length)}</span> of <span className="text-[#003875] dark:text-[#FFD500]">{tableData.length}</span> entries
                   </div>
-                  
+
                   <div className="flex items-center gap-2">
                     <button
                       onClick={() => setTableCurrentPage(p => Math.max(1, p - 1))}
@@ -2227,13 +2309,13 @@ export default function O2DPage() {
                       <ChevronLeftIcon className="w-4 h-4 transition-transform group-hover:-translate-x-0.5" />
                       Prev
                     </button>
-                    
+
                     <div className="flex items-center gap-1 mx-2">
                       {/* Show current, first, last, and some relative pages if many exist */}
                       {(() => {
                         const totalPages = Math.ceil(tableData.length / tableItemsPerPage);
                         if (totalPages <= 1) return null;
-                        
+
                         return (
                           <span className="px-4 py-2 bg-[#003875]/5 dark:bg-[#FFD500]/5 rounded-xl border border-[#003875]/10 dark:border-[#FFD500]/10 text-[11px] font-black text-[#003875] dark:text-[#FFD500]">
                             Page {tableCurrentPage} of {totalPages}
@@ -2271,46 +2353,37 @@ export default function O2DPage() {
                       />
                     </div>
 
-                    {/* Sidebar Pagination - Top Position */}
-                    {/* Sidebar Header Stats */}
-                    <div className="flex flex-col gap-2 px-2 py-1.5 bg-[#003875]/5 dark:bg-[#FFD500]/5 rounded-xl border border-[#003875]/10 dark:border-[#FFD500]/10 shadow-sm">
-                      {isAllLoading && (
-                        <div className="w-full space-y-1 mb-1">
-                          <div className="flex justify-between items-center px-0.5">
-                            <span className="text-[8px] font-black text-[#003875] dark:text-[#FFD500] uppercase animate-pulse">Syncing Cloud Data...</span>
-                            <span className="text-[8px] font-black text-gray-500">{chunkProgress} / {totalRowsServer}</span>
-                          </div>
-                          <div className="h-1 w-full bg-gray-200 dark:bg-navy-800 rounded-full overflow-hidden">
-                            <div 
-                              className="h-full bg-gradient-to-r from-[#003875] to-[#FFD500] transition-all duration-300" 
-                              style={{ width: `${Math.min(100, (chunkProgress / (totalRowsServer || 1)) * 100)}%` }}
-                            />
-                          </div>
-                        </div>
-                      )}
-                      
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
-                            Matches:
-                          </span>
-                          <span className="text-[11px] font-black text-[#003875] dark:text-[#FFD500]">
-                            {filteredOrderNumbers.length}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
-                            Total:
-                          </span>
-                          <span className="text-[11px] font-black text-gray-600 dark:text-gray-300">
-                            {allO2DsRaw.length}
-                          </span>
-                        </div>
+                    {/* Compact Pagination — right under search */}
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1">
+                        {isSidebarLoading && (
+                          <div className="w-2.5 h-2.5 border-2 border-[#003875]/20 border-t-[#003875] dark:border-[#FFD500]/20 dark:border-t-[#FFD500] rounded-full animate-spin shrink-0" />
+                        )}
+                        <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">
+                          {sidebarCurrentPage} / {sidebarTotalPages}
+                        </span>
+                      </div>
+                      <div className="flex gap-1">
+                        <button
+                          onClick={() => setSidebarCurrentPage(p => Math.max(1, p - 1))}
+                          disabled={sidebarCurrentPage === 1 || isSidebarLoading}
+                          className="p-1 bg-white dark:bg-black border border-gray-100 dark:border-navy-700 rounded-lg hover:border-[#FFD500] disabled:opacity-30 transition-all shadow-sm"
+                        >
+                          <ChevronLeftIcon className="w-3 h-3" />
+                        </button>
+                        <button
+                          onClick={() => setSidebarCurrentPage(p => Math.min(sidebarTotalPages, p + 1))}
+                          disabled={sidebarCurrentPage >= sidebarTotalPages || isSidebarLoading}
+                          className="p-1 bg-white dark:bg-black border border-gray-100 dark:border-navy-700 rounded-lg hover:border-[#FFD500] disabled:opacity-30 transition-all shadow-sm"
+                        >
+                          <ChevronRightIcon className="w-3 h-3" />
+                        </button>
                       </div>
                     </div>
                   </div>
                   <div className="flex-1 overflow-y-auto no-scrollbar p-2 space-y-1.5">
-                    {isAllLoading ? (
+                    {/* Only show full spinner on true first load; keepPreviousData shows stale content while fetching */}
+                    {isSidebarLoading && filteredOrderNumbers.length === 0 ? (
                       <div className="flex flex-col items-center justify-center h-40 space-y-3">
                         <div className="w-8 h-8 border-3 border-[#FFD500]/20 border-t-[#FFD500] rounded-full animate-spin" />
                         <p className="text-[10px] font-black text-gray-400 tracking-widest uppercase">
@@ -2326,187 +2399,164 @@ export default function O2DPage() {
                       </div>
                     ) : (
                       <>
-                        {filteredOrderNumbers.slice((sidebarCurrentPage - 1) * sidebarItemsPerPage, sidebarCurrentPage * sidebarItemsPerPage).map((no) => {
-                          const orderItems = groupedOrders[no];
-                        const first = orderItems[0];
-                        const totalQty = orderItems.reduce(
-                          (sum: number, item: O2D) =>
-                            sum + (parseFloat(item.item_qty) || 0),
-                          0,
-                        );
-                        const totalAmt = orderItems.reduce(
-                          (sum: number, item: O2D) =>
-                            sum + (parseFloat(item.est_amount) || 0),
-                          0,
-                        );
+                        {filteredOrderNumbers.map((no: string) => {
+                          const orderItems = sidebarGroupedOrders[no];
+                          if (!orderItems || orderItems.length === 0) return null;
+                          const first = orderItems[0];
+                          const totalQty = orderItems.reduce(
+                            (sum: number, item: O2D) =>
+                              sum + (parseFloat(item.item_qty) || 0),
+                            0,
+                          );
+                          const totalAmt = orderItems.reduce(
+                            (sum: number, item: O2D) =>
+                              sum + (parseFloat(item.est_amount) || 0),
+                            0,
+                          );
 
-                        // Find current pending stage using the unified helper
-                        const pIdx = getPendingStepIdx(orderItems);
-                        const currentStageIdx = pIdx !== -1 ? pIdx - 1 : -1;
-                        const allDone = currentStageIdx === -1;
-                        const isSelected = selectedOrderNo === no;
-                        const isCancelled = !!first?.cancelled;
-                        const isHold = !!first?.hold && !isCancelled;
+                          // Find current pending stage using the unified helper
+                          const pIdx = getPendingStepIdx(orderItems);
+                          const currentStageIdx = pIdx !== -1 ? pIdx - 1 : -1;
+                          const allDone = currentStageIdx === -1;
+                          const isSelected = selectedOrderNo === no;
+                          const isCancelled = !!first?.cancelled;
+                          const isHold = !!first?.hold && !isCancelled;
 
-                        // Extract planned time for current stage
-                        let plannedTimeStr = "";
-                        if (!allDone && first) {
-                          const pVal = (first as any)[`planned_${pIdx}`];
-                          if (pVal && pVal !== "-") {
-                            const d = new Date(pVal);
-                            if (!isNaN(d.getTime())) {
-                              plannedTimeStr = d.toLocaleDateString("en-GB", { day: '2-digit', month: 'short' }) + " " + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                            } else {
-                              plannedTimeStr = pVal;
+                          // Extract planned time for current stage
+                          let plannedTimeStr = "";
+                          if (!allDone && first) {
+                            const pVal = (first as any)[`planned_${pIdx}`];
+                            if (pVal && pVal !== "-") {
+                              const d = new Date(pVal);
+                              if (!isNaN(d.getTime())) {
+                                plannedTimeStr = d.toLocaleDateString("en-GB", { day: '2-digit', month: 'short' }) + " " + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                              } else {
+                                plannedTimeStr = pVal;
+                              }
                             }
                           }
-                        }
 
-                        return (
-                          <div
-                            key={no}
-                            onClick={() => setSelectedOrderNo(no)}
-                            className={`group relative p-2 rounded-xl border transition-all cursor-pointer ${
-                              isSelected
-                                ? "border-[#003875] dark:border-[#FFD500] bg-[#003875]/5 dark:bg-[#FFD500]/5 shadow-xl scale-[1.02] z-10"
-                                : isCancelled
-                                  ? "border-red-200 dark:border-red-800/40 bg-gradient-to-br from-red-100 via-red-50 to-white dark:from-red-900/30 dark:via-red-900/10 dark:to-navy-800/50 shadow-md hover:shadow-lg hover:scale-[1.01]"
-                                  : isHold
-                                    ? "border-orange-200 dark:border-orange-800/40 bg-gradient-to-br from-orange-100 via-orange-50 to-white dark:from-orange-900/30 dark:via-orange-900/10 dark:to-navy-800/50 shadow-md hover:shadow-lg hover:scale-[1.01]"
-                                    : "border-gray-100 dark:border-navy-700 bg-white dark:bg-navy-800/50 shadow-md hover:shadow-lg dark:hover:border-navy-600 hover:scale-[1.01]"
-                            }`}
-                          >
+                          return (
                             <div
-                              className={`absolute left-0 top-1 bottom-1 w-0.5 rounded-full transition-all ${
-                                isSelected
-                                  ? "bg-[#FFD500]"
+                              key={no}
+                              onClick={() => setSelectedOrderNo(no)}
+                              className={`group relative p-2 rounded-xl border transition-all cursor-pointer ${isSelected
+                                  ? "border-[#003875] dark:border-[#FFD500] bg-[#003875]/5 dark:bg-[#FFD500]/5 shadow-xl scale-[1.02] z-10"
                                   : isCancelled
-                                    ? "bg-red-500"
+                                    ? "border-red-200 dark:border-red-800/40 bg-gradient-to-br from-red-100 via-red-50 to-white dark:from-red-900/30 dark:via-red-900/10 dark:to-navy-800/50 shadow-md hover:shadow-lg hover:scale-[1.01]"
                                     : isHold
-                                      ? "bg-orange-500"
-                                      : "bg-[#003875]/10 group-hover:bg-[#003875]/20"
-                              }`}
-                            />
+                                      ? "border-orange-200 dark:border-orange-800/40 bg-gradient-to-br from-orange-100 via-orange-50 to-white dark:from-orange-900/30 dark:via-orange-900/10 dark:to-navy-800/50 shadow-md hover:shadow-lg hover:scale-[1.01]"
+                                      : "border-gray-100 dark:border-navy-700 bg-white dark:bg-navy-800/50 shadow-md hover:shadow-lg dark:hover:border-navy-600 hover:scale-[1.01]"
+                                }`}
+                            >
+                              <div
+                                className={`absolute left-0 top-1 bottom-1 w-0.5 rounded-full transition-all ${isSelected
+                                    ? "bg-[#FFD500]"
+                                    : isCancelled
+                                      ? "bg-red-500"
+                                      : isHold
+                                        ? "bg-orange-500"
+                                        : "bg-[#003875]/10 group-hover:bg-[#003875]/20"
+                                  }`}
+                              />
 
-                            {/* Line 1: Order No & Status Labels */}
-                            <div className="flex justify-between items-start mb-0.5 pl-1.5">
-                              <div className="flex flex-wrap items-center gap-2 min-w-0">
-                                <span className="text-[13px] font-black text-gray-900 dark:text-white truncate tracking-tight flex items-center gap-2">
-                                  {currentStageIdx === 0 &&
-                                    !isCancelled &&
-                                    !isHold && (
-                                      <span className="relative flex h-2 w-2 shrink-0">
-                                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                                        <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.8)] animate-pulse"></span>
-                                      </span>
-                                    )}
-                                  {no}
-                                </span>
-                                {first?.cancelled ? (
-                                  <span className="px-1.5 py-0.5 rounded-sm bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-400 text-[7px] uppercase tracking-widest leading-none font-bold">
-                                    Cancelled
+                              {/* Line 1: Order No & Status Labels */}
+                              <div className="flex justify-between items-start mb-0.5 pl-1.5">
+                                <div className="flex flex-wrap items-center gap-2 min-w-0">
+                                  <span className="text-[13px] font-black text-gray-900 dark:text-white truncate tracking-tight flex items-center gap-2">
+                                    {currentStageIdx === 0 &&
+                                      !isCancelled &&
+                                      !isHold && (
+                                        <span className="relative flex h-2 w-2 shrink-0">
+                                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                                          <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.8)] animate-pulse"></span>
+                                        </span>
+                                      )}
+                                    {no}
                                   </span>
-                                ) : null}
-                                {first?.hold && !first?.cancelled ? (
-                                  <span className="px-1.5 py-0.5 rounded-sm bg-orange-100 text-orange-600 dark:bg-orange-900/40 dark:text-orange-400 text-[7px] uppercase tracking-widest leading-none font-bold">
-                                    Hold
-                                  </span>
-                                ) : null}
-                              </div>
-                              <div className="flex items-center gap-1 shrink-0 ml-1">
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleEdit(no);
-                                  }}
-                                  className="p-1 px-1.5 bg-[#003875]/5 text-[#003875] dark:bg-[#FFD500]/10 dark:text-[#FFD500] hover:bg-[#003875] hover:text-white dark:hover:bg-[#FFD500] dark:hover:text-black rounded-lg transition-all"
-                                >
-                                  <PencilSquareIcon className="w-3 h-3" />
-                                </button>
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleDeleteClick(no);
-                                  }}
-                                  className="p-1 px-1.5 bg-[#CE2029]/5 text-[#CE2029] hover:bg-[#CE2029] hover:text-white rounded-lg transition-all"
-                                >
-                                  <TrashIcon className="w-3 h-3" />
-                                </button>
-                              </div>
-                            </div>
-
-                            {/* Line 2: Party Name */}
-                            <div className="pl-1.5 mb-1 text-[10px] font-bold text-gray-400 uppercase tracking-wide truncate">
-                              {first?.party_name}
-                            </div>
-
-                            {/* Line 3: Current Stage & Item Details */}
-                            <div className="flex items-end justify-between pl-1.5 min-w-0">
-                              <div className="min-w-0 mr-2">
-                                {allDone ? (
-                                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9.5px] font-black uppercase tracking-widest bg-emerald-50 text-emerald-600 border border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-400 dark:border-emerald-800 truncate">
-                                    <span className="w-1 h-1 rounded-full bg-emerald-500 inline-block" />
-                                    Completed
-                                  </span>
-                                ) : (
-                                  <span className="inline-flex flex-col items-start px-1.5 py-0.5 rounded-md text-[9.5px] font-black uppercase tracking-widest bg-amber-100 text-amber-700 border border-amber-200 dark:bg-amber-900/20 dark:text-amber-400 dark:border-amber-800 leading-none">
-                                    <span className="flex items-center gap-1 min-w-0">
-                                      <span className="w-1 h-1 rounded-full bg-amber-400 animate-pulse shrink-0 block" />
-                                      <span className="truncate">
-                                        Step {currentStageIdx + 1}:{" "}
-                                        {O2D_STEP_SHORTS[currentStageIdx]}
-                                      </span>
+                                  {first?.cancelled ? (
+                                    <span className="px-1.5 py-0.5 rounded-sm bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-400 text-[7px] uppercase tracking-widest leading-none font-bold">
+                                      Cancelled
                                     </span>
-                                    {plannedTimeStr && (
-                                      <span className="text-[8px] opacity-75 font-semibold pl-2 mt-0.5 flex items-center gap-1 tracking-wider normal-case">
-                                        <ClockIcon className="w-2 h-2" />
-                                        {plannedTimeStr}
-                                      </span>
-                                    )}
-                                  </span>
-                                )}
+                                  ) : null}
+                                  {first?.hold && !first?.cancelled ? (
+                                    <span className="px-1.5 py-0.5 rounded-sm bg-orange-100 text-orange-600 dark:bg-orange-900/40 dark:text-orange-400 text-[7px] uppercase tracking-widest leading-none font-bold">
+                                      Hold
+                                    </span>
+                                  ) : null}
+                                </div>
+                                <div className="flex items-center gap-1 shrink-0 ml-1">
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleEdit(no);
+                                    }}
+                                    className="p-1 px-1.5 bg-[#003875]/5 text-[#003875] dark:bg-[#FFD500]/10 dark:text-[#FFD500] hover:bg-[#003875] hover:text-white dark:hover:bg-[#FFD500] dark:hover:text-black rounded-lg transition-all"
+                                  >
+                                    <PencilSquareIcon className="w-3 h-3" />
+                                  </button>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleDeleteClick(no);
+                                    }}
+                                    className="p-1 px-1.5 bg-[#CE2029]/5 text-[#CE2029] hover:bg-[#CE2029] hover:text-white rounded-lg transition-all"
+                                  >
+                                    <TrashIcon className="w-3 h-3" />
+                                  </button>
+                                </div>
                               </div>
-                              <div className="flex flex-col items-end shrink-0 leading-[1.1]">
-                                <span className="text-[10px] font-black text-gray-400 uppercase tracking-tighter mb-0.5">
-                                  {orderItems.length} ITEMS
-                                </span>
-                                <span className="text-[12px] font-black text-[#003875] dark:text-[#FFD500]">
-                                  ₹
-                                  {(totalAmt || 0).toLocaleString(undefined, {
-                                    minimumFractionDigits: 1,
-                                    maximumFractionDigits: 1,
-                                  })}
-                                </span>
+
+                              {/* Line 2: Party Name */}
+                              <div className="pl-1.5 mb-1 text-[10px] font-bold text-gray-400 uppercase tracking-wide truncate">
+                                {first?.party_name}
+                              </div>
+
+                              {/* Line 3: Current Stage & Item Details */}
+                              <div className="flex items-end justify-between pl-1.5 min-w-0">
+                                <div className="min-w-0 mr-2">
+                                  {allDone ? (
+                                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9.5px] font-black uppercase tracking-widest bg-emerald-50 text-emerald-600 border border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-400 dark:border-emerald-800 truncate">
+                                      <span className="w-1 h-1 rounded-full bg-emerald-500 inline-block" />
+                                      Completed
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex flex-col items-start px-1.5 py-0.5 rounded-md text-[9.5px] font-black uppercase tracking-widest bg-amber-100 text-amber-700 border border-amber-200 dark:bg-amber-900/20 dark:text-amber-400 dark:border-amber-800 leading-none">
+                                      <span className="flex items-center gap-1 min-w-0">
+                                        <span className="w-1 h-1 rounded-full bg-amber-400 animate-pulse shrink-0 block" />
+                                        <span className="truncate">
+                                          Step {currentStageIdx + 1}:{" "}
+                                          {O2D_STEP_SHORTS[currentStageIdx]}
+                                        </span>
+                                      </span>
+                                      {plannedTimeStr && (
+                                        <span className="text-[8px] opacity-75 font-semibold pl-2 mt-0.5 flex items-center gap-1 tracking-wider normal-case">
+                                          <ClockIcon className="w-2 h-2" />
+                                          {plannedTimeStr}
+                                        </span>
+                                      )}
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="flex flex-col items-end shrink-0 leading-[1.1]">
+                                  <span className="text-[10px] font-black text-gray-400 uppercase tracking-tighter mb-0.5">
+                                    {orderItems.length} ITEMS
+                                  </span>
+                                  <span className="text-[12px] font-black text-[#003875] dark:text-[#FFD500]">
+                                    ₹
+                                    {(totalAmt || 0).toLocaleString(undefined, {
+                                      minimumFractionDigits: 1,
+                                      maximumFractionDigits: 1,
+                                    })}
+                                  </span>
+                                </div>
                               </div>
                             </div>
-                          </div>
-                        );
-                      })}
-                      {/* Sidebar Pagination Footer */}
-                      <div className="mt-auto p-3 bg-gray-50/50 dark:bg-navy-900/50 border-t border-gray-100 dark:border-navy-800 flex items-center justify-between shrink-0">
-                        <div className="text-[9px] font-black text-gray-400 uppercase tracking-widest">
-                          Page {sidebarCurrentPage} / {Math.ceil(filteredOrderNumbers.length / sidebarItemsPerPage) || 1}
-                        </div>
-                        <div className="flex gap-1.5">
-                          <button
-                            onClick={() => setSidebarCurrentPage(p => Math.max(1, p - 1))}
-                            disabled={sidebarCurrentPage === 1}
-                            className="p-1.5 bg-white dark:bg-black border border-gray-100 dark:border-navy-700 rounded-lg hover:border-[#FFD500] disabled:opacity-30 transition-all shadow-sm"
-                          >
-                            <ChevronLeftIcon className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            onClick={() => setSidebarCurrentPage(p => Math.min(Math.ceil(filteredOrderNumbers.length / sidebarItemsPerPage), p + 1))}
-                            disabled={sidebarCurrentPage >= Math.ceil(filteredOrderNumbers.length / sidebarItemsPerPage)}
-                            className="p-1.5 bg-white dark:bg-black border border-gray-100 dark:border-navy-700 rounded-lg hover:border-[#FFD500] disabled:opacity-30 transition-all shadow-sm"
-                          >
-                            <ChevronRightIcon className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </div>
-                    </>
-                  )}
-                </div>
+                          );
+                        })}
+                      </>
+                    )}
+                  </div>
                 </div>
 
                 {/* Thick Dark Blue Divider Line */}
@@ -3103,9 +3153,9 @@ export default function O2DPage() {
                                       {selectedOrder[0]
                                         ?.actual_date_of_order_packed_5
                                         ? new Date(
-                                            selectedOrder[0]
-                                              ?.actual_date_of_order_packed_5,
-                                          ).toLocaleDateString()
+                                          selectedOrder[0]
+                                            ?.actual_date_of_order_packed_5,
+                                        ).toLocaleDateString()
                                         : "-"}
                                     </span>
                                   </div>
@@ -3517,11 +3567,10 @@ export default function O2DPage() {
                               stepIdx,
                             ]);
                         }}
-                        className={`flex items-center gap-2 p-3 rounded-xl border-2 transition-all ${
-                          isSelected
+                        className={`flex items-center gap-2 p-3 rounded-xl border-2 transition-all ${isSelected
                             ? "bg-[#003875] border-[#003875] text-[#FFD500] shadow-md"
                             : "bg-white dark:bg-black/20 border-gray-100 dark:border-navy-800 text-gray-400 hover:border-gray-200"
-                        }`}
+                          }`}
                       >
                         <div
                           className={`w-4 h-4 rounded border flex items-center justify-center ${isSelected ? "bg-[#FFD500] border-[#FFD500]" : "border-gray-300"}`}
@@ -3621,7 +3670,7 @@ export default function O2DPage() {
                         <PhotoIcon className="w-3 h-3 text-[#FFD500]" />
                         Order Proof
                       </label>
-                      <label 
+                      <label
                         className="flex flex-col items-center justify-center w-28 h-28 bg-gray-50/50 dark:bg-navy-900 border-2 border-dashed border-gray-100 dark:border-navy-700 rounded-3xl hover:border-[#FFD500] cursor-pointer transition-all active:scale-95 shadow-inner overflow-hidden relative"
                         onDragOver={(e) => {
                           e.preventDefault();
@@ -3690,20 +3739,22 @@ export default function O2DPage() {
                             label="Partner Name"
                             icon={BuildingOfficeIcon}
                             value={commonData.party_name}
+                            onFocus={centerOnFocus}
+                            data-initial-focus
                             onChange={(val) =>
                               setCommonData({ ...commonData, party_name: val })
                             }
                             options={parties}
                           />
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => setIsPartyModalOpen(true)}
-                          className="w-[36px] h-[36px] shrink-0 bg-[#003875] dark:bg-[#FFD500] text-white dark:text-black rounded-xl flex items-center justify-center shadow-sm hover:scale-105 transition-all mt-[auto] border border-[#003875]/20 dark:border-[#FFD500]/20"
-                          title="Create New Party"
-                        >
-                          <PlusIcon className="w-4 h-4" />
-                        </button>
+                          <button
+                            type="button"
+                            onClick={() => setIsPartyModalOpen(true)}
+                            className="w-[36px] h-[36px] shrink-0 bg-[#003875] dark:bg-[#FFD500] text-white dark:text-black rounded-xl flex items-center justify-center shadow-sm hover:scale-105 transition-all mt-[auto] border border-[#003875]/20 dark:border-[#FFD500]/20"
+                            title="Create New Party"
+                          >
+                            <PlusIcon className="w-4 h-4" />
+                          </button>
                       </div>
                     </div>
                   </div>
@@ -3715,6 +3766,7 @@ export default function O2DPage() {
                     </label>
                     <textarea
                       value={commonData.remark}
+                      onFocus={centerOnFocus}
                       onChange={(e) =>
                         setCommonData({ ...commonData, remark: e.target.value })
                       }
@@ -3736,6 +3788,35 @@ export default function O2DPage() {
                   </div>
 
                   <div className="space-y-1.5">
+                    {/* Add Line Item - top (Controls-First) */}
+                    <div className="flex flex-col sm:flex-row items-center justify-center gap-3 py-2 px-1">
+                      <div className="flex items-center bg-[#003875]/5 dark:bg-[#FFD500]/5 px-4 py-2 rounded-2xl border border-[#003875]/10 dark:border-[#FFD500]/10 shadow-sm">
+                          <label className="text-[9px] font-black uppercase text-gray-400 tracking-tighter mr-2 whitespace-nowrap">Bulk Rows:</label>
+                          <input 
+                              type="number" 
+                              min="1" 
+                              max="50"
+                              value={multiRowQty}
+                              onChange={(e) => setMultiRowQty(parseInt(e.target.value) || 1)}
+                              className="w-12 bg-transparent text-center font-black text-[#003875] dark:text-[#FFD500] text-[12px] outline-none"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => addItemRow(multiRowQty)}
+                            className="ml-2 flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest bg-[#003875] dark:bg-[#FFD500] text-white dark:text-black px-3 py-1.5 rounded-xl hover:scale-105 transition-all shadow-sm"
+                          >
+                            <PlusIcon className="w-3.5 h-3.5 stroke-[3]" /> Generate
+                          </button>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => addItemRow(1)}
+                        className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-[#003875] dark:text-[#FFD500] hover:scale-105 transition-all bg-[#003875]/10 dark:bg-[#FFD500]/15 px-6 py-2.5 rounded-2xl shadow-sm border-2 border-transparent hover:border-[#003875]/20"
+                      >
+                        <PlusIcon className="w-4 h-4 stroke-[3]" /> Add Single Line
+                      </button>
+                    </div>
                     {items.map((item, index) => (
                       <div
                         key={index}
@@ -3745,6 +3826,7 @@ export default function O2DPage() {
                         {items.length > 1 && (
                           <button
                             type="button"
+                            tabIndex={-1}
                             onClick={() => removeItemRow(index)}
                             className="absolute top-2.5 right-2.5 p-1.5 text-gray-300 hover:text-[#CE2029] hover:bg-red-50 dark:hover:bg-red-950/20 rounded-lg transition-all z-10"
                             title="Remove Line Item"
@@ -3757,10 +3839,12 @@ export default function O2DPage() {
                           <div className="md:col-span-6 min-w-0">
                             <div className="flex gap-2 items-end">
                               <div className="flex-1 min-w-0">
-                                <SearchableDropdown
+                                 <SearchableDropdown
                                   label="Nomenclature"
                                   icon={ArchiveBoxIcon}
                                   value={item.item_name}
+                                  data-nomenclature-trigger={index}
+                                  onFocus={centerOnFocus}
                                   onChange={(val) => {
                                     handleItemChange(index, "item_name", val);
                                     const matchingItem = dropdownItems.find(
@@ -3779,6 +3863,7 @@ export default function O2DPage() {
                               </div>
                               <button
                                 type="button"
+                                tabIndex={-1}
                                 onClick={() => {
                                   setActiveItemIndex(index);
                                   setIsItemModalOpen(true);
@@ -3796,8 +3881,9 @@ export default function O2DPage() {
                               Qty
                             </label>
                             <input
-                              type="number"
+                              type="text"
                               value={item.item_qty}
+                              onFocus={centerOnFocus}
                               onChange={(e) =>
                                 handleItemChange(
                                   index,
@@ -3824,12 +3910,13 @@ export default function O2DPage() {
                                   e.target.value,
                                 )
                               }
+                              onFocus={centerOnFocus}
+                              tabIndex={!!dropdownItems.find(di => di.name === item.item_name) ? -1 : 0}
                               readOnly={!!dropdownItems.find(di => di.name === item.item_name)}
-                              className={`w-full h-[34px] px-3 rounded-lg border focus:border-[#FFD500] outline-none font-bold text-[11px] shadow-sm transition-all ${
-                                dropdownItems.find(di => di.name === item.item_name) 
-                                ? "bg-gray-100 dark:bg-navy-950 text-gray-500 cursor-not-allowed border-gray-200 dark:border-navy-700" 
-                                : "bg-[#FEF6DB] dark:bg-black text-[#003875] dark:text-[#FFD500] border-orange-100 dark:border-navy-700"
-                              }`}
+                              className={`w-full h-[34px] px-3 rounded-lg border focus:border-[#FFD500] outline-none font-bold text-[11px] shadow-sm transition-all ${dropdownItems.find(di => di.name === item.item_name)
+                                  ? "bg-gray-100 dark:bg-navy-950 text-gray-500 cursor-not-allowed border-gray-200 dark:border-navy-700"
+                                  : "bg-[#FEF6DB] dark:bg-black text-[#003875] dark:text-[#FFD500] border-orange-100 dark:border-navy-700"
+                                }`}
                             />
                           </div>
                         </div>
@@ -3844,6 +3931,13 @@ export default function O2DPage() {
                                 e.target.value,
                               )
                             }
+                            onFocus={centerOnFocus}
+                            onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                    e.preventDefault();
+                                    addItemRow(1);
+                                }
+                            }}
                             className="w-full h-[34px] bg-[#FEF6DB] dark:bg-black px-3 rounded-lg border border-orange-100 dark:border-navy-700 focus:border-[#FFD500] outline-none font-bold text-[11px] text-gray-800 dark:text-gray-100 shadow-sm transition-all"
                             placeholder="Item Specification..."
                           />
@@ -3852,17 +3946,7 @@ export default function O2DPage() {
                     ))}
                   </div>
 
-                  {/* Add Line Item - bottom */}
-                  <div className="flex justify-center pt-1">
-                    <button
-                      type="button"
-                      onClick={addItemRow}
-                      className="flex items-center gap-2 text-[9px] font-black uppercase tracking-widest text-[#003875] dark:text-[#FFD500] hover:scale-105 transition-all bg-[#003875]/5 dark:bg-[#FFD500]/10 px-4 py-2 rounded-full shadow-sm"
-                    >
-                      <PlusIcon className="w-3.5 h-3.5 stroke-[3]" /> ADD LINE
-                      ITEM
-                    </button>
-                  </div>
+
                 </div>
               </div>
 
@@ -4064,8 +4148,8 @@ export default function O2DPage() {
                     value={
                       stepUpdateFields.actual
                         ? new Date(stepUpdateFields.actual)
-                            .toISOString()
-                            .slice(0, 16)
+                          .toISOString()
+                          .slice(0, 16)
                         : ""
                     }
                     onChange={(e) =>
@@ -4124,14 +4208,14 @@ export default function O2DPage() {
                         value={
                           stepUpdateFields.merge_order_with_1
                             ? (() => {
-                                const match = Object.keys(groupedOrders).find(
-                                  (no) =>
-                                    no === stepUpdateFields.merge_order_with_1,
-                                );
-                                return match
-                                  ? `${match} | ${groupedOrders[match][0]?.party_name || ""}`
-                                  : stepUpdateFields.merge_order_with_1;
-                              })()
+                              const match = Object.keys(groupedOrders).find(
+                                (no) =>
+                                  no === stepUpdateFields.merge_order_with_1,
+                              );
+                              return match
+                                ? `${match} | ${groupedOrders[match][0]?.party_name || ""}`
+                                : stepUpdateFields.merge_order_with_1;
+                            })()
                             : ""
                         }
                         onChange={(val) => {
@@ -4154,7 +4238,7 @@ export default function O2DPage() {
                       <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block flex items-center gap-1.5">
                         <PhotoIcon className="w-3 h-3" /> Upload SO (Attachment)
                       </label>
-                      <label 
+                      <label
                         className="flex items-center justify-center w-full h-24 border-2 border-dashed border-orange-100 rounded-2xl hover:bg-orange-50/30 cursor-pointer overflow-hidden relative"
                         onDragOver={(e) => {
                           e.preventDefault();
@@ -4171,7 +4255,7 @@ export default function O2DPage() {
                         }}
                       >
                         {stepAttachmentPreview &&
-                        stepAttachment?.type.startsWith("image/") ? (
+                          stepAttachment?.type.startsWith("image/") ? (
                           <img
                             src={stepAttachmentPreview}
                             className="w-full h-full object-cover"
@@ -4209,7 +4293,7 @@ export default function O2DPage() {
                   </div>
                 )}
 
-                 {currentStepToUpdate === 5 && (
+                {currentStepToUpdate === 5 && (
                   <div className="space-y-4 pt-2 border-t border-gray-100 dark:border-white/5">
                     <div>
                       <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block font-bold">
@@ -4237,10 +4321,10 @@ export default function O2DPage() {
                         value={
                           stepUpdateFields.actual_date_of_order_packed_5
                             ? new Date(
-                                stepUpdateFields.actual_date_of_order_packed_5,
-                              )
-                                .toISOString()
-                                .split("T")[0]
+                              stepUpdateFields.actual_date_of_order_packed_5,
+                            )
+                              .toISOString()
+                              .split("T")[0]
                             : ""
                         }
                         onChange={(e) =>
@@ -4258,7 +4342,7 @@ export default function O2DPage() {
                       <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest block flex items-center gap-1.5 font-bold">
                         <PhotoIcon className="w-3 h-3" /> Upload PI (Attachment)
                       </label>
-                      <label 
+                      <label
                         className="flex items-center justify-center w-full h-24 border-2 border-dashed border-orange-100 rounded-2xl hover:bg-orange-50/30 cursor-pointer overflow-hidden relative mt-1.5"
                         onDragOver={(e) => {
                           e.preventDefault();
@@ -4275,7 +4359,7 @@ export default function O2DPage() {
                         }}
                       >
                         {stepAttachmentPreview &&
-                        stepAttachment?.type.startsWith("image/") ? (
+                          stepAttachment?.type.startsWith("image/") ? (
                           <img
                             src={stepAttachmentPreview}
                             className="w-full h-full object-cover"
@@ -4410,7 +4494,7 @@ export default function O2DPage() {
                         <PhotoIcon className="w-3 h-3" /> Attach Bilty to CRM
                         (Attachment)
                       </label>
-                      <label 
+                      <label
                         className="flex items-center justify-center w-full h-24 border-2 border-dashed border-orange-100 rounded-2xl hover:bg-orange-50/30 cursor-pointer overflow-hidden relative mt-1.5"
                         onDragOver={(e) => {
                           e.preventDefault();
@@ -4427,7 +4511,7 @@ export default function O2DPage() {
                         }}
                       >
                         {stepAttachmentPreview &&
-                        stepAttachment?.type.startsWith("image/") ? (
+                          stepAttachment?.type.startsWith("image/") ? (
                           <img
                             src={stepAttachmentPreview}
                             className="w-full h-full object-cover"
@@ -4528,7 +4612,7 @@ export default function O2DPage() {
         cancelLabel="No, Abort"
         type={
           confirmPayload?.type === "delete" ||
-          confirmPayload?.type === "cancelled"
+            confirmPayload?.type === "cancelled"
             ? "danger"
             : "info"
         }
@@ -4538,7 +4622,7 @@ export default function O2DPage() {
         status={actionStatus}
         message={actionMessage}
       />
-      
+
       <ItemFormModal
         isOpen={isItemModalOpen}
         onClose={() => {
@@ -4888,8 +4972,20 @@ function BusyModal({
               <div className="relative">
                 <button
                   onClick={() => setIsBusyCalendarOpen(!isBusyCalendarOpen)}
-                  className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
-                    selectedBusyDate &&
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${selectedBusyDate &&
+                      ![0, 1, 2].some((d) => {
+                        const dt = new Date();
+                        const y = dt.getFullYear();
+                        const m = String(dt.getMonth() + 1).padStart(2, "0");
+                        const day = String(dt.getDate() - d).padStart(2, "0");
+                        return `${y}-${m}-${day}` === selectedBusyDate;
+                      })
+                      ? "bg-[#003875] text-white shadow-md"
+                      : "bg-white dark:bg-navy-950 text-gray-400 border border-gray-100 dark:border-navy-800"
+                    }`}
+                >
+                  <CalendarDaysIcon className="w-3.5 h-3.5" />
+                  {selectedBusyDate &&
                     ![0, 1, 2].some((d) => {
                       const dt = new Date();
                       const y = dt.getFullYear();
@@ -4897,19 +4993,6 @@ function BusyModal({
                       const day = String(dt.getDate() - d).padStart(2, "0");
                       return `${y}-${m}-${day}` === selectedBusyDate;
                     })
-                      ? "bg-[#003875] text-white shadow-md"
-                      : "bg-white dark:bg-navy-950 text-gray-400 border border-gray-100 dark:border-navy-800"
-                  }`}
-                >
-                  <CalendarDaysIcon className="w-3.5 h-3.5" />
-                  {selectedBusyDate &&
-                  ![0, 1, 2].some((d) => {
-                    const dt = new Date();
-                    const y = dt.getFullYear();
-                    const m = String(dt.getMonth() + 1).padStart(2, "0");
-                    const day = String(dt.getDate() - d).padStart(2, "0");
-                    return `${y}-${m}-${day}` === selectedBusyDate;
-                  })
                     ? new Date(selectedBusyDate + "T00:00:00").toLocaleDateString("en-GB")
                     : "Calendar"}
                 </button>
@@ -5083,11 +5166,10 @@ function YesNoToggle({
       </span>
       <div className="flex bg-gray-100/50 dark:bg-black/40 p-1.5 rounded-full border border-gray-100 dark:border-navy-800 backdrop-blur-sm relative">
         <div
-          className={`absolute top-1.5 bottom-1.5 transition-all duration-300 rounded-full shadow-lg ${
-            value === "Yes"
+          className={`absolute top-1.5 bottom-1.5 transition-all duration-300 rounded-full shadow-lg ${value === "Yes"
               ? "left-1.5 right-[calc(50%+6px)] bg-emerald-500"
               : "left-[calc(50%+6px)] right-1.5 bg-[#CE2029]"
-          }`}
+            }`}
         />
         <button
           type="button"

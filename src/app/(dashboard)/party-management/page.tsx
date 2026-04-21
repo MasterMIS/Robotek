@@ -41,12 +41,28 @@ import PartyFormModal, {
 
 // ─── Main Page ──────────────────────────────────────────────────────────────────
 export default function PartyManagementPage() {
+  const [searchTerm, setSearchTerm] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
   const [parties, setParties] = useState<PartyManagement[]>([]);
-  const { data: swrParties, mutate: mutateParties } = useSWR<PartyManagement[]>("/api/party-management", fetcher, {
-    refreshInterval: 0,        // No background polling — SSE handles change detection
-    revalidateOnFocus: true,   // Refetch when user returns to the tab
-    revalidateOnMount: true,   // Refetch on page load
-  });
+  const [totalItems, setTotalItems] = useState(0);
+
+  // Debounce search
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(searchTerm), 500);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
+  const { data: swrResponse, mutate: mutateParties } = useSWR(
+    `/api/party-management?page=${currentPage}&limit=${itemsPerPage}&search=${debouncedSearch}`,
+    fetcher,
+    {
+      refreshInterval: 0,        // No background polling — SSE handles change detection
+      revalidateOnFocus: true,   // Refetch when user returns to the tab
+      revalidateOnMount: true,   // Refetch on page load
+    }
+  );
 
   // SSE: instantly refetch when a new party is added or deleted
   // SSE: incrementally update local cache when a change is detected
@@ -55,24 +71,25 @@ export default function PartyManagementPage() {
     onUpdate: (incremental) => {
       const updates = incremental.find(m => m.module === 'party-management');
       if (updates) {
-        mutateParties((current) => applyIncrementalUpdate(current, updates.upserts, updates.currentIds), false);
+        mutateParties((current: PartyManagement[] | undefined) => applyIncrementalUpdate(current, updates.upserts, updates.currentIds), false);
       }
     } 
   });
 
   useEffect(() => {
-    if (swrParties) {
-      setParties(swrParties);
+    if (swrResponse) {
+      setParties(swrResponse.data || []);
+      setTotalItems(swrResponse.total || 0);
     }
-  }, [swrParties]);
+  }, [swrResponse]);
 
   const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingParty, setEditingParty] = useState<PartyManagement | null>(null);
-  const [searchTerm, setSearchTerm] = useState("");
+  // const [searchTerm, setSearchTerm] = useState(""); // Moved up
   const [sortConfig, setSortConfig] = useState<{ key: keyof PartyManagement; direction: "asc" | "desc" } | null>(null);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(10);
+  // const [currentPage, setCurrentPage] = useState(1); // Moved up
+  // const [itemsPerPage, setItemsPerPage] = useState(10); // Moved up
 
   const { data: session } = useSession();
 
@@ -96,12 +113,12 @@ export default function PartyManagementPage() {
   };
 
   useEffect(() => {
-    if (!swrParties && parties.length === 0) {
+    if (!swrResponse && parties.length === 0) {
       setIsLoading(true);
     } else {
       setIsLoading(false);
     }
-  }, [swrParties, parties]);
+  }, [swrResponse, parties]);
 
   // ─── Helpers ──────────────────────────────────────────────────────────────────
   const openFormForNew = () => {
@@ -170,18 +187,9 @@ export default function PartyManagementPage() {
     document.body.removeChild(link);
   };
 
-  // ─── Filter / Sort / Paginate ─────────────────────────────────────────────────
-  const filteredParties = parties.filter((p) =>
-    Object.values(p).some((val) => val?.toString().toLowerCase().includes(searchTerm.toLowerCase()))
-  );
-
-  const handleSort = (key: keyof PartyManagement) => {
-    let direction: "asc" | "desc" = "asc";
-    if (sortConfig && sortConfig.key === key && sortConfig.direction === "asc") direction = "desc";
-    setSortConfig({ key, direction });
-  };
-
-  const sortedParties = [...filteredParties].sort((a, b) => {
+  // Client-side filtering is now minimized because search happens on server
+  // But we still sort the current page's data
+  const sortedParties = [...parties].sort((a, b) => {
     // Default to sorting by ID descending (latest first) if no active sort column
     if (!sortConfig) {
       const aN = parseInt(String(a.id));
@@ -198,6 +206,15 @@ export default function PartyManagementPage() {
     return 0;
   });
 
+  const handleSort = (key: keyof PartyManagement) => {
+    setSortConfig(prev => {
+      if (prev?.key === key) {
+        return { key, direction: prev.direction === "asc" ? "desc" : "asc" };
+      }
+      return { key, direction: "asc" };
+    });
+  };
+
   const SortIcon = ({ column }: { column: keyof PartyManagement }) => {
     if (sortConfig?.key !== column) return <div className="w-3 h-3 ml-1 opacity-20" />;
     return sortConfig.direction === "asc"
@@ -205,9 +222,8 @@ export default function PartyManagementPage() {
       : <ChevronDownIcon className="w-3 h-3 ml-1 text-[#FFD500]" />;
   };
 
-  const totalPages = Math.ceil(sortedParties.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const paginatedParties = sortedParties.slice(startIndex, startIndex + itemsPerPage);
+  const totalPages = Math.ceil(totalItems / itemsPerPage);
+  const paginatedParties = sortedParties; // Already paginated from server
 
   // ─── Render ───────────────────────────────────────────────────────────────────
   return (

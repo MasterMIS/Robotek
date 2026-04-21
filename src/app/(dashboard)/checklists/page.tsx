@@ -244,6 +244,19 @@ export default function ChecklistsPage() {
       alert("Attachment is required for this checklist item when marking as Completed.");
       return;
     }
+
+    const optimisticStatus = updatingStatus;
+    
+    // Optimistic Update
+    mutateChecklists((current: any) => {
+      if (!current?.data) return current;
+      return {
+        ...current,
+        data: current.data.map((item: Checklist) => 
+          item.id === selectedTask.id ? { ...item, status: optimisticStatus } : item
+        )
+      };
+    }, false);
     
     setIsSubmittingUpdate(true);
     try {
@@ -266,14 +279,16 @@ export default function ChecklistsPage() {
         setEvidenceFile(null);
         setRevisedDueDate("");
         fetchHistory(selectedTask.id);
-        mutateChecklists(); // Refresh main list
+        mutateChecklists(); // Background revalidate
       } else {
         const err = await res.json();
         alert(err.error || "Failed to update status");
+        mutateChecklists(); // Rollback
       }
     } catch (error) {
       console.error("Error updating status:", error);
       alert("An error occurred while updating status");
+      mutateChecklists(); // Rollback
     } finally {
       setIsSubmittingUpdate(false);
     }
@@ -342,30 +357,26 @@ export default function ChecklistsPage() {
     setAssignedToOpen(false);
     setDepartmentOpen(false);
   };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-     setActionStatus('loading');
-     setActionMessage(editingItem ? "Updating checklist item..." : "Creating new checklist items...");
-     setIsStatusModalOpen(true);
-     setSubmitting(true);
- 
-     const now = new Date();
+    const now = new Date();
     const nowIso = now.toISOString();
+
+    setIsModalOpen(false);
+    setActionStatus('loading');
+    setActionMessage(editingItem ? "Updating Task..." : "Creating Tasks...");
+    setIsStatusModalOpen(true);
 
     try {
       if (editingItem) {
-        // Handle group-wise update if groupId exists
         const url = formData.group_id 
           ? `/api/checklists/${editingItem.id}?groupId=${formData.group_id}`
           : `/api/checklists/${editingItem.id}`;
         
-        // Format due_date as ISO if it's a simple date
         let finalDueDate = formData.due_date || "";
         if (finalDueDate && /^\d{4}-\d{2}-\d{2}$/.test(finalDueDate)) {
           const d = new Date(finalDueDate);
-          // Preserve current hours/mins if possible, or use current time
           d.setHours(now.getHours(), now.getMinutes(), now.getSeconds(), now.getMilliseconds());
           finalDueDate = d.toISOString();
         }
@@ -373,10 +384,9 @@ export default function ChecklistsPage() {
         const payload = {
           ...formData,
           due_date: finalDueDate,
-          // Submit "Weekly" only for weekly frequency
           frequency: formData.frequency?.startsWith('Weekly') ? 'Weekly' : formData.frequency,
           updated_at: nowIso,
-        };
+        } as Checklist;
 
         const res = await fetch(url, {
           method: "PUT",
@@ -389,14 +399,11 @@ export default function ChecklistsPage() {
           throw new Error(errorData.error || "Failed to update checklist");
         }
       } else {
-        // Handle creation (potentially multiple rows)
         const selectedDates = formData.due_date?.split(',').map(d => d.trim()).filter(Boolean) || [];
         const datesToSubmit = selectedDates.length > 0 ? selectedDates : [""];
-        
-        for (let i = 0; i < datesToSubmit.length; i++) {
-          const dateStr = datesToSubmit[i];
-          const groupId = `GR-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
+        const sharedGroupId = `GR-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
 
+        const payloadArray = datesToSubmit.map((dateStr) => {
           let finalDueDate = dateStr;
           if (dateStr && /^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
             const d = new Date(dateStr);
@@ -404,40 +411,44 @@ export default function ChecklistsPage() {
             finalDueDate = d.toISOString();
           }
 
-          const payload = {
+          return {
             ...formData,
-            id: "", // Server-side generation
-            group_id: groupId,
+            id: "", 
+            group_id: sharedGroupId,
             due_date: finalDueDate,
             frequency: formData.frequency?.startsWith('Weekly') ? 'Weekly' : formData.frequency,
             created_at: nowIso,
             updated_at: nowIso,
           };
+        });
 
-          const res = await fetch("/api/checklists", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
-          });
+        const res = await fetch("/api/checklists", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payloadArray),
+        });
 
-           if (!res.ok) {
-             const errorData = await res.json().catch(() => ({}));
-             throw new Error(errorData.error || `Failed to create checklist item ${i + 1}`);
-           }
-         }
-       }
+        if (!res.ok) {
+          const errorData = await res.json().catch(() => ({}));
+          throw new Error(errorData.error || `Failed to create checklist`);
+        }
+      }
 
-      setIsStatusModalOpen(false);
-      setIsModalOpen(false);
       resetForm();
-      mutateChecklists();
-     } catch (error: any) {
-       setIsStatusModalOpen(false);
-       alert(error.message || "Something went wrong while saving. Please try again.");
-     } finally {
-       setSubmitting(false);
-     }
-   };
+      await mutateChecklists(); // Final wait for sync
+      setActionStatus('success');
+      setActionMessage(editingItem ? "Task updated successfully!" : "Tasks created successfully!");
+      setTimeout(() => setIsStatusModalOpen(false), 1500);
+    } catch (error: any) {
+      console.error("Save error:", error);
+      setActionStatus('error');
+      setActionMessage(error.message || "An error occurred while saving.");
+      mutateChecklists(); 
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
 
   const handleEdit = (item: Checklist) => {
     setEditingItem(item);
@@ -584,26 +595,28 @@ export default function ChecklistsPage() {
   const performDelete = async () => {
     if (!pendingDeleteId) return;
 
+    setIsConfirmOpen(false);
     setActionStatus('loading');
-    setActionMessage("Removing checklist group...");
+    setActionMessage(pendingDeleteGroupId ? "Deleting Group..." : "Deleting Task...");
     setIsStatusModalOpen(true);
 
     try {
-      // Use groupId for deletion if available
       const url = pendingDeleteGroupId 
         ? `/api/checklists/${pendingDeleteId}?groupId=${pendingDeleteGroupId}`
         : `/api/checklists/${pendingDeleteId}`;
 
       const res = await fetch(url, { method: "DELETE" });
-      if (res.ok) {
-        setIsStatusModalOpen(false);
-        mutateChecklists();
-      } else {
-        throw new Error("Delete failed");
-      }
+      if (!res.ok) throw new Error("Delete failed");
+      
+      await mutateChecklists(); // Wait for sync
+      setActionStatus('success');
+      setActionMessage("Deleted successfully!");
+      setTimeout(() => setIsStatusModalOpen(false), 1500);
     } catch (error) {
-      setIsStatusModalOpen(false);
-      alert("Failed to delete checklist. Please try again.");
+      console.error("Delete error:", error);
+      setActionStatus('error');
+      setActionMessage("Failed to delete.");
+      mutateChecklists(); 
     } finally {
       setPendingDeleteId(null);
       setPendingDeleteGroupId(null);

@@ -11,22 +11,55 @@ const client = generateClient<Schema>({ authMode: 'apiKey' });
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-async function fetchAllParties() {
+async function fetchParties(page: number, limit: number, search: string) {
   let allRecords: any[] = [];
   let nextToken: string | null | undefined = undefined;
+  
+  // If we have a search, we should filter at the source if possible
+  // For now, let's fetch in chunks until we have enough for the requested page
+  // This is a hybrid approach since DynamoDB pagination is cursor-based, not offset-based
+  
+  let currentCount = 0;
+  let targetStart = (page - 1) * limit;
+  let targetEnd = targetStart + limit;
+
   do {
-    const response: any = await client.models.Party.list({ nextToken, limit: 1000 });
+    const response: any = await client.models.Party.list({ 
+      nextToken, 
+      limit: 1000,
+      filter: search ? {
+        partyName: { contains: search }
+      } : undefined
+    });
+    
     allRecords = [...allRecords, ...response.data];
     nextToken = response.nextToken;
+    
+    if (allRecords.length >= targetEnd && !search) break; // Optimization if no search
   } while (nextToken);
-  return allRecords;
+
+  const total = allRecords.length;
+  const paginatedData = allRecords.slice(targetStart, targetEnd);
+
+  return {
+    data: paginatedData,
+    total,
+    page,
+    limit,
+    totalPages: Math.ceil(total / limit)
+  };
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
-    const parties = await fetchAllParties();
-    return NextResponse.json(parties, {
-      headers: { 'Cache-Control': 'private, max-age=60, stale-while-revalidate=300' },
+    const { searchParams } = new URL(req.url);
+    const page = parseInt(searchParams.get("page") || "1", 10);
+    const limit = parseInt(searchParams.get("limit") || "10", 10);
+    const search = searchParams.get("search") || "";
+
+    const result = await fetchParties(page, limit, search);
+    return NextResponse.json(result, {
+      headers: { 'Cache-Control': 'private, max-age=10, stale-while-revalidate=60' },
     });
   } catch (error: any) {
     return NextResponse.json({ error: error.message || "Failed to fetch parties" }, { status: 500 });

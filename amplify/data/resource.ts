@@ -222,7 +222,7 @@ const schema = a.schema({
   // ── IMS & PARTY ───────────────────────────────────────────────────────────
   IMSItem: a.model({
     id: a.string().required(),
-    item_name: a.string(),
+    Item_name: a.string(),
     est_amount_item: a.string(),
     gst: a.string(),
     final_amount: a.string(),
