@@ -1087,12 +1087,17 @@ export default function O2DPage() {
           }
         }
 
-        const updatedItems = items.map((item) => {
+        const updatedItems = items.map((item, index) => {
           let idToUse = item.id;
           if (!idToUse) {
             currentMaxId++;
             idToUse = currentMaxId.toString();
           }
+
+          // Use base time and add offset based on order in list to ensure stable sorting
+          const baseTime = (item as any).created_at || baseRecord.created_at || now;
+          const itemCreatedAt = new Date(new Date(baseTime).getTime() + index * 10).toISOString();
+
           const updated = {
             ...baseRecord,
             id: idToUse,
@@ -1102,6 +1107,7 @@ export default function O2DPage() {
             item_specification: item.item_specification,
             party_name: commonData.party_name,
             remark: commonData.remark,
+            created_at: itemCreatedAt,
             updated_at: now,
           } as O2D;
 
@@ -1196,8 +1202,10 @@ export default function O2DPage() {
         let initRecord: any = { planned_1: calculatePlannedDate(now, tat1) };
         for (let i = 2; i <= 11; i++) initRecord[`planned_${i}`] = "";
 
-        const newItems = items.map((item) => {
+        const newItems = items.map((item, index) => {
           currentMaxId++;
+          // Add 10ms offset per item to ensure unique created_at for stable sorting
+          const itemCreatedAt = new Date(new Date(now).getTime() + index * 10).toISOString();
           return {
             ...initRecord,
             id: currentMaxId.toString(),
@@ -1209,7 +1217,7 @@ export default function O2DPage() {
             item_specification: item.item_specification,
             remark: commonData.remark,
             filled_by: currentUser,
-            created_at: now,
+            created_at: itemCreatedAt,
             updated_at: now,
           } as O2D;
         });

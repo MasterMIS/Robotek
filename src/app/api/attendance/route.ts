@@ -180,7 +180,10 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ error: "Invalid action" }, { status: 400 });
   } catch (error: any) {
-    console.error(error);
-    return NextResponse.json({ error: "Failed to update attendance" }, { status: 500 });
+    console.error("Attendance API Error:", error);
+    return NextResponse.json({ 
+      error: "Failed to update attendance", 
+      details: error.message || String(error) 
+    }, { status: 500 });
   }
 }

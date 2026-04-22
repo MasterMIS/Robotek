@@ -1,6 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getAttendanceRecords, getLeaveRequests } from "@/lib/sheets/attendance-sheets";
-import { getUsers } from "@/lib/google-sheets";
 import { getTickets } from "@/lib/ticket-sheets";
 import { getDelegations } from "@/lib/delegation-sheets";
 import { getChecklists } from "@/lib/checklist-sheets";
@@ -8,8 +6,28 @@ import { getMeetings } from "@/lib/meeting-sheets";
 import { getO2Ds, getO2DStepConfig } from "@/lib/o2d-sheets";
 import { getParties } from "@/lib/party-management-sheets";
 import { auth } from "@/auth";
+import { getUsers } from "@/lib/google-sheets";
+import { generateClient } from 'aws-amplify/data';
+import { Amplify } from 'aws-amplify';
+import outputs from '@/../amplify_outputs.json';
+import type { Schema } from '@/../amplify/data/resource';
+
+Amplify.configure(outputs);
+const client = generateClient<Schema>({ authMode: 'apiKey' });
 
 export const dynamic = 'force-dynamic';
+
+// Helper to fetch all records from AWS (handling pagination)
+async function fetchAWSData(model: any) {
+  let allRecords: any[] = [];
+  let nextToken: string | null | undefined = undefined;
+  do {
+    const response: any = await model.list({ nextToken, limit: 1000 });
+    allRecords = [...allRecords, ...response.data];
+    nextToken = response.nextToken;
+  } while (nextToken);
+  return allRecords;
+}
 
 function parseDate(dateStr: string | undefined): Date | null {
   if (!dateStr) return null;
@@ -119,8 +137,8 @@ export async function GET(req: NextRequest) {
 
     const [users, attendance, leaves, tickets, delegations, checklists, o2ds, stepConfigs, meetings, parties] = await Promise.all([
       getUsers(),
-      getAttendanceRecords(),
-      getLeaveRequests(),
+      fetchAWSData(client.models.AttendanceRecord),
+      fetchAWSData(client.models.LeaveRequest),
       getTickets(),
       getDelegations(),
       getChecklists(),
@@ -137,14 +155,14 @@ export async function GET(req: NextRequest) {
     const inTodayCount = attendanceToday.length;
     
     const onLeaveToday = leaves.filter((l: any) => {
-        if (l.status.toLowerCase() !== 'approved') return false;
+        if (!l.status || l.status.toLowerCase() !== 'approved') return false;
         const start = new Date(normalizeDateStr(l.startDate));
         const end = new Date(normalizeDateStr(l.endDate));
         const today = new Date(todayStrRaw);
         return today >= start && today <= end;
     });
     const leaveTodayCount = onLeaveToday.length;
-    const outOfOfficeCount = Math.max(0, totalUsersCount - inTodayCount);
+    const outOfOfficeCount = Math.max(0, totalUsersCount - inTodayCount - leaveTodayCount);
 
     // 3. Birthdays
     const birthdays = users.filter((u: any) => {

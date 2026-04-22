@@ -3738,6 +3738,19 @@
               "list",
               "write"
             ]
+          },
+          "attendance/*": {
+            "authenticated": [
+              "get",
+              "list",
+              "write",
+              "delete"
+            ],
+            "guest": [
+              "get",
+              "list",
+              "write"
+            ]
           }
         }
       }

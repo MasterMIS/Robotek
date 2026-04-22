@@ -267,6 +267,15 @@ export async function GET(req: NextRequest) {
       groupedByOrder[orderNo].push(item);
     });
 
+    // Specifically sort items within each order group by created_at ascending
+    Object.keys(groupedByOrder).forEach((orderNo) => {
+      groupedByOrder[orderNo].sort((a, b) => {
+        const timeA = new Date(a.created_at || 0).getTime();
+        const timeB = new Date(b.created_at || 0).getTime();
+        return timeA - timeB;
+      });
+    });
+
     // 2. Filter orders
     let filteredOrderNumbers = Object.keys(groupedByOrder).sort((a, b) => b.localeCompare(a));
 
