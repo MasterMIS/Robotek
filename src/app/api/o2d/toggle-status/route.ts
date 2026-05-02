@@ -1,12 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { generateClient } from 'aws-amplify/data';
-import { Schema } from '@/../amplify/data/resource';
-import { Amplify } from 'aws-amplify';
-import outputs from '@/../amplify_outputs.json';
-
-Amplify.configure(outputs);
-
-const client = generateClient<Schema>({ authMode: 'apiKey' });
+import { updateOrderToggleStatus } from "@/lib/o2d-sheets";
 
 export async function POST(req: NextRequest) {
   try {
@@ -16,32 +9,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Invalid parameters" }, { status: 400 });
     }
 
-    // 1. Find all records with this orderNo
-    let allMatching: any[] = [];
-    let nextToken: string | null | undefined = undefined;
-    do {
-      const response: any = await client.models.O2DRecord.list({
-        filter: { order_no: { eq: orderNo } },
-        nextToken
-      });
-      allMatching = [...allMatching, ...response.data];
-      nextToken = response.nextToken;
-    } while (nextToken);
-
-    if (allMatching.length === 0) {
-      return NextResponse.json({ error: "Order not found" }, { status: 404 });
-    }
-
-    // 2. Update all matching records
-    const timestamp = value ? new Date().toISOString() : "";
-    
-    await Promise.all(allMatching.map(item => 
-      client.models.O2DRecord.update({
-        id: item.id,
-        [action]: timestamp,
-        updated_at: new Date().toISOString()
-      })
-    ));
+    await updateOrderToggleStatus(orderNo, action, value);
 
     return NextResponse.json({ message: `Order ${action} state updated successfully` });
   } catch (error: any) {

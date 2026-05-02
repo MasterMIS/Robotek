@@ -1,39 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
-import { generateClient } from 'aws-amplify/data';
-import { uploadData, getUrl } from 'aws-amplify/storage';
-import { Amplify } from "aws-amplify";
-import outputs from '@/../amplify_outputs.json';
-import type { Schema } from '@/../amplify/data/resource';
+import { getDelegations, addDelegation } from "@/lib/delegation-sheets";
+import { uploadFileToDrive } from "@/lib/google-drive";
 import { getUserByUsernameOrEmail } from "@/lib/google-sheets";
-import { Delegation } from "@/types/delegation";
 import { sendWhatsAppMessage } from "@/lib/maytapi";
 import { formatDate } from "@/lib/dateUtils";
 
-Amplify.configure(outputs);
-const client = generateClient<Schema>();
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 export async function GET() {
   try {
-    let allDelegations: any[] = [];
-    let nextToken: string | null | undefined = null;
-
-    do {
-      const result: any = await client.models.Delegation.list({
-        nextToken: nextToken,
-        limit: 1000 // Increase batch size for efficiency
-      });
-      
-      if (result.errors) throw new Error(result.errors[0].message);
-      
-      allDelegations = [...allDelegations, ...result.data];
-      nextToken = result.nextToken;
-    } while (nextToken);
-
-    return NextResponse.json(allDelegations, {
-      headers: { 'Cache-Control': 'private, max-age=60, stale-while-revalidate=300' },
-    });
+    const allDelegations = await getDelegations();
+    return NextResponse.json(allDelegations);
   } catch (error: any) {
-    console.error("AWS GET Delegations Error:", error);
+    console.error("GET Delegations Error:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
@@ -41,7 +21,7 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   try {
     const contentType = req.headers.get("content-type") || "";
-    let delegationData: Partial<Delegation> = {};
+    let delegationData: any = {};
 
     if (contentType.includes("multipart/form-data")) {
       const formData = await req.formData();
@@ -51,44 +31,26 @@ export async function POST(req: NextRequest) {
       const refDocFile = formData.get("reference_doc") as File;
 
       if (voiceNoteFile && voiceNoteFile.size > 0) {
-        const result = await uploadData({
-          path: `delegations/${Date.now()}_voice_${voiceNoteFile.name}`,
-          data: voiceNoteFile,
-        }).result;
-        const { url } = await getUrl({ path: result.path });
-        delegationData.voice_note_url = url.toString();
+        const fileId = await uploadFileToDrive(voiceNoteFile);
+        delegationData.voice_note_url = fileId || "";
       }
 
       if (refDocFile && refDocFile.size > 0) {
-        const result = await uploadData({
-          path: `delegations/${Date.now()}_ref_${refDocFile.name}`,
-          data: refDocFile,
-        }).result;
-        const { url } = await getUrl({ path: result.path });
-        delegationData.reference_docs = url.toString();
+        const fileId = await uploadFileToDrive(refDocFile);
+        delegationData.reference_docs = fileId || "";
       }
     } else {
       delegationData = await req.json();
     }
 
-    // Assign numerical ID equivalent
-    if (!delegationData.id) {
-       // A robust system would use a counter or UUID, keeping String for now to match interface
-       delegationData.id = Date.now().toString(); 
-    }
-
-    // Strip UI helpers if any
-    const { createdAt, updatedAt, ...cleanData } = delegationData as any;
-    
+    const timestamp = new Date().toISOString();
     const payload = {
-       ...cleanData,
-       id: String(delegationData.id),
-       created_at: new Date().toISOString(),
-       updated_at: new Date().toISOString()
+       ...delegationData,
+       created_at: delegationData.created_at || timestamp,
+       updated_at: timestamp
     };
 
-    const { data: newDelegation, errors } = await client.models.Delegation.create(payload);
-    if (errors) throw new Error(errors[0].message);
+    await addDelegation(payload);
 
     // Send WhatsApp Notification
     try {
@@ -102,10 +64,10 @@ export async function POST(req: NextRequest) {
       console.error("Error sending WhatsApp notification:", err);
     }
 
-    return NextResponse.json({ message: "Delegation added successfully to AWS", delegation: newDelegation });
+    return NextResponse.json({ message: "Delegation added successfully" });
 
   } catch (error: any) {
-    console.error("AWS POST Delegation Error:", error);
+    console.error("POST Delegation Error:", error);
     return NextResponse.json({ error: error.message || "Invalid request" }, { status: 400 });
   }
 }

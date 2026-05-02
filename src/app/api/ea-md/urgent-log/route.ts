@@ -1,33 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
-import { Amplify } from "aws-amplify";
-import { generateClient } from "aws-amplify/data";
-import outputs from "@/../amplify_outputs.json";
-import type { Schema } from "@/../amplify/data/resource";
-
-Amplify.configure(outputs);
-const client = generateClient<Schema>();
+import { eaMdService } from "@/lib/ea-md-sheets";
 
 export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export async function GET() {
   try {
-    let allItems: any[] = [];
-    let nextToken: string | null | undefined = null;
-
-    do {
-      const result: any = await client.models.EaMdUrgentLog.list({
-        nextToken: nextToken,
-        limit: 1000
-      });
-      
-      if (result.errors) throw new Error(result.errors[0].message);
-      
-      allItems = [...allItems, ...result.data];
-      nextToken = result.nextToken;
-    } while (nextToken);
-
-    return NextResponse.json({ items: allItems });
+    const items = await eaMdService.urgentLog.getAll();
+    return NextResponse.json({ items });
   } catch (error: any) {
+    console.error("GET Urgent Log Error:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
@@ -35,11 +17,14 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   try {
     const item = await req.json();
-    const { __typename, createdAt, updatedAt, ...clean } = item;
-    const { data, errors } = await client.models.EaMdUrgentLog.create(clean);
-    if (errors) throw new Error(errors[0].message);
-    return NextResponse.json({ success: true, id: data?.id });
+    const newItem = {
+      ...item,
+      id: item.id || `UL-${Date.now()}-${Math.random()}`
+    };
+    await eaMdService.urgentLog.add(newItem);
+    return NextResponse.json({ success: true, id: newItem.id });
   } catch (error: any) {
+    console.error("POST Urgent Log Error:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
@@ -50,12 +35,11 @@ export async function PUT(req: NextRequest) {
     const id = searchParams.get("id");
     if (!id) return NextResponse.json({ error: "ID required" }, { status: 400 });
 
-    const body = await req.json();
-    const { __typename, createdAt, updatedAt, ...clean } = body;
-    const { errors } = await client.models.EaMdUrgentLog.update({ ...clean, id });
-    if (errors) throw new Error(errors[0].message);
+    const updates = await req.json();
+    await eaMdService.urgentLog.update(id, updates);
     return NextResponse.json({ success: true });
   } catch (error: any) {
+    console.error("PUT Urgent Log Error:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
@@ -66,10 +50,10 @@ export async function DELETE(req: NextRequest) {
     const id = searchParams.get("id");
     if (!id) return NextResponse.json({ error: "ID required" }, { status: 400 });
 
-    const { errors } = await client.models.EaMdUrgentLog.delete({ id });
-    if (errors) throw new Error(errors[0].message);
+    await eaMdService.urgentLog.delete(id);
     return NextResponse.json({ success: true });
   } catch (error: any) {
+    console.error("DELETE Urgent Log Error:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

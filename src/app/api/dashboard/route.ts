@@ -7,27 +7,11 @@ import { getO2Ds, getO2DStepConfig } from "@/lib/o2d-sheets";
 import { getParties } from "@/lib/party-management-sheets";
 import { auth } from "@/auth";
 import { getUsers } from "@/lib/google-sheets";
-import { generateClient } from 'aws-amplify/data';
-import { Amplify } from 'aws-amplify';
-import outputs from '@/../amplify_outputs.json';
-import type { Schema } from '@/../amplify/data/resource';
-
-Amplify.configure(outputs);
-const client = generateClient<Schema>({ authMode: 'apiKey' });
+import { attendanceService } from "@/lib/sheets/attendance-sheets";
+import { leaveRequestService } from "@/lib/leave-sheets";
 
 export const dynamic = 'force-dynamic';
-
-// Helper to fetch all records from AWS (handling pagination)
-async function fetchAWSData(model: any) {
-  let allRecords: any[] = [];
-  let nextToken: string | null | undefined = undefined;
-  do {
-    const response: any = await model.list({ nextToken, limit: 1000 });
-    allRecords = [...allRecords, ...response.data];
-    nextToken = response.nextToken;
-  } while (nextToken);
-  return allRecords;
-}
+export const revalidate = 0;
 
 function parseDate(dateStr: string | undefined): Date | null {
   if (!dateStr) return null;
@@ -63,7 +47,6 @@ function normalizeDateStr(dStr: string | undefined): string {
 }
 
 function calculateMetrics(tasks: any[], from: Date, to: Date) {
-  // Filter for Current Month tasks (matching score page logic)
   const inRange = tasks.filter(t => {
       if (!t.plannedDate) return false;
       const pd = new Date(t.plannedDate);
@@ -100,10 +83,7 @@ export async function GET(req: NextRequest) {
     const username = (session?.user as any)?.username;
     const isAdmin = userRole === "ADMIN" || userRole === "EA";
 
-    // 1. Define Range (Current Month) to match Score Page
     const now = new Date();
-    
-    // Robust IST calculation using Intl
     const istFormatter = new Intl.DateTimeFormat('en-GB', {
       timeZone: 'Asia/Kolkata',
       year: 'numeric',
@@ -130,15 +110,13 @@ export async function GET(req: NextRequest) {
     const tMM = String(istMonth).padStart(2, '0');
     const tDD = String(istDay).padStart(2, '0');
 
-    // Start of current month (IST relative)
     const from = new Date(istYear, istMonth - 1, 1, 0, 0, 0, 0);
-    // End of current month
     const to = new Date(istYear, istMonth, 0, 23, 59, 59, 999);
 
     const [users, attendance, leaves, tickets, delegations, checklists, o2ds, stepConfigs, meetings, parties] = await Promise.all([
       getUsers(),
-      fetchAWSData(client.models.AttendanceRecord),
-      fetchAWSData(client.models.LeaveRequest),
+      attendanceService.getAll(),
+      leaveRequestService.getAll(),
       getTickets(),
       getDelegations(),
       getChecklists(),
@@ -149,8 +127,6 @@ export async function GET(req: NextRequest) {
     ]);
 
     const attendanceToday = attendance.filter((r: any) => normalizeDateStr(r.date) === todayStrRaw);
-
-    // 2. Summary Counts
     const totalUsersCount = users.length;
     const inTodayCount = attendanceToday.length;
     
@@ -164,7 +140,6 @@ export async function GET(req: NextRequest) {
     const leaveTodayCount = onLeaveToday.length;
     const outOfOfficeCount = Math.max(0, totalUsersCount - inTodayCount - leaveTodayCount);
 
-    // 3. Birthdays
     const birthdays = users.filter((u: any) => {
       if (!u.dob) return false;
       const normalized = normalizeDateStr(u.dob);
@@ -173,18 +148,14 @@ export async function GET(req: NextRequest) {
       return m === tMM && d === tDD;
     });
 
-    console.log('[Dashboard] Party count:', parties.length, '| Sample DOBs:', parties.slice(0, 3).map((p: any) => p.dateOfBirth));
-    console.log('[Dashboard] Today tMM:', tMM, 'tDD:', tDD);
     const partyBirthdays = parties.filter((p: any) => {
       if (!p.dateOfBirth) return false;
       const raw = String(p.dateOfBirth).trim();
-      // Try normalization first
       const normalized = normalizeDateStr(raw);
       if (normalized) {
         const parts = normalized.split('-');
         if (parts.length === 3 && parts[1] === tMM && parts[2] === tDD) return true;
       }
-      // Fallback: try to parse as Date object and compare month/day
       try {
         const parsed = new Date(raw);
         if (!isNaN(parsed.getTime())) {
@@ -195,14 +166,11 @@ export async function GET(req: NextRequest) {
       } catch { /* ignore */ }
       return false;
     });
-    console.log('[Dashboard] Party Birthdays found:', partyBirthdays.length);
 
-    // 4. Persistence: Non-resolved tickets
     const openTickets = tickets
         .filter((t: any) => t.status !== 'Resolved' && t.status !== 'Closed')
         .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
-    // 5. Leave Dates for Calendar (User Specific)
     const userLeaves = leaves.filter((l: any) => (l.userName === username) && l.status.toLowerCase() === 'approved');
     const leaveDates: string[] = [];
     userLeaves.forEach((l: any) => {
@@ -218,7 +186,6 @@ export async function GET(req: NextRequest) {
        }
     });
 
-    // 6. Score Data (Overall Company - MONTHLY)
     const allTasks: any[] = [];
     delegations.forEach((d: any) => {
       const planned = parseDate(d.due_date);
@@ -261,12 +228,11 @@ export async function GET(req: NextRequest) {
 
     const companyMetrics = calculateMetrics(allTasks, from, to);
 
-    // 7. Upcoming Meetings
     const upcomingMeetings = meetings
       .filter((m: any) => {
         const start = parseDate(m.start_time);
         if (!start) return false;
-        return start >= new Date(istNow.getFullYear(), istNow.getMonth(), istNow.getDate()); // Today and onwards
+        return start >= new Date(istNow.getFullYear(), istNow.getMonth(), istNow.getDate()); 
       })
       .sort((a: any, b: any) => parseDate(a.start_time)!.getTime() - parseDate(b.start_time)!.getTime())
       .slice(0, 10);
@@ -290,8 +256,6 @@ export async function GET(req: NextRequest) {
       teamMembers: users.map((u: any) => ({ username: u.username, image_url: u.image_url })),
       score: companyMetrics,
       isAdmin
-    }, {
-      headers: { 'Cache-Control': 'private, max-age=60, stale-while-revalidate=300' },
     });
 
   } catch (error) {

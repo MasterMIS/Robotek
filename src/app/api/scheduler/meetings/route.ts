@@ -1,34 +1,17 @@
 import { NextResponse } from "next/server";
-import { generateClient } from 'aws-amplify/data';
-import { Schema } from '@/../amplify/data/resource';
+import { getMeetings, addMeeting, updateMeeting, deleteMeeting } from "@/lib/meeting-sheets";
 import { v4 as uuidv4 } from "uuid";
 import { auth } from "@/auth";
-import { Amplify } from 'aws-amplify';
-import outputs from '@/../amplify_outputs.json';
-
-Amplify.configure(outputs);
-
-const client = generateClient<Schema>({ authMode: 'apiKey' });
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-async function fetchAllMeetings() {
-  let allRecords: any[] = [];
-  let nextToken: string | null | undefined = undefined;
-  do {
-    const response: any = await client.models.Meeting.list({ nextToken, limit: 1000 });
-    allRecords = [...allRecords, ...response.data];
-    nextToken = response.nextToken;
-  } while (nextToken);
-  return allRecords;
-}
-
 export async function GET() {
   try {
-    const meetings = await fetchAllMeetings();
+    const meetings = await getMeetings();
     return NextResponse.json(meetings);
   } catch (error: any) {
+    console.error("GET Meetings Error:", error);
     return NextResponse.json({ error: error.message || "Failed to fetch meetings" }, { status: 500 });
   }
 }
@@ -45,17 +28,12 @@ export async function POST(req: Request) {
       id: data.id || uuidv4(),
       created_by: (session.user as any).username || session.user.email,
       created_at: data.created_at || timestamp,
-      updated_at: timestamp
     };
 
-    const { errors } = await client.models.Meeting.create(newMeeting);
-    if (errors) {
-      console.error("Amplify Create Error:", errors);
-      return NextResponse.json({ error: "Failed to add meeting" }, { status: 500 });
-    }
-
+    await addMeeting(newMeeting);
     return NextResponse.json(newMeeting);
   } catch (error: any) {
+    console.error("POST Meeting Error:", error);
     return NextResponse.json({ error: error.message || "Failed to add meeting" }, { status: 500 });
   }
 }
@@ -66,21 +44,13 @@ export async function PUT(req: Request) {
     if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const data = await req.json();
-    const { id, createdAt, updatedAt, ...rest } = data;
+    const id = data.id;
+    if (!id) return NextResponse.json({ error: "ID is required" }, { status: 400 });
 
-    const { errors } = await client.models.Meeting.update({
-      id: data.id,
-      ...rest,
-      updated_at: new Date().toISOString()
-    });
-
-    if (errors) {
-      console.error("Amplify Update Error:", errors);
-      return NextResponse.json({ error: "Failed to update meeting" }, { status: 500 });
-    }
-
+    await updateMeeting(id, data);
     return NextResponse.json({ success: true });
   } catch (error: any) {
+    console.error("PUT Meeting Error:", error);
     return NextResponse.json({ error: error.message || "Failed to update meeting" }, { status: 500 });
   }
 }
@@ -91,14 +61,10 @@ export async function DELETE(req: Request) {
     const id = searchParams.get("id");
     if (!id) return NextResponse.json({ error: "ID is required" }, { status: 400 });
 
-    const { errors } = await client.models.Meeting.delete({ id });
-    if (errors) {
-      console.error("Amplify Delete Error:", errors);
-      return NextResponse.json({ error: "Failed to delete meeting" }, { status: 500 });
-    }
-
+    await deleteMeeting(id);
     return NextResponse.json({ success: true });
   } catch (error: any) {
+    console.error("DELETE Meeting Error:", error);
     return NextResponse.json({ error: error.message || "Failed to delete meeting" }, { status: 500 });
   }
 }

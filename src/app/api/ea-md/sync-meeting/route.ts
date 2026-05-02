@@ -1,33 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
-import { Amplify } from "aws-amplify";
-import { generateClient } from "aws-amplify/data";
-import outputs from "@/../amplify_outputs.json";
-import type { Schema } from "@/../amplify/data/resource";
-
-Amplify.configure(outputs);
-const client = generateClient<Schema>();
+import { eaMdService } from "@/lib/ea-md-sheets";
 
 export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export async function GET() {
   try {
-    let allItems: any[] = [];
-    let nextToken: string | null | undefined = null;
-
-    do {
-      const result: any = await client.models.EaMdSyncMeeting.list({
-        nextToken: nextToken,
-        limit: 1000
-      });
-      
-      if (result.errors) throw new Error(result.errors[0].message);
-      
-      allItems = [...allItems, ...result.data];
-      nextToken = result.nextToken;
-    } while (nextToken);
-
-    return NextResponse.json({ items: allItems });
+    const items = await eaMdService.syncMeetings.getAll();
+    return NextResponse.json({ items });
   } catch (error: any) {
+    console.error("GET Sync Meetings Error:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
@@ -35,20 +17,18 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   try {
     const item = await req.json();
-    const { __typename, createdAt, updatedAt, id, ...clean } = item;
-
-    // agenda and actionItems are arrays — store as JSON strings
     const payload = {
-      ...clean,
-      agenda: typeof clean.agenda === "string" ? clean.agenda : JSON.stringify(clean.agenda || []),
-      actionItems: typeof clean.actionItems === "string" ? clean.actionItems : JSON.stringify(clean.actionItems || []),
+      ...item,
+      id: item.id || `SM-${Date.now()}-${Math.random()}`,
+      agenda: typeof item.agenda === "string" ? item.agenda : JSON.stringify(item.agenda || []),
+      actionItems: typeof item.actionItems === "string" ? item.actionItems : JSON.stringify(item.actionItems || []),
       timestamp: new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }),
     };
 
-    const { data, errors } = await client.models.EaMdSyncMeeting.create(payload);
-    if (errors) throw new Error(errors[0].message);
-    return NextResponse.json({ success: true, id: data?.id });
+    await eaMdService.syncMeetings.add(payload);
+    return NextResponse.json({ success: true, id: payload.id });
   } catch (error: any) {
+    console.error("POST Sync Meeting Error:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
@@ -60,18 +40,16 @@ export async function PUT(req: NextRequest) {
     if (!id) return NextResponse.json({ error: "ID required" }, { status: 400 });
 
     const body = await req.json();
-    const { __typename, createdAt, updatedAt, ...clean } = body;
     const payload = {
-      ...clean,
-      id,
-      agenda: typeof clean.agenda === "string" ? clean.agenda : JSON.stringify(clean.agenda || []),
-      actionItems: typeof clean.actionItems === "string" ? clean.actionItems : JSON.stringify(clean.actionItems || []),
+      ...body,
+      agenda: typeof body.agenda === "string" ? body.agenda : JSON.stringify(body.agenda || []),
+      actionItems: typeof body.actionItems === "string" ? body.actionItems : JSON.stringify(body.actionItems || []),
     };
 
-    const { errors } = await client.models.EaMdSyncMeeting.update(payload);
-    if (errors) throw new Error(errors[0].message);
+    await eaMdService.syncMeetings.update(id, payload);
     return NextResponse.json({ success: true });
   } catch (error: any) {
+    console.error("PUT Sync Meeting Error:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
@@ -82,10 +60,10 @@ export async function DELETE(req: NextRequest) {
     const id = searchParams.get("id");
     if (!id) return NextResponse.json({ error: "ID required" }, { status: 400 });
 
-    const { errors } = await client.models.EaMdSyncMeeting.delete({ id });
-    if (errors) throw new Error(errors[0].message);
+    await eaMdService.syncMeetings.delete(id);
     return NextResponse.json({ success: true });
   } catch (error: any) {
+    console.error("DELETE Sync Meeting Error:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

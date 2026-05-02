@@ -10,12 +10,7 @@
     "lint": "eslint"
   },
   "dependencies": {
-    "@aws-amplify/adapter-nextjs": "^1.2.35",
-    "@aws-amplify/data-construct": "^1.17.2",
-    "@aws-sdk/client-s3": "^3.1030.0",
-    "@aws-sdk/s3-request-presigner": "^3.1030.0",
     "@heroicons/react": "^2.2.0",
-    "aws-amplify": "^6.16.4",
     "date-fns": "^4.1.0",
     "emoji-picker-react": "^4.18.0",
     "framer-motion": "^12.38.0",
@@ -35,9 +30,6 @@
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
-    "@aws-amplify/backend": "^1.22.0",
-    "@aws-amplify/backend-cli": "^1.8.2",
-    "@aws-amplify/codegen-ui": "^2.20.4",
     "@tailwindcss/postcss": "^4",
     "@types/lodash": "^4.17.24",
     "@types/next": "^8.0.7",

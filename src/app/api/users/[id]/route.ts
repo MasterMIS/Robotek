@@ -1,19 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { Amplify } from "aws-amplify";
-import { generateClient } from 'aws-amplify/data';
-import { uploadData, getUrl } from 'aws-amplify/storage';
-import outputs from '@/../amplify_outputs.json';
-import type { Schema } from '@/../amplify/data/resource';
+import { updateUser, deleteUser } from "@/lib/google-sheets";
+import { uploadFileToDrive } from "@/lib/google-drive";
 
-// Configure Amplify for Server-side
-Amplify.configure(outputs);
-const client = generateClient<Schema>();
-
-// Strip out fields that don't exist in the AWS schema (UI-only fields)
-function sanitizeUser(userData: any) {
-  const { locations, __typename, createdAt, updatedAt, ...clean } = userData;
-  return clean;
-}
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 export async function PUT(
   req: NextRequest,
@@ -30,30 +20,19 @@ export async function PUT(
       const file = formData.get("image") as File;
 
       if (file && file.size > 0) {
-        // Upload to AWS S3 specifically in the users/ folder
-        const result = await uploadData({
-          path: `users/${Date.now()}_${file.name}`,
-          data: file,
-        }).result;
-        
-        const { url } = await getUrl({ path: result.path });
-        userData.image_url = url.toString();
+        const fileId = await uploadFileToDrive(file);
+        userData.image_url = fileId || "";
       }
     } else {
       userData = await req.json();
     }
 
-    // Update in DynamoDB - sanitize to remove UI-only fields
-    const { data: updatedUser, errors } = await client.models.User.update({
-      ...sanitizeUser(userData),
-      id: id, // Ensure we use the ID from params
-    });
+    const success = await updateUser(id, userData);
+    if (!success) throw new Error("Failed to update user in Sheets");
 
-    if (errors) throw new Error(errors[0].message);
-
-    return NextResponse.json({ message: "User updated successfully in AWS", user: updatedUser });
+    return NextResponse.json({ message: "User updated successfully" });
   } catch (error: any) {
-    console.error("AWS PUT User Error:", error);
+    console.error("PUT User Error:", error);
     return NextResponse.json({ error: error.message }, { status: 400 });
   }
 }
@@ -64,12 +43,12 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
-    const { errors } = await client.models.User.delete({ id });
-    if (errors) throw new Error(errors[0].message);
+    const success = await deleteUser(id);
+    if (!success) throw new Error("Failed to delete user from Sheets");
 
-    return NextResponse.json({ message: "User deleted successfully from AWS" });
+    return NextResponse.json({ message: "User deleted successfully" });
   } catch (error: any) {
-    console.error("AWS DELETE User Error:", error);
+    console.error("DELETE User Error:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

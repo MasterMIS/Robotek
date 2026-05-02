@@ -1,31 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getUsers } from "@/lib/google-sheets";
-import { generateClient } from 'aws-amplify/data';
-import { Amplify } from 'aws-amplify';
-import outputs from '@/../amplify_outputs.json';
-import type { Schema } from '@/../amplify/data/resource';
+import { attendanceService } from "@/lib/sheets/attendance-sheets";
+import { leaveRequestService } from "@/lib/leave-sheets";
 
-Amplify.configure(outputs);
-const client = generateClient<Schema>({ authMode: 'apiKey' });
-
-// Helper to fetch all records from AWS (handling pagination)
-async function fetchAWSData(model: any) {
-  let allRecords: any[] = [];
-  let nextToken: string | null | undefined = undefined;
-  do {
-    const response: any = await model.list({ nextToken, limit: 1000 });
-    allRecords = [...allRecords, ...response.data];
-    nextToken = response.nextToken;
-  } while (nextToken);
-  return allRecords;
-}
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export async function GET(req: NextRequest) {
   try {
     const [users, attendance, leaves] = await Promise.all([
       getUsers(),
-      fetchAWSData(client.models.AttendanceRecord),
-      fetchAWSData(client.models.LeaveRequest)
+      attendanceService.getAll(),
+      leaveRequestService.getAll()
     ]);
 
     return NextResponse.json({

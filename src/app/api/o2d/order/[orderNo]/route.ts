@@ -1,13 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { generateClient } from 'aws-amplify/data';
-import { uploadData } from 'aws-amplify/storage';
-import { Schema } from '@/../amplify/data/resource';
-import { Amplify } from 'aws-amplify';
-import outputs from '@/../amplify_outputs.json';
+import { o2dService } from "@/lib/o2d-sheets";
+import { uploadFileToDrive } from "@/lib/google-drive";
 
-Amplify.configure(outputs);
-
-const client = generateClient<Schema>({ authMode: 'apiKey' });
+export const dynamic = "force-dynamic";
 
 export async function PUT(
   req: NextRequest,
@@ -26,15 +21,9 @@ export async function PUT(
       const screenshotFile = formData.get("order_screenshot") as File;
 
       if (screenshotFile && screenshotFile.size > 0) {
-        const path = `o2d/${Date.now()}-${screenshotFile.name}`;
-        await uploadData({
-          path,
-          data: await screenshotFile.arrayBuffer(),
-          options: { contentType: screenshotFile.type }
-        }).result;
-        screenshotUrl = path;
+        const fileId = await uploadFileToDrive(screenshotFile);
+        screenshotUrl = fileId || "";
       } else {
-        // Keep existing screenshot if not provided
         screenshotUrl = updatedItems[0]?.order_screenshot || "";
       }
     } else {
@@ -42,51 +31,34 @@ export async function PUT(
       screenshotUrl = updatedItems[0]?.order_screenshot || "";
     }
 
-    // 1. Get existing records for this order to handle deletions/updates
-    let existingRecords: any[] = [];
-    let nextToken: string | null | undefined = undefined;
-    do {
-      const response: any = await client.models.O2DRecord.list({
-        filter: { order_no: { eq: orderNo } },
-        nextToken
-      });
-      existingRecords = [...existingRecords, ...response.data];
-      nextToken = response.nextToken;
-    } while (nextToken);
-
-    const existingIds = new Set(existingRecords.map(r => r.id));
+    const allRecords = await o2dService.getAll();
+    const existingForOrder = allRecords.filter(r => r.order_no === orderNo);
+    const existingIds = new Set(existingForOrder.map(r => r.id));
     const incomingIds = new Set(updatedItems.map(r => r.id).filter(id => !!id));
 
-    // 2. Perform updates and creations
-    await Promise.all(updatedItems.map(item => {
-      const timestamp = new Date().toISOString();
+    await Promise.all(updatedItems.map(async (item) => {
       const itemData = {
         ...item,
         order_screenshot: screenshotUrl,
-        updated_at: timestamp,
-        sheet_updated_at: timestamp
+        updated_at: new Date().toISOString()
       };
 
       if (item.id && existingIds.has(item.id)) {
-        const { id, createdAt, updatedAt, sheet_created_at, ...updateRest } = itemData;
-        return client.models.O2DRecord.update({ id, ...updateRest });
+        return o2dService.update(item.id, itemData);
       } else {
-        return client.models.O2DRecord.create({
-            ...itemData,
-            id: item.id || `O2D-${Date.now()}-${Math.random()}`,
-            created_at: timestamp,
-            sheet_created_at: timestamp
+        return o2dService.add({
+          ...itemData,
+          id: item.id || `O2D-${Date.now()}-${Math.random()}`
         });
       }
     }));
 
-    // 3. Perform deletions for items no longer in the list
     const idsToDelete = [...existingIds].filter(id => !incomingIds.has(id));
-    await Promise.all(idsToDelete.map(id => client.models.O2DRecord.delete({ id })));
+    await Promise.all(idsToDelete.map(id => o2dService.delete(id)));
 
     return NextResponse.json({ message: "Order updated successfully" });
   } catch (error: any) {
-    console.error("API Error:", error);
+    console.error("PUT Order Error:", error);
     return NextResponse.json({ error: error.message }, { status: 400 });
   }
 }
@@ -97,25 +69,14 @@ export async function DELETE(
 ) {
   try {
     const { orderNo } = await params;
-    
-    // 1. Find all records with this orderNo
-    let allMatching: any[] = [];
-    let nextToken: string | null | undefined = undefined;
-    do {
-      const response: any = await client.models.O2DRecord.list({
-        filter: { order_no: { eq: orderNo } },
-        nextToken
-      });
-      allMatching = [...allMatching, ...response.data];
-      nextToken = response.nextToken;
-    } while (nextToken);
+    const allRecords = await o2dService.getAll();
+    const matching = allRecords.filter(r => r.order_no === orderNo);
 
-    // 2. Delete all matching records
-    await Promise.all(allMatching.map(item => client.models.O2DRecord.delete({ id: item.id })));
+    await Promise.all(matching.map(item => o2dService.delete(item.id)));
 
     return NextResponse.json({ message: "Order deleted successfully" });
   } catch (error: any) {
-    console.error("API Error:", error);
+    console.error("DELETE Order Error:", error);
     return NextResponse.json({ error: error.message }, { status: 400 });
   }
 }

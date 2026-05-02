@@ -1,16 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { Amplify } from "aws-amplify";
-import { generateClient } from 'aws-amplify/data';
-import outputs from '@/../amplify_outputs.json';
-import type { Schema } from '@/../amplify/data/resource';
+import { delegationService, addDelegationRemark } from "@/lib/delegation-sheets";
 import { auth } from "@/auth";
-import { v4 as uuidv4 } from "uuid";
 import { sendWhatsAppMessage } from "@/lib/maytapi";
 import { getUserByUsernameOrEmail } from "@/lib/google-sheets";
 import { formatDate } from "@/lib/dateUtils";
 
-Amplify.configure(outputs);
-const client = generateClient<Schema>();
+export const dynamic = "force-dynamic";
 
 export async function POST(
   req: NextRequest,
@@ -33,6 +28,7 @@ export async function POST(
     const usernameStr = (session.user as any).username || session.user.name || "Unknown User";
 
     const payload = {
+      id: `REM-${Date.now()}`,
       delegation_id: id,
       user_id: session.user.id || "unknown",
       username: usernameStr,
@@ -40,13 +36,11 @@ export async function POST(
       created_at: new Date().toISOString(),
     };
 
-    const { data: newRemark, errors } = await client.models.DelegationRemark.create(payload);
-    
-    if (errors) throw new Error(errors[0].message);
+    await addDelegationRemark(payload);
 
-    // Send WhatsApp notification for new remark
     try {
-      const { data: delegation } = await client.models.Delegation.get({ id });
+      const allDelegations = await delegationService.getAll();
+      const delegation = allDelegations.find(d => String(d.id) === String(id));
       
       if (delegation) {
         const formattedNow = formatDate(payload.created_at);
@@ -66,9 +60,9 @@ export async function POST(
       console.error("Error sending WhatsApp notification for remark:", err);
     }
 
-    return NextResponse.json({ message: "Remark added successfully via AWS", remark: newRemark });
+    return NextResponse.json({ message: "Remark added successfully", remark: payload });
   } catch (error: any) {
-    console.error("API Error adding remark to AWS:", error);
+    console.error("POST Remark Error:", error);
     return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 });
   }
 }

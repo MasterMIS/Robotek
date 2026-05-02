@@ -238,7 +238,7 @@ export default function TicketsPage() {
   };
 
   const toggleAudio = (voiceNote: string, id: string) => {
-    // Determine the URL based on source (AWS S3 URLs start with http, legacy are just IDs)
+    // Non-http URLs are treated as Google Drive IDs and proxied through our API
     const url = voiceNote?.startsWith("http") ? voiceNote : `/api/audio/${voiceNote}`;
 
     if (playingAudioId === id) {

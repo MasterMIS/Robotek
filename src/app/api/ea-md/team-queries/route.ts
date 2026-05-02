@@ -1,38 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
-import { Amplify } from "aws-amplify";
-import { generateClient } from "aws-amplify/data";
-import outputs from "@/../amplify_outputs.json";
-import type { Schema } from "@/../amplify/data/resource";
-
-Amplify.configure(outputs);
-const client = generateClient<Schema>();
+import { eaMdService } from "@/lib/ea-md-sheets";
 
 export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export async function GET() {
   try {
-    let allItems: any[] = [];
-    let nextToken: string | null | undefined = null;
-
-    do {
-      const result: any = await client.models.EaMdTeamQuery.list({
-        nextToken: nextToken,
-        limit: 1000
-      });
-      
-      if (result.errors) throw new Error(result.errors[0].message);
-      
-      allItems = [...allItems, ...result.data];
-      nextToken = result.nextToken;
-    } while (nextToken);
-
-    return NextResponse.json({ items: allItems });
+    const items = await eaMdService.teamQueries.getAll();
+    return NextResponse.json({ items });
   } catch (error: any) {
+    console.error("GET Team Queries Error:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
 
-// Team Queries also uses batch POST (array of items)
 export async function POST(req: Request) {
   try {
     const body = await req.json();
@@ -44,17 +25,18 @@ export async function POST(req: Request) {
 
     const ids: string[] = [];
     for (const item of items) {
-      const { __typename, createdAt, updatedAt, id, ...clean } = item;
-      const { data, errors } = await client.models.EaMdTeamQuery.create({
-        ...clean,
+      const newItem = {
+        ...item,
+        id: item.id || `TQ-${Date.now()}-${Math.random()}`,
         timestamp: new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }),
-      });
-      if (errors) throw new Error(errors[0].message);
-      if (data?.id) ids.push(data.id);
+      };
+      await eaMdService.teamQueries.add(newItem);
+      ids.push(newItem.id);
     }
 
     return NextResponse.json({ success: true, ids });
   } catch (error: any) {
+    console.error("POST Team Queries Error:", error);
     return NextResponse.json({ error: "Server error: " + error.message }, { status: 500 });
   }
 }
@@ -66,11 +48,10 @@ export async function PUT(req: Request) {
     if (!id) return NextResponse.json({ error: "Missing item id" }, { status: 400 });
 
     const updates = await req.json();
-    const { __typename, createdAt, updatedAt, ...clean } = updates;
-    const { errors } = await client.models.EaMdTeamQuery.update({ ...clean, id });
-    if (errors) throw new Error(errors[0].message);
+    await eaMdService.teamQueries.update(id, updates);
     return NextResponse.json({ success: true });
   } catch (error: any) {
+    console.error("PUT Team Queries Error:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
@@ -81,10 +62,10 @@ export async function DELETE(req: Request) {
     const id = searchParams.get("id");
     if (!id) return NextResponse.json({ error: "Missing item id" }, { status: 400 });
 
-    const { errors } = await client.models.EaMdTeamQuery.delete({ id });
-    if (errors) throw new Error(errors[0].message);
+    await eaMdService.teamQueries.delete(id);
     return NextResponse.json({ success: true });
   } catch (error: any) {
+    console.error("DELETE Team Queries Error:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

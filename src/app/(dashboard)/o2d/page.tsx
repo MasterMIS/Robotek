@@ -16,9 +16,7 @@ const fetcher = async (url: string) => {
   return res.json();
 };
 import { useSSE } from "@/hooks/useSSE";
-import { getUrl } from "aws-amplify/storage";
-import { generateClient } from "aws-amplify/data";
-import type { Schema } from "@/../amplify/data/resource";
+import { getDriveImageUrl } from "@/lib/drive-utils";
 import {
   PlusIcon,
   PencilSquareIcon,
@@ -66,7 +64,6 @@ import ConfirmModal from "@/components/ConfirmModal";
 import PartyFormModal from "@/components/PartyFormModal";
 import ItemFormModal from "@/components/ItemFormModal";
 import PremiumDatePicker from "@/components/PremiumDatePicker";
-import { getDriveImageUrl } from "@/lib/drive-utils";
 
 // --- Searchable Dropdown ---
 interface SearchableDropdownProps {
@@ -308,12 +305,7 @@ function SearchableDropdown({
 
 // --- Main Page ---
 export default function O2DPage() {
-  // Lazy-init so generateClient() only runs after Amplify.configure() in <Providers>
-  const amplifyClient = useRef<ReturnType<typeof generateClient<Schema>> | null>(null);
-  if (!amplifyClient.current) {
-    try { amplifyClient.current = generateClient<Schema>(); } catch { /* not yet configured */ }
-  }
-  const client = amplifyClient.current;
+  const client = null; // Removed AWS Amplify client
 
   const { data: session } = useSession();
   const currentUser = (session?.user as any)?.username || "";
@@ -368,7 +360,7 @@ export default function O2DPage() {
   const { data: paginatedResponse, error: paginatedError } = useSWR(
     tableQueryKey,
     fetcher,
-    { revalidateOnFocus: true, refreshInterval: 60000 }
+    { revalidateOnFocus: true, refreshInterval: 15000 }
   );
 
   useEffect(() => {
@@ -388,7 +380,7 @@ export default function O2DPage() {
   const { data: sidebarResponse, isLoading: isSidebarLoading } = useSWR(
     sidebarQueryKey,
     fetcher,
-    { revalidateOnFocus: true, refreshInterval: 60000, keepPreviousData: true }
+    { revalidateOnFocus: true, refreshInterval: 15000, keepPreviousData: true }
   );
 
   // Fetch summary data first to know total count
@@ -399,7 +391,7 @@ export default function O2DPage() {
   }>(
     "/api/o2d/summary",
     fetcher,
-    { revalidateOnFocus: true, refreshInterval: 600000 }
+    { revalidateOnFocus: true, refreshInterval: 30000 }
   );
 
   // Use summaryData to set total rows if not already set by paginated fetch
@@ -436,86 +428,10 @@ export default function O2DPage() {
         globalMutate("/api/ims");
       }
     },
-  });
-
-  // AWS AppSync Native Real-Time Subscriptions for O2D (True Big Software Approach)
+  });  // AWS AppSync Native Real-Time Subscriptions - REMOVED for Google Sheets migration
   useEffect(() => {
-    if (!globalMutate) return;
-
-    const handleUpdate = (item: any) => {
-      const mappedItem = {
-        ...item,
-        created_at: item.sheet_created_at || item.sheetCreatedAt || item.created_at || null,
-        updated_at: item.sheet_updated_at || item.sheetUpdatedAt || item.updated_at || null,
-        sheet_created_at: item.sheet_created_at || item.sheetCreatedAt || null,
-        sheet_updated_at: item.sheet_updated_at || item.sheetUpdatedAt || null,
-        ...Object.fromEntries(
-          Array.from({ length: 11 }, (_, i) => i + 1).map((i) => [
-            `actual_${i}`, item[`actual_${i}`] || item[`acual_${i}`] || "",
-          ])
-        )
-      };
-
-      // SURGICAL UPDATE: Update local cache without hitting the server
-      const updateFn = (current: any) => {
-        if (!current?.data) return current;
-        const nextData = [...current.data];
-        const idx = nextData.findIndex((d: any) => d.id === mappedItem.id);
-        
-        if (idx !== -1) {
-          nextData[idx] = { ...nextData[idx], ...mappedItem };
-        } else {
-          // Prepend new item
-          nextData.unshift(mappedItem);
-        }
-
-        return {
-          ...current,
-          data: nextData,
-          orders: Array.from(new Set([mappedItem.order_no, ...(current.orders || [])])),
-          total: idx === -1 ? (current.total || 0) + 1 : current.total
-        };
-      };
-
-      // Patch active keys
-      globalMutate(tableQueryKey, updateFn, false);
-      globalMutate(sidebarQueryKey, updateFn, false);
-      
-      // Background revalidation for summary (lightweight)
-      globalMutate("/api/o2d/summary");
-    };
-
-    const handleDelete = (deletedItem: any) => {
-      const filterFn = (current: any) => {
-        if (!current?.data) return current;
-        const nextData = current.data.filter((d: any) => d.id !== deletedItem.id);
-        const hasOrderStill = nextData.some((d: any) => d.order_no === deletedItem.order_no);
-        
-        return {
-          ...current,
-          data: nextData,
-          orders: hasOrderStill ? current.orders : (current.orders || []).filter((no: string) => no !== deletedItem.order_no),
-          total: hasOrderStill ? current.total : Math.max(0, (current.total || 0) - 1)
-        };
-      };
-
-      globalMutate(tableQueryKey, filterFn, false);
-      globalMutate(sidebarQueryKey, filterFn, false);
-      globalMutate("/api/o2d/summary");
-    };
-
-    if (!client) return;
-
-    const subCreate = client.models.O2DRecord.onCreate().subscribe({ next: handleUpdate });
-    const subUpdate = client.models.O2DRecord.onUpdate().subscribe({ next: handleUpdate });
-    const subDelete = client.models.O2DRecord.onDelete().subscribe({ next: handleDelete });
-
-    return () => {
-      subCreate.unsubscribe();
-      subUpdate.unsubscribe();
-      subDelete.unsubscribe();
-    };
-  }, [globalMutate, client]);
+    // Real-time updates handled by SWR polling every 15 seconds
+  }, []);
 
   // Extract O2D data
   const allO2DsRaw = allO2DData || [];
@@ -565,19 +481,6 @@ export default function O2DPage() {
     userRole.toUpperCase() === "ADMIN" || userRole.toUpperCase() === "EA";
   const [selectedOrderNo, setSelectedOrderNo] = useState<string | null>(null);
 
-  // Auto-resolve media URLs for selected order
-  useEffect(() => {
-    if (selectedOrderNo && groupedOrders[selectedOrderNo]) {
-      const items = groupedOrders[selectedOrderNo];
-      items.forEach(item => {
-        if (item.order_screenshot) resolveS3Path(item.order_screenshot);
-        if (item.upload_so_1) resolveS3Path(item.upload_so_1);
-        if (item.upload_pi_5) resolveS3Path(item.upload_pi_5);
-        if (item.attach_bilty_9) resolveS3Path(item.attach_bilty_9);
-      });
-    }
-  }, [selectedOrderNo, groupedOrders]);
-
   // Data
   const [parties, setParties] = useState<string[]>([]);
   const [fullParties, setFullParties] = useState<any[]>([]);
@@ -620,31 +523,11 @@ export default function O2DPage() {
   const [isBusyModalOpen, setIsBusyModalOpen] = useState(false);
   const [busySearchQuery, setBusySearchQuery] = useState("");
 
-  // Media resolution cache (path -> signedURL)
-  const [resolvedUrls, setResolvedUrls] = useState<Record<string, string>>({});
-
-  const resolveS3Path = async (path: string | null | undefined) => {
-    if (!path || path.startsWith("http") || path.startsWith("data:")) return path || "";
-    if (resolvedUrls[path]) return resolvedUrls[path];
-    try {
-      const url = await getUrl({
-        path,
-        options: { validateObjectExistence: false, expiresIn: 3600 }
-      });
-      const resolved = url.url.toString();
-      setResolvedUrls(prev => ({ ...prev, [path]: resolved }));
-      return resolved;
-    } catch (err) {
-      console.error("Error resolving S3 path:", path, err);
-      return path;
-    }
-  };
-
   const getEffectiveUrl = (path: string | null | undefined) => {
     if (!path) return "#";
     if (path.startsWith("http") || path.startsWith("data:")) return path;
-    // For S3 paths, we might have already resolved it
-    return resolvedUrls[path] || "#";
+    // Assume it's a Google Drive ID if it's not a URL
+    return getDriveImageUrl(path);
   };
 
   const [detailViewMode, setDetailViewMode] = useState<"full" | "table">(
@@ -1163,26 +1046,7 @@ export default function O2DPage() {
         );
         optimisticO2Ds = [...updatedItems, ...optimisticO2Ds];
 
-        // Merge into existing data
-        const sidebarOptimistic = { 
-          ...sidebarResponse, 
-          data: [
-            ...updatedItems, 
-            ...(sidebarResponse?.data || []).filter((o: any) => o.order_no !== editingOrderNo)
-          ],
-          orders: Array.from(new Set([editingOrderNo, ...(sidebarResponse?.orders || [])]))
-        };
-
-        const tableOptimistic = { 
-          ...paginatedResponse, 
-          data: [
-            ...updatedItems, 
-            ...(paginatedResponse?.data || []).filter((o: any) => o.order_no !== editingOrderNo)
-          ]
-        };
-
-        globalMutate(tableQueryKey, tableOptimistic, false);
-        globalMutate(sidebarQueryKey, sidebarOptimistic, false);
+        // Optimistic UI removed for data integrity
         
         setIsModalOpen(false);
         resetForm();
@@ -1224,22 +1088,7 @@ export default function O2DPage() {
 
         optimisticO2Ds = [...newItems, ...optimisticO2Ds];
 
-        // Merge into existing data and prepend new order
-        const sidebarOptimistic = { 
-          ...sidebarResponse, 
-          data: [...newItems, ...(sidebarResponse?.data || [])].slice(0, sidebarItemsPerPage),
-          orders: [finalOrderNo, ...(sidebarResponse?.orders || [])].slice(0, sidebarItemsPerPage),
-          total: (sidebarResponse?.total || 0) + 1
-        };
-
-        const tableOptimistic = { 
-          ...paginatedResponse, 
-          data: [...newItems, ...(paginatedResponse?.data || [])].slice(0, tableItemsPerPage),
-          total: (paginatedResponse?.total || 0) + 1
-        };
-
-        globalMutate(tableQueryKey, tableOptimistic, false);
-        globalMutate(sidebarQueryKey, sidebarOptimistic, false);
+        // Optimistic UI removed for data integrity
 
         setIsModalOpen(false);
         resetForm();
@@ -1270,9 +1119,11 @@ export default function O2DPage() {
       setActionStatus("success");
       setActionMessage(editingOrderNo ? "Order Updated!" : "Order Created!");
       
-      // No broad revalidation here - AppSync or local mutation handles it
-      // Just refresh the summary (lightweight)
+      // Revalidate all relevant keys
+      globalMutate(tableQueryKey);
+      globalMutate(sidebarQueryKey);
       globalMutate("/api/o2d/summary");
+      globalMutate("/api/o2d?type=ordernumbers");
 
       setTimeout(() => setIsStatusModalOpen(false), 1500);
     } catch (error: any) {
@@ -1322,20 +1173,7 @@ export default function O2DPage() {
     const orderNo = confirmPayload?.orderNo;
     if (!orderNo) return;
 
-    const tableOptimistic = { 
-      ...paginatedResponse, 
-      data: (paginatedResponse?.data || []).filter((o: any) => o.order_no !== orderNo), 
-      total: Math.max(0, (paginatedResponse?.total || 0) - 1) 
-    };
-    const sidebarOptimistic = { 
-      ...sidebarResponse, 
-      data: (sidebarResponse?.data || []).filter((o: any) => o.order_no !== orderNo), 
-      orders: (sidebarResponse?.orders || []).filter((no: string) => no !== orderNo),
-      total: Math.max(0, (sidebarResponse?.total || 0) - 1) 
-    };
-
-    globalMutate(tableQueryKey, tableOptimistic, false);
-    globalMutate(sidebarQueryKey, sidebarOptimistic, false);
+    // Optimistic UI removed for data integrity
 
     setSelectedOrderNo(null);
     setConfirmPayload(null);
@@ -1355,14 +1193,13 @@ export default function O2DPage() {
       setActionMessage("Order Deleted");
       
       // Simple summary refresh
+      // Revalidate
+      globalMutate(tableQueryKey);
+      globalMutate(sidebarQueryKey);
       globalMutate("/api/o2d/summary");
-      
-      setTimeout(() => setIsStatusModalOpen(false), 1500);
-    } catch (error) {
-      // Rollback
-      globalMutate(tableQueryKey, paginatedResponse, false);
-      globalMutate(sidebarQueryKey, sidebarResponse, false);
-
+      globalMutate("/api/o2d?type=ordernumbers");
+      setTimeout(() => setIsStatusModalOpen(false), 2000);
+    } catch (err) {
       setActionStatus("error");
       setActionMessage("Delete Failed");
       setTimeout(() => setIsStatusModalOpen(false), 2000);
@@ -1449,12 +1286,7 @@ export default function O2DPage() {
     if (!orderNo) return;
 
     const newValue = !currentValue ? new Date().toISOString() : "";
-    const currentO2Ds = allO2DsRaw;
-    const optimisticO2Ds = allO2DsRaw.map((o: any) =>
-      o.order_no === orderNo ? { ...o, [action]: newValue } : o,
-    );
-
-    mutate("O2D", optimisticO2Ds, false);
+    setConfirmPayload(null);
     setConfirmPayload(null);
     setIsConfirmOpen(false);
 
@@ -1481,10 +1313,11 @@ export default function O2DPage() {
       if (!res.ok) throw new Error(`Failed to toggle ${action}`);
       setActionStatus("success");
       setActionMessage("Status Updated");
-      mutate("O2D");
+      globalMutate(tableQueryKey);
+      globalMutate(sidebarQueryKey);
+      globalMutate("/api/o2d/summary");
       setTimeout(() => setIsStatusModalOpen(false), 1500);
     } catch (e: any) {
-      mutate("O2D", currentO2Ds, false);
       setActionStatus("error");
       setActionMessage(e.message || "Action failed");
       setTimeout(() => setIsStatusModalOpen(false), 2000);
@@ -1626,7 +1459,9 @@ export default function O2DPage() {
       setActionStatus("success");
       setActionMessage("Data Cleared Successfully");
       setIsRemoveFollowUpModalOpen(false);
-      mutate("O2D");
+      globalMutate(tableQueryKey);
+      globalMutate(sidebarQueryKey);
+      globalMutate("/api/o2d/summary");
       setTimeout(() => setIsStatusModalOpen(false), 1500);
     } catch (e: any) {
       setActionStatus("error");
@@ -1827,7 +1662,6 @@ export default function O2DPage() {
       return updated;
     });
 
-    mutate("O2D", updatedO2Ds, false);
     setIsStepUpdateModalOpen(false);
 
     // Show loader
@@ -1858,11 +1692,7 @@ export default function O2DPage() {
           };
           const targetField = fieldMap[currentStepToUpdate];
           if (targetField) {
-            updatedO2Ds.forEach((o: any) => {
-              if (o.order_no === selectedOrderNo) o[targetField] = fileId;
-            });
-            // Update cache again with fileId
-            mutate("O2D", updatedO2Ds, false);
+            // Optimistic update removed
           }
         }
       }
@@ -1878,10 +1708,11 @@ export default function O2DPage() {
       if (!res.ok) throw new Error("Step update failed");
       setActionStatus("success");
       setActionMessage("Step Updated Successfully");
-      mutate("O2D");
+      globalMutate(tableQueryKey);
+      globalMutate(sidebarQueryKey);
+      globalMutate("/api/o2d/summary");
       setTimeout(() => setIsStatusModalOpen(false), 1500);
     } catch (error: any) {
-      mutate("O2D", currentO2Ds, false);
       setActionStatus("error");
       setActionMessage(error.message);
       setTimeout(() => setIsStatusModalOpen(false), 2000);
