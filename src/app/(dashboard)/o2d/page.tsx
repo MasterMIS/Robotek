@@ -15,7 +15,6 @@ const fetcher = async (url: string) => {
   const res = await fetch(url);
   return res.json();
 };
-import { useSSE } from "@/hooks/useSSE";
 import { getDriveImageUrl } from "@/lib/drive-utils";
 import {
   PlusIcon,
@@ -355,8 +354,27 @@ export default function O2DPage() {
 
   // --- TABLE view: 100 items per page, server-side ---
   const [tableCurrentPage, setTableCurrentPage] = useState(1);
-  const [tableItemsPerPage] = useState(100);
+  const [tableItemsPerPage] = useState(10);
   const tableQueryKey = `/api/o2d?page=${tableCurrentPage}&limit=${tableItemsPerPage}&search=${debouncedSearch}&dateFilters=${encodeURIComponent(JSON.stringify(selectedDateFilters))}&stepFilters=${encodeURIComponent(JSON.stringify(selectedStepFilters))}&partyFilter=${tableFilterParty}&orderFilter=${tableFilterOrderNo}&itemNameFilter=${tableFilterItemName}&pendingFilter=${tableFilterPending}&startDate=${filterStartDate}&endDate=${filterEndDate}`;
+  const expandO2DItem = (item: O2D): O2D[] => {
+    if (item.item_name && /^1\.\s/.test(item.item_name)) {
+      const names = item.item_name.split(" | ").map(s => s.replace(/^\d+\.\s*/, "").trim());
+      const qtys = (item.item_qty || "").split(" | ").map(s => s.replace(/^\d+\.\s*/, "").trim());
+      const amounts = (item.est_amount || "").split(" | ").map(s => s.replace(/^\d+\.\s*/, "").trim());
+      const specs = (item.item_specification || "").split(" | ").map(s => s.replace(/^\d+\.\s*/, "").trim());
+      
+      return names.map((name, idx) => ({
+        ...item,
+        id: idx === 0 ? item.id : `${item.id}-${idx}`, 
+        item_name: name,
+        item_qty: qtys[idx] || "",
+        est_amount: amounts[idx] || "",
+        item_specification: specs[idx] || "",
+      }));
+    }
+    return [item];
+  };
+
   const { data: paginatedResponse, error: paginatedError } = useSWR(
     tableQueryKey,
     fetcher,
@@ -365,7 +383,7 @@ export default function O2DPage() {
 
   useEffect(() => {
     if (paginatedResponse) {
-      setAllO2Ds(paginatedResponse.data || []);
+      setAllO2Ds((paginatedResponse.data || []).flatMap(expandO2DItem));
       setTotalOrdersServer(paginatedResponse.total || 0);
       setIsAllLoading(false);
     } else if (!paginatedError) {
@@ -418,20 +436,7 @@ export default function O2DPage() {
 
   const { mutate: globalMutate } = useSWRConfig();
 
-  // SSE: Incremental real-time updates for IMS
-  useSSE({
-    modules: ["ims"],
-    onUpdate: (incremental) => {
-      // 1. Update IMS Cache
-      const imsUpdates = incremental.find((m) => m.module === "ims");
-      if (imsUpdates) {
-        globalMutate("/api/ims");
-      }
-    },
-  });  // AWS AppSync Native Real-Time Subscriptions - REMOVED for Google Sheets migration
-  useEffect(() => {
-    // Real-time updates handled by SWR polling every 15 seconds
-  }, []);
+
 
   // Extract O2D data
   const allO2DsRaw = allO2DData || [];
@@ -448,7 +453,7 @@ export default function O2DPage() {
   // Dedicated grouped map for the SIDEBAR — built from the sidebar's own page data
   // This avoids crashes when sidebar is on page N but table is on page 1
   const sidebarGroupedOrders = useMemo(() => {
-    const rows: O2D[] = sidebarResponse?.data || [];
+    const rows: O2D[] = (sidebarResponse?.data || []).flatMap(expandO2DItem);
     return rows.reduce((acc: Record<string, O2D[]>, o2d: O2D) => {
       const orderNo = o2d.order_no || "Unknown";
       if (!acc[orderNo]) acc[orderNo] = [];
@@ -927,6 +932,14 @@ export default function O2DPage() {
     setEditingOrderNo(null);
   };
 
+  const mergeItems = (itemsToMerge: O2DItem[]) => {
+    const item_name = itemsToMerge.map((it, i) => `${i + 1}. ${it.item_name}`).join(" | ");
+    const item_qty = itemsToMerge.map((it, i) => `${i + 1}. ${it.item_qty}`).join(" | ");
+    const est_amount = itemsToMerge.map((it, i) => `${i + 1}. ${it.est_amount}`).join(" | ");
+    const item_specification = itemsToMerge.map((it, i) => `${i + 1}. ${it.item_specification || ""}`).join(" | ");
+    return { item_name, item_qty, est_amount, item_specification };
+  };
+
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -970,81 +983,77 @@ export default function O2DPage() {
           }
         }
 
-        const updatedItems = items.map((item, index) => {
-          let idToUse = item.id;
-          if (!idToUse) {
-            currentMaxId++;
-            idToUse = currentMaxId.toString();
-          }
+        const { item_name, item_qty, est_amount, item_specification } = mergeItems(items);
+        let idToUse = items[0]?.id || baseRecord.id;
+        if (!idToUse) {
+          currentMaxId++;
+          idToUse = currentMaxId.toString();
+        }
 
-          // Use base time and add offset based on order in list to ensure stable sorting
-          const baseTime = (item as any).created_at || baseRecord.created_at || now;
-          const itemCreatedAt = new Date(new Date(baseTime).getTime() + index * 10).toISOString();
+        const baseTime = baseRecord.created_at || now;
+        const updated = {
+          ...baseRecord,
+          id: idToUse,
+          item_name,
+          item_qty,
+          est_amount,
+          item_specification,
+          party_name: commonData.party_name,
+          remark: commonData.remark,
+          created_at: baseTime,
+          updated_at: now,
+        } as O2D;
 
-          const updated = {
-            ...baseRecord,
-            id: idToUse,
-            item_name: item.item_name,
-            item_qty: item.item_qty,
-            est_amount: item.est_amount,
-            item_specification: item.item_specification,
-            party_name: commonData.party_name,
-            remark: commonData.remark,
-            created_at: itemCreatedAt,
-            updated_at: now,
-          } as O2D;
+        // Recalculate cascading logic for THIS item/row
+        let currentBaseForUpdated = updated.created_at || now;
+        for (let i = 0; i < 11; i++) {
+          const tat = globalConfigs[i]?.tat || "24 Hrs";
+          const pKey = `planned_${i + 1}`;
+          const stepIdx = i + 1;
 
-          // Recalculate cascading logic for THIS item/row
-          let currentBase = updated.created_at || now;
-          for (let i = 0; i < 11; i++) {
-            const tat = globalConfigs[i]?.tat || "24 Hrs";
-            const pKey = `planned_${i + 1}`;
-            const stepIdx = i + 1;
+          if (i === 0) {
+            if (!(updated as any)[pKey])
+              (updated as any)[pKey] = calculatePlannedDate(currentBaseForUpdated, tat);
+          } else {
+            const prevActual = (updated as any)[`actual_${i}`];
+            const prevStatus = (updated as any)[`status_${i}`];
 
-            if (i === 0) {
-              if (!(updated as any)[pKey])
-                (updated as any)[pKey] = calculatePlannedDate(currentBase, tat);
-            } else {
-              const prevActual = (updated as any)[`actual_${i}`];
-              const prevStatus = (updated as any)[`status_${i}`];
-
-              // Skip logic: if Step 3 is Yes, skip Step 4 and go to Step 5
-              if (stepIdx === 4 && prevStatus === "Yes" && i === 3) {
-                (updated as any)[pKey] = ""; // Skip Step 4
+            // Skip logic: if Step 3 is Yes, skip Step 4 and go to Step 5
+            if (stepIdx === 4 && prevStatus === "Yes" && i === 3) {
+              (updated as any)[pKey] = ""; // Skip Step 4
+              continue;
+            }
+            if (stepIdx === 5 && (updated as any)[`status_3`] === "Yes") {
+              const actual3 = (updated as any)[`actual_3`];
+              if (actual3 && actual3 !== "-" && actual3.trim() !== "") {
+                (updated as any)[pKey] = calculatePlannedDate(actual3, tat);
                 continue;
-              }
-              if (stepIdx === 5 && (updated as any)[`status_3`] === "Yes") {
-                const actual3 = (updated as any)[`actual_3`];
-                if (actual3 && actual3 !== "-" && actual3.trim() !== "") {
-                  (updated as any)[pKey] = calculatePlannedDate(actual3, tat);
-                  continue;
-                }
-              }
-
-              // Termination logic: if Step 4 is No, end the process (no planned Step 5)
-              if (stepIdx === 5 && prevStatus === "No" && i === 4) {
-                (updated as any)[pKey] = ""; // Skip Step 5
-                continue;
-              }
-
-              if (
-                prevActual &&
-                prevActual !== "-" &&
-                prevActual.trim() !== ""
-              ) {
-                (updated as any)[pKey] = calculatePlannedDate(prevActual, tat);
-              } else if (!(updated as any)[pKey]) {
-                (updated as any)[pKey] = "";
               }
             }
+
+            // Termination logic: if Step 4 is No, end the process (no planned Step 5)
+            if (stepIdx === 5 && prevStatus === "No" && i === 4) {
+              (updated as any)[pKey] = ""; // Skip Step 5
+              continue;
+            }
+
+            if (
+              prevActual &&
+              prevActual !== "-" &&
+              prevActual.trim() !== ""
+            ) {
+              (updated as any)[pKey] = calculatePlannedDate(prevActual, tat);
+            } else if (!(updated as any)[pKey]) {
+              (updated as any)[pKey] = "";
+            }
           }
-          return updated;
-        });
+        }
+        const updatedItems = [updated];
 
         optimisticO2Ds = optimisticO2Ds.filter(
           (o) => o.order_no !== editingOrderNo,
         );
-        optimisticO2Ds = [...updatedItems, ...optimisticO2Ds];
+        optimisticO2Ds = [...updatedItems.flatMap(expandO2DItem), ...optimisticO2Ds];
 
         // Optimistic UI removed for data integrity
         
@@ -1066,27 +1075,24 @@ export default function O2DPage() {
         let initRecord: any = { planned_1: calculatePlannedDate(now, tat1) };
         for (let i = 2; i <= 11; i++) initRecord[`planned_${i}`] = "";
 
-        const newItems = items.map((item, index) => {
-          currentMaxId++;
-          // Add 10ms offset per item to ensure unique created_at for stable sorting
-          const itemCreatedAt = new Date(new Date(now).getTime() + index * 10).toISOString();
-          return {
-            ...initRecord,
-            id: currentMaxId.toString(),
-            order_no: finalOrderNo,
-            party_name: commonData.party_name,
-            item_name: item.item_name,
-            item_qty: item.item_qty,
-            est_amount: item.est_amount,
-            item_specification: item.item_specification,
-            remark: commonData.remark,
-            filled_by: currentUser,
-            created_at: itemCreatedAt,
-            updated_at: now,
-          } as O2D;
-        });
+        const { item_name, item_qty, est_amount, item_specification } = mergeItems(items);
+        currentMaxId++;
+        const newItems = [{
+          ...initRecord,
+          id: currentMaxId.toString(),
+          order_no: finalOrderNo,
+          party_name: commonData.party_name,
+          item_name,
+          item_qty,
+          est_amount,
+          item_specification,
+          remark: commonData.remark,
+          filled_by: currentUser,
+          created_at: now,
+          updated_at: now,
+        } as O2D];
 
-        optimisticO2Ds = [...newItems, ...optimisticO2Ds];
+        optimisticO2Ds = [...newItems.flatMap(expandO2DItem), ...optimisticO2Ds];
 
         // Optimistic UI removed for data integrity
 
@@ -1147,6 +1153,7 @@ export default function O2DPage() {
       party_name: orderItems[0].party_name,
       remark: orderItems[0].remark,
     });
+    
     setItems(
       orderItems.map((o) => ({
         id: o.id,
@@ -1156,6 +1163,7 @@ export default function O2DPage() {
         item_specification: o.item_specification || "",
       })),
     );
+
     setImagePreview(
       orderItems[0].order_screenshot
         ? getDriveImageUrl(orderItems[0].order_screenshot)
@@ -1433,7 +1441,7 @@ export default function O2DPage() {
   ]);
 
   const tableTotalPages = Math.ceil(totalOrdersServer / tableItemsPerPage);
-  const tableData = paginatedResponse?.data || [];
+  const tableData = (paginatedResponse?.data || []).flatMap(expandO2DItem);
 
   const handleRemoveFollowUp = async () => {
     if (!selectedOrderNo) return;
@@ -2028,6 +2036,7 @@ export default function O2DPage() {
                         <th className="px-6 py-4">Order ID</th>
                         <th className="px-6 py-4">Party Name</th>
                         <th className="px-6 py-4">Item Name</th>
+                        <th className="px-6 py-4">Item Spec</th>
                         <th className="px-6 py-4 text-center">Item Qty</th>
                         <th className="px-6 py-4">Created At</th>
                         <th className="px-6 py-4">Filled By</th>
@@ -2036,7 +2045,7 @@ export default function O2DPage() {
                     </thead>
                     <tbody className="divide-y divide-gray-50 dark:divide-navy-800/20">
                       {tableData.length > 0 ? (
-                        tableData.slice((tableCurrentPage - 1) * tableItemsPerPage, tableCurrentPage * tableItemsPerPage).map((item: O2D, idx: number) => (
+                        tableData.map((item: O2D, idx: number) => (
                           <tr
                             key={idx}
                             className="group hover:bg-[#003875]/[0.02] dark:hover:bg-white/5 transition-colors"
@@ -2069,6 +2078,12 @@ export default function O2DPage() {
                               title={item.item_name}
                             >
                               {item.item_name}
+                            </td>
+                            <td
+                              className="px-6 py-4 text-[12px] font-bold text-gray-500 dark:text-gray-400 uppercase max-w-[200px] truncate"
+                              title={item.item_specification}
+                            >
+                              {item.item_specification || "-"}
                             </td>
                             <td className="px-6 py-4 text-center font-black text-[#003875] dark:text-[#FFD500] text-[13px]">
                               {item.item_qty}
@@ -2136,7 +2151,7 @@ export default function O2DPage() {
                 {/* Table Pagination Footer */}
                 <div className="p-4 bg-gray-50 dark:bg-navy-950 border-t border-gray-100 dark:border-navy-800 flex items-center justify-between shrink-0">
                   <div className="text-[11px] font-black text-gray-400 uppercase tracking-widest">
-                    Showing <span className="text-[#003875] dark:text-[#FFD500]">{(tableCurrentPage - 1) * tableItemsPerPage + 1}</span> to <span className="text-[#003875] dark:text-[#FFD500]">{Math.min(tableCurrentPage * tableItemsPerPage, tableData.length)}</span> of <span className="text-[#003875] dark:text-[#FFD500]">{tableData.length}</span> entries
+                    Showing <span className="text-[#003875] dark:text-[#FFD500]">{(tableCurrentPage - 1) * tableItemsPerPage + 1}</span> to <span className="text-[#003875] dark:text-[#FFD500]">{Math.min(tableCurrentPage * tableItemsPerPage, totalOrdersServer)}</span> of <span className="text-[#003875] dark:text-[#FFD500]">{totalOrdersServer}</span> entries
                   </div>
 
                   <div className="flex items-center gap-2">
@@ -2152,7 +2167,7 @@ export default function O2DPage() {
                     <div className="flex items-center gap-1 mx-2">
                       {/* Show current, first, last, and some relative pages if many exist */}
                       {(() => {
-                        const totalPages = Math.ceil(tableData.length / tableItemsPerPage);
+                        const totalPages = Math.ceil(totalOrdersServer / tableItemsPerPage);
                         if (totalPages <= 1) return null;
 
                         return (
@@ -2164,8 +2179,8 @@ export default function O2DPage() {
                     </div>
 
                     <button
-                      onClick={() => setTableCurrentPage(p => Math.min(Math.ceil(tableData.length / tableItemsPerPage), p + 1))}
-                      disabled={tableCurrentPage >= Math.ceil(tableData.length / tableItemsPerPage)}
+                      onClick={() => setTableCurrentPage(p => Math.min(Math.ceil(totalOrdersServer / tableItemsPerPage), p + 1))}
+                      disabled={tableCurrentPage >= Math.ceil(totalOrdersServer / tableItemsPerPage)}
                       className="flex items-center gap-1.5 px-4 py-2 bg-white dark:bg-black border border-gray-100 dark:border-navy-700 rounded-xl text-[10px] font-black uppercase tracking-widest hover:border-[#FFD500] disabled:opacity-30 transition-all shadow-sm group"
                     >
                       Next

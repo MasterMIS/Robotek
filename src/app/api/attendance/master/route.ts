@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getUsers } from "@/lib/google-sheets";
-import { attendanceService } from "@/lib/sheets/attendance-sheets";
+import { getAttendanceRecords } from "@/lib/sheets/attendance-sheets";
 import { leaveRequestService } from "@/lib/leave-sheets";
 
 export const dynamic = "force-dynamic";
@@ -10,7 +10,7 @@ export async function GET(req: NextRequest) {
   try {
     const [users, attendance, leaves] = await Promise.all([
       getUsers(),
-      attendanceService.getAll(),
+      getAttendanceRecords(),
       leaveRequestService.getAll()
     ]);
 

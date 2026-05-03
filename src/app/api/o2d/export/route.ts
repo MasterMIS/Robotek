@@ -88,8 +88,29 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "No data to export" }, { status: 400 });
     }
 
+    const expandO2DItem = (item: any): any[] => {
+      if (item.item_name && /^1\.\s/.test(item.item_name)) {
+        const names = item.item_name.split(" | ").map((s: string) => s.replace(/^\d+\.\s*/, "").trim());
+        const qtys = (item.item_qty || "").split(" | ").map((s: string) => s.replace(/^\d+\.\s*/, "").trim());
+        const amounts = (item.est_amount || "").split(" | ").map((s: string) => s.replace(/^\d+\.\s*/, "").trim());
+        const specs = (item.item_specification || "").split(" | ").map((s: string) => s.replace(/^\d+\.\s*/, "").trim());
+        
+        return names.map((name: string, idx: number) => ({
+          ...item,
+          id: idx === 0 ? item.id : `${item.id}-${idx}`, 
+          item_name: name,
+          item_qty: qtys[idx] || "",
+          est_amount: amounts[idx] || "",
+          item_specification: specs[idx] || "",
+        }));
+      }
+      return [item];
+    };
+
+    const expandedO2Ds = allO2Ds.flatMap(expandO2DItem);
+
     // Generate CSV
-    const csvContent = generateCSV(allO2Ds, selectedSteps, includeDetails);
+    const csvContent = generateCSV(expandedO2Ds, selectedSteps, includeDetails);
 
     // Generate filename with timestamp
     const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, -5);

@@ -642,10 +642,17 @@ export async function getO2DsPaginated(
     }
 
     // Item name filter
-    if (tableFilterItemName && !items.some((item) =>
-      item.item_name?.toLowerCase().includes(tableFilterItemName.toLowerCase())
-    )) {
-      return false;
+    if (tableFilterItemName) {
+      const searchTarget = tableFilterItemName.toLowerCase().trim();
+      const hasMatch = items.some((item) => {
+        if (!item.item_name) return false;
+        if (/^1\.\s/.test(item.item_name)) {
+          const names = item.item_name.split(" | ").map(s => s.replace(/^\d+\.\s*/, "").trim().toLowerCase());
+          return names.includes(searchTarget);
+        }
+        return item.item_name.toLowerCase().trim() === searchTarget;
+      });
+      if (!hasMatch) return false;
     }
 
     // Date range filter

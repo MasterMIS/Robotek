@@ -7,7 +7,7 @@ import { getO2Ds, getO2DStepConfig } from "@/lib/o2d-sheets";
 import { getParties } from "@/lib/party-management-sheets";
 import { auth } from "@/auth";
 import { getUsers } from "@/lib/google-sheets";
-import { attendanceService } from "@/lib/sheets/attendance-sheets";
+import { getAttendanceRecords } from "@/lib/sheets/attendance-sheets";
 import { leaveRequestService } from "@/lib/leave-sheets";
 
 export const dynamic = 'force-dynamic';
@@ -115,7 +115,7 @@ export async function GET(req: NextRequest) {
 
     const [users, attendance, leaves, tickets, delegations, checklists, o2ds, stepConfigs, meetings, parties] = await Promise.all([
       getUsers(),
-      attendanceService.getAll(),
+      getAttendanceRecords(),
       leaveRequestService.getAll(),
       getTickets(),
       getDelegations(),
