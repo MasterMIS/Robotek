@@ -167,3 +167,33 @@ export async function saveWeeklyUpdateItems(items: any[]) {
     };
   }
 }
+
+// Dummy service implementations to satisfy build requirements
+// These should be updated to properly map rows once the sheet structures are finalized.
+const createDummyService = (sheetName: string) => ({
+  getAll: async () => {
+    console.log(`[EA-MD] getAll called for ${sheetName}`);
+    return [];
+  },
+  add: async (item: any) => {
+    console.log(`[EA-MD] add called for ${sheetName}`, item);
+    return true;
+  },
+  update: async (id: string, item: any) => {
+    console.log(`[EA-MD] update called for ${sheetName}`, id, item);
+    return true;
+  },
+  delete: async (id: string) => {
+    console.log(`[EA-MD] delete called for ${sheetName}`, id);
+    return true;
+  }
+});
+
+export const eaMdService = {
+  actionLog: createDummyService("Action Log"),
+  weeklyUpdates: createDummyService("Weekly Update"),
+  urgentLog: createDummyService("Urgent Log"),
+  syncMeetings: createDummyService("Sync Meeting"),
+  teamQueries: createDummyService("Team Query"),
+};
+
