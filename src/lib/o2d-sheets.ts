@@ -14,7 +14,23 @@ class O2DService extends BaseSheetsService<O2D> {
   protected idColumnIndex = 0;
 
   mapRowToItem(row: any[]): O2D {
-    const get = (h: string) => row[this.hMap[h.toLowerCase()]] || "";
+    const get = (h: string) => {
+      const normalized = h.toLowerCase();
+      // Try exact match first
+      if (this.hMap[normalized] !== undefined) return row[this.hMap[normalized]] || "";
+      
+      // Try common variations/typos
+      const variations = [
+        normalized.replace("upload", "upoad"),
+        normalized.replace("bilty", "billty"),
+        normalized.replace("billty", "bilty"), // cover reverse
+      ];
+      
+      for (const v of variations) {
+        if (this.hMap[v] !== undefined) return row[this.hMap[v]] || "";
+      }
+      return "";
+    };
     const item: O2D = {
       id: get("id"),
       order_no: get("order_no."),
@@ -62,8 +78,21 @@ class O2DService extends BaseSheetsService<O2D> {
   mapItemToRow(o2d: O2D): any[] {
     const row: any[] = [];
     const set = (h: string, val: any) => {
-      const idx = this.hMap[h.toLowerCase()];
-      if (idx !== undefined) row[idx] = val;
+      const normalized = h.toLowerCase();
+      const variations = [
+        normalized,
+        normalized.replace("upload", "upoad"),
+        normalized.replace("bilty", "billty"),
+        normalized.replace("billty", "bilty"),
+      ];
+      
+      for (const v of variations) {
+        const idx = this.hMap[v];
+        if (idx !== undefined) {
+          row[idx] = val;
+          return;
+        }
+      }
     };
     set("id", o2d.id);
     set("order_no.", o2d.order_no);
