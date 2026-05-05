@@ -434,6 +434,24 @@ export default function O2DPage() {
     }
   );
 
+  // Fetch all orders for Busy Modal (not paginated)
+  const busyQueryKey = `/api/o2d?page=1&limit=-1&pendingFilter=true&currentUser=${currentUser}&userRole=${userRole}`;
+  const { data: busyResponse } = useSWR(
+    isBusyModalOpen ? busyQueryKey : null,
+    fetcher,
+    { revalidateOnFocus: false, refreshInterval: 60000 }
+  );
+
+  const busyOrdersGrouped = useMemo(() => {
+    const raw = busyResponse?.data || [];
+    return raw.reduce((acc: Record<string, O2D[]>, o2d: O2D) => {
+      const orderNo = o2d.order_no || "Unknown";
+      if (!acc[orderNo]) acc[orderNo] = [];
+      acc[orderNo].push(o2d);
+      return acc;
+    }, {});
+  }, [busyResponse]);
+
   const { mutate: globalMutate } = useSWRConfig();
   const [isSyncing, setIsSyncing] = useState(false);
 
@@ -1899,16 +1917,6 @@ export default function O2DPage() {
             </button>
             <div className="h-4 w-[1px] bg-[#003875]/10 dark:bg-[#FFD500]/10 mx-0.5" />
             <button
-              onClick={handleSync}
-              disabled={isSyncing}
-              className={`flex items-center gap-2 px-2 sm:px-3 py-1.5 font-black text-[11px] uppercase tracking-widest rounded-full transition-all text-[#003875] dark:text-[#FFD500] hover:bg-[#003875]/5 dark:hover:bg-navy-700 ${isSyncing ? "animate-pulse" : ""}`}
-              title="Sync with Google Sheet"
-            >
-              <ArrowPathIcon className={`w-4 h-4 stroke-[3] ${isSyncing ? "animate-spin" : ""}`} />
-              <span className="hidden sm:inline">Sync</span>
-            </button>
-            <div className="h-4 w-[1px] bg-[#003875]/10 dark:bg-[#FFD500]/10 mx-0.5" />
-            <button
               onClick={handleOpenSetup}
               className="flex items-center gap-2 text-[#003875] dark:text-[#FFD500] px-2 sm:px-3 py-1.5 font-black text-[11px] uppercase tracking-widest rounded-full hover:bg-[#003875]/5 dark:hover:bg-navy-700 transition-all"
             >
@@ -1922,15 +1930,6 @@ export default function O2DPage() {
             >
               <ClipboardDocumentCheckIcon className="w-4 h-4 stroke-[3]" />
               <span className="hidden sm:inline">For Busy</span>
-            </button>
-            <div className="h-4 w-[1px] bg-[#003875]/10 dark:bg-[#FFD500]/10 mx-1" />
-            <button
-              onClick={fetchO2Ds}
-              className="p-1.5 text-[#003875] dark:text-[#FFD500] rounded-full hover:bg-gray-100 dark:hover:bg-navy-700 transition-all"
-            >
-              <ArrowPathIcon
-                className={`w-4 h-4 ${isLoading ? "animate-spin" : ""}`}
-              />
             </button>
           </div>
         </div>
@@ -4681,7 +4680,7 @@ export default function O2DPage() {
       <BusyModal
         isOpen={isBusyModalOpen}
         onClose={() => setIsBusyModalOpen(false)}
-        groupedOrders={groupedOrders}
+        groupedOrders={busyOrdersGrouped}
         fullParties={fullParties}
       />
     </div>

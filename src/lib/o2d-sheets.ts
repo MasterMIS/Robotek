@@ -707,11 +707,28 @@ export async function getO2DsPaginated(
 
   // Paginate the filtered orders
   const startIdx = (page - 1) * limit;
-  const endIdx = startIdx + limit;
-  const paginatedOrderNumbers = orderNumbers.slice(startIdx, endIdx);
+  const endIdx = limit === -1 ? orderNumbers.length : startIdx + limit;
+  const paginatedOrderNumbers = limit === -1 ? orderNumbers : orderNumbers.slice(startIdx, endIdx);
 
   // Get all rows for the paginated orders
-  const paginatedData = paginatedOrderNumbers.flatMap((orderNo) => groupedByOrder[orderNo]);
+  const paginatedData = paginatedOrderNumbers.flatMap((orderNo) => {
+    let items = groupedByOrder[orderNo];
+    
+    // If filtering by item name, only show the matching items in the table
+    if (tableFilterItemName) {
+      const searchTarget = tableFilterItemName.toLowerCase().trim();
+      items = items.filter((item) => {
+        if (!item.item_name) return false;
+        if (/^1\.\s/.test(item.item_name)) {
+          const names = item.item_name.split(" | ").map(s => s.replace(/^\d+\.\s*/, "").trim().toLowerCase());
+          return names.includes(searchTarget);
+        }
+        return item.item_name.toLowerCase().trim() === searchTarget;
+      });
+    }
+    
+    return items;
+  });
 
   return {
     data: paginatedData,
@@ -719,7 +736,7 @@ export async function getO2DsPaginated(
     total: orderNumbers.length, // Total filtered orders, not rows
     page,
     limit,
-    totalPages: Math.ceil(orderNumbers.length / limit),
+    totalPages: limit === -1 ? 1 : Math.ceil(orderNumbers.length / limit),
     totalRows: allO2Ds.length, // Total rows for reference
   };
 }
