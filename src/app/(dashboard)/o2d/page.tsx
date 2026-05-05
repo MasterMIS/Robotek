@@ -378,7 +378,7 @@ export default function O2DPage() {
   const { data: paginatedResponse, error: paginatedError } = useSWR(
     tableQueryKey,
     fetcher,
-    { revalidateOnFocus: true, refreshInterval: 15000 }
+    { revalidateOnFocus: true, refreshInterval: 10000 }
   );
 
   useEffect(() => {
@@ -435,9 +435,36 @@ export default function O2DPage() {
   );
 
   const { mutate: globalMutate } = useSWRConfig();
+  const [isSyncing, setIsSyncing] = useState(false);
 
+  const handleSync = async () => {
+    setIsSyncing(true);
+    setActionStatus("loading");
+    setActionMessage("Syncing with Google Sheets...");
+    setIsStatusModalOpen(true);
 
+    try {
+      // Call API with refresh=true to invalidate server cache
+      await fetch(`${tableQueryKey}&refresh=true`);
+      
+      // Trigger SWR revalidation
+      await Promise.all([
+        globalMutate(tableQueryKey, undefined, { revalidate: true }),
+        globalMutate(sidebarQueryKey, undefined, { revalidate: true }),
+        globalMutate("/api/o2d/summary", undefined, { revalidate: true })
+      ]);
 
+      setActionStatus("success");
+      setActionMessage("Synced Successfully");
+      setTimeout(() => setIsStatusModalOpen(false), 500);
+    } catch (error) {
+      setActionStatus("error");
+      setActionMessage("Sync failed");
+      setTimeout(() => setIsStatusModalOpen(false), 2000);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
   // Extract O2D data
   const allO2DsRaw = allO2DData || [];
 
@@ -1864,6 +1891,16 @@ export default function O2DPage() {
             >
               <ArrowDownTrayIcon className="w-4 h-4 stroke-[3]" />
               <span className="hidden sm:inline">Export</span>
+            </button>
+            <div className="h-4 w-[1px] bg-[#003875]/10 dark:bg-[#FFD500]/10 mx-0.5" />
+            <button
+              onClick={handleSync}
+              disabled={isSyncing}
+              className={`flex items-center gap-2 px-2 sm:px-3 py-1.5 font-black text-[11px] uppercase tracking-widest rounded-full transition-all text-[#003875] dark:text-[#FFD500] hover:bg-[#003875]/5 dark:hover:bg-navy-700 ${isSyncing ? "animate-pulse" : ""}`}
+              title="Sync with Google Sheet"
+            >
+              <ArrowPathIcon className={`w-4 h-4 stroke-[3] ${isSyncing ? "animate-spin" : ""}`} />
+              <span className="hidden sm:inline">Sync</span>
             </button>
             <div className="h-4 w-[1px] bg-[#003875]/10 dark:bg-[#FFD500]/10 mx-0.5" />
             <button

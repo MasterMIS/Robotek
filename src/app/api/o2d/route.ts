@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getO2DsPaginated, addO2Ds, addItem, getO2Ds } from "@/lib/o2d-sheets";
+import { getO2DsPaginated, addO2Ds, addItem, getO2Ds, o2dService } from "@/lib/o2d-sheets";
 import { uploadFileToDrive, O2D_UPLOADS_FOLDER_ID } from "@/lib/google-drive";
 import { auth } from "@/auth";
 
@@ -13,6 +13,11 @@ export async function GET(req: NextRequest) {
     const userRole = (session?.user as any)?.role || "User";
 
     const { searchParams } = new URL(req.url);
+    const refresh = searchParams.get("refresh") === "true";
+    if (refresh) {
+      o2dService.invalidateCache();
+    }
+    
     const type = searchParams.get("type");
 
     if (type === "ordernumbers") {

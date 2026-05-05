@@ -24,7 +24,7 @@ export abstract class BaseSheetsService<T extends SheetItem> {
   protected abstract idColumnIndex: number; // 0-based
 
   protected hMap: Record<string, number> = {};
-  private CACHE_TTL = 30000; // 30 seconds
+  private CACHE_TTL = 5000; // 5 seconds
   // Column used to store a last-modified Unix timestamp (a cell unlikely to collide with data)
   private META_COL = 'ZZ';
   private META_ROW = 1;
@@ -531,7 +531,7 @@ export abstract class BaseSheetsService<T extends SheetItem> {
     }
   }
 
-  protected invalidateCache() {
+  public invalidateCache() {
     const cacheKey = `${this.spreadsheetId}_${this.sheetName}`;
     globalCache.delete(cacheKey);
     // Also clear header cache so structural changes (added/removed columns) are picked up
