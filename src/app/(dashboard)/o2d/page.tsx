@@ -15,6 +15,33 @@ const fetcher = async (url: string) => {
   const res = await fetch(url);
   return res.json();
 };
+
+const expandO2DItem = (item: O2D): O2D[] => {
+  if (item.item_name && /^1\.\s/.test(item.item_name)) {
+    const names = item.item_name
+      .split(" | ")
+      .map((s) => s.replace(/^\d+\.\s*/, "").trim());
+    const qtys = (item.item_qty || "")
+      .split(" | ")
+      .map((s) => s.replace(/^\d+\.\s*/, "").trim());
+    const amounts = (item.est_amount || "")
+      .split(" | ")
+      .map((s) => s.replace(/^\d+\.\s*/, "").trim());
+    const specs = (item.item_specification || "")
+      .split(" | ")
+      .map((s) => s.replace(/^\d+\.\s*/, "").trim());
+
+    return names.map((name, idx) => ({
+      ...item,
+      id: idx === 0 ? item.id : `${item.id}-${idx}`,
+      item_name: name,
+      item_qty: qtys[idx] || "",
+      est_amount: amounts[idx] || "",
+      item_specification: specs[idx] || "",
+    }));
+  }
+  return [item];
+};
 import { getDriveImageUrl, getDriveDownloadUrl, getDrivePreviewUrl } from "@/lib/drive-utils";
 import {
   PlusIcon,
@@ -356,24 +383,6 @@ export default function O2DPage() {
   const [tableCurrentPage, setTableCurrentPage] = useState(1);
   const [tableItemsPerPage] = useState(10);
   const tableQueryKey = `/api/o2d?page=${tableCurrentPage}&limit=${tableItemsPerPage}&search=${debouncedSearch}&dateFilters=${encodeURIComponent(JSON.stringify(selectedDateFilters))}&stepFilters=${encodeURIComponent(JSON.stringify(selectedStepFilters))}&partyFilter=${tableFilterParty}&orderFilter=${tableFilterOrderNo}&itemNameFilter=${tableFilterItemName}&pendingFilter=${tableFilterPending}&startDate=${filterStartDate}&endDate=${filterEndDate}`;
-  const expandO2DItem = (item: O2D): O2D[] => {
-    if (item.item_name && /^1\.\s/.test(item.item_name)) {
-      const names = item.item_name.split(" | ").map(s => s.replace(/^\d+\.\s*/, "").trim());
-      const qtys = (item.item_qty || "").split(" | ").map(s => s.replace(/^\d+\.\s*/, "").trim());
-      const amounts = (item.est_amount || "").split(" | ").map(s => s.replace(/^\d+\.\s*/, "").trim());
-      const specs = (item.item_specification || "").split(" | ").map(s => s.replace(/^\d+\.\s*/, "").trim());
-      
-      return names.map((name, idx) => ({
-        ...item,
-        id: idx === 0 ? item.id : `${item.id}-${idx}`, 
-        item_name: name,
-        item_qty: qtys[idx] || "",
-        est_amount: amounts[idx] || "",
-        item_specification: specs[idx] || "",
-      }));
-    }
-    return [item];
-  };
 
   const { data: paginatedResponse, error: paginatedError } = useSWR(
     tableQueryKey,
@@ -383,13 +392,25 @@ export default function O2DPage() {
 
   useEffect(() => {
     if (paginatedResponse) {
-      setAllO2Ds((paginatedResponse.data || []).flatMap(expandO2DItem));
+      const expanded = (paginatedResponse.data || []).flatMap(expandO2DItem);
+      // Strictly filter items by name in the table view if a filter is active
+      const filtered = tableFilterItemName 
+        ? expanded.filter((item: O2D) => item.item_name.toLowerCase().includes(tableFilterItemName.toLowerCase()))
+        : expanded;
+      setAllO2Ds(filtered);
       setTotalOrdersServer(paginatedResponse.total || 0);
       setIsAllLoading(false);
     } else if (!paginatedError) {
       setIsAllLoading(true);
     }
-  }, [paginatedResponse, paginatedError]);
+  }, [paginatedResponse, paginatedError, tableFilterItemName]);
+
+  // Fetch all unique item names for the filter dropdown (never shrinks)
+  const { data: allItemNamesMaster } = useSWR<string[]>(
+    "/api/o2d?type=itemnames",
+    fetcher,
+    { revalidateOnFocus: false, refreshInterval: 600000 }
+  );
 
   // --- SIDEBAR/PANELS view: 10 orders per page, lazy server-side ---
   const [sidebarCurrentPage, setSidebarCurrentPage] = useState(1);
@@ -434,23 +455,6 @@ export default function O2DPage() {
     }
   );
 
-  // Fetch all orders for Busy Modal (not paginated)
-  const busyQueryKey = `/api/o2d?page=1&limit=-1&pendingFilter=true&currentUser=${currentUser}&userRole=${userRole}`;
-  const { data: busyResponse } = useSWR(
-    isBusyModalOpen ? busyQueryKey : null,
-    fetcher,
-    { revalidateOnFocus: false, refreshInterval: 60000 }
-  );
-
-  const busyOrdersGrouped = useMemo(() => {
-    const raw = busyResponse?.data || [];
-    return raw.reduce((acc: Record<string, O2D[]>, o2d: O2D) => {
-      const orderNo = o2d.order_no || "Unknown";
-      if (!acc[orderNo]) acc[orderNo] = [];
-      acc[orderNo].push(o2d);
-      return acc;
-    }, {});
-  }, [busyResponse]);
 
   const { mutate: globalMutate } = useSWRConfig();
   const [isSyncing, setIsSyncing] = useState(false);
@@ -572,6 +576,24 @@ export default function O2DPage() {
 
   const [isBusyModalOpen, setIsBusyModalOpen] = useState(false);
   const [busySearchQuery, setBusySearchQuery] = useState("");
+
+  // Fetch all orders for Busy Modal (not paginated)
+  const busyQueryKey = `/api/o2d?page=1&limit=-1&pendingFilter=true&currentUser=${currentUser}&userRole=${userRole}`;
+  const { data: busyResponse } = useSWR(
+    isBusyModalOpen ? busyQueryKey : null,
+    fetcher,
+    { revalidateOnFocus: false, refreshInterval: 60000 }
+  );
+
+  const busyOrdersGrouped = useMemo(() => {
+    const raw = busyResponse?.data || [];
+    return raw.reduce((acc: Record<string, O2D[]>, o2d: O2D) => {
+      const orderNo = o2d.order_no || "Unknown";
+      if (!acc[orderNo]) acc[orderNo] = [];
+      acc[orderNo].push(o2d);
+      return acc;
+    }, {});
+  }, [busyResponse]);
 
   const getPreviewUrl = (path: string | null | undefined) => {
     if (!path) return "#";
@@ -873,8 +895,8 @@ export default function O2DPage() {
   }, [allOrderNumbers]);
 
   const memoizedItemOptions = useMemo(() => {
-    return Array.from(new Set(allO2Ds.map((o) => o.item_name))).sort();
-  }, [allO2Ds]);
+    return allItemNamesMaster || [];
+  }, [allItemNamesMaster]);
 
   // Sidebar uses its own server-driven page of order numbers
   const filteredOrderNumbers = useMemo(() => {
@@ -3037,30 +3059,30 @@ export default function O2DPage() {
                                       "N/A"}
                                   </span>
                                 </div>
-                                {selectedOrder[0]?.upload_so_1 && (
-                                  <div className="flex items-center gap-2 mt-1">
-                                    <a
-                                      href={getPreviewUrl(
-                                        selectedOrder[0]?.upload_so_1,
-                                      )}
-                                      target="_blank"
-                                      className="p-1 px-2.5 bg-[#003875]/5 dark:bg-[#FFD500]/5 text-[#003875] dark:text-[#FFD500] rounded-full text-[9px] font-black uppercase tracking-widest hover:bg-[#003875] hover:text-white dark:hover:bg-[#FFD500] dark:hover:text-black transition-all flex items-center gap-1"
-                                    >
-                                      <EyeIcon className="w-3 h-3" />
-                                      View
-                                    </a>
-                                    <a
-                                      href={getDownloadUrl(
-                                        selectedOrder[0]?.upload_so_1,
-                                      )}
-                                      target="_blank"
-                                      className="flex items-center gap-1.5 px-3 py-2 bg-[#003875]/5 rounded-lg text-[11px] font-black text-[#003875] hover:bg-[#003875]/10 transition-all uppercase tracking-widest"
-                                      title="Download SO Doc"
-                                    >
-                                      <ArrowDownTrayIcon className="w-4 h-4" />
-                                    </a>
-                                  </div>
-                                )}
+                                {(() => {
+                                  const soDoc = selectedOrder.find(o => o.upload_so_1)?.upload_so_1;
+                                  if (!soDoc) return null;
+                                  return (
+                                    <div className="flex items-center gap-2 mt-1">
+                                      <a
+                                        href={getPreviewUrl(soDoc)}
+                                        target="_blank"
+                                        className="p-1 px-2.5 bg-[#003875]/5 dark:bg-[#FFD500]/5 text-[#003875] dark:text-[#FFD500] rounded-full text-[9px] font-black uppercase tracking-widest hover:bg-[#003875] hover:text-white dark:hover:bg-[#FFD500] dark:hover:text-black transition-all flex items-center gap-1"
+                                      >
+                                        <EyeIcon className="w-3 h-3" />
+                                        View
+                                      </a>
+                                      <a
+                                        href={getDownloadUrl(soDoc)}
+                                        target="_blank"
+                                        className="flex items-center gap-1.5 px-3 py-2 bg-[#003875]/5 rounded-lg text-[11px] font-black text-[#003875] hover:bg-[#003875]/10 transition-all uppercase tracking-widest"
+                                        title="Download SO Doc"
+                                      >
+                                        <ArrowDownTrayIcon className="w-4 h-4" />
+                                      </a>
+                                    </div>
+                                  );
+                                })()}
                               </div>
 
                               {/* Step 5: Packing */}
@@ -3093,30 +3115,30 @@ export default function O2DPage() {
                                     </span>
                                   </div>
                                 </div>
-                                {selectedOrder[0]?.upload_pi_5 && (
-                                  <div className="flex items-center gap-2 mt-1">
-                                    <a
-                                      href={getPreviewUrl(
-                                        selectedOrder[0]?.upload_pi_5,
-                                      )}
-                                      target="_blank"
-                                      className="p-1 px-2.5 bg-[#003875]/5 dark:bg-[#FFD500]/5 text-[#003875] dark:text-[#FFD500] rounded-full text-[9px] font-black uppercase tracking-widest hover:bg-[#003875] hover:text-white dark:hover:bg-[#FFD500] dark:hover:text-black transition-all flex items-center gap-1"
-                                    >
-                                      <EyeIcon className="w-3 h-3" />
-                                      View
-                                    </a>
-                                    <a
-                                      href={getDownloadUrl(
-                                        selectedOrder[0]?.upload_pi_5,
-                                      )}
-                                      target="_blank"
-                                      className="flex items-center gap-1.5 px-3 py-2 bg-[#003875]/5 rounded-lg text-[11px] font-black text-[#003875] hover:bg-[#003875]/10 transition-all uppercase tracking-widest"
-                                      title="Download PI Doc"
-                                    >
-                                      <ArrowDownTrayIcon className="w-4 h-4" />
-                                    </a>
-                                  </div>
-                                )}
+                                {(() => {
+                                  const piDoc = selectedOrder.find(o => o.upload_pi_5)?.upload_pi_5;
+                                  if (!piDoc) return null;
+                                  return (
+                                    <div className="flex items-center gap-2 mt-1">
+                                      <a
+                                        href={getPreviewUrl(piDoc)}
+                                        target="_blank"
+                                        className="p-1 px-2.5 bg-[#003875]/5 dark:bg-[#FFD500]/5 text-[#003875] dark:text-[#FFD500] rounded-full text-[9px] font-black uppercase tracking-widest hover:bg-[#003875] hover:text-white dark:hover:bg-[#FFD500] dark:hover:text-black transition-all flex items-center gap-1"
+                                      >
+                                        <EyeIcon className="w-3 h-3" />
+                                        View
+                                      </a>
+                                      <a
+                                        href={getDownloadUrl(piDoc)}
+                                        target="_blank"
+                                        className="flex items-center gap-1.5 px-3 py-2 bg-[#003875]/5 rounded-lg text-[11px] font-black text-[#003875] hover:bg-[#003875]/10 transition-all uppercase tracking-widest"
+                                        title="Download PI Doc"
+                                      >
+                                        <ArrowDownTrayIcon className="w-4 h-4" />
+                                      </a>
+                                    </div>
+                                  );
+                                })()}
                               </div>
 
                               {/* Step 7 & 9: Dispatch & Bilty */}
@@ -3150,18 +3172,29 @@ export default function O2DPage() {
                                           "-"}
                                       </span>
                                     </div>
-                                    {selectedOrder[0]?.attach_bilty_9 && (
-                                      <a
-                                        href={getPreviewUrl(
-                                          selectedOrder[0]?.attach_bilty_9,
-                                        )}
-                                        target="_blank"
-                                        className="flex items-center gap-2 px-3 py-1.5 bg-[#003875]/5 rounded-lg text-[10px] font-black text-[#003875] hover:bg-[#003875]/10 w-fit transition-all uppercase tracking-widest self-end mb-1"
-                                      >
-                                        <EyeIcon className="w-3.5 h-3.5" />{" "}
-                                        Bilty
-                                      </a>
-                                    )}
+                                    {(() => {
+                                      const biltyDoc = selectedOrder.find(o => o.attach_bilty_9)?.attach_bilty_9;
+                                      if (!biltyDoc) return null;
+                                      return (
+                                        <div className="flex items-center gap-2 self-end mb-1">
+                                          <a
+                                            href={getPreviewUrl(biltyDoc)}
+                                            target="_blank"
+                                            className="flex items-center gap-2 px-3 py-1.5 bg-[#003875]/5 rounded-lg text-[10px] font-black text-[#003875] hover:bg-[#003875]/10 w-fit transition-all uppercase tracking-widest"
+                                          >
+                                            <EyeIcon className="w-3.5 h-3.5" /> Bilty
+                                          </a>
+                                          <a
+                                            href={getDownloadUrl(biltyDoc)}
+                                            target="_blank"
+                                            className="p-1.5 bg-[#003875]/5 rounded-lg text-[#003875] hover:bg-[#003875]/10 transition-all"
+                                            title="Download Bilty"
+                                          >
+                                            <ArrowDownTrayIcon className="w-3.5 h-3.5" />
+                                          </a>
+                                        </div>
+                                      );
+                                    })()}
                                   </div>
                                 </div>
                               </div>
@@ -4783,10 +4816,12 @@ function BusyModal({
         }
       }
 
+      const expandedOrders = orders.flatMap(expandO2DItem);
+
       return {
         orderNo: first.order_no,
         partyName: first.party_name,
-        items: orders.map((o: any) => ({ name: o.item_name, qty: o.item_qty })),
+        items: expandedOrders.map((o: any) => ({ name: o.item_name, qty: o.item_qty })),
         promoItems,
         found: true,
       };

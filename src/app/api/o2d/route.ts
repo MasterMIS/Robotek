@@ -26,6 +26,12 @@ export async function GET(req: NextRequest) {
       return NextResponse.json(orderNumbers);
     }
 
+    if (type === "itemnames") {
+      const { getAllItemNames } = await import("@/lib/o2d-sheets");
+      const itemNames = await getAllItemNames();
+      return NextResponse.json(itemNames);
+    }
+
     const page = parseInt(searchParams.get("page") || "1", 10);
     const limit = parseInt(searchParams.get("limit") || "10", 10);
     const search = searchParams.get("search") || "";

@@ -856,3 +856,22 @@ export async function updateO2DStepConfig(configs: O2DStepConfig[]): Promise<boo
     return false;
   }
 }
+
+export async function getAllItemNames() {
+  const allO2Ds = await o2dService.getAll();
+  const itemNames = new Set<string>();
+  
+  allO2Ds.forEach(item => {
+    if (item.item_name) {
+      if (/^1\.\s/.test(item.item_name)) {
+        item.item_name.split(" | ").forEach(s => {
+          itemNames.add(s.replace(/^\d+\.\s*/, "").trim());
+        });
+      } else {
+        itemNames.add(item.item_name.trim());
+      }
+    }
+  });
+  
+  return Array.from(itemNames).sort();
+}
