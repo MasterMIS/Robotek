@@ -15,7 +15,7 @@ const fetcher = async (url: string) => {
   const res = await fetch(url);
   return res.json();
 };
-import { getDriveImageUrl } from "@/lib/drive-utils";
+import { getDriveImageUrl, getDriveDownloadUrl, getDrivePreviewUrl } from "@/lib/drive-utils";
 import {
   PlusIcon,
   PencilSquareIcon,
@@ -555,11 +555,16 @@ export default function O2DPage() {
   const [isBusyModalOpen, setIsBusyModalOpen] = useState(false);
   const [busySearchQuery, setBusySearchQuery] = useState("");
 
-  const getEffectiveUrl = (path: string | null | undefined) => {
+  const getPreviewUrl = (path: string | null | undefined) => {
     if (!path) return "#";
     if (path.startsWith("http") || path.startsWith("data:")) return path;
-    // Assume it's a Google Drive ID if it's not a URL
-    return getDriveImageUrl(path);
+    return getDrivePreviewUrl(path);
+  };
+
+  const getDownloadUrl = (path: string | null | undefined) => {
+    if (!path) return "#";
+    if (path.startsWith("http") || path.startsWith("data:")) return path;
+    return getDriveDownloadUrl(path);
   };
 
   const [detailViewMode, setDetailViewMode] = useState<"full" | "table">(
@@ -2748,7 +2753,7 @@ export default function O2DPage() {
                                 <div className="relative h-full bg-white dark:bg-black border-4 border-white dark:border-navy-800 rounded-xl overflow-hidden shadow-xl group-hover:scale-105 transition-transform">
                                   {selectedOrder[0]?.order_screenshot ? (
                                     <img
-                                      src={getEffectiveUrl(
+                                      src={getPreviewUrl(
                                         selectedOrder[0]?.order_screenshot,
                                       )}
                                       className="w-full h-full object-cover"
@@ -2758,7 +2763,7 @@ export default function O2DPage() {
                                   )}
                                   <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
                                     <a
-                                      href={getEffectiveUrl(
+                                      href={getPreviewUrl(
                                         selectedOrder[0]?.order_screenshot,
                                       )}
                                       target="_blank"
@@ -2769,7 +2774,7 @@ export default function O2DPage() {
                                     </a>
                                     {selectedOrder[0]?.order_screenshot && (
                                       <a
-                                        href={getEffectiveUrl(
+                                        href={getDownloadUrl(
                                           selectedOrder[0]?.order_screenshot,
                                         )}
                                         target="_blank"
@@ -3036,7 +3041,7 @@ export default function O2DPage() {
                                 {selectedOrder[0]?.upload_so_1 && (
                                   <div className="flex items-center gap-2 mt-1">
                                     <a
-                                      href={getEffectiveUrl(
+                                      href={getPreviewUrl(
                                         selectedOrder[0]?.upload_so_1,
                                       )}
                                       target="_blank"
@@ -3046,7 +3051,7 @@ export default function O2DPage() {
                                       View
                                     </a>
                                     <a
-                                      href={getEffectiveUrl(
+                                      href={getDownloadUrl(
                                         selectedOrder[0]?.upload_so_1,
                                       )}
                                       target="_blank"
@@ -3092,7 +3097,7 @@ export default function O2DPage() {
                                 {selectedOrder[0]?.upload_pi_5 && (
                                   <div className="flex items-center gap-2 mt-1">
                                     <a
-                                      href={getEffectiveUrl(
+                                      href={getPreviewUrl(
                                         selectedOrder[0]?.upload_pi_5,
                                       )}
                                       target="_blank"
@@ -3102,7 +3107,7 @@ export default function O2DPage() {
                                       View
                                     </a>
                                     <a
-                                      href={getEffectiveUrl(
+                                      href={getDownloadUrl(
                                         selectedOrder[0]?.upload_pi_5,
                                       )}
                                       target="_blank"
@@ -3148,7 +3153,7 @@ export default function O2DPage() {
                                     </div>
                                     {selectedOrder[0]?.attach_bilty_9 && (
                                       <a
-                                        href={getEffectiveUrl(
+                                        href={getPreviewUrl(
                                           selectedOrder[0]?.attach_bilty_9,
                                         )}
                                         target="_blank"
