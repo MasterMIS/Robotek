@@ -1,8 +1,8 @@
 import { BaseSheetsService } from "./sheets/base-service";
 
-const GOOGLE_SHEET_ID = "1Wj38A6-v3E-i5W8-rPqV4F-sE1C6S8-e5G1U-bS-G08"; // Placeholder, usually same for EA-MD?
-const LEAVE_SHEET = "LeaveRequest";
-const REMARK_SHEET = "LeaveRemark";
+const GOOGLE_SHEET_ID = "1Gl782jnYBytGTZ-vMj5CgppfJHUPRF6lcCdH-pmj5w8";
+const LEAVE_SHEET = "Leave";
+const REMARK_SHEET = "leave_remark";
 
 export interface LeaveRequest {
   id: string;
