@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { o2dService } from "@/lib/o2d-sheets";
-import { uploadFileToDrive } from "@/lib/google-drive";
+import { uploadFileToDrive, O2D_UPLOADS_FOLDER_ID } from "@/lib/google-drive";
 
 export const dynamic = "force-dynamic";
 
@@ -21,7 +21,7 @@ export async function PUT(
       const screenshotFile = formData.get("order_screenshot") as File;
 
       if (screenshotFile && screenshotFile.size > 0) {
-        const fileId = await uploadFileToDrive(screenshotFile);
+        const fileId = await uploadFileToDrive(screenshotFile, O2D_UPLOADS_FOLDER_ID);
         screenshotUrl = fileId || "";
       } else {
         screenshotUrl = updatedItems[0]?.order_screenshot || "";
@@ -29,6 +29,22 @@ export async function PUT(
     } else {
       updatedItems = await req.json();
       screenshotUrl = updatedItems[0]?.order_screenshot || "";
+    }
+
+    // Server-side safeguard: if multiple items are sent for one order, merge them
+    if (updatedItems.length > 1 && updatedItems.every(it => !it.item_name?.includes(" | "))) {
+      const first = updatedItems[0];
+      const idToUse = first.id?.toString().split("-")[0];
+      
+      const mergedItem = {
+        ...first,
+        id: idToUse,
+        item_name: updatedItems.map((it, i) => `${i + 1}. ${it.item_name}`).join(" | "),
+        item_qty: updatedItems.map((it, i) => `${i + 1}. ${it.item_qty}`).join(" | "),
+        est_amount: updatedItems.map((it, i) => `${i + 1}. ${it.est_amount}`).join(" | "),
+        item_specification: updatedItems.map((it, i) => `${i + 1}. ${it.item_specification || ""}`).join(" | "),
+      };
+      updatedItems = [mergedItem];
     }
 
     const allRecords = await o2dService.getAll();

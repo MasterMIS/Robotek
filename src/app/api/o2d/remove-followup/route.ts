@@ -24,7 +24,9 @@ export async function POST(req: NextRequest) {
       const endStep = onlyThisStep ? startStep : maxStep;
       
       for (let i = startStep; i <= endStep; i++) {
-        (updated as any)[`planned_${i}`] = "";
+        if (i > startStep) {
+          (updated as any)[`planned_${i}`] = "";
+        }
         (updated as any)[`actual_${i}`] = "";
         (updated as any)[`status_${i}`] = "";
         

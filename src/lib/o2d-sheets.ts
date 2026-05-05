@@ -43,7 +43,7 @@ class O2DService extends BaseSheetsService<O2D> {
         item.upload_so_1 = get("upload_so_(attachment)_1");
       } else if (i === 5) {
         item.num_of_parcel_5 = get("num_of_parcel_5");
-        item.upload_pi_5 = get("upoad_pi_(attachment)_5");
+        item.upload_pi_5 = get("upload_pi_(attachment)_5");
         item.actual_date_of_order_packed_5 = get("actual_date_of_order_packed_5");
       } else if (i === 7) {
         item.voucher_num_7 = get("voucher_num_7");
@@ -52,7 +52,7 @@ class O2DService extends BaseSheetsService<O2D> {
         item.voucher_num_51_8 = get("voucher_num_(51)_8");
         item.t_amt_8 = get("t._amt_8");
       } else if (i === 9) {
-        item.attach_bilty_9 = get("attach_billty_(attachment)_9");
+        item.attach_bilty_9 = get("attach_bilty_(attachment)_9");
         item.num_of_parcel_9 = get("num_of_parcel_9");
       }
     }
@@ -90,7 +90,7 @@ class O2DService extends BaseSheetsService<O2D> {
         set("upload_so_(attachment)_1", o2d.upload_so_1);
       } else if (i === 5) {
         set("num_of_parcel_5", o2d.num_of_parcel_5);
-        set("upoad_pi_(attachment)_5", o2d.upload_pi_5);
+        set("upload_pi_(attachment)_5", o2d.upload_pi_5);
         set("actual_date_of_order_packed_5", o2d.actual_date_of_order_packed_5);
       } else if (i === 7) {
         set("voucher_num_7", o2d.voucher_num_7);
@@ -99,7 +99,7 @@ class O2DService extends BaseSheetsService<O2D> {
         set("voucher_num_(51)_8", o2d.voucher_num_51_8);
         set("t._amt_8", o2d.t_amt_8);
       } else if (i === 9) {
-        set("attach_billty_(attachment)_9", o2d.attach_bilty_9);
+        set("attach_bilty_(attachment)_9", o2d.attach_bilty_9);
         set("num_of_parcel_9", o2d.num_of_parcel_9);
       }
     }

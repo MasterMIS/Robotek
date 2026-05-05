@@ -940,6 +940,33 @@ export default function O2DPage() {
     return { item_name, item_qty, est_amount, item_specification };
   };
 
+  const mergeExpandedItems = (expandedItems: O2D[]): O2D | null => {
+    if (expandedItems.length === 0) return null;
+    if (expandedItems.length === 1) return expandedItems[0];
+
+    const base = { ...expandedItems[0] };
+    // Restore the original ID by removing any -idx suffix
+    if (typeof base.id === "string") {
+      base.id = base.id.split("-")[0];
+    }
+
+    const itemsToMerge = expandedItems.map(it => ({
+      item_name: it.item_name,
+      item_qty: it.item_qty,
+      est_amount: it.est_amount,
+      item_specification: it.item_specification
+    }));
+
+    const { item_name, item_qty, est_amount, item_specification } = mergeItems(itemsToMerge);
+    return { 
+      ...base, 
+      item_name, 
+      item_qty, 
+      est_amount, 
+      item_specification 
+    };
+  };
+
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -985,6 +1012,10 @@ export default function O2DPage() {
 
         const { item_name, item_qty, est_amount, item_specification } = mergeItems(items);
         let idToUse = items[0]?.id || baseRecord.id;
+        if (idToUse && typeof idToUse === "string") {
+          idToUse = idToUse.split("-")[0];
+        }
+        
         if (!idToUse) {
           currentMaxId++;
           idToUse = currentMaxId.toString();
@@ -1467,10 +1498,10 @@ export default function O2DPage() {
       setActionStatus("success");
       setActionMessage("Data Cleared Successfully");
       setIsRemoveFollowUpModalOpen(false);
-      globalMutate(tableQueryKey);
-      globalMutate(sidebarQueryKey);
-      globalMutate("/api/o2d/summary");
-      setTimeout(() => setIsStatusModalOpen(false), 1500);
+      globalMutate(tableQueryKey, undefined, { revalidate: true });
+      globalMutate(sidebarQueryKey, undefined, { revalidate: true });
+      globalMutate("/api/o2d/summary", undefined, { revalidate: true });
+      setTimeout(() => setIsStatusModalOpen(false), 500);
     } catch (e: any) {
       setActionStatus("error");
       setActionMessage(e.message || "Purge failed");
@@ -1680,6 +1711,7 @@ export default function O2DPage() {
     try {
       // Handle file attachment if present
       let fileUploaded = false;
+      let uploadedFileId = "";
       if (stepAttachment) {
         const formData = new FormData();
         formData.append("file", stepAttachment);
@@ -1691,35 +1723,41 @@ export default function O2DPage() {
           body: formData,
         });
         if (uploadRes.ok) {
-          const { fileId } = await uploadRes.json();
+          const data = await uploadRes.json();
+          uploadedFileId = data.fileId;
           fileUploaded = true;
-          const fieldMap: any = {
-            1: "upload_so_1",
-            5: "upload_pi_5",
-            9: "attach_bilty_9",
-          };
-          const targetField = fieldMap[currentStepToUpdate];
-          if (targetField) {
-            // Optimistic update removed
-          }
+        }
+      }
+
+      const orderItems = updatedO2Ds.filter((o) => o.order_no === selectedOrderNo);
+      const mergedOrder = mergeExpandedItems(orderItems);
+
+      // If we uploaded a file, attach its ID to the merged record
+      if (fileUploaded && mergedOrder && uploadedFileId) {
+        const fieldMap: any = {
+          1: "upload_so_1",
+          5: "upload_pi_5",
+          9: "attach_bilty_9",
+        };
+        const targetField = fieldMap[currentStepToUpdate];
+        if (targetField) {
+          (mergedOrder as any)[targetField] = uploadedFileId;
         }
       }
 
       const res = await fetch(`/api/o2d/order/${selectedOrderNo}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(
-          updatedO2Ds.filter((o) => o.order_no === selectedOrderNo),
-        ),
+        body: JSON.stringify(mergedOrder ? [mergedOrder] : []),
       });
 
       if (!res.ok) throw new Error("Step update failed");
       setActionStatus("success");
       setActionMessage("Step Updated Successfully");
-      globalMutate(tableQueryKey);
-      globalMutate(sidebarQueryKey);
-      globalMutate("/api/o2d/summary");
-      setTimeout(() => setIsStatusModalOpen(false), 1500);
+      globalMutate(tableQueryKey, undefined, { revalidate: true });
+      globalMutate(sidebarQueryKey, undefined, { revalidate: true });
+      globalMutate("/api/o2d/summary", undefined, { revalidate: true });
+      setTimeout(() => setIsStatusModalOpen(false), 500);
     } catch (error: any) {
       setActionStatus("error");
       setActionMessage(error.message);

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { uploadFileToDrive } from "@/lib/google-drive";
+import { uploadFileToDrive, O2D_UPLOADS_FOLDER_ID } from "@/lib/google-drive";
 
 export const dynamic = "force-dynamic";
 
@@ -12,7 +12,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "No file uploaded" }, { status: 400 });
     }
 
-    const fileId = await uploadFileToDrive(file);
+    const fileId = await uploadFileToDrive(file, O2D_UPLOADS_FOLDER_ID);
     if (!fileId) throw new Error("Failed to upload to Drive");
 
     return NextResponse.json({ fileId });

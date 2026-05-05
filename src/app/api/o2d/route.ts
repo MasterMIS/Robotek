@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getO2DsPaginated, addO2Ds, addItem, getO2Ds } from "@/lib/o2d-sheets";
-import { uploadFileToDrive } from "@/lib/google-drive";
+import { uploadFileToDrive, O2D_UPLOADS_FOLDER_ID } from "@/lib/google-drive";
 import { auth } from "@/auth";
 
 export const dynamic = 'force-dynamic';
@@ -75,7 +75,7 @@ export async function POST(req: NextRequest) {
 
       let screenshotUrl = "";
       if (screenshotFile && screenshotFile.size > 0) {
-        const fileId = await uploadFileToDrive(screenshotFile);
+        const fileId = await uploadFileToDrive(screenshotFile, O2D_UPLOADS_FOLDER_ID);
         screenshotUrl = fileId || "";
       }
 
