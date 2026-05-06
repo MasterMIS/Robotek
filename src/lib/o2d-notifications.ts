@@ -1,7 +1,7 @@
 import { sendWhatsAppMessage } from "./maytapi";
 import { O2D } from "@/types/o2d";
 
-const NOTIFICATION_RECIPIENT = "7217685179";
+const NOTIFICATION_RECIPIENTS = ["7217685179", "8920615702", "7988775751"];
 
 /**
  * Sends a WhatsApp notification for O2D order remarks.
@@ -86,12 +86,13 @@ export async function sendO2DRemarkNotification(
 
     message += `\nThanks and Regards`;
 
-    const result = await sendWhatsAppMessage(NOTIFICATION_RECIPIENT, message);
-    if (!result.success) {
-      console.error(`Failed to send O2D WhatsApp notification: ${result.error}`);
-    } else {
-      console.log(`O2D Remark notification sent for Order ${orderNo}`);
+    for (const phone of NOTIFICATION_RECIPIENTS) {
+      const result = await sendWhatsAppMessage(phone, message);
+      if (!result.success) {
+        console.error(`Failed to send O2D WhatsApp notification to ${phone}: ${result.error}`);
+      }
     }
+    console.log(`O2D Remark notification sent for Order ${orderNo}`);
   } catch (error) {
     console.error("Error sending O2D WhatsApp notification:", error);
   }
