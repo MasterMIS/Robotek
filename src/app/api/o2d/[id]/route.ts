@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { updateO2D, deleteO2D } from "@/lib/o2d-sheets";
+import { sendO2DRemarkNotification } from "@/lib/o2d-notifications";
 
 export async function PUT(
   req: NextRequest,
@@ -10,6 +11,10 @@ export async function PUT(
     const body = await req.json();
     
     await updateO2D(id, body);
+    
+    // Send WhatsApp Notification
+    await sendO2DRemarkNotification({ ...body, id });
+
     return NextResponse.json({ message: "O2D record updated successfully" });
   } catch (error: any) {
     console.error("API Error:", error);

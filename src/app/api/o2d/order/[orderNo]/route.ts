@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { o2dService } from "@/lib/o2d-sheets";
 import { uploadFileToDrive, O2D_UPLOADS_FOLDER_ID } from "@/lib/google-drive";
+import { sendO2DRemarkNotification } from "@/lib/o2d-notifications";
 
 export const dynamic = "force-dynamic";
 
@@ -71,6 +72,10 @@ export async function PUT(
 
     const idsToDelete = [...existingIds].filter(id => !incomingIds.has(id));
     await Promise.all(idsToDelete.map(id => o2dService.delete(id)));
+
+    // Send WhatsApp Notification for the updated order
+    // updatedItems contains the merged/processed items
+    await sendO2DRemarkNotification(updatedItems);
 
     return NextResponse.json({ message: "Order updated successfully" });
   } catch (error: any) {

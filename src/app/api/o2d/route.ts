@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getO2DsPaginated, addO2Ds, addItem, getO2Ds, o2dService } from "@/lib/o2d-sheets";
 import { uploadFileToDrive, O2D_UPLOADS_FOLDER_ID } from "@/lib/google-drive";
 import { auth } from "@/auth";
+import { sendO2DRemarkNotification } from "@/lib/o2d-notifications";
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -100,16 +101,34 @@ export async function POST(req: NextRequest) {
       }));
 
       await addO2Ds(recordsToSave);
+      
+      // Send WhatsApp Notification for the new order(s)
+      // Group by order number if multiple were added
+      const orderGroups = recordsToSave.reduce((acc, curr) => {
+        if (!acc[curr.order_no]) acc[curr.order_no] = [];
+        acc[curr.order_no].push(curr);
+        return acc;
+      }, {} as Record<string, any[]>);
+
+      for (const orderNo in orderGroups) {
+        await sendO2DRemarkNotification(orderGroups[orderNo]);
+      }
+
       return NextResponse.json({ message: "O2D records added successfully" });
     } else {
       const o2dData = await req.json();
       const timestamp = new Date().toISOString();
-      await addO2Ds([{
+      const record = {
         ...o2dData,
         id: o2dData.id || `O2D-${Date.now()}`,
         created_at: o2dData.created_at || timestamp,
         updated_at: timestamp
-      }]);
+      };
+      await addO2Ds([record]);
+      
+      // Send WhatsApp Notification
+      await sendO2DRemarkNotification(record);
+
       return NextResponse.json({ message: "O2D record added successfully" });
     }
   } catch (error: any) {
