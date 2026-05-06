@@ -39,6 +39,20 @@ const expandO2DItem = (item: O2D): O2D[] => {
       est_amount: amounts[idx] || "",
       item_specification: specs[idx] || "",
     }));
+  } else if (item.item_name && item.item_name.includes('\n')) {
+    const names = item.item_name.split('\n').map(s => s.trim());
+    const qtys = (item.item_qty || "").split('\n').map(s => s.trim());
+    const amounts = (item.est_amount || "").split('\n').map(s => s.trim());
+    const specs = (item.item_specification || "").split('\n').map(s => s.trim());
+
+    return names.map((name, idx) => ({
+      ...item,
+      id: idx === 0 ? item.id : `${item.id}-${idx}`,
+      item_name: name,
+      item_qty: qtys[idx] || "",
+      est_amount: amounts[idx] || "",
+      item_specification: specs[idx] || "",
+    }));
   }
   return [item];
 };
@@ -395,7 +409,7 @@ export default function O2DPage() {
       const expanded = (paginatedResponse.data || []).flatMap(expandO2DItem);
       // Strictly filter items by name in the table view if a filter is active
       const filtered = tableFilterItemName 
-        ? expanded.filter((item: O2D) => item.item_name.toLowerCase().includes(tableFilterItemName.toLowerCase()))
+        ? expanded.filter((item: O2D) => item.item_name.toLowerCase().trim() === tableFilterItemName.toLowerCase().trim())
         : expanded;
       setAllO2Ds(filtered);
       setTotalOrdersServer(paginatedResponse.total || 0);
@@ -502,14 +516,17 @@ export default function O2DPage() {
   // Dedicated grouped map for the SIDEBAR — built from the sidebar's own page data
   // This avoids crashes when sidebar is on page N but table is on page 1
   const sidebarGroupedOrders = useMemo(() => {
-    const rows: O2D[] = (sidebarResponse?.data || []).flatMap(expandO2DItem);
+    let rows: O2D[] = (sidebarResponse?.data || []).flatMap(expandO2DItem);
+    if (tableFilterItemName) {
+      rows = rows.filter((item: O2D) => item.item_name.toLowerCase().trim() === tableFilterItemName.toLowerCase().trim());
+    }
     return rows.reduce((acc: Record<string, O2D[]>, o2d: O2D) => {
       const orderNo = o2d.order_no || "Unknown";
       if (!acc[orderNo]) acc[orderNo] = [];
       acc[orderNo].push(o2d);
       return acc;
     }, {});
-  }, [sidebarResponse]);
+  }, [sidebarResponse, tableFilterItemName]);
 
   // State for loading during page transitions
   const [isTransitioning, setIsTransitioning] = useState(false);
@@ -1544,7 +1561,7 @@ export default function O2DPage() {
   ]);
 
   const tableTotalPages = Math.ceil(totalOrdersServer / tableItemsPerPage);
-  const tableData = (paginatedResponse?.data || []).flatMap(expandO2DItem);
+  const tableData = allO2Ds;
 
   const handleRemoveFollowUp = async () => {
     if (!selectedOrderNo) return;

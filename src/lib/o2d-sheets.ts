@@ -894,10 +894,14 @@ export async function getAllItemNames() {
     if (item.item_name) {
       if (/^1\.\s/.test(item.item_name)) {
         item.item_name.split(" | ").forEach(s => {
-          itemNames.add(s.replace(/^\d+\.\s*/, "").trim());
+          if (s.trim()) itemNames.add(s.replace(/^\d+\.\s*/, "").trim());
+        });
+      } else if (item.item_name.includes('\n')) {
+        item.item_name.split('\n').forEach(s => {
+          if (s.trim()) itemNames.add(s.trim());
         });
       } else {
-        itemNames.add(item.item_name.trim());
+        if (item.item_name.trim()) itemNames.add(item.item_name.trim());
       }
     }
   });

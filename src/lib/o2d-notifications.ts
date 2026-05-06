@@ -7,12 +7,19 @@ const NOTIFICATION_RECIPIENT = "7217685179";
  * Sends a WhatsApp notification for O2D order remarks.
  * Focuses on item specification remarks and order-level notes.
  */
-export async function sendO2DRemarkNotification(o2dData: O2D | O2D[]) {
+/**
+ * Sends a WhatsApp notification for O2D order actions.
+ * Focuses on item specification remarks and order-level notes.
+ */
+export async function sendO2DRemarkNotification(
+  o2dData: O2D | O2D[],
+  action: string = "Updated"
+) {
   try {
     const records = Array.isArray(o2dData) ? o2dData : [o2dData];
-    if (records.length === 0) return;
+    if (records.length === 0 && action !== "Deleted") return;
 
-    const first = records[0];
+    const first = records[0] || {} as O2D;
     const orderNo = first.order_no || "Unknown";
     const partyName = first.party_name || "Unknown";
     const orderRemark = first.remark;
@@ -45,32 +52,39 @@ export async function sendO2DRemarkNotification(o2dData: O2D | O2D[]) {
       }
     });
 
-    // If no remarks at all (item specs or order note), don't send anything
+    // If no remarks at all (item specs or order note), don't send anything for Created/Updated
     const hasOrderNote = orderRemark && orderRemark !== "-" && orderRemark.toLowerCase() !== "n/a" && orderRemark.trim() !== "";
     
-    if (!itemRemarks && !hasOrderNote) {
+    if (action !== "Deleted" && !itemRemarks && !hasOrderNote) {
       console.log(`No significant remarks for Order ${orderNo}, skipping notification.`);
       return;
     }
 
-    let message = `Order Remarks🚨⚠️\n\n`;
+    const actionEmoji = action === "Created" ? "📝" : action === "Updated" ? "🔄" : "🗑️";
+    let message = `Order ${action} ${actionEmoji}🚨⚠️\n\n`;
     message += `Hello Manish Sir,\n\n`;
     message += `Order Num :- ${orderNo}\n`;
     message += `Party Name :- ${partyName}\n\n`;
-    message += `Remarks for order are Following :-\n`;
-    
-    if (itemRemarks) {
-      message += itemRemarks;
-    }
-    
-    if (hasOrderNote) {
-      // Add a separator if item remarks were already added
-      if (itemRemarks) message += `\n`;
-      message += `Order Note :- ${orderRemark}\n`;
+
+    if (action === "Deleted") {
+      message += `This order has been DELETED from the system.\n`;
+    } else {
+      message += `Remarks for order are Following :-\n`;
+      
+      if (itemRemarks) {
+        message += itemRemarks;
+      }
+      
+      if (hasOrderNote) {
+        // Add a separator if item remarks were already added
+        if (itemRemarks) message += `\n`;
+        message += `Order Note :- ${orderRemark}\n`;
+      }
+
+      message += `\nPlease consider these remarks for final order dispatching\n`;
     }
 
-    message += `\nPlease consider these remarks for final order dispatching\n\n`;
-    message += `Thanks and Regards`;
+    message += `\nThanks and Regards`;
 
     const result = await sendWhatsAppMessage(NOTIFICATION_RECIPIENT, message);
     if (!result.success) {

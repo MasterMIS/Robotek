@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { updateO2D, deleteO2D } from "@/lib/o2d-sheets";
+import { updateO2D, deleteO2D, o2dService } from "@/lib/o2d-sheets";
 import { sendO2DRemarkNotification } from "@/lib/o2d-notifications";
 
 export async function PUT(
@@ -12,9 +12,6 @@ export async function PUT(
     
     await updateO2D(id, body);
     
-    // Send WhatsApp Notification
-    await sendO2DRemarkNotification({ ...body, id });
-
     return NextResponse.json({ message: "O2D record updated successfully" });
   } catch (error: any) {
     console.error("API Error:", error);
@@ -29,6 +26,7 @@ export async function DELETE(
   try {
     const { id } = await params;
     await deleteO2D(id);
+    
     return NextResponse.json({ message: "O2D record deleted successfully" });
   } catch (error: any) {
     console.error("API Error:", error);

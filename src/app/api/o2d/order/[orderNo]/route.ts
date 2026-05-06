@@ -15,8 +15,10 @@ export async function PUT(
     
     let updatedItems: any[] = [];
     let screenshotUrl = "";
+    let isEditingDetails = false;
 
     if (contentType.includes("multipart/form-data")) {
+      isEditingDetails = true;
       const formData = await req.formData();
       updatedItems = JSON.parse(formData.get("o2dData") as string) as any[];
       const screenshotFile = formData.get("order_screenshot") as File;
@@ -73,9 +75,11 @@ export async function PUT(
     const idsToDelete = [...existingIds].filter(id => !incomingIds.has(id));
     await Promise.all(idsToDelete.map(id => o2dService.delete(id)));
 
-    // Send WhatsApp Notification for the updated order
-    // updatedItems contains the merged/processed items
-    await sendO2DRemarkNotification(updatedItems);
+    // ONLY send WhatsApp Notification for core order detail edits
+    // Step updates (which use application/json) will NOT trigger notifications
+    if (isEditingDetails) {
+      await sendO2DRemarkNotification(updatedItems, "Updated");
+    }
 
     return NextResponse.json({ message: "Order updated successfully" });
   } catch (error: any) {
@@ -94,6 +98,11 @@ export async function DELETE(
     const matching = allRecords.filter(r => r.order_no === orderNo);
 
     await Promise.all(matching.map(item => o2dService.delete(item.id)));
+
+    // Send WhatsApp Notification for the deleted order
+    if (matching.length > 0) {
+      await sendO2DRemarkNotification(matching, "Deleted");
+    }
 
     return NextResponse.json({ message: "Order deleted successfully" });
   } catch (error: any) {

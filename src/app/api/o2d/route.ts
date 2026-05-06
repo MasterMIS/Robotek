@@ -111,7 +111,7 @@ export async function POST(req: NextRequest) {
       }, {} as Record<string, any[]>);
 
       for (const orderNo in orderGroups) {
-        await sendO2DRemarkNotification(orderGroups[orderNo]);
+        await sendO2DRemarkNotification(orderGroups[orderNo], "Created");
       }
 
       return NextResponse.json({ message: "O2D records added successfully" });
@@ -127,7 +127,7 @@ export async function POST(req: NextRequest) {
       await addO2Ds([record]);
       
       // Send WhatsApp Notification
-      await sendO2DRemarkNotification(record);
+      await sendO2DRemarkNotification(record, "Created");
 
       return NextResponse.json({ message: "O2D record added successfully" });
     }
