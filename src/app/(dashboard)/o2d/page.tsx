@@ -343,6 +343,50 @@ function SearchableDropdown({
   );
 }
 
+const formatDate = (dateString: string) => {
+  if (!dateString || dateString === "-") return "-";
+  try {
+    const d = new Date(dateString);
+    if (isNaN(d.getTime())) return dateString;
+    const pad = (n: number) => n.toString().padStart(2, "0");
+    return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+  } catch (e) {
+    return dateString;
+  }
+};
+
+const getTimeDelay = (pRaw: string, aRaw: string) => {
+  if (!pRaw || pRaw === "-" || pRaw.trim() === "") return null;
+  const pDate = new Date(pRaw);
+  if (isNaN(pDate.getTime())) return null;
+
+  let cDate = new Date();
+  if (aRaw && aRaw !== "-" && aRaw.trim() !== "") {
+    const aDate = new Date(aRaw);
+    if (!isNaN(aDate.getTime())) cDate = aDate;
+  }
+
+  const diffMs = pDate.getTime() - cDate.getTime();
+  const absDiff = Math.abs(diffMs);
+
+  if (absDiff < 60000) return { text: "On Time", isDelayed: false };
+
+  const isDelayed = diffMs < 0;
+  const days = Math.floor(absDiff / (1000 * 60 * 60 * 24));
+  const hours = Math.floor((absDiff / (1000 * 60 * 60)) % 24);
+  const minutes = Math.floor((absDiff / 1000 / 60) % 60);
+
+  let textParts = [];
+  if (days > 0) textParts.push(`${days}d`);
+  if (hours > 0) textParts.push(`${hours}h`);
+  if (minutes > 0 || textParts.length === 0) textParts.push(`${minutes}m`);
+
+  return {
+    text: (isDelayed ? "-" : "+") + textParts.join(" "),
+    isDelayed: isDelayed,
+  };
+};
+
 // --- Main Page ---
 export default function O2DPage() {
   const client = null; // Removed AWS Amplify client
@@ -506,7 +550,7 @@ export default function O2DPage() {
 
   const groupedOrders = useMemo(() => {
     return allO2DsRaw.reduce((acc: Record<string, O2D[]>, o2d: O2D) => {
-      const orderNo = o2d.order_no || "Unknown";
+      const orderNo = (o2d.order_no || "Unknown").trim();
       if (!acc[orderNo]) acc[orderNo] = [];
       acc[orderNo].push(o2d);
       return acc;
@@ -521,7 +565,7 @@ export default function O2DPage() {
       rows = rows.filter((item: O2D) => item.item_name.toLowerCase().trim() === tableFilterItemName.toLowerCase().trim());
     }
     return rows.reduce((acc: Record<string, O2D[]>, o2d: O2D) => {
-      const orderNo = o2d.order_no || "Unknown";
+      const orderNo = (o2d.order_no || "Unknown").trim();
       if (!acc[orderNo]) acc[orderNo] = [];
       acc[orderNo].push(o2d);
       return acc;
@@ -549,7 +593,10 @@ export default function O2DPage() {
   const [editingOrderNo, setEditingOrderNo] = useState<string | null>(null);
   const userRole = (session?.user as any)?.role || "User";
   const isSpecialRole =
-    userRole.toUpperCase() === "ADMIN" || userRole.toUpperCase() === "EA";
+    userRole.toUpperCase() === "ADMIN" || 
+    userRole.toUpperCase() === "EA" || 
+    userRole.toUpperCase() === "SALES" || 
+    userRole.toUpperCase() === "CRM";
   const [selectedOrderNo, setSelectedOrderNo] = useState<string | null>(null);
 
   // Data
@@ -603,14 +650,84 @@ export default function O2DPage() {
   );
 
   const busyOrdersGrouped = useMemo(() => {
-    const raw = busyResponse?.data || [];
-    return raw.reduce((acc: Record<string, O2D[]>, o2d: O2D) => {
-      const orderNo = o2d.order_no || "Unknown";
+    return (busyResponse?.data || []).reduce((acc: Record<string, O2D[]>, o2d: O2D) => {
+      const orderNo = (o2d.order_no || "Unknown").trim();
       if (!acc[orderNo]) acc[orderNo] = [];
       acc[orderNo].push(o2d);
       return acc;
     }, {});
   }, [busyResponse]);
+
+  const [masterOrderMap, setMasterOrderMap] = useState<Record<string, O2D[]>>({});
+
+  useEffect(() => {
+    setMasterOrderMap(prev => {
+      const next = { ...prev };
+      
+      // Helper to merge while avoiding overwriting full data with partial/filtered data
+      const mergeIfBetter = (no: string, items: O2D[]) => {
+        if (!no || !items || items.length === 0) return;
+        const trimmedNo = no.trim();
+        const existing = next[trimmedNo];
+        
+        // If we don't have it, or the new data has more items, or we don't have a filter active that might be restricting items
+        // We generally want to merge if we have no existing data or if the new data looks 'fresher' or more complete
+        const isNewer = !existing || items.length >= existing.length;
+        const noFilter = !tableFilterItemName;
+        
+        if (isNewer || noFilter) {
+          next[trimmedNo] = items;
+        }
+      };
+
+      // Merge Table orders (usually 10 items per page)
+      Object.entries(groupedOrders as Record<string, O2D[]>).forEach(([no, items]) => {
+        mergeIfBetter(no, items);
+      });
+
+      // Merge Sidebar orders (usually 10 orders per page)
+      Object.entries(sidebarGroupedOrders as Record<string, O2D[]>).forEach(([no, items]) => {
+        mergeIfBetter(no, items);
+      });
+
+      // Merge Busy orders (from modal)
+      Object.entries(busyOrdersGrouped as Record<string, O2D[]>).forEach(([no, items]) => {
+        mergeIfBetter(no, items);
+      });
+
+      return next;
+    });
+  }, [groupedOrders, sidebarGroupedOrders, busyOrdersGrouped, tableFilterItemName]);
+
+  const selectedOrder = useMemo(() => {
+    if (!selectedOrderNo) return [];
+    const trimmedNo = selectedOrderNo.trim();
+    
+    // Priority order for finding selected order data:
+    // 1. Persistent master map (primary source of truth - should have most complete data)
+    const fromMaster = masterOrderMap[trimmedNo];
+    if (fromMaster && fromMaster.length > 0) {
+      // If we have a filter, verify if the current sidebar/table has a more "relevant" version
+      // but generally the master map should be the safest bet for completeness.
+      const fromSidebar = (sidebarGroupedOrders as Record<string, O2D[]>)[trimmedNo];
+      if (fromSidebar && fromSidebar.length > fromMaster.length) return fromSidebar;
+      return fromMaster;
+    }
+    
+    // 2. Sidebar (current page - reactive fallback)
+    const fromSidebar = (sidebarGroupedOrders as Record<string, O2D[]>)[trimmedNo];
+    if (fromSidebar && fromSidebar.length > 0) return fromSidebar;
+
+    // 3. Table view (current page - reactive fallback)
+    const fromTable = (groupedOrders as Record<string, O2D[]>)[trimmedNo];
+    if (fromTable && fromTable.length > 0) return fromTable;
+    
+    // 4. Busy orders (from modal - reactive fallback)
+    const fromBusy = (busyOrdersGrouped as Record<string, O2D[]>)[trimmedNo];
+    if (fromBusy && fromBusy.length > 0) return fromBusy;
+
+    return [];
+  }, [masterOrderMap, sidebarGroupedOrders, groupedOrders, busyOrdersGrouped, selectedOrderNo]);
 
   const getPreviewUrl = (path: string | null | undefined) => {
     if (!path) return "#";
@@ -1251,6 +1368,27 @@ export default function O2DPage() {
       globalMutate("/api/o2d/summary");
       globalMutate("/api/o2d?type=ordernumbers");
 
+      // MANUAL CACHE UPDATE: Ensure the master map has the latest data immediately
+      // This handles the case where the order is not on the current sidebar pagination page
+      if (editingOrderNo) {
+        const { item_name, item_qty, est_amount, item_specification } = mergeItems(items);
+        const updatedItems = [{
+          ...groupedOrders[editingOrderNo][0],
+          item_name,
+          item_qty,
+          est_amount,
+          item_specification,
+          party_name: commonData.party_name,
+          remark: commonData.remark,
+          updated_at: now
+        }].flatMap(expandO2DItem);
+        
+        setMasterOrderMap(prev => ({
+          ...prev,
+          [editingOrderNo]: updatedItems
+        }));
+      }
+
       setTimeout(() => setIsStatusModalOpen(false), 1500);
     } catch (error: any) {
       console.error(error);
@@ -1266,7 +1404,7 @@ export default function O2DPage() {
   };
 
   const handleEdit = (orderNo: string) => {
-    const orderItems = groupedOrders[orderNo];
+    const orderItems = masterOrderMap[orderNo.trim()] || [];
     setEditingOrderNo(orderNo);
     setCommonData({
       order_no: orderNo,
@@ -1444,6 +1582,18 @@ export default function O2DPage() {
       globalMutate(tableQueryKey);
       globalMutate(sidebarQueryKey);
       globalMutate("/api/o2d/summary");
+
+      // MANUAL CACHE UPDATE: Reflect the status change in the master map immediately
+      setMasterOrderMap(prev => {
+        const existing = prev[orderNo];
+        if (!existing) return prev;
+        const updated = existing.map(o => ({
+          ...o,
+          [action]: newValue,
+          updated_at: new Date().toISOString()
+        }));
+        return { ...prev, [orderNo]: updated };
+      });
       setTimeout(() => setIsStatusModalOpen(false), 1500);
     } catch (e: any) {
       setActionStatus("error");
@@ -1452,17 +1602,13 @@ export default function O2DPage() {
     }
   };
 
-  const selectedOrder = useMemo(() => {
-    return groupedOrders[selectedOrderNo || ""] || [];
-  }, [groupedOrders, selectedOrderNo]);
-
   const flattenedO2Ds = useMemo(() => {
     if (!allO2DsRaw || allO2DsRaw.length === 0) return [];
 
     // 1. Group by order_no
     const groups: Record<string, O2D[]> = {};
     allO2DsRaw.forEach((item: any) => {
-      const no = item.order_no || "Unknown";
+      const no = (item.order_no || "Unknown").trim();
       if (!groups[no]) groups[no] = [];
       groups[no].push(item);
     });
@@ -1590,6 +1736,24 @@ export default function O2DPage() {
       globalMutate(tableQueryKey, undefined, { revalidate: true });
       globalMutate(sidebarQueryKey, undefined, { revalidate: true });
       globalMutate("/api/o2d/summary", undefined, { revalidate: true });
+
+      // MANUAL CACHE UPDATE: Refresh the master map to reflect purged steps immediately
+      setMasterOrderMap(prev => {
+        const existing = prev[selectedOrderNo];
+        if (!existing) return prev;
+        const updated = existing.map(o => {
+          const newO = { ...o };
+          for (let i = removeStep; i <= 11; i++) {
+            if (removeOnwards || i === removeStep) {
+              (newO as any)[`status_${i}`] = "";
+              (newO as any)[`actual_${i}`] = "";
+              (newO as any)[`planned_${i}`] = "";
+            }
+          }
+          return newO;
+        });
+        return { ...prev, [selectedOrderNo]: updated };
+      });
       setTimeout(() => setIsStatusModalOpen(false), 500);
     } catch (e: any) {
       setActionStatus("error");
@@ -1846,58 +2010,21 @@ export default function O2DPage() {
       globalMutate(tableQueryKey, undefined, { revalidate: true });
       globalMutate(sidebarQueryKey, undefined, { revalidate: true });
       globalMutate("/api/o2d/summary", undefined, { revalidate: true });
+
+      // MANUAL CACHE UPDATE: Ensure the detail panel shows the updated step immediately
+      const stepItems = updatedO2Ds.filter((o: any) => o.order_no === selectedOrderNo).map(expandO2DItem).flat();
+      if (stepItems.length > 0) {
+        setMasterOrderMap(prev => ({
+          ...prev,
+          [selectedOrderNo]: stepItems
+        }));
+      }
       setTimeout(() => setIsStatusModalOpen(false), 500);
     } catch (error: any) {
       setActionStatus("error");
       setActionMessage(error.message);
       setTimeout(() => setIsStatusModalOpen(false), 2000);
     }
-  };
-
-  const formatDate = (dateString: string) => {
-    if (!dateString || dateString === "-") return "-";
-    try {
-      const d = new Date(dateString);
-      if (isNaN(d.getTime())) return dateString;
-      const pad = (n: number) => n.toString().padStart(2, "0");
-      return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
-    } catch (e) {
-      return dateString;
-    }
-  };
-
-  const getTimeDelay = (pRaw: string, aRaw: string) => {
-    if (!pRaw || pRaw === "-" || pRaw.trim() === "") return null;
-    const pDate = new Date(pRaw);
-    if (isNaN(pDate.getTime())) return null;
-
-    let cDate = new Date();
-    if (aRaw && aRaw !== "-" && aRaw.trim() !== "") {
-      const aDate = new Date(aRaw);
-      if (!isNaN(aDate.getTime())) cDate = aDate;
-    }
-
-    const diffMs = pDate.getTime() - cDate.getTime();
-    const absDiff = Math.abs(diffMs);
-
-    if (absDiff < 60000) return { text: "On Time", isDelayed: false };
-
-    const isDelayed = diffMs < 0;
-    const days = Math.floor(absDiff / (1000 * 60 * 60 * 24));
-    const hours = Math.floor((absDiff / (1000 * 60 * 60)) % 24);
-    const minutes = Math.floor((absDiff / 1000 / 60) % 60);
-
-    let textParts = [];
-    if (days > 0) textParts.push(`${days}d`);
-    if (hours > 0) textParts.push(`${hours}h`);
-    if (minutes > 0 || textParts.length === 0) textParts.push(`${minutes}m`);
-
-    return {
-      text: isDelayed
-        ? `${textParts.join(" ")} Late`
-        : `${textParts.join(" ")} Early`,
-      isDelayed,
-    };
   };
 
   return (
@@ -2372,7 +2499,7 @@ export default function O2DPage() {
                     ) : (
                       <>
                         {filteredOrderNumbers.map((no: string) => {
-                          const orderItems = sidebarGroupedOrders[no];
+                          const orderItems = sidebarGroupedOrders[no.trim()];
                           if (!orderItems || orderItems.length === 0) return null;
                           const first = orderItems[0];
                           const totalQty = orderItems.reduce(
@@ -2390,7 +2517,7 @@ export default function O2DPage() {
                           const pIdx = getPendingStepIdx(orderItems);
                           const currentStageIdx = pIdx !== -1 ? pIdx - 1 : -1;
                           const allDone = currentStageIdx === -1;
-                          const isSelected = selectedOrderNo === no;
+                          const isSelected = selectedOrderNo?.trim() === no.trim();
                           const isCancelled = !!first?.cancelled;
                           const isHold = !!first?.hold && !isCancelled;
 
@@ -2411,7 +2538,23 @@ export default function O2DPage() {
                           return (
                             <div
                               key={no}
-                              onClick={() => setSelectedOrderNo(no)}
+                              onClick={() => {
+                                const trimmedNo = no.trim();
+                                // Set selection first for immediate visual feedback
+                                setSelectedOrderNo(trimmedNo);
+                                // Ensure this specific order's data is immediately in the master map
+                                // We use the same defensive merge logic as the useEffect to avoid overwriting full data with partial data
+                                if (trimmedNo && orderItems && orderItems.length > 0) {
+                                  setMasterOrderMap(prev => {
+                                    const existing = prev[trimmedNo];
+                                    // Only overwrite if we don't have existing data, OR the new data has more items, OR no filter is active
+                                    if (!existing || orderItems.length >= existing.length || !tableFilterItemName) {
+                                      return { ...prev, [trimmedNo]: orderItems };
+                                    }
+                                    return prev;
+                                  });
+                                }
+                              }}
                               className={`group relative p-2 rounded-xl border transition-all cursor-pointer ${isSelected
                                   ? "border-[#003875] dark:border-[#FFD500] bg-[#003875]/5 dark:bg-[#FFD500]/5 shadow-xl scale-[1.02] z-10"
                                   : isCancelled
@@ -2534,925 +2677,26 @@ export default function O2DPage() {
                 {/* Thick Dark Blue Divider Line */}
                 <div className="w-[3px] bg-[#003875] h-full hidden lg:block opacity-80" />
 
-                {/* Detail Pane: Order Details - Compact Layout */}
-                <div
-                  className={`flex-1 flex flex-col min-w-0 bg-white dark:bg-navy-900/20 relative ${!selectedOrderNo ? "hidden lg:flex" : "flex"}`}
-                >
-                  {/* Loading Overlay */}
-                  {(isAllLoading || isTransitioning) && (
-                    <div className="absolute inset-0 bg-white/60 dark:bg-navy-900/60 backdrop-blur-sm flex items-center justify-center z-40 rounded-lg">
-                      <div className="flex flex-col items-center gap-3">
-                        <div className="w-8 h-8 border-3 border-[#003875]/20 dark:border-[#FFD500]/20 border-t-[#003875] dark:border-t-[#FFD500] rounded-full animate-spin" />
-                        <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">
-                          Loading...
-                        </p>
-                      </div>
-                    </div>
-                  )}
-                  {selectedOrder && selectedOrder.length > 0 ? (
-                    <div className="flex-1 flex flex-col overflow-hidden">
-                      {" "}
-                      {/* CREAM HEADER - Compact with all Actions */}
-                      <div className="px-4 py-2 flex items-center justify-between bg-[#FEF6DB] dark:bg-navy-800 border-b border-orange-100 dark:border-navy-700 text-[#003875] dark:text-[#FFD500]">
-                        <div className="flex items-center gap-2.5">
-                          <button
-                            onClick={() => setSelectedOrderNo(null)}
-                            className="lg:hidden p-1.5 bg-[#003875]/10 hover:bg-[#003875]/20 rounded-full transition-all"
-                          >
-                            <ArrowLeftIcon className="w-4 h-4 text-[#003875] dark:text-[#FFD500]" />
-                          </button>
-                          <h2 className="text-[15px] font-black italic tracking-tight uppercase">
-                            {selectedOrderNo}
-                          </h2>
-                        </div>
-
-                        <div className="flex items-center gap-1">
-                          {" "}
-                          {/* Workflow Actions */}
-                          {!selectedOrder[0]?.hold &&
-                            !selectedOrder[0]?.cancelled &&
-                            !isStep1Lockout && (
-                              <div className="flex items-center gap-1.5">
-                                {isSpecialRole && (
-                                  <button
-                                    onClick={() =>
-                                      setIsRemoveFollowUpModalOpen(true)
-                                    }
-                                    className="flex items-center gap-1.5 p-1.5 sm:px-4 sm:py-1.5 bg-[#003875]/5 hover:bg-[#003875]/10 rounded-full text-[#003875] dark:text-[#FFD500] transition-all transition-transform active:scale-90 border border-[#003875]/10 dark:border-[#FFD500]/10"
-                                    title="Remove Follow-up"
-                                  >
-                                    <MinusCircleIcon className="w-4 h-4" />
-                                    <span className="hidden lg:inline text-[10px] font-black uppercase tracking-widest">
-                                      Remove Follow-up
-                                    </span>
-                                  </button>
-                                )}
-                                <button
-                                  onClick={openStepUpdateModal}
-                                  className="flex items-center gap-1.5 p-1.5 sm:px-5 sm:py-1.5 bg-[#003875] text-[#FFD500] hover:bg-[#002a5a] rounded-full transition-all transition-transform active:scale-90 shadow-lg shadow-black/10 animate-pulse"
-                                  title="Update Progress"
-                                >
-                                  <ArrowPathIcon className="w-4 h-4" />
-                                  <span className="hidden lg:inline text-[10px] font-black uppercase opacity-90">
-                                    Update
-                                  </span>
-                                </button>
-                              </div>
-                            )}
-                          {/* Status Actions: Hold & Cancel */}
-                          <button
-                            onClick={() => {
-                              setConfirmPayload({
-                                type: "hold",
-                                orderNo: selectedOrderNo as string,
-                                currentValue: selectedOrder[0]?.hold,
-                              });
-                              setIsConfirmOpen(true);
-                            }}
-                            className={`flex items-center gap-1.5 p-1.5 sm:px-4 sm:py-1.5 rounded-full transition-all transition-transform active:scale-90 border ${selectedOrder[0]?.hold ? "bg-orange-500 text-white border-orange-400 shadow-md" : "bg-[#003875]/5 text-[#003875]/80 border-[#003875]/10 hover:bg-[#003875]/10 hover:text-[#003875] dark:text-[#FFD500]/80 dark:border-[#FFD500]/10 dark:hover:bg-[#FFD500]/10 dark:hover:text-[#FFD500]"}`}
-                            title={
-                              selectedOrder[0]?.hold
-                                ? "Resume Order"
-                                : "Put on Hold"
-                            }
-                          >
-                            <PauseCircleIcon className="w-4 h-4" />
-                            <span className="hidden lg:inline text-[10px] font-black uppercase tracking-widest">
-                              {selectedOrder[0]?.hold ? "On Hold" : "Hold"}
-                            </span>
-                          </button>
-                          <button
-                            onClick={() => {
-                              setConfirmPayload({
-                                type: "cancelled",
-                                orderNo: selectedOrderNo as string,
-                                currentValue: selectedOrder[0]?.cancelled,
-                              });
-                              setIsConfirmOpen(true);
-                            }}
-                            className={`flex items-center gap-1.5 p-1.5 sm:px-4 sm:py-1.5 rounded-full transition-all transition-transform active:scale-90 border ${selectedOrder[0]?.cancelled ? "bg-black text-white border-black shadow-md" : "bg-[#003875]/5 text-[#003875]/80 border-[#003875]/10 hover:bg-[#003875]/10 hover:text-[#003875] dark:text-[#FFD500]/80 dark:border-[#FFD500]/10 dark:hover:bg-[#FFD500]/10 dark:hover:text-[#FFD500]"}`}
-                            title={
-                              selectedOrder[0]?.cancelled
-                                ? "Undo Cancellation"
-                                : "Cancel Order"
-                            }
-                          >
-                            <NoSymbolIcon className="w-4 h-4" />
-                            <span className="hidden lg:inline text-[10px] font-black uppercase tracking-widest">
-                              {selectedOrder[0]?.cancelled
-                                ? "Cancelled"
-                                : "Cancel"}
-                            </span>
-                          </button>
-                          <div className="w-px h-5 bg-[#003875]/10 dark:bg-white/20 mx-1 hidden sm:block" />
-                          <div className="flex items-center gap-1.5 p-1 bg-[#003875]/5 dark:bg-black/10 rounded-full border border-[#003875]/10 dark:border-white/20 backdrop-blur-sm">
-                            <button
-                              onClick={() => setDetailViewMode("full")}
-                              className={`p-1.5 rounded-full transition-all ${detailViewMode === "full" ? "bg-[#003875] text-[#FFD500] shadow-md scale-105" : "text-[#003875]/60 hover:text-[#003875] dark:text-white/60 dark:hover:text-white"}`}
-                            >
-                              <Squares2X2Icon className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => setDetailViewMode("table")}
-                              className={`p-1.5 rounded-full transition-all ${detailViewMode === "table" ? "bg-[#003875] text-[#FFD500] shadow-md scale-105" : "text-[#003875]/60 hover:text-[#003875] dark:text-white/60 dark:hover:text-white"}`}
-                            >
-                              <ListBulletIcon className="w-4 h-4" />
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                      {detailViewMode === "full" ? (
-                        <div className="flex-1 overflow-y-auto no-scrollbar p-6 space-y-6 animate-in fade-in duration-200">
-                          {/* Consolidated Summary - Cream Background */}
-                          <div className="bg-white dark:bg-navy-800/50 p-6 rounded-2xl border-2 border-gray-100 dark:border-navy-700 shadow-md grid grid-cols-1 md:grid-cols-12 gap-6 items-center">
-                            <div className="md:col-span-9">
-                              <div className="mb-5">
-                                <p className="text-[9px] font-black text-gray-400 uppercase tracking-[0.3em] mb-1">
-                                  ESTABLISHED PARTNER
-                                </p>
-                                <p className="text-lg font-black text-[#003875] dark:text-[#FFD500] uppercase tracking-wide">
-                                  {selectedOrder[0]?.party_name}
-                                </p>
-                              </div>
-                              <div className="flex flex-wrap gap-6">
-                                <div className="flex items-center gap-3">
-                                  <ArchiveBoxIcon className="w-4.5 h-4.5 text-[#003875]/40" />
-                                  <div className="flex flex-col">
-                                    <span className="text-[9px] font-black text-gray-400 uppercase">
-                                      Loadout
-                                    </span>
-                                    <span className="text-[13px] font-black text-gray-700 dark:text-gray-100">
-                                      {selectedOrder.length} Items
-                                    </span>
-                                  </div>
-                                </div>
-                                <div className="w-px h-8 bg-[#003875]/5 mx-1 hidden sm:block" />
-                                <div className="flex items-center gap-3">
-                                  <UserIcon className="w-4.5 h-4.5 text-[#003875]/40" />
-                                  <div className="flex flex-col">
-                                    <span className="text-[9px] font-black text-gray-400 uppercase">
-                                      Operator
-                                    </span>
-                                    <span className="text-[13px] font-black text-gray-700 dark:text-gray-100 uppercase truncate max-w-[120px]">
-                                      {selectedOrder[0]?.filled_by}
-                                    </span>
-                                  </div>
-                                </div>
-                                <div className="w-px h-8 bg-[#003875]/5 mx-1 hidden sm:block" />
-                                <div className="flex items-center gap-3">
-                                  <CalendarDaysIcon className="w-4.5 h-4.5 text-[#003875]/40" />
-                                  <div className="flex flex-col">
-                                    <span className="text-[9px] font-black text-gray-400 uppercase">
-                                      Timestamp
-                                    </span>
-                                    <div className="flex items-center gap-2">
-                                      <span className="text-[13px] font-black text-gray-700 dark:text-gray-100">
-                                        {(() => {
-                                          const o = selectedOrder[0];
-                                          const d = o?.created_at || (o as any)?.actual_1 || (o as any)?.planned_1;
-                                          if (!d) return "N/A";
-                                          const ts = new Date(d);
-                                          if (isNaN(ts.getTime()) || ts.getFullYear() <= 1970) return "N/A";
-                                          return ts.toLocaleString(undefined, {
-                                            dateStyle: "short",
-                                            timeStyle: "short",
-                                          });
-                                        })()}
-                                      </span>
-                                      {isStep1Lockout && (
-                                        <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 border border-red-100 dark:border-red-800 text-[12px] font-black shadow-sm">
-                                          <ClockIcon className="w-4 h-4 animate-pulse" />
-                                          -
-                                          {lockoutTimeLeft.m
-                                            .toString()
-                                            .padStart(2, "0")}
-                                          :
-                                          {lockoutTimeLeft.s
-                                            .toString()
-                                            .padStart(2, "0")}{" "}
-                                          to enable
-                                        </span>
-                                      )}
-                                    </div>
-                                  </div>
-                                </div>
-
-                                {selectedOrder[0]?.hold &&
-                                  !selectedOrder[0]?.cancelled && (
-                                    <>
-                                      <div className="w-px h-8 bg-orange-500/10 mx-1 hidden sm:block" />
-                                      <div className="flex items-center gap-3">
-                                        <PauseCircleIcon className="w-4.5 h-4.5 text-orange-500/60" />
-                                        <div className="flex flex-col">
-                                          <span className="text-[9px] font-black text-orange-400 uppercase">
-                                            Held On
-                                          </span>
-                                          <span className="text-[13px] font-black text-orange-500">
-                                            {selectedOrder[0]?.hold &&
-                                              new Date(
-                                                selectedOrder[0]?.hold,
-                                              ).toLocaleString(undefined, {
-                                                dateStyle: "short",
-                                                timeStyle: "short",
-                                              })}
-                                          </span>
-                                        </div>
-                                      </div>
-                                    </>
-                                  )}
-
-                                {selectedOrder[0]?.cancelled && (
-                                  <>
-                                    <div className="w-px h-8 bg-red-500/10 mx-1 hidden sm:block" />
-                                    <div className="flex items-center gap-3">
-                                      <NoSymbolIcon className="w-4.5 h-4.5 text-red-500/60" />
-                                      <div className="flex flex-col">
-                                        <span className="text-[9px] font-black text-red-400 uppercase">
-                                          Cancelled On
-                                        </span>
-                                        <span className="text-[13px] font-black text-[#CE2029]">
-                                          {selectedOrder[0]?.cancelled &&
-                                            new Date(
-                                              selectedOrder[0]?.cancelled,
-                                            ).toLocaleString(undefined, {
-                                              dateStyle: "short",
-                                              timeStyle: "short",
-                                            })}
-                                        </span>
-                                      </div>
-                                    </div>
-                                  </>
-                                )}
-                              </div>
-                            </div>
-                            <div className="md:col-span-3 flex justify-end">
-                              <div className="relative group w-28 h-28">
-                                <div className="absolute inset-0 bg-[#FFD500] blur-lg opacity-10" />
-                                <div className="relative h-full bg-white dark:bg-black border-4 border-white dark:border-navy-800 rounded-xl overflow-hidden shadow-xl group-hover:scale-105 transition-transform">
-                                  {selectedOrder[0]?.order_screenshot ? (
-                                    <img
-                                      src={getPreviewUrl(
-                                        selectedOrder[0]?.order_screenshot,
-                                      )}
-                                      className="w-full h-full object-cover"
-                                    />
-                                  ) : (
-                                    <PhotoIcon className="w-6 h-6 text-gray-100 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
-                                  )}
-                                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                                    <a
-                                      href={getPreviewUrl(
-                                        selectedOrder[0]?.order_screenshot,
-                                      )}
-                                      target="_blank"
-                                      className="p-2 bg-white rounded-full transition-transform hover:scale-110"
-                                      title="View"
-                                    >
-                                      <EyeIcon className="w-4 h-4 text-black" />
-                                    </a>
-                                    {selectedOrder[0]?.order_screenshot && (
-                                      <a
-                                        href={getDownloadUrl(
-                                          selectedOrder[0]?.order_screenshot,
-                                        )}
-                                        target="_blank"
-                                        className="p-2 bg-white rounded-full transition-transform hover:scale-110"
-                                        title="Download"
-                                      >
-                                        <ArrowDownTrayIcon className="w-4 h-4 text-black" />
-                                      </a>
-                                    )}
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Promotional Deployment - Extra Items for Dispatch */}
-                          {(() => {
-                            const activeParty = fullParties.find(
-                              (p) =>
-                                p.partyName === selectedOrder[0]?.party_name,
-                            );
-                            if (activeParty && activeParty.firstOrderItems) {
-                              // Parse order no from customerType e.g. "NEW (OR-05)"
-                              const match = (
-                                activeParty.customerType || ""
-                              ).match(/NEW\s*\((.+?)\)/i);
-                              const firstOrderNo = match
-                                ? match[1].trim()
-                                : null;
-                              // Only show if this is the specific linked first order
-                              if (
-                                firstOrderNo &&
-                                firstOrderNo === selectedOrder[0]?.order_no
-                              ) {
-                                const promoItems = activeParty.firstOrderItems
-                                  .split(",")
-                                  .map((s: string) => s.trim())
-                                  .filter(Boolean);
-                                if (promoItems.length > 0) {
-                                  // Icon + color map for known promo items
-                                  const promoIconMap: Record<
-                                    string,
-                                    { icon: React.ElementType; color: string }
-                                  > = {
-                                    "T Shirt": {
-                                      icon: TagIcon,
-                                      color: "text-rose-500",
-                                    },
-                                    "Note Pad": {
-                                      icon: DocumentTextIcon,
-                                      color: "text-sky-500",
-                                    },
-                                    Pen: {
-                                      icon: PencilSquareIcon,
-                                      color: "text-violet-500",
-                                    },
-                                    Thele: {
-                                      icon: ShoppingBagIcon,
-                                      color: "text-emerald-500",
-                                    },
-                                    "Tape Roll": {
-                                      icon: ArchiveBoxIcon,
-                                      color: "text-amber-500",
-                                    },
-                                    Posters: {
-                                      icon: PhotoIcon,
-                                      color: "text-pink-500",
-                                    },
-                                    Catalogue: {
-                                      icon: ClipboardDocumentCheckIcon,
-                                      color: "text-teal-500",
-                                    },
-                                  };
-                                  return (
-                                    <div className="bg-gradient-to-r from-amber-50 to-[#FFFBF0] dark:from-navy-800 dark:to-navy-900 rounded-2xl border-2 border-[#FFD500] shadow-sm overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-400 relative">
-                                      <div className="absolute top-0 left-0 w-1.5 h-full bg-[#FFD500]" />
-                                      <div className="px-6 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                                        <div>
-                                          <h3 className="text-[11px] font-black text-[#003875] dark:text-[#FFD500] uppercase tracking-widest flex items-center gap-2">
-                                            <GiftIcon className="w-5 h-5 text-[#FFD500]" />
-                                            PROMOTIONAL DEPLOYMENT
-                                          </h3>
-                                          <p className="text-[10px] font-bold text-gray-500 mt-0.5 ml-7 uppercase tracking-wider">
-                                            Required First Order Extras for
-                                            Dispatch
-                                          </p>
-                                        </div>
-                                        <div className="flex flex-wrap gap-2">
-                                          {promoItems.map(
-                                            (item: string, idx: number) => {
-                                              const itemMatch = item.match(
-                                                /(.*?)\s*\(Qty:\s*(.*?)\)/,
-                                              );
-                                              const name = itemMatch
-                                                ? itemMatch[1].trim()
-                                                : item;
-                                              const qty = itemMatch
-                                                ? itemMatch[2]
-                                                : "1";
-                                              const promo = promoIconMap[
-                                                name
-                                              ] || {
-                                                icon: GiftIcon,
-                                                color: "text-orange-500",
-                                              };
-                                              const ItemIcon = promo.icon;
-                                              return (
-                                                <div
-                                                  key={idx}
-                                                  className="bg-white dark:bg-black px-3 py-1.5 rounded-lg border border-orange-100 dark:border-navy-700 flex items-center gap-2 shadow-sm"
-                                                >
-                                                  <ItemIcon
-                                                    className={`w-3.5 h-3.5 shrink-0 ${promo.color}`}
-                                                  />
-                                                  <span className="text-[11px] font-black text-gray-800 dark:text-gray-100">
-                                                    {name}
-                                                  </span>
-                                                  <div className="w-px h-3 bg-gray-200 dark:bg-navy-700" />
-                                                  <span className="text-[11px] font-black text-[#003875] dark:text-[#FFD500]">
-                                                    Ã—{qty}
-                                                  </span>
-                                                </div>
-                                              );
-                                            },
-                                          )}
-                                        </div>
-                                      </div>
-                                    </div>
-                                  );
-                                }
-                              }
-                            }
-                            return null;
-                          })()}
-
-                          {/* Tactical Inventory - Reverted to Simple 4-Column Table View */}
-                          <div className="bg-white dark:bg-navy-800/50 rounded-2xl border-2 border-gray-100 dark:border-navy-700 shadow-md overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-500">
-                            <div className="px-6 py-3 border-b border-gray-100 dark:border-navy-700 flex items-center justify-between bg-white/40 dark:bg-transparent">
-                              <h3 className="text-[10px] font-black text-gray-500 uppercase tracking-widest flex items-center gap-2 items-center">
-                                <div className="w-1 h-3.5 bg-[#003875] rounded-full" />{" "}
-                                Tactical Inventory
-                              </h3>
-                              <div className="text-[12px] font-black text-[#003875] dark:text-[#FFD500] uppercase tracking-tighter">
-                                TOTAL Value: ₹
-                                {selectedOrder
-                                  .reduce(
-                                    (sum: number, i: O2D) =>
-                                      sum + (parseFloat(i.est_amount) || 0),
-                                    0,
-                                  )
-                                  .toLocaleString()}
-                              </div>
-                            </div>
-                            <div className="overflow-x-auto">
-                              <table className="w-full text-left border-collapse">
-                                <thead>
-                                  <tr className="bg-amber-100 dark:bg-navy-950 text-[10px] font-black text-[#003875] dark:text-[#FFD500] uppercase tracking-widest">
-                                    <th className="px-6 py-3">NOMENCLATURE</th>
-                                    <th className="px-6 py-3">
-                                      ITEM SPECIFICATION
-                                    </th>
-                                    <th className="px-6 py-3 text-center">
-                                      QUANTITY
-                                    </th>
-                                    <th className="px-6 py-3 text-right">
-                                      ESTIMATED AMOUNT
-                                    </th>
-                                  </tr>
-                                </thead>
-                                <tbody className="divide-y divide-gray-100 dark:divide-navy-800/20">
-                                  {selectedOrder.map((item, idx) => (
-                                    <tr
-                                      key={idx}
-                                      className="text-[12px] font-bold text-gray-700 dark:text-gray-300 hover:bg-[#003875]/[0.02] dark:hover:bg-navy-700/10 transition-colors"
-                                    >
-                                      <td className="px-6 py-4 font-black text-gray-900 dark:text-white uppercase">
-                                        {item.item_name}
-                                      </td>
-                                      <td className="px-6 py-4 text-[11px] font-medium text-gray-500 dark:text-gray-400 italic italic">
-                                        {item.item_specification || "-"}
-                                      </td>
-                                      <td className="px-6 py-4 text-center font-black text-[#003875] dark:text-[#FFD500]">
-                                        {item.item_qty}
-                                      </td>
-                                      <td className="px-6 py-4 text-right font-black text-[#CE2029]">
-                                        ₹
-                                        {(parseFloat(item.est_amount) || 0).toLocaleString()}
-                                      </td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                                <tfoot>
-                                  <tr className="bg-amber-100/50 dark:bg-black/20 text-[11px] font-black uppercase tracking-widest text-[#003875] dark:text-[#FFD500]">
-                                    <td
-                                      colSpan={2}
-                                      className="px-6 py-4 italic"
-                                    >
-                                      Aggregate Order Sum
-                                    </td>
-                                    <td className="px-6 py-4 text-center bg-[#003875]/5 dark:bg-[#003875]/10 text-gray-700 dark:text-gray-300">
-                                      {selectedOrder.length} Items
-                                    </td>
-                                    <td className="px-6 py-4 text-right bg-[#003875] text-white">
-                                      ₹
-                                      {selectedOrder
-                                        .reduce(
-                                          (sum: number, i: O2D) =>
-                                            sum +
-                                            (parseFloat(i.est_amount) || 0),
-                                          0,
-                                        )
-                                        .toLocaleString()}
-                                    </td>
-                                  </tr>
-                                </tfoot>
-                              </table>
-                            </div>
-                          </div>
-                          {/* Operational Manifest - Step Specific Details */}
-                          <div className="bg-white dark:bg-navy-800/50 rounded-2xl border-2 border-gray-100 dark:border-navy-700 shadow-md overflow-hidden">
-                            <div className="px-6 py-3 border-b border-gray-100 dark:border-navy-700 bg-white/40 dark:bg-transparent">
-                              <h3 className="text-[10px] font-black text-gray-500 uppercase tracking-widest flex items-center gap-2 items-center">
-                                <div className="w-1 h-3.5 bg-[#003875] rounded-full" />{" "}
-                                Operational Manifest
-                              </h3>
-                            </div>
-                            <div className="p-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-y-8 gap-x-12">
-                              {/* Step 1: SO Details */}
-                              <div className="space-y-4">
-                                <div className="flex items-center gap-2 text-[11px] font-black text-[#003875] dark:text-[#FFD500] uppercase tracking-widest border-b border-gray-100 pb-2">
-                                  <IdentificationIcon className="w-4 h-4" />{" "}
-                                  Step 1: SO Protocol
-                                </div>
-                                <div className="grid grid-cols-2 gap-4">
-                                  <div className="flex flex-col">
-                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">
-                                      SO Number
-                                    </span>
-                                    <span className="text-[14px] font-black text-gray-700 dark:text-gray-200">
-                                      {selectedOrder[0]?.so_number_1 || "-"}
-                                    </span>
-                                  </div>
-                                  <div className="flex flex-col">
-                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">
-                                      Final Amt
-                                    </span>
-                                    <span className="text-[14px] font-black text-[#003875] dark:text-[#FFD500]">
-                                      ₹
-                                      {(parseFloat(
-                                        selectedOrder[0]?.final_amount_1 || "0",
-                                      ) || 0).toLocaleString()}
-                                    </span>
-                                  </div>
-                                </div>
-                                <div className="flex flex-col">
-                                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">
-                                    Merge With
-                                  </span>
-                                  <span className="text-[14px] font-black text-gray-700 dark:text-gray-200">
-                                    {selectedOrder[0]?.merge_order_with_1 ||
-                                      "N/A"}
-                                  </span>
-                                </div>
-                                {(() => {
-                                  const soDoc = selectedOrder.find(o => o.upload_so_1)?.upload_so_1;
-                                  if (!soDoc) return null;
-                                  return (
-                                    <div className="flex items-center gap-2 mt-1">
-                                      <a
-                                        href={getPreviewUrl(soDoc)}
-                                        target="_blank"
-                                        className="p-1 px-2.5 bg-[#003875]/5 dark:bg-[#FFD500]/5 text-[#003875] dark:text-[#FFD500] rounded-full text-[9px] font-black uppercase tracking-widest hover:bg-[#003875] hover:text-white dark:hover:bg-[#FFD500] dark:hover:text-black transition-all flex items-center gap-1"
-                                      >
-                                        <EyeIcon className="w-3 h-3" />
-                                        View
-                                      </a>
-                                      <a
-                                        href={getDownloadUrl(soDoc)}
-                                        target="_blank"
-                                        className="flex items-center gap-1.5 px-3 py-2 bg-[#003875]/5 rounded-lg text-[11px] font-black text-[#003875] hover:bg-[#003875]/10 transition-all uppercase tracking-widest"
-                                        title="Download SO Doc"
-                                      >
-                                        <ArrowDownTrayIcon className="w-4 h-4" />
-                                      </a>
-                                    </div>
-                                  );
-                                })()}
-                              </div>
-
-                              {/* Step 5: Packing */}
-                              <div className="space-y-4">
-                                <div className="flex items-center gap-2 text-[11px] font-black text-[#003875] dark:text-[#FFD500] uppercase tracking-widest border-b border-gray-100 pb-2">
-                                  <ArchiveBoxIcon className="w-4 h-4" /> Step 5:
-                                  Packing
-                                </div>
-                                <div className="grid grid-cols-2 gap-4">
-                                  <div className="flex flex-col">
-                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">
-                                      Parcels
-                                    </span>
-                                    <span className="text-[14px] font-black text-gray-700 dark:text-gray-200">
-                                      {selectedOrder[0]?.num_of_parcel_5 || "-"}
-                                    </span>
-                                  </div>
-                                  <div className="flex flex-col">
-                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">
-                                      Packed On
-                                    </span>
-                                    <span className="text-[14px] font-black text-gray-700 dark:text-gray-200">
-                                      {selectedOrder[0]
-                                        ?.actual_date_of_order_packed_5
-                                        ? new Date(
-                                          selectedOrder[0]
-                                            ?.actual_date_of_order_packed_5,
-                                        ).toLocaleDateString()
-                                        : "-"}
-                                    </span>
-                                  </div>
-                                </div>
-                                {(() => {
-                                  const piDoc = selectedOrder.find(o => o.upload_pi_5)?.upload_pi_5;
-                                  if (!piDoc) return null;
-                                  return (
-                                    <div className="flex items-center gap-2 mt-1">
-                                      <a
-                                        href={getPreviewUrl(piDoc)}
-                                        target="_blank"
-                                        className="p-1 px-2.5 bg-[#003875]/5 dark:bg-[#FFD500]/5 text-[#003875] dark:text-[#FFD500] rounded-full text-[9px] font-black uppercase tracking-widest hover:bg-[#003875] hover:text-white dark:hover:bg-[#FFD500] dark:hover:text-black transition-all flex items-center gap-1"
-                                      >
-                                        <EyeIcon className="w-3 h-3" />
-                                        View
-                                      </a>
-                                      <a
-                                        href={getDownloadUrl(piDoc)}
-                                        target="_blank"
-                                        className="flex items-center gap-1.5 px-3 py-2 bg-[#003875]/5 rounded-lg text-[11px] font-black text-[#003875] hover:bg-[#003875]/10 transition-all uppercase tracking-widest"
-                                        title="Download PI Doc"
-                                      >
-                                        <ArrowDownTrayIcon className="w-4 h-4" />
-                                      </a>
-                                    </div>
-                                  );
-                                })()}
-                              </div>
-
-                              {/* Step 7 & 9: Dispatch & Bilty */}
-                              <div className="space-y-8">
-                                <div className="space-y-3">
-                                  <div className="flex items-center gap-2 text-[11px] font-black text-[#003875] dark:text-[#FFD500] uppercase tracking-widest border-b border-gray-100 pb-2">
-                                    <CalendarDaysIcon className="w-4 h-4" />{" "}
-                                    Step 7: Dispatch
-                                  </div>
-                                  <div className="flex flex-col">
-                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">
-                                      Voucher #
-                                    </span>
-                                    <span className="text-[14px] font-black text-gray-700 dark:text-gray-200">
-                                      {selectedOrder[0]?.voucher_num_7 || "-"}
-                                    </span>
-                                  </div>
-                                </div>
-                                <div className="space-y-3">
-                                  <div className="flex items-center gap-2 text-[11px] font-black text-[#003875] dark:text-[#FFD500] uppercase tracking-widest border-b border-gray-100 pb-2">
-                                    <HashtagIcon className="w-4 h-4" /> Step 9:
-                                    Send Bilty to CRM
-                                  </div>
-                                  <div className="grid grid-cols-2 gap-4">
-                                    <div className="flex flex-col">
-                                      <span className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">
-                                        Parcels
-                                      </span>
-                                      <span className="text-[14px] font-black text-gray-700 dark:text-gray-200">
-                                        {selectedOrder[0]?.num_of_parcel_9 ||
-                                          "-"}
-                                      </span>
-                                    </div>
-                                    {(() => {
-                                      const biltyDoc = selectedOrder.find(o => o.attach_bilty_9)?.attach_bilty_9;
-                                      if (!biltyDoc) return null;
-                                      return (
-                                        <div className="flex items-center gap-2 self-end mb-1">
-                                          <a
-                                            href={getPreviewUrl(biltyDoc)}
-                                            target="_blank"
-                                            className="flex items-center gap-2 px-3 py-1.5 bg-[#003875]/5 rounded-lg text-[10px] font-black text-[#003875] hover:bg-[#003875]/10 w-fit transition-all uppercase tracking-widest"
-                                          >
-                                            <EyeIcon className="w-3.5 h-3.5" /> Bilty
-                                          </a>
-                                          <a
-                                            href={getDownloadUrl(biltyDoc)}
-                                            target="_blank"
-                                            className="p-1.5 bg-[#003875]/5 rounded-lg text-[#003875] hover:bg-[#003875]/10 transition-all"
-                                            title="Download Bilty"
-                                          >
-                                            <ArrowDownTrayIcon className="w-3.5 h-3.5" />
-                                          </a>
-                                        </div>
-                                      );
-                                    })()}
-                                  </div>
-                                </div>
-                              </div>
-
-                              {/* Step 8: Verification */}
-                              <div className="space-y-4 lg:col-span-2">
-                                <div className="flex items-center gap-2 text-[11px] font-black text-[#003875] dark:text-[#FFD500] uppercase tracking-widest border-b border-gray-100 pb-2">
-                                  <CalendarDaysIcon className="w-4 h-4" /> Step
-                                  8: Operational Audit
-                                </div>
-                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-6">
-                                  <div className="flex flex-col">
-                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">
-                                      Checked
-                                    </span>
-                                    <span
-                                      className={`text-[14px] font-black ${selectedOrder[0]?.order_details_checked_8 === "Yes" ? "text-green-500" : "text-red-500"}`}
-                                    >
-                                      {selectedOrder[0]
-                                        ?.order_details_checked_8 || "No"}
-                                    </span>
-                                  </div>
-                                  <div className="flex flex-col">
-                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">
-                                      Voucher 51
-                                    </span>
-                                    <span className="text-[14px] font-black text-gray-700 dark:text-gray-200">
-                                      {selectedOrder[0]?.voucher_num_51_8 ||
-                                        "-"}
-                                    </span>
-                                  </div>
-                                  <div className="flex flex-col sm:col-span-2">
-                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">
-                                      T. Amount
-                                    </span>
-                                    <span className="text-[14px] font-black text-[#003875] dark:text-[#FFD500]">
-                                      ₹
-                                      {(parseFloat(
-                                        selectedOrder[0]?.t_amt_8 || "0",
-                                      ) || 0).toLocaleString()}
-                                    </span>
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Dark Blue Decorative Line */}
-                          <div className="h-0.5 bg-gradient-to-r from-transparent via-[#003875]/20 to-transparent" />
-
-                          {/* Compact Remarks - Cream Background */}
-                          {selectedOrder[0]?.remark && (
-                            <div className="bg-[#FEF6DB] dark:bg-navy-800/50 p-5 rounded-2xl border-2 border-orange-100 dark:border-navy-700 relative shadow-md">
-                              <ChatBubbleBottomCenterTextIcon className="absolute top-4 right-4 w-6 h-6 text-[#003875]/10" />
-                              <span className="text-[9px] font-black text-[#003875]/40 uppercase tracking-[0.2em] block mb-1.5 font-bold">
-                                Intelligence Report
-                              </span>
-                              <p className="text-[12px] font-bold text-gray-600 dark:text-gray-400 leading-relaxed italic">
-                                "{selectedOrder[0]?.remark}"
-                              </p>
-                            </div>
-                          )}
-                        </div>
-                      ) : (
-                        /* Pure Simple Table View - Cream Background Theme */
-                        <div className="flex-1 overflow-y-auto overflow-x-auto no-scrollbar p-6 animate-in slide-in-from-bottom-2 duration-200">
-                          <div className="bg-white dark:bg-navy-900 rounded-xl border-2 border-gray-100 dark:border-navy-700 shadow-xl w-max min-w-full overflow-hidden">
-                            <table className="w-full text-left border-collapse whitespace-nowrap">
-                              <thead>
-                                <tr className="bg-amber-100 dark:bg-navy-950 text-[11px] font-black text-[#003875] dark:text-[#FFD500] uppercase tracking-widest">
-                                  <th className="px-6 py-4 border-r border-[#003875]/10 sticky left-0 z-10 bg-amber-100 dark:bg-navy-950">
-                                    Nomenclature
-                                  </th>
-                                  <th className="px-6 py-4 border-r border-[#003875]/10">
-                                    Item Specification
-                                  </th>
-                                  <th className="px-6 py-4 text-center border-r border-[#003875]/10">
-                                    Quantity
-                                  </th>
-                                  <th className="px-6 py-4 text-right border-r border-[#003875]/10">
-                                    Estimated Amount
-                                  </th>
-                                  {O2D_STEPS.map((step, idx) => (
-                                    <th
-                                      key={idx}
-                                      className="px-4 py-3 text-center border-r border-[#003875]/10 last:border-r-0 align-top"
-                                      title={step}
-                                    >
-                                      <div className="flex flex-col items-center justify-center gap-0.5 min-w-[120px]">
-                                        <span className="text-[8px] opacity-50 uppercase tracking-[0.2em] font-black">
-                                          Step {idx + 1}
-                                        </span>
-                                        <span className="text-[10px] whitespace-normal leading-tight">
-                                          {O2D_STEP_SHORTS[idx]}
-                                        </span>
-                                      </div>
-                                    </th>
-                                  ))}
-                                </tr>
-                              </thead>
-                              <tbody className="divide-y divide-[#CE2029]/5 dark:divide-navy-800/20">
-                                {selectedOrder.map((item, idx) => (
-                                  <tr
-                                    key={idx}
-                                    className="hover:bg-white/50 dark:hover:bg-white/5 transition-colors text-[13px] font-medium text-gray-700 dark:text-gray-200"
-                                  >
-                                    <td className="px-6 py-3 border-r border-[#CE2029]/5 sticky left-0 z-10 bg-white dark:bg-navy-800">
-                                      {item.item_name}
-                                    </td>
-                                    <td
-                                      className="px-6 py-3 border-r border-[#CE2029]/5 italic text-gray-500 text-[11px] max-w-[250px] truncate"
-                                      title={item.item_specification}
-                                    >
-                                      {item.item_specification || "-"}
-                                    </td>
-                                    <td className="px-6 py-3 text-center border-r border-[#CE2029]/5 bg-[#FFD500]/5 dark:bg-navy-900 font-black">
-                                      {item.item_qty}
-                                    </td>
-                                    <td className="px-6 py-3 text-right font-black text-[#003875] dark:text-[#FFD500] border-r border-[#CE2029]/5">
-                                      ₹
-                                      {parseFloat(
-                                        item.est_amount,
-                                      ).toLocaleString()}
-                                    </td>
-                                    {O2D_STEPS.map((_, stepIdx) => {
-                                      const plannedRaw = item[
-                                        `planned_${stepIdx + 1}` as keyof O2D
-                                      ] as string;
-                                      const actualRaw = item[
-                                        `actual_${stepIdx + 1}` as keyof O2D
-                                      ] as string;
-                                      const status = item[
-                                        `status_${stepIdx + 1}` as keyof O2D
-                                      ] as string;
-
-                                      const planned = formatDate(plannedRaw);
-                                      const actual = formatDate(actualRaw);
-                                      const delay = getTimeDelay(
-                                        plannedRaw,
-                                        actualRaw,
-                                      );
-
-                                      return (
-                                        <td
-                                          key={stepIdx}
-                                          className="px-6 py-2 min-w-[140px] border-r border-[#CE2029]/5 last:border-r-0"
-                                        >
-                                          <div className="flex flex-col gap-1.5 text-[10.5px]">
-                                            <div className="flex justify-between items-center gap-2">
-                                              <span className="text-gray-400 font-black tracking-widest uppercase text-[9px]">
-                                                Plan
-                                              </span>{" "}
-                                              <span className="font-bold text-gray-800 dark:text-gray-200">
-                                                {planned}
-                                              </span>
-                                            </div>
-                                            <div className="flex justify-between items-center gap-2">
-                                              <span className="text-gray-400 font-black tracking-widest uppercase text-[9px]">
-                                                Actual
-                                              </span>{" "}
-                                              <span className="font-black text-[#003875] dark:text-[#FFD500]">
-                                                {actual}
-                                              </span>
-                                            </div>
-                                            <div className="flex justify-between items-center gap-2">
-                                              <span className="text-gray-400 font-black tracking-widest uppercase text-[9px]">
-                                                Status
-                                              </span>{" "}
-                                              <span
-                                                className={`font-black uppercase ${(status || "").toString().trim().toLowerCase() === "done" || (status || "").toString().trim().toLowerCase() === "yes" ? "text-green-500" : "text-[#CE2029]"}`}
-                                              >
-                                                {status || "-"}
-                                              </span>
-                                            </div>
-                                            {delay && (
-                                              <div
-                                                className={`flex justify-between items-center gap-2 border-t pt-1.5 mt-0.5 ${delay.isDelayed ? "border-red-100 dark:border-red-900/30" : "border-green-100 dark:border-green-900/30"}`}
-                                              >
-                                                <span className="text-gray-400 font-black tracking-widest uppercase text-[9px]">
-                                                  Delay
-                                                </span>
-                                                <span
-                                                  className={`font-black text-[10px] ${delay.isDelayed ? "text-[#CE2029]" : "text-green-600"}`}
-                                                >
-                                                  {delay.text}
-                                                </span>
-                                              </div>
-                                            )}
-                                          </div>
-                                        </td>
-                                      );
-                                    })}
-                                  </tr>
-                                ))}
-                              </tbody>
-                              <tfoot>
-                                <tr className="bg-[#FEF6DB]/80 dark:bg-navy-950 font-black text-[#003875] dark:text-white text-[13px] border-t-2 border-[#003875]/20 shadow-inner">
-                                  <td className="px-6 py-4 border-r border-[#003875]/10 sticky left-0 z-10 bg-[#FEF6DB]/80 dark:bg-navy-950 backdrop-blur-md">
-                                    AGGREGATE SUM
-                                  </td>
-                                  <td className="px-6 py-4 border-r border-[#003875]/10"></td>
-                                  <td className="px-6 py-4 text-center border-r border-[#003875]/10">
-                                    {selectedOrder.reduce(
-                                      (sum: number, i: O2D) =>
-                                        sum + (parseFloat(i.item_qty) || 0),
-                                      0,
-                                    )}{" "}
-                                    Units
-                                  </td>
-                                  <td className="px-6 py-4 text-right text-[#003875] dark:text-[#FFD500] border-r border-[#003875]/10">
-                                    ₹
-                                    {selectedOrder
-                                      .reduce(
-                                        (sum: number, i: O2D) =>
-                                          sum + (parseFloat(i.est_amount) || 0),
-                                        0,
-                                      )
-                                      .toLocaleString()}
-                                  </td>
-                                  <td
-                                    colSpan={O2D_STEPS.length}
-                                    className="px-6 py-4"
-                                  ></td>
-                                </tr>
-                              </tfoot>
-                            </table>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="flex-1 flex flex-col items-center justify-center p-10 opacity-30">
-                      <div className="w-16 h-16 bg-[#003875]/5 rounded-full flex items-center justify-center mb-4">
-                        <Squares2X2Icon className="w-8 h-8 text-[#003875]" />
-                      </div>
-                      <p className="text-[11px] font-black uppercase tracking-[0.3em] text-[#003875] italic">
-                        Select record to engage
-                      </p>
-                    </div>
-                  )}
-                </div>
+                {/* Detail Pane: Order Details - Modularized */}
+                <O2DDetailPanel
+                  selectedOrder={selectedOrder}
+                  selectedOrderNo={selectedOrderNo}
+                  setSelectedOrderNo={setSelectedOrderNo}
+                  isAllLoading={isAllLoading}
+                  isTransitioning={isTransitioning}
+                  isSpecialRole={isSpecialRole}
+                  setIsRemoveFollowUpModalOpen={setIsRemoveFollowUpModalOpen}
+                  openStepUpdateModal={openStepUpdateModal}
+                  setConfirmPayload={setConfirmPayload}
+                  setIsConfirmOpen={setIsConfirmOpen}
+                  detailViewMode={detailViewMode}
+                  setDetailViewMode={setDetailViewMode}
+                  lockoutTimeLeft={lockoutTimeLeft}
+                  isStep1Lockout={isStep1Lockout}
+                  getPreviewUrl={getPreviewUrl}
+                  getDownloadUrl={getDownloadUrl}
+                  fullParties={fullParties}
+                />
               </>
             )}
           </div>
@@ -3673,6 +2917,7 @@ export default function O2DPage() {
                           <img
                             src={imagePreview}
                             className="w-full h-full object-cover"
+                            alt="Order Proof"
                           />
                         ) : (
                           <>
@@ -4196,7 +3441,7 @@ export default function O2DPage() {
                                   no === stepUpdateFields.merge_order_with_1,
                               );
                               return match
-                                ? `${match} | ${groupedOrders[match][0]?.party_name || ""}`
+                                ? `${match} | ${(groupedOrders as any)[match][0]?.party_name || ""}`
                                 : stepUpdateFields.merge_order_with_1;
                             })()
                             : ""
@@ -4240,14 +3485,14 @@ export default function O2DPage() {
                         {stepAttachmentPreview &&
                           stepAttachment?.type.startsWith("image/") ? (
                           <img
-                            src={stepAttachmentPreview}
+                            src={stepAttachmentPreview || ""}
                             className="w-full h-full object-cover"
                           />
                         ) : stepAttachment ? (
                           <div className="flex flex-col items-center gap-1">
                             <ArchiveBoxIcon className="w-8 h-8 text-[#003875]/40" />
                             <span className="text-[8px] font-black text-gray-400 max-w-[150px] truncate">
-                              {stepAttachment.name}
+                              {stepAttachment?.name}
                             </span>
                           </div>
                         ) : (
@@ -4344,14 +3589,14 @@ export default function O2DPage() {
                         {stepAttachmentPreview &&
                           stepAttachment?.type.startsWith("image/") ? (
                           <img
-                            src={stepAttachmentPreview}
+                            src={stepAttachmentPreview || ""}
                             className="w-full h-full object-cover"
                           />
                         ) : stepAttachment ? (
                           <div className="flex flex-col items-center gap-1">
                             <ArchiveBoxIcon className="w-8 h-8 text-[#003875]/40" />
                             <span className="text-[8px] font-black text-gray-400 max-w-[150px] truncate">
-                              {stepAttachment.name}
+                              {stepAttachment?.name}
                             </span>
                           </div>
                         ) : (
@@ -4496,14 +3741,14 @@ export default function O2DPage() {
                         {stepAttachmentPreview &&
                           stepAttachment?.type.startsWith("image/") ? (
                           <img
-                            src={stepAttachmentPreview}
+                            src={stepAttachmentPreview || ""}
                             className="w-full h-full object-cover"
                           />
                         ) : stepAttachment ? (
                           <div className="flex flex-col items-center gap-1">
                             <ArchiveBoxIcon className="w-8 h-8 text-[#003875]/40" />
                             <span className="text-[8px] font-black text-gray-400 max-w-[150px] truncate">
-                              {stepAttachment.name}
+                              {stepAttachment?.name}
                             </span>
                           </div>
                         ) : (
@@ -4577,7 +3822,7 @@ export default function O2DPage() {
           confirmPayload?.type === "delete"
             ? "Terminate Protocol?"
             : confirmPayload?.type === "hold"
-              ? confirmPayload.currentValue
+              ? confirmPayload?.currentValue
                 ? "Release Hold?"
                 : "Place on Hold?"
               : "Cancel Order?"
@@ -4586,7 +3831,7 @@ export default function O2DPage() {
           confirmPayload?.type === "delete"
             ? "This action will permanently purge this record from the grid. Are you sure you want to execute this command?"
             : confirmPayload?.type === "hold"
-              ? confirmPayload.currentValue
+              ? confirmPayload?.currentValue
                 ? "Do you want to release this order from the hold status?"
                 : "Do you want to place this order on hold?"
               : "Are you sure you want to cancel this order? This action will mark it as cancelled."
@@ -5174,3 +4419,966 @@ function YesNoToggle({
     </div>
   );
 }
+
+interface O2DDetailPanelProps {
+  selectedOrder: O2D[];
+  selectedOrderNo: string | null;
+  setSelectedOrderNo: (no: string | null) => void;
+  isAllLoading: boolean;
+  isTransitioning: boolean;
+  isSpecialRole: boolean;
+  setIsRemoveFollowUpModalOpen: (open: boolean) => void;
+  openStepUpdateModal: () => void;
+  setConfirmPayload: (payload: any) => void;
+  setIsConfirmOpen: (open: boolean) => void;
+  detailViewMode: 'full' | 'table';
+  setDetailViewMode: (mode: 'full' | 'table') => void;
+  lockoutTimeLeft: { m: number; s: number };
+  isStep1Lockout: boolean;
+  getPreviewUrl: (path: string) => string;
+  getDownloadUrl: (path: string) => string;
+  fullParties: any[];
+}
+
+function O2DDetailPanel({
+  selectedOrder,
+  selectedOrderNo,
+  setSelectedOrderNo,
+  isAllLoading,
+  isTransitioning,
+  isSpecialRole,
+  setIsRemoveFollowUpModalOpen,
+  openStepUpdateModal,
+  setConfirmPayload,
+  setIsConfirmOpen,
+  detailViewMode,
+  setDetailViewMode,
+  lockoutTimeLeft,
+  isStep1Lockout,
+  getPreviewUrl,
+  getDownloadUrl,
+  fullParties,
+}: O2DDetailPanelProps) {
+  return (
+    <div
+      key={selectedOrderNo || "none"}
+      className={`flex-1 flex flex-col min-w-0 bg-white dark:bg-navy-900/20 relative z-10 ${!selectedOrderNo ? "hidden lg:flex" : "flex"}`}
+    >
+      {/* Loading Overlay */}
+      {(isAllLoading || isTransitioning) && (!selectedOrder || selectedOrder.length === 0) && (
+        <div className="absolute inset-0 bg-white/60 dark:bg-navy-900/60 backdrop-blur-sm flex items-center justify-center z-40 rounded-lg">
+          <div className="flex flex-col items-center gap-3">
+            <div className="w-8 h-8 border-3 border-[#003875]/20 dark:border-[#FFD500]/20 border-t-[#003875] dark:border-t-[#FFD500] rounded-full animate-spin" />
+            <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">
+              Loading...
+            </p>
+          </div>
+        </div>
+      )}
+      {selectedOrder && selectedOrder.length > 0 ? (
+        <div className="flex-1 flex flex-col overflow-y-auto no-scrollbar">
+          {" "}
+          {/* CREAM HEADER - Compact with all Actions */}
+          <div className="px-4 py-2 flex items-center justify-between bg-[#FEF6DB] dark:bg-navy-800 border-b border-orange-100 dark:border-navy-700 text-[#003875] dark:text-[#FFD500]">
+            <div className="flex items-center gap-2.5">
+              <button
+                onClick={() => setSelectedOrderNo(null)}
+                className="lg:hidden p-1.5 bg-[#003875]/10 hover:bg-[#003875]/20 rounded-full transition-all"
+              >
+                <ArrowLeftIcon className="w-4 h-4 text-[#003875] dark:text-[#FFD500]" />
+              </button>
+              <h2 className="text-[15px] font-black italic tracking-tight uppercase">
+                {selectedOrderNo}
+              </h2>
+            </div>
+
+            <div className="flex items-center gap-1">
+              {" "}
+              {/* Workflow Actions */}
+              {!selectedOrder[0]?.hold &&
+                !selectedOrder[0]?.cancelled &&
+                !isStep1Lockout && (
+                  <div className="flex items-center gap-1.5">
+                    {isSpecialRole && (
+                      <button
+                        onClick={() =>
+                          setIsRemoveFollowUpModalOpen(true)
+                        }
+                        className="flex items-center gap-1.5 p-1.5 sm:px-4 sm:py-1.5 bg-[#003875]/5 hover:bg-[#003875]/10 rounded-full text-[#003875] dark:text-[#FFD500] transition-all transition-transform active:scale-90 border border-[#003875]/10 dark:border-[#FFD500]/10"
+                        title="Remove Follow-up"
+                      >
+                        <MinusCircleIcon className="w-4 h-4" />
+                        <span className="hidden lg:inline text-[10px] font-black uppercase tracking-widest">
+                          Remove Follow-up
+                        </span>
+                      </button>
+                    )}
+                    <button
+                      onClick={openStepUpdateModal}
+                      className="flex items-center gap-1.5 p-1.5 sm:px-5 sm:py-1.5 bg-[#003875] text-[#FFD500] hover:bg-[#002a5a] rounded-full transition-all transition-transform active:scale-90 shadow-lg shadow-black/10 animate-pulse"
+                      title="Update Progress"
+                    >
+                      <ArrowPathIcon className="w-4 h-4" />
+                      <span className="hidden lg:inline text-[10px] font-black uppercase opacity-90">
+                        Update
+                      </span>
+                    </button>
+                  </div>
+                )}
+              {/* Status Actions: Hold & Cancel */}
+              <button
+                onClick={() => {
+                  setConfirmPayload({
+                    type: "hold",
+                    orderNo: selectedOrderNo as string,
+                    currentValue: selectedOrder[0]?.hold,
+                  });
+                  setIsConfirmOpen(true);
+                }}
+                className={`flex items-center gap-1.5 p-1.5 sm:px-4 sm:py-1.5 rounded-full transition-all transition-transform active:scale-90 border ${selectedOrder[0]?.hold ? "bg-orange-500 text-white border-orange-400 shadow-md" : "bg-[#003875]/5 text-[#003875]/80 border-[#003875]/10 hover:bg-[#003875]/10 hover:text-[#003875] dark:text-[#FFD500]/80 dark:border-[#FFD500]/10 dark:hover:bg-[#FFD500]/10 dark:hover:text-[#FFD500]"}`}
+                title={
+                  selectedOrder[0]?.hold
+                    ? "Resume Order"
+                    : "Put on Hold"
+                }
+              >
+                <PauseCircleIcon className="w-4 h-4" />
+                <span className="hidden lg:inline text-[10px] font-black uppercase tracking-widest">
+                  {selectedOrder[0]?.hold ? "On Hold" : "Hold"}
+                </span>
+              </button>
+              <button
+                onClick={() => {
+                  setConfirmPayload({
+                    type: "cancelled",
+                    orderNo: selectedOrderNo as string,
+                    currentValue: selectedOrder[0]?.cancelled,
+                  });
+                  setIsConfirmOpen(true);
+                }}
+                className={`flex items-center gap-1.5 p-1.5 sm:px-4 sm:py-1.5 rounded-full transition-all transition-transform active:scale-90 border ${selectedOrder[0]?.cancelled ? "bg-black text-white border-black shadow-md" : "bg-[#003875]/5 text-[#003875]/80 border-[#003875]/10 hover:bg-[#003875]/10 hover:text-[#003875] dark:text-[#FFD500]/80 dark:border-[#FFD500]/10 dark:hover:bg-[#FFD500]/10 dark:hover:text-[#FFD500]"}`}
+                title={
+                  selectedOrder[0]?.cancelled
+                    ? "Undo Cancellation"
+                    : "Cancel Order"
+                }
+              >
+                <NoSymbolIcon className="w-4 h-4" />
+                <span className="hidden lg:inline text-[10px] font-black uppercase tracking-widest">
+                  {selectedOrder[0]?.cancelled
+                    ? "Cancelled"
+                    : "Cancel"}
+                </span>
+              </button>
+              <div className="w-px h-5 bg-[#003875]/10 dark:bg-white/20 mx-1 hidden sm:block" />
+              <div className="flex items-center gap-1.5 p-1 bg-[#003875]/5 dark:bg-black/10 rounded-full border border-[#003875]/10 dark:border-white/20 backdrop-blur-sm">
+                <button
+                  onClick={() => setDetailViewMode("full")}
+                  className={`p-1.5 rounded-full transition-all ${detailViewMode === "full" ? "bg-[#003875] text-[#FFD500] shadow-md scale-105" : "text-[#003875]/60 hover:text-[#003875] dark:text-white/60 dark:hover:text-white"}`}
+                >
+                  <Squares2X2Icon className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => setDetailViewMode("table")}
+                  className={`p-1.5 rounded-full transition-all ${detailViewMode === "table" ? "bg-[#003875] text-[#FFD500] shadow-md scale-105" : "text-[#003875]/60 hover:text-[#003875] dark:text-white/60 dark:hover:text-white"}`}
+                >
+                  <ListBulletIcon className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          </div>
+          {detailViewMode === "full" ? (
+            <div className="flex-1 overflow-y-auto no-scrollbar p-6 space-y-6 animate-in fade-in duration-200">
+              {/* Consolidated Summary - Cream Background */}
+              <div className="bg-white dark:bg-navy-800/50 p-6 rounded-2xl border-2 border-gray-100 dark:border-navy-700 shadow-md grid grid-cols-1 md:grid-cols-12 gap-6 items-center">
+                <div className="md:col-span-9">
+                  <div className="mb-5">
+                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-[0.3em] mb-1">
+                      ESTABLISHED PARTNER
+                    </p>
+                    <p className="text-lg font-black text-[#003875] dark:text-[#FFD500] uppercase tracking-wide">
+                      {selectedOrder[0]?.party_name}
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-6">
+                    <div className="flex items-center gap-3">
+                      <ArchiveBoxIcon className="w-4.5 h-4.5 text-[#003875]/40" />
+                      <div className="flex flex-col">
+                        <span className="text-[9px] font-black text-gray-400 uppercase">
+                          Loadout
+                        </span>
+                        <span className="text-[13px] font-black text-gray-700 dark:text-gray-100">
+                          {selectedOrder.length} Items
+                        </span>
+                      </div>
+                    </div>
+                    <div className="w-px h-8 bg-[#003875]/5 mx-1 hidden sm:block" />
+                    <div className="flex items-center gap-3">
+                      <UserIcon className="w-4.5 h-4.5 text-[#003875]/40" />
+                      <div className="flex flex-col">
+                        <span className="text-[9px] font-black text-gray-400 uppercase">
+                          Operator
+                        </span>
+                        <span className="text-[13px] font-black text-gray-700 dark:text-gray-100 uppercase truncate max-w-[120px]">
+                          {selectedOrder[0]?.filled_by}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="w-px h-8 bg-[#003875]/5 mx-1 hidden sm:block" />
+                    <div className="flex items-center gap-3">
+                      <CalendarDaysIcon className="w-4.5 h-4.5 text-[#003875]/40" />
+                      <div className="flex flex-col">
+                        <span className="text-[9px] font-black text-gray-400 uppercase">
+                          Timestamp
+                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[13px] font-black text-gray-700 dark:text-gray-100">
+                            {(() => {
+                              const o = selectedOrder[0];
+                              const d = o?.created_at || (o as any)?.actual_1 || (o as any)?.planned_1;
+                              if (!d) return "N/A";
+                              const ts = new Date(d);
+                              if (isNaN(ts.getTime()) || ts.getFullYear() <= 1970) return "N/A";
+                              return ts.toLocaleString(undefined, {
+                                dateStyle: "short",
+                                timeStyle: "short",
+                              });
+                            })()}
+                          </span>
+                          {isStep1Lockout && (
+                            <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 border border-red-100 dark:border-red-800 text-[12px] font-black shadow-sm">
+                              <ClockIcon className="w-4 h-4 animate-pulse" />
+                              -
+                              {lockoutTimeLeft.m
+                                .toString()
+                                .padStart(2, "0")}
+                              :
+                              {lockoutTimeLeft.s
+                                .toString()
+                                .padStart(2, "0")}{" "}
+                              to enable
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {selectedOrder[0]?.hold &&
+                      !selectedOrder[0]?.cancelled && (
+                        <>
+                          <div className="w-px h-8 bg-orange-500/10 mx-1 hidden sm:block" />
+                          <div className="flex items-center gap-3">
+                            <PauseCircleIcon className="w-4.5 h-4.5 text-orange-500/60" />
+                            <div className="flex flex-col">
+                              <span className="text-[9px] font-black text-orange-400 uppercase">
+                                Held On
+                              </span>
+                              <span className="text-[13px] font-black text-orange-500">
+                                {selectedOrder[0]?.hold &&
+                                  new Date(
+                                    selectedOrder[0]?.hold,
+                                  ).toLocaleString(undefined, {
+                                    dateStyle: "short",
+                                    timeStyle: "short",
+                                  })}
+                              </span>
+                            </div>
+                          </div>
+                        </>
+                      )}
+
+                    {selectedOrder[0]?.cancelled && (
+                      <>
+                        <div className="w-px h-8 bg-red-500/10 mx-1 hidden sm:block" />
+                        <div className="flex items-center gap-3">
+                          <NoSymbolIcon className="w-4.5 h-4.5 text-red-500/60" />
+                          <div className="flex flex-col">
+                            <span className="text-[9px] font-black text-red-400 uppercase">
+                              Cancelled On
+                            </span>
+                            <span className="text-[13px] font-black text-[#CE2029]">
+                              {selectedOrder[0]?.cancelled &&
+                                new Date(
+                                  selectedOrder[0]?.cancelled,
+                                ).toLocaleString(undefined, {
+                                  dateStyle: "short",
+                                  timeStyle: "short",
+                                })}
+                            </span>
+                          </div>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
+                <div className="md:col-span-3 flex justify-end">
+                  <div className="relative group w-28 h-28">
+                    <div className="absolute inset-0 bg-[#FFD500] blur-lg opacity-10" />
+                    <div className="relative h-full bg-white dark:bg-black border-4 border-white dark:border-navy-800 rounded-xl overflow-hidden shadow-xl group-hover:scale-105 transition-transform">
+                      {selectedOrder[0]?.order_screenshot ? (
+                        <img
+                          src={getPreviewUrl(
+                            selectedOrder[0]?.order_screenshot,
+                          )}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <PhotoIcon className="w-6 h-6 text-gray-100 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
+                      )}
+                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                        <a
+                          href={getPreviewUrl(
+                            selectedOrder[0]?.order_screenshot,
+                          )}
+                          target="_blank"
+                          className="p-2 bg-white rounded-full transition-transform hover:scale-110"
+                          title="View"
+                        >
+                          <EyeIcon className="w-4 h-4 text-black" />
+                        </a>
+                        {selectedOrder[0]?.order_screenshot && (
+                          <a
+                            href={getDownloadUrl(
+                              selectedOrder[0]?.order_screenshot,
+                            )}
+                            target="_blank"
+                            className="p-2 bg-white rounded-full transition-transform hover:scale-110"
+                            title="Download"
+                          >
+                            <ArrowDownTrayIcon className="w-4 h-4 text-black" />
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Promotional Deployment - Extra Items for Dispatch */}
+              {(() => {
+                const activeParty = fullParties.find(
+                  (p: any) =>
+                    p.partyName === selectedOrder[0]?.party_name,
+                );
+                if (activeParty && activeParty.firstOrderItems) {
+                  // Parse order no from customerType e.g. "NEW (OR-05)"
+                  const match = (
+                    activeParty.customerType || ""
+                  ).match(/NEW\s*\((.+?)\)/i);
+                  const firstOrderNo = match
+                    ? match[1].trim()
+                    : null;
+                  // Only show if this is the specific linked first order
+                  if (
+                    firstOrderNo &&
+                    firstOrderNo === selectedOrder[0]?.order_no
+                  ) {
+                    const promoItems = activeParty.firstOrderItems
+                      .split(",")
+                      .map((s: string) => s.trim())
+                      .filter(Boolean);
+                    if (promoItems.length > 0) {
+                      // Icon + color map for known promo items
+                      const promoIconMap: Record<
+                        string,
+                        { icon: React.ElementType; color: string }
+                      > = {
+                        "T Shirt": {
+                          icon: TagIcon,
+                          color: "text-rose-500",
+                        },
+                        "Note Pad": {
+                          icon: DocumentTextIcon,
+                          color: "text-sky-500",
+                        },
+                        Pen: {
+                          icon: PencilSquareIcon,
+                          color: "text-violet-500",
+                        },
+                        Thele: {
+                          icon: ShoppingBagIcon,
+                          color: "text-emerald-500",
+                        },
+                        "Tape Roll": {
+                          icon: ArchiveBoxIcon,
+                          color: "text-amber-500",
+                        },
+                        Posters: {
+                          icon: PhotoIcon,
+                          color: "text-pink-500",
+                        },
+                        Catalogue: {
+                          icon: ClipboardDocumentCheckIcon,
+                          color: "text-teal-500",
+                        },
+                      };
+                      return (
+                        <div className="bg-gradient-to-r from-amber-50 to-[#FFFBF0] dark:from-navy-800 dark:to-navy-900 rounded-2xl border-2 border-[#FFD500] shadow-sm overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-400 relative">
+                          <div className="absolute top-0 left-0 w-1.5 h-full bg-[#FFD500]" />
+                          <div className="px-6 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                            <div>
+                              <h3 className="text-[11px] font-black text-[#003875] dark:text-[#FFD500] uppercase tracking-widest flex items-center gap-2">
+                                <GiftIcon className="w-5 h-5 text-[#FFD500]" />
+                                PROMOTIONAL DEPLOYMENT
+                              </h3>
+                              <p className="text-[10px] font-bold text-gray-500 mt-0.5 ml-7 uppercase tracking-wider">
+                                Required First Order Extras for
+                                Dispatch
+                              </p>
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                              {promoItems.map(
+                                (item: string, idx: number) => {
+                                  const itemMatch = item.match(
+                                    /(.*?)\s*\((Qty:\s*(.*?))\)/,
+                                  );
+                                  const name = itemMatch
+                                    ? itemMatch[1].trim()
+                                    : item;
+                                  const qty = itemMatch
+                                    ? itemMatch[3]
+                                    : "1";
+                                  const promo = promoIconMap[
+                                    name
+                                  ] || {
+                                    icon: GiftIcon,
+                                    color: "text-orange-500",
+                                  };
+                                  const ItemIcon = promo.icon;
+                                  return (
+                                    <div
+                                      key={idx}
+                                      className="bg-white dark:bg-black px-3 py-1.5 rounded-lg border border-orange-100 dark:border-navy-700 flex items-center gap-2 shadow-sm"
+                                    >
+                                      <ItemIcon
+                                        className={`w-3.5 h-3.5 shrink-0 ${promo.color}`}
+                                      />
+                                      <span className="text-[11px] font-black text-gray-800 dark:text-gray-100">
+                                        {name}
+                                      </span>
+                                      <div className="w-px h-3 bg-gray-200 dark:bg-navy-700" />
+                                      <span className="text-[11px] font-black text-[#003875] dark:text-[#FFD500]">
+                                        ×{qty}
+                                      </span>
+                                    </div>
+                                  );
+                                },
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    }
+                  }
+                }
+                return null;
+              })()}
+
+              {/* Tactical Inventory - Reverted to Simple 4-Column Table View */}
+              <div className="bg-white dark:bg-navy-800/50 rounded-2xl border-2 border-gray-100 dark:border-navy-700 shadow-md overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-500">
+                <div className="px-6 py-3 border-b border-gray-100 dark:border-navy-700 flex items-center justify-between bg-white/40 dark:bg-transparent">
+                  <h3 className="text-[10px] font-black text-gray-500 uppercase tracking-widest flex items-center gap-2 items-center">
+                    <div className="w-1 h-3.5 bg-[#003875] rounded-full" />{" "}
+                    Tactical Inventory
+                  </h3>
+                  <div className="text-[12px] font-black text-[#003875] dark:text-[#FFD500] uppercase tracking-tighter">
+                    TOTAL Value: ₹
+                    {selectedOrder
+                      .reduce(
+                        (sum: number, i: O2D) =>
+                          sum + (parseFloat(i.est_amount) || 0),
+                        0,
+                      )
+                      .toLocaleString()}
+                  </div>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="bg-amber-100 dark:bg-navy-950 text-[10px] font-black text-[#003875] dark:text-[#FFD500] uppercase tracking-widest">
+                        <th className="px-6 py-3">NOMENCLATURE</th>
+                        <th className="px-6 py-3">
+                          ITEM SPECIFICATION
+                        </th>
+                        <th className="px-6 py-3 text-center">
+                          QUANTITY
+                        </th>
+                        <th className="px-6 py-3 text-right">
+                          ESTIMATED AMOUNT
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100 dark:divide-navy-800/20">
+                      {selectedOrder.map((item: O2D, idx: number) => (
+                        <tr
+                          key={idx}
+                          className="text-[12px] font-bold text-gray-700 dark:text-gray-300 hover:bg-[#003875]/[0.02] dark:hover:bg-navy-700/10 transition-colors"
+                        >
+                          <td className="px-6 py-4 font-black text-gray-900 dark:text-white uppercase">
+                            {item.item_name}
+                          </td>
+                          <td className="px-6 py-4 text-[11px] font-medium text-gray-500 dark:text-gray-400 italic italic">
+                            {item.item_specification || "-"}
+                          </td>
+                          <td className="px-6 py-4 text-center font-black text-[#003875] dark:text-[#FFD500]">
+                            {item.item_qty}
+                          </td>
+                          <td className="px-6 py-4 text-right font-black text-[#CE2029]">
+                            ₹
+                            {(parseFloat(item.est_amount) || 0).toLocaleString()}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr className="bg-amber-100/50 dark:bg-black/20 text-[11px] font-black uppercase tracking-widest text-[#003875] dark:text-[#FFD500]">
+                        <td
+                          colSpan={2}
+                          className="px-6 py-4 italic"
+                        >
+                          Aggregate Order Sum
+                        </td>
+                        <td className="px-6 py-4 text-center bg-[#003875]/5 dark:bg-[#003875]/10 text-gray-700 dark:text-gray-300">
+                          {selectedOrder.length} Items
+                        </td>
+                        <td className="px-6 py-4 text-right bg-[#003875] text-white">
+                          ₹
+                          {selectedOrder
+                            .reduce(
+                              (sum: number, i: O2D) =>
+                                sum +
+                                (parseFloat(i.est_amount) || 0),
+                              0,
+                            )
+                            .toLocaleString()}
+                        </td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              </div>
+              {/* Operational Manifest - Step Specific Details */}
+              <div className="bg-white dark:bg-navy-800/50 rounded-2xl border-2 border-gray-100 dark:border-navy-700 shadow-md overflow-hidden">
+                <div className="px-6 py-3 border-b border-gray-100 dark:border-navy-700 bg-white/40 dark:bg-transparent">
+                  <h3 className="text-[10px] font-black text-gray-500 uppercase tracking-widest flex items-center gap-2 items-center">
+                    <div className="w-1 h-3.5 bg-[#003875] rounded-full" />{" "}
+                    Operational Manifest
+                  </h3>
+                </div>
+                <div className="p-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-y-8 gap-x-12">
+                  {/* Step 1: SO Details */}
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-2 text-[11px] font-black text-[#003875] dark:text-[#FFD500] uppercase tracking-widest border-b border-gray-100 pb-2">
+                      <IdentificationIcon className="w-4 h-4" />{" "}
+                      Step 1: SO Protocol
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="flex flex-col">
+                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">
+                          SO Number
+                        </span>
+                        <span className="text-[14px] font-black text-gray-700 dark:text-gray-200">
+                          {selectedOrder[0]?.so_number_1 || "-"}
+                        </span>
+                      </div>
+                      <div className="flex flex-col">
+                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">
+                          Final Amt
+                        </span>
+                        <span className="text-[14px] font-black text-[#003875] dark:text-[#FFD500]">
+                          ₹
+                          {(parseFloat(
+                            selectedOrder[0]?.final_amount_1 || "0",
+                          ) || 0).toLocaleString()}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">
+                        Merge With
+                      </span>
+                      <span className="text-[14px] font-black text-gray-700 dark:text-gray-200">
+                        {selectedOrder[0]?.merge_order_with_1 ||
+                          "N/A"}
+                      </span>
+                    </div>
+                    {(() => {
+                      const soDoc = selectedOrder.find((o: O2D) => o.upload_so_1)?.upload_so_1;
+                      if (!soDoc) return null;
+                      return (
+                        <div className="flex items-center gap-2 mt-1">
+                          <a
+                            href={getPreviewUrl(soDoc)}
+                            target="_blank"
+                            className="p-1 px-2.5 bg-[#003875]/5 dark:bg-[#FFD500]/5 text-[#003875] dark:text-[#FFD500] rounded-full text-[9px] font-black uppercase tracking-widest hover:bg-[#003875] hover:text-white dark:hover:bg-[#FFD500] dark:hover:text-black transition-all flex items-center gap-1"
+                          >
+                            <EyeIcon className="w-3 h-3" />
+                            View
+                          </a>
+                          <a
+                            href={getDownloadUrl(soDoc)}
+                            target="_blank"
+                            className="flex items-center gap-1.5 px-3 py-2 bg-[#003875]/5 rounded-lg text-[11px] font-black text-[#003875] hover:bg-[#003875]/10 transition-all uppercase tracking-widest"
+                            title="Download SO Doc"
+                          >
+                            <ArrowDownTrayIcon className="w-4 h-4" />
+                          </a>
+                        </div>
+                      );
+                    })()}
+                  </div>
+
+                  {/* Step 5: Packing */}
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-2 text-[11px] font-black text-[#003875] dark:text-[#FFD500] uppercase tracking-widest border-b border-gray-100 pb-2">
+                      <ArchiveBoxIcon className="w-4 h-4" /> Step 5:
+                      Packing
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="flex flex-col">
+                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">
+                          Parcels
+                        </span>
+                        <span className="text-[14px] font-black text-gray-700 dark:text-gray-200">
+                          {selectedOrder[0]?.num_of_parcel_5 || "-"}
+                        </span>
+                      </div>
+                      <div className="flex flex-col">
+                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">
+                          Packed On
+                        </span>
+                        <span className="text-[14px] font-black text-gray-700 dark:text-gray-200">
+                          {selectedOrder[0]
+                            ?.actual_date_of_order_packed_5
+                            ? new Date(
+                              selectedOrder[0]
+                                ?.actual_date_of_order_packed_5,
+                            ).toLocaleDateString()
+                            : "-"}
+                        </span>
+                      </div>
+                    </div>
+                    {(() => {
+                      const piDoc = selectedOrder.find((o: O2D) => o.upload_pi_5)?.upload_pi_5;
+                      if (!piDoc) return null;
+                      return (
+                        <div className="flex items-center gap-2 mt-1">
+                          <a
+                            href={getPreviewUrl(piDoc)}
+                            target="_blank"
+                            className="p-1 px-2.5 bg-[#003875]/5 dark:bg-[#FFD500]/5 text-[#003875] dark:text-[#FFD500] rounded-full text-[9px] font-black uppercase tracking-widest hover:bg-[#003875] hover:text-white dark:hover:bg-[#FFD500] dark:hover:text-black transition-all flex items-center gap-1"
+                          >
+                            <EyeIcon className="w-3 h-3" />
+                            View
+                          </a>
+                          <a
+                            href={getDownloadUrl(piDoc)}
+                            target="_blank"
+                            className="flex items-center gap-1.5 px-3 py-2 bg-[#003875]/5 rounded-lg text-[11px] font-black text-[#003875] hover:bg-[#003875]/10 transition-all uppercase tracking-widest"
+                            title="Download PI Doc"
+                          >
+                            <ArrowDownTrayIcon className="w-4 h-4" />
+                          </a>
+                        </div>
+                      );
+                    })()}
+                  </div>
+
+                  {/* Step 7 & 9: Dispatch & Bilty */}
+                  <div className="space-y-8">
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2 text-[11px] font-black text-[#003875] dark:text-[#FFD500] uppercase tracking-widest border-b border-gray-100 pb-2">
+                        <CalendarDaysIcon className="w-4 h-4" />{" "}
+                        Step 7: Dispatch
+                      </div>
+                      <div className="flex flex-col">
+                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">
+                          Voucher #
+                        </span>
+                        <span className="text-[14px] font-black text-gray-700 dark:text-gray-200">
+                          {selectedOrder[0]?.voucher_num_7 || "-"}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2 text-[11px] font-black text-[#003875] dark:text-[#FFD500] uppercase tracking-widest border-b border-gray-100 pb-2">
+                        <HashtagIcon className="w-4 h-4" /> Step 9:
+                        Send Bilty to CRM
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="flex flex-col">
+                          <span className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">
+                            Parcels
+                          </span>
+                          <span className="text-[14px] font-black text-gray-700 dark:text-gray-200">
+                            {selectedOrder[0]?.num_of_parcel_9 ||
+                              "-"}
+                          </span>
+                        </div>
+                        {(() => {
+                          const biltyDoc = selectedOrder.find((o: O2D) => o.attach_bilty_9)?.attach_bilty_9;
+                          if (!biltyDoc) return null;
+                          return (
+                            <div className="flex items-center gap-2 self-end mb-1">
+                              <a
+                                href={getPreviewUrl(biltyDoc)}
+                                target="_blank"
+                                className="flex items-center gap-2 px-3 py-1.5 bg-[#003875]/5 rounded-lg text-[10px] font-black text-[#003875] hover:bg-[#003875]/10 w-fit transition-all uppercase tracking-widest"
+                              >
+                                <EyeIcon className="w-3.5 h-3.5" /> Bilty
+                              </a>
+                              <a
+                                href={getDownloadUrl(biltyDoc)}
+                                target="_blank"
+                                className="p-1.5 bg-[#003875]/5 rounded-lg text-[#003875] hover:bg-[#003875]/10 transition-all"
+                                title="Download Bilty"
+                              >
+                                <ArrowDownTrayIcon className="w-3.5 h-3.5" />
+                              </a>
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Step 8: Verification */}
+                  <div className="space-y-4 lg:col-span-2">
+                    <div className="flex items-center gap-2 text-[11px] font-black text-[#003875] dark:text-[#FFD500] uppercase tracking-widest border-b border-gray-100 pb-2">
+                      <CalendarDaysIcon className="w-4 h-4" /> Step
+                      8: Operational Audit
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-6">
+                      <div className="flex flex-col">
+                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">
+                          Checked
+                        </span>
+                        <span
+                          className={`text-[14px] font-black ${selectedOrder[0]?.order_details_checked_8 === "Yes" ? "text-green-500" : "text-red-500"}`}
+                        >
+                          {selectedOrder[0]
+                            ?.order_details_checked_8 || "No"}
+                        </span>
+                      </div>
+                      <div className="flex flex-col">
+                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">
+                          Voucher 51
+                        </span>
+                        <span className="text-[14px] font-black text-gray-700 dark:text-gray-200">
+                          {selectedOrder[0]?.voucher_num_51_8 ||
+                            "-"}
+                        </span>
+                      </div>
+                      <div className="flex flex-col sm:col-span-2">
+                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">
+                          T. Amount
+                        </span>
+                        <span className="text-[14px] font-black text-[#003875] dark:text-[#FFD500]">
+                          ₹
+                          {(parseFloat(
+                            selectedOrder[0]?.t_amt_8 || "0",
+                          ) || 0).toLocaleString()}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Dark Blue Decorative Line */}
+              <div className="h-0.5 bg-gradient-to-r from-transparent via-[#003875]/20 to-transparent" />
+
+              {/* Compact Remarks - Cream Background */}
+              {selectedOrder[0]?.remark && (
+                <div className="bg-[#FEF6DB] dark:bg-navy-800/50 p-5 rounded-2xl border-2 border-orange-100 dark:border-navy-700 relative shadow-md">
+                  <ChatBubbleBottomCenterTextIcon className="absolute top-4 right-4 w-6 h-6 text-[#003875]/10" />
+                  <span className="text-[9px] font-black text-[#003875]/40 uppercase tracking-[0.2em] block mb-1.5 font-bold">
+                    Intelligence Report
+                  </span>
+                  <p className="text-[12px] font-bold text-gray-600 dark:text-gray-400 leading-relaxed italic">
+                    "{selectedOrder[0]?.remark}"
+                  </p>
+                </div>
+              )}
+            </div>
+          ) : (
+            /* Pure Simple Table View - Cream Background Theme */
+            <div className="flex-1 overflow-y-auto overflow-x-auto no-scrollbar p-6 animate-in slide-in-from-bottom-2 duration-200">
+              <div className="bg-white dark:bg-navy-900 rounded-xl border-2 border-gray-100 dark:border-navy-700 shadow-xl w-max min-w-full overflow-hidden">
+                <table className="w-full text-left border-collapse whitespace-nowrap">
+                  <thead>
+                    <tr className="bg-amber-100 dark:bg-navy-950 text-[11px] font-black text-[#003875] dark:text-[#FFD500] uppercase tracking-widest">
+                      <th className="px-6 py-4 border-r border-[#003875]/10 sticky left-0 z-10 bg-amber-100 dark:bg-navy-950">
+                        Nomenclature
+                      </th>
+                      <th className="px-6 py-4 border-r border-[#003875]/10">
+                        Item Specification
+                      </th>
+                      <th className="px-6 py-4 text-center border-r border-[#003875]/10">
+                        Quantity
+                      </th>
+                      <th className="px-6 py-4 text-right border-r border-[#003875]/10">
+                        Estimated Amount
+                      </th>
+                      {O2D_STEPS.map((step, idx) => (
+                        <th
+                          key={idx}
+                          className="px-4 py-3 text-center border-r border-[#003875]/10 last:border-r-0 align-top"
+                          title={step}
+                        >
+                          <div className="flex flex-col items-center justify-center gap-0.5 min-w-[120px]">
+                            <span className="text-[8px] opacity-50 uppercase tracking-[0.2em] font-black">
+                              Step {idx + 1}
+                            </span>
+                            <span className="text-[10px] whitespace-normal leading-tight">
+                              {O2D_STEP_SHORTS[idx]}
+                            </span>
+                          </div>
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#CE2029]/5 dark:divide-navy-800/20">
+                    {selectedOrder.map((item: O2D, idx: number) => (
+                      <tr
+                        key={idx}
+                        className="hover:bg-white/50 dark:hover:bg-white/5 transition-colors text-[13px] font-medium text-gray-700 dark:text-gray-200"
+                      >
+                        <td className="px-6 py-3 border-r border-[#CE2029]/5 sticky left-0 z-10 bg-white dark:bg-navy-800">
+                          {item.item_name}
+                        </td>
+                        <td
+                          className="px-6 py-3 border-r border-[#CE2029]/5 italic text-gray-500 text-[11px] max-w-[250px] truncate"
+                          title={item.item_specification}
+                        >
+                          {item.item_specification || "-"}
+                        </td>
+                        <td className="px-6 py-3 text-center border-r border-[#CE2029]/5 bg-[#FFD500]/5 dark:bg-navy-900 font-black">
+                          {item.item_qty}
+                        </td>
+                        <td className="px-6 py-3 text-right font-black text-[#003875] dark:text-[#FFD500] border-r border-[#CE2029]/5">
+                          ₹
+                          {parseFloat(
+                            item.est_amount,
+                          ).toLocaleString()}
+                        </td>
+                        {O2D_STEPS.map((_, stepIdx) => {
+                          const plannedRaw = item[
+                            `planned_${stepIdx + 1}` as keyof O2D
+                          ] as string;
+                          const actualRaw = item[
+                            `actual_${stepIdx + 1}` as keyof O2D
+                          ] as string;
+                          const status = item[
+                            `status_${stepIdx + 1}` as keyof O2D
+                          ] as string;
+
+                          const planned = formatDate(plannedRaw);
+                          const actual = formatDate(actualRaw);
+                          const delay = getTimeDelay(
+                            plannedRaw,
+                            actualRaw,
+                          );
+
+                          return (
+                            <td
+                              key={stepIdx}
+                              className="px-6 py-2 min-w-[140px] border-r border-[#CE2029]/5 last:border-r-0"
+                            >
+                              <div className="flex flex-col gap-1.5 text-[10.5px]">
+                                <div className="flex justify-between items-center gap-2">
+                                  <span className="text-gray-400 font-black tracking-widest uppercase text-[9px]">
+                                    Plan
+                                  </span>{" "}
+                                  <span className="font-bold text-gray-800 dark:text-gray-200">
+                                    {planned}
+                                  </span>
+                                </div>
+                                <div className="flex justify-between items-center gap-2">
+                                  <span className="text-gray-400 font-black tracking-widest uppercase text-[9px]">
+                                    Actual
+                                  </span>{" "}
+                                  <span className="font-black text-[#003875] dark:text-[#FFD500]">
+                                    {actual}
+                                  </span>
+                                </div>
+                                <div className="flex justify-between items-center gap-2">
+                                  <span className="text-gray-400 font-black tracking-widest uppercase text-[9px]">
+                                    Status
+                                  </span>{" "}
+                                  <span
+                                    className={`font-black uppercase ${(status || "").toString().trim().toLowerCase() === "done" || (status || "").toString().trim().toLowerCase() === "yes" ? "text-green-500" : "text-[#CE2029]"}`}
+                                  >
+                                    {status || "-"}
+                                  </span>
+                                </div>
+                                {delay && (
+                                  <div
+                                    className={`flex justify-between items-center gap-2 border-t pt-1.5 mt-0.5 ${delay.isDelayed ? "border-red-100 dark:border-red-900/30" : "border-green-100 dark:border-green-900/30"}`}
+                                  >
+                                    <span className="text-gray-400 font-black tracking-widest uppercase text-[9px]">
+                                      Delay
+                                    </span>
+                                    <span
+                                      className={`font-black text-[10px] ${delay.isDelayed ? "text-[#CE2029]" : "text-green-600"}`}
+                                    >
+                                      {delay.text}
+                                    </span>
+                                  </div>
+                                )}
+                              </div>
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr className="bg-[#FEF6DB]/80 dark:bg-navy-950 font-black text-[#003875] dark:text-white text-[13px] border-t-2 border-[#003875]/20 shadow-inner">
+                      <td className="px-6 py-4 border-r border-[#003875]/10 sticky left-0 z-10 bg-[#FEF6DB]/80 dark:bg-navy-950 backdrop-blur-md">
+                        AGGREGATE SUM
+                      </td>
+                      <td className="px-6 py-4 border-r border-[#003875]/10"></td>
+                      <td className="px-6 py-4 text-center border-r border-[#003875]/10">
+                        {selectedOrder.reduce(
+                          (sum: number, i: O2D) =>
+                            sum + (parseFloat(i.item_qty) || 0),
+                          0,
+                        )}{" "}
+                        Units
+                      </td>
+                      <td className="px-6 py-4 text-right text-[#003875] dark:text-[#FFD500] border-r border-[#003875]/10">
+                        ₹
+                        {selectedOrder
+                          .reduce(
+                            (sum: number, i: O2D) =>
+                              sum + (parseFloat(i.est_amount) || 0),
+                            0,
+                          )
+                          .toLocaleString()}
+                      </td>
+                      <td
+                        colSpan={O2D_STEPS.length}
+                        className="px-6 py-4"
+                      ></td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="flex-1 flex flex-col items-center justify-center p-10 opacity-30">
+          <div className="w-16 h-16 bg-[#003875]/5 rounded-full flex items-center justify-center mb-4">
+            <Squares2X2Icon className="w-8 h-8 text-[#003875]" />
+          </div>
+          <p className="text-[11px] font-black uppercase tracking-[0.3em] text-[#003875] italic">
+            Select record to engage
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+

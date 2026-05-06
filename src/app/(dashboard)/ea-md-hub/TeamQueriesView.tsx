@@ -342,7 +342,7 @@ export default function TeamQueriesView() {
         <Portal>
           <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-[#001736]/60 backdrop-blur-md" onClick={closeModal} />
-            <div className="relative bg-white dark:bg-navy-900 w-full max-w-xl rounded-[2rem] shadow-2xl flex flex-col animate-in fade-in zoom-in-95 duration-200 border border-white/20 overflow-hidden">
+            <div className="relative bg-white dark:bg-navy-900 w-full max-w-xl rounded-2xl shadow-2xl flex flex-col animate-in fade-in zoom-in-95 duration-200 border border-white/20 overflow-hidden">
               <div className="px-8 py-6 border-b border-gray-100 dark:border-navy-800 flex justify-between items-center bg-[#FFFBF0] dark:bg-navy-900">
                 <div>
                   <h2 className="text-xl font-black text-gray-900 dark:text-white tracking-tight uppercase">
@@ -366,12 +366,23 @@ export default function TeamQueriesView() {
                 </div>
               )}
 
-              <form onSubmit={handleSave} className="p-8 space-y-5 bg-white dark:bg-navy-800/50 max-h-[80vh] overflow-y-auto">
+              <form onSubmit={handleSave} className="p-8 space-y-6 bg-white dark:bg-navy-800/50 max-h-[80vh] overflow-y-auto">
+                {/* Section Header */}
+                <div>
+                  <p className="text-[10px] font-black text-[#003875] dark:text-[#FFD500] uppercase tracking-[0.2em] mb-1">Query Details</p>
+                  <div className="h-0.5 w-10 bg-[#003875] dark:bg-[#FFD500] rounded-full mb-4"></div>
+                </div>
                 <div>
                   <label className="flex items-center gap-2 text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 px-1 font-black">
                     <UserIcon className="w-3 h-3" /> Team Member *
                   </label>
-                  <SearchableSelect options={users} value={formMember} onChange={setFormMember} placeholder="Who raised this?" />
+                  <SearchableSelect 
+                    options={users} 
+                    value={formMember} 
+                    onChange={setFormMember} 
+                    placeholder="Who raised this?" 
+                    className="bg-[#FFFBF0] dark:bg-navy-900 border border-orange-100 dark:border-navy-700/50 shadow-sm"
+                  />
                 </div>
 
                 <div>
@@ -456,12 +467,14 @@ export default function TeamQueriesView() {
                     className="w-full bg-[#FFFBF0] dark:bg-navy-900 px-4 py-3 rounded-xl border border-orange-100 dark:border-navy-700/50 focus:border-[#003875] dark:focus:border-[#FFD500] focus:bg-white outline-none text-[13px] font-bold text-gray-800 dark:text-white transition-all shadow-sm resize-none appearance-none" />
                 </div>
 
-                <div className="pt-2 flex justify-end gap-4">
+                <div className="pt-4 flex justify-end gap-5">
                   <button type="button" onClick={closeModal} className="px-8 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-gray-900 transition-colors">
-                    Cancel
+                    Dismiss
                   </button>
-                  <button type="submit" className="px-10 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest text-white bg-[#003875] dark:bg-[#FFD500] dark:text-black hover:shadow-xl transition-all active:scale-95 shadow-lg border-b-4 border-black/20">
-                    {editingItem ? "Update Changes" : "Log Query"}
+                  <button type="submit" 
+                    className="px-12 py-3 rounded-xl text-[11px] font-black uppercase tracking-widest text-white bg-[#003875] dark:bg-[#FFD500] dark:text-black hover:shadow-xl transition-all active:scale-95 shadow-lg border-b-4 border-black/20"
+                  >
+                    {editingItem ? "Update Changes" : "Confirm & Log Query"}
                   </button>
                 </div>
               </form>

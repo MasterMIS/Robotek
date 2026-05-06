@@ -52,8 +52,9 @@ export default function Sidebar({ mobileOpen, setMobileOpen }: SidebarProps) {
         ]);
         
         // Filter for USER role
-        const baseDel = (delData || []).length > 0 && userRole === 'USER' ? delData.filter((d: any) => d.assigned_to === currentUser) : (delData || []);
-        const baseCheck = (checkData || []).length > 0 && userRole === 'USER' ? checkData.filter((c: any) => c.assigned_to === currentUser) : (checkData || []);
+        const isRegularUser = userRole?.toUpperCase() === 'USER' || userRole?.toUpperCase() === 'SALES' || userRole?.toUpperCase() === 'CRM';
+        const baseDel = (delData || []).length > 0 && isRegularUser ? delData.filter((d: any) => d.assigned_to === currentUser) : (delData || []);
+        const baseCheck = (checkData || []).length > 0 && isRegularUser ? checkData.filter((c: any) => c.assigned_to === currentUser) : (checkData || []);
 
         // Common helper
         const getEarliestDate = (dateString?: string) => {

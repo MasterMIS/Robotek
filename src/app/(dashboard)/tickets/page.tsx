@@ -447,7 +447,8 @@ export default function TicketsPage() {
     return s || 'Open';
   };
 
-  const baseTickets = userRole === 'USER'
+  const isRegularUser = userRole?.toUpperCase() === 'USER' || userRole?.toUpperCase() === 'SALES' || userRole?.toUpperCase() === 'CRM';
+  const baseTickets = isRegularUser
     ? tickets.filter(t => t.raised_by === currentUser || t.solver_person === currentUser)
     : tickets;
 
@@ -456,7 +457,7 @@ export default function TicketsPage() {
     const matchesStatus = activeStatusFilters.length === 0 || activeStatusFilters.includes(getDisplayStatus(t));
 
     let matchesAssignment = true;
-    if (userRole !== 'USER' && assignmentFilters.length > 0) {
+    if (!isRegularUser && assignmentFilters.length > 0) {
       matchesAssignment = false;
       if (assignmentFilters.includes('ToMe') && t.solver_person === currentUser) matchesAssignment = true;
       if (assignmentFilters.includes('ByMe') && t.raised_by === currentUser) matchesAssignment = true;

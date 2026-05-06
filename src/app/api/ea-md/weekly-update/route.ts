@@ -1,18 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { eaMdService } from "@/lib/ea-md-sheets";
+import { saveWeeklyUpdateItems } from "@/lib/ea-md-sheets";
+import { updateWeeklyUpdateItem, deleteWeeklyUpdateItem } from "./delete-update-utils";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
-
-export async function GET() {
-  try {
-    const items = await eaMdService.weeklyUpdates.getAll();
-    return NextResponse.json({ items });
-  } catch (error: any) {
-    console.error("GET Weekly Updates Error:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
-  }
-}
 
 export async function POST(req: Request) {
   try {
@@ -23,18 +14,13 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Invalid or empty items array" }, { status: 400 });
     }
 
-    const ids: string[] = [];
-    for (const item of items) {
-      const newItem = {
-        ...item,
-        id: item.id || `WU-${Date.now()}-${Math.random()}`,
-        timestamp: new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }),
-      };
-      await eaMdService.weeklyUpdates.add(newItem);
-      ids.push(newItem.id);
-    }
+    const result = await saveWeeklyUpdateItems(items);
 
-    return NextResponse.json({ success: true, ids });
+    if (result.success) {
+      return NextResponse.json({ success: true, ids: result.ids });
+    } else {
+      return NextResponse.json({ error: "Failed to save to sheet", details: result.error }, { status: 500 });
+    }
   } catch (error: any) {
     console.error("POST Weekly Update Error:", error);
     return NextResponse.json({ error: "Server error: " + error.message }, { status: 500 });
@@ -48,8 +34,13 @@ export async function PUT(req: Request) {
     if (!id) return NextResponse.json({ error: "Missing item id" }, { status: 400 });
 
     const updates = await req.json();
-    await eaMdService.weeklyUpdates.update(id, updates);
-    return NextResponse.json({ success: true });
+    const result = await updateWeeklyUpdateItem(id, updates);
+
+    if (result.success) {
+      return NextResponse.json({ success: true });
+    } else {
+      return NextResponse.json({ error: "Failed to update", details: result.error }, { status: 500 });
+    }
   } catch (error: any) {
     console.error("PUT Weekly Update Error:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
@@ -62,8 +53,13 @@ export async function DELETE(req: Request) {
     const id = searchParams.get("id");
     if (!id) return NextResponse.json({ error: "Missing item id" }, { status: 400 });
 
-    await eaMdService.weeklyUpdates.delete(id);
-    return NextResponse.json({ success: true });
+    const result = await deleteWeeklyUpdateItem(id);
+
+    if (result.success) {
+      return NextResponse.json({ success: true });
+    } else {
+      return NextResponse.json({ error: "Failed to delete", details: result.error }, { status: 500 });
+    }
   } catch (error: any) {
     console.error("DELETE Weekly Update Error:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });

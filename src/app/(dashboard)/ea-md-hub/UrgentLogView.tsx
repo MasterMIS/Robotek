@@ -274,18 +274,33 @@ export default function UrgentLogView() {
                 initial={{ scale: 0.95, opacity: 0, y: 10 }}
                 animate={{ scale: 1, opacity: 1, y: 0 }}
                 exit={{ scale: 0.95, opacity: 0, y: 10 }}
-                className="relative w-full max-w-2xl bg-white dark:bg-navy-900 rounded-2xl shadow-xl flex flex-col overflow-hidden"
+                className="relative w-full max-w-2xl bg-white dark:bg-navy-900 rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-white/20"
               >
                 {/* Modal Header */}
-                <div className="px-6 py-5 border-b border-gray-100 dark:border-navy-800 flex items-center justify-between">
-                  <h2 className="text-xl font-bold text-[#001736] dark:text-white" style={{ fontFamily: 'Georgia, serif' }}>Flag urgent matter</h2>
-                  <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
-                    <XMarkIcon className="w-5 h-5" />
+                <div className="px-8 py-6 border-b border-gray-100 dark:border-navy-800 flex justify-between items-center bg-[#FFFBF0] dark:bg-navy-900">
+                  <div>
+                    <h2 className="text-xl font-black text-gray-900 dark:text-white tracking-tight uppercase">
+                      Flag urgent matter
+                    </h2>
+                    <div className="flex items-center gap-2 mt-1">
+                      <p className="text-gray-400 dark:text-slate-400 font-bold text-[8px] uppercase tracking-widest">Triage & Escalate Workspace</p>
+                      <span className="px-2 py-0.5 bg-rose-50 dark:bg-navy-800 text-[8px] font-black text-rose-700 dark:text-rose-400 rounded border border-rose-100 dark:border-navy-700 uppercase">
+                        Immediate Action
+                      </span>
+                    </div>
+                  </div>
+                  <button onClick={() => setIsModalOpen(false)} className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-white transition-colors">
+                    <XMarkIcon className="w-8 h-8" />
                   </button>
                 </div>
 
                 {/* Modal Body */}
-                <div className="p-6 space-y-6 overflow-y-auto max-h-[80vh] custom-scrollbar">
+                <div className="p-8 space-y-6 overflow-y-auto max-h-[80vh] custom-scrollbar bg-white dark:bg-navy-800/50">
+                  {/* Section Header */}
+                  <div>
+                    <p className="text-[10px] font-black text-rose-700 dark:text-rose-400 uppercase tracking-[0.2em] mb-1">Escalation Details</p>
+                    <div className="h-0.5 w-10 bg-rose-700 dark:bg-rose-400 rounded-full mb-4"></div>
+                  </div>
                   
                   {/* Issue Summary */}
                   <div className="space-y-2">
@@ -294,7 +309,7 @@ export default function UrgentLogView() {
                       value={issueSummary}
                       onChange={e => setIssueSummary(e.target.value)}
                       placeholder="Brief description..."
-                      className="w-full bg-white dark:bg-navy-800 border border-gray-200 dark:border-navy-700 rounded-xl px-4 py-3 text-[13px] text-gray-800 dark:text-gray-200 outline-none focus:ring-2 focus:ring-blue-100 min-h-[100px] resize-none"
+                      className="w-full bg-[#FFFBF0] dark:bg-navy-900 border border-orange-100 dark:border-navy-700/50 rounded-xl px-4 py-3 text-[13px] text-gray-800 dark:text-gray-200 outline-none focus:border-[#003875] dark:focus:border-[#FFD500] min-h-[100px] resize-none shadow-sm transition-all"
                     />
                   </div>
 
@@ -357,7 +372,7 @@ export default function UrgentLogView() {
                         value={requiredFromMD}
                         onChange={e => setRequiredFromMD(e.target.value)}
                         placeholder="Decision / approval / call back..."
-                        className="w-full bg-white dark:bg-navy-800 border border-gray-200 dark:border-navy-700 rounded-xl px-4 py-2.5 text-[12px] text-gray-800 dark:text-gray-200 outline-none focus:ring-2 focus:ring-blue-100"
+                        className="w-full bg-[#FFFBF0] dark:bg-navy-900 border border-orange-100 dark:border-navy-700/50 rounded-xl px-4 py-2.5 text-[12px] text-gray-800 dark:text-gray-200 outline-none focus:border-[#003875] dark:focus:border-[#FFD500] shadow-sm transition-all"
                       />
                     </div>
                     
@@ -367,7 +382,7 @@ export default function UrgentLogView() {
                         type="datetime-local"
                         value={deadline}
                         onChange={e => setDeadline(e.target.value)}
-                        className="w-full bg-white dark:bg-navy-800 border border-gray-200 dark:border-navy-700 rounded-xl px-4 py-2.5 text-[12px] font-bold text-gray-800 dark:text-gray-200 outline-none focus:ring-2 focus:ring-blue-100"
+                        className="w-full bg-[#FFFBF0] dark:bg-navy-900 border border-orange-100 dark:border-navy-700/50 rounded-xl px-4 py-2.5 text-[12px] font-bold text-gray-800 dark:text-gray-200 outline-none focus:border-[#003875] dark:focus:border-[#FFD500] shadow-sm transition-all"
                       />
                     </div>
                   </div>
@@ -375,19 +390,16 @@ export default function UrgentLogView() {
                 </div>
 
                 {/* Modal Footer */}
-                <div className="px-6 py-4 bg-gray-50 dark:bg-navy-800/50 border-t border-gray-100 dark:border-navy-800 flex items-center justify-end gap-3">
-                  <button 
-                    onClick={() => setIsModalOpen(false)}
-                    className="px-5 py-2 text-[12px] font-bold text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 dark:bg-navy-900 dark:border-navy-600 dark:text-gray-300 dark:hover:bg-navy-800"
-                  >
-                    Cancel
+                <div className="px-8 py-4 bg-white dark:bg-navy-800/50 flex justify-end gap-5">
+                  <button type="button" onClick={() => setIsModalOpen(false)} className="px-8 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-gray-900 transition-colors">
+                    Dismiss
                   </button>
-                  <button 
+                  <button type="button"
                     onClick={submitLog}
                     disabled={isSaving}
-                    className="px-6 py-2 text-[12px] font-bold text-white bg-[#b91c1c] hover:bg-[#991b1b] rounded-lg shadow-sm disabled:opacity-50 flex items-center gap-2"
+                    className="px-12 py-3 rounded-xl text-[11px] font-black uppercase tracking-widest text-white bg-rose-600 dark:bg-rose-500 hover:bg-rose-700 dark:hover:bg-rose-600 hover:shadow-xl transition-all active:scale-95 shadow-lg border-b-4 border-black/20"
                   >
-                    {isSaving ? "Saving..." : "Log escalation"}
+                    {isSaving ? "Saving..." : "Log Escalation"}
                   </button>
                 </div>
 

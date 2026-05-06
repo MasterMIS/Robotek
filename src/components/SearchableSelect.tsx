@@ -14,6 +14,7 @@ interface SearchableSelectProps {
   onChange: (value: string) => void;
   placeholder?: string;
   label?: string;
+  className?: string;
 }
 
 export default function SearchableSelect({
@@ -21,7 +22,8 @@ export default function SearchableSelect({
   value,
   onChange,
   placeholder = "Select option...",
-  label
+  label,
+  className = ""
 }: SearchableSelectProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
@@ -53,7 +55,7 @@ export default function SearchableSelect({
       
       <div 
         onClick={() => setIsOpen(!isOpen)}
-        className={`w-full p-3 rounded-xl bg-gray-50 dark:bg-slate-900 border border-gray-100 dark:border-white/5 cursor-pointer flex justify-between items-center transition-all ${isOpen ? 'border-[#FFD500] ring-1 ring-[#FFD500]/10' : ''}`}
+        className={`w-full p-3 rounded-xl cursor-pointer flex justify-between items-center transition-all ${className || 'bg-gray-50 dark:bg-slate-900 border border-gray-100 dark:border-white/5'} ${isOpen ? 'border-[#FFD500] ring-1 ring-[#FFD500]/10' : ''}`}
       >
         <span className={`text-[10px] font-bold ${selectedOption ? 'text-gray-900 dark:text-white' : 'text-gray-400'}`}>
           {selectedOption ? selectedOption.label : placeholder}

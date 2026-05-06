@@ -339,7 +339,7 @@ export default function ChecklistsPage() {
     setFormData({
       id: "",
       task: "",
-      assigned_by: userRole?.toUpperCase() === 'USER' ? currentUser : "",
+      assigned_by: (userRole?.toUpperCase() === 'USER' || userRole?.toUpperCase() === 'SALES' || userRole?.toUpperCase() === 'CRM') ? currentUser : "",
       assigned_to: "",
       priority: "Medium",
       department: "",

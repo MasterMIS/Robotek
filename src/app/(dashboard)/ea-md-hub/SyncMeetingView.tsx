@@ -289,15 +289,20 @@ export default function SyncMeetingView() {
                 initial={{ scale: 0.95, opacity: 0, y: 20 }}
                 animate={{ scale: 1, opacity: 1, y: 0 }}
                 exit={{ scale: 0.95, opacity: 0, y: 20 }}
-                className="relative w-full max-w-4xl max-h-[90vh] bg-gray-50 dark:bg-navy-900 rounded-[2rem] shadow-2xl flex flex-col overflow-hidden"
+                className="relative w-full max-w-4xl max-h-[90vh] bg-white dark:bg-navy-900 rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-white/20"
               >
                 {/* Modal Header */}
-                <div className="bg-white dark:bg-navy-800 p-5 border-b border-gray-100 dark:border-navy-700 flex items-center justify-between sticky top-0 z-10 shrink-0">
+                <div className="px-8 py-6 border-b border-gray-100 dark:border-navy-800 flex items-center justify-between sticky top-0 z-10 shrink-0 bg-[#FFFBF0] dark:bg-navy-900">
                   <div>
-                    <h2 className="text-xl font-black text-gray-900 dark:text-white uppercase tracking-tight">
+                    <h2 className="text-xl font-black text-gray-900 dark:text-white tracking-tight uppercase">
                         {meetingId ? 'Edit Meeting Record' : 'New Meeting Record'}
                     </h2>
-                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">Fill out the details below</p>
+                    <div className="flex items-center gap-2 mt-1">
+                      <p className="text-gray-400 dark:text-slate-400 font-bold text-[8px] uppercase tracking-widest">EA-MD Hub</p>
+                      <span className="px-2 py-0.5 bg-orange-50 dark:bg-navy-800 text-[8px] font-black text-[#003875] dark:text-[#FFD500] rounded border border-orange-100 dark:border-navy-700 uppercase">
+                        Sync Meeting
+                      </span>
+                    </div>
                   </div>
                   <div className="flex items-center gap-4">
                       {meetingId && (
@@ -315,7 +320,7 @@ export default function SyncMeetingView() {
                 </div>
 
                 {/* Modal Body */}
-                <div className="flex-1 overflow-y-auto p-5 space-y-4 custom-scrollbar pb-10">
+                <div className="flex-1 overflow-y-auto p-8 space-y-6 custom-scrollbar pb-10 bg-white dark:bg-navy-800/50">
                   
                   {/* Meeting Details Section */}
                   <div className="bg-white dark:bg-navy-800 p-5 rounded-2xl border border-gray-100 dark:border-navy-700 shadow-sm">
@@ -328,21 +333,21 @@ export default function SyncMeetingView() {
                         <div className="relative group/date">
                           <CalendarDaysIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none group-focus-within/date:text-[#1e40af]" />
                           <input type="date" value={date} onChange={e => setDate(e.target.value)}
-                            className="w-full bg-gray-50 dark:bg-navy-900 pr-10 pl-3 py-2 rounded-xl border border-gray-100 dark:border-navy-700 outline-none text-[11px] font-bold text-gray-800 dark:text-white transition-all focus:ring-2 focus:ring-[#1e40af]/20" />
+                            className="w-full bg-[#FFFBF0] dark:bg-navy-900 pr-10 pl-3 py-2.5 rounded-xl border border-orange-100 dark:border-navy-700/50 outline-none text-[11px] font-bold text-gray-800 dark:text-white transition-all focus:ring-2 focus:ring-[#1e40af]/20 shadow-sm" />
                         </div>
                       </div>
                       <div className="space-y-1">
                         <label className="text-[9px] font-black text-gray-500 uppercase tracking-widest px-1">Time</label>
                         <div className="relative group">
                           <input type="time" value={time} onChange={e => setTime(e.target.value)}
-                            className="w-full bg-gray-50 dark:bg-navy-900 px-3 py-2 rounded-xl border border-gray-100 dark:border-navy-700 outline-none text-[11px] font-bold text-gray-800 dark:text-white transition-all focus:ring-2 focus:ring-[#1e40af]/20" />
+                            className="w-full bg-[#FFFBF0] dark:bg-navy-900 px-3 py-2.5 rounded-xl border border-orange-100 dark:border-navy-700/50 outline-none text-[11px] font-bold text-gray-800 dark:text-white transition-all focus:ring-2 focus:ring-[#1e40af]/20 shadow-sm" />
                         </div>
                       </div>
                       <div className="space-y-1">
                         <label className="text-[9px] font-black text-gray-500 uppercase tracking-widest px-1">Location</label>
                         <div className="relative group">
                           <input type="text" value={location} onChange={e => setLocation(e.target.value)} placeholder="Where?"
-                            className="w-full bg-gray-50 dark:bg-navy-900 px-3 py-2 rounded-xl border border-gray-100 dark:border-navy-700 outline-none text-[11px] font-bold text-gray-800 dark:text-white transition-all focus:ring-2 focus:ring-[#1e40af]/20" />
+                            className="w-full bg-[#FFFBF0] dark:bg-navy-900 px-3 py-2.5 rounded-xl border border-orange-100 dark:border-navy-700/50 outline-none text-[11px] font-bold text-gray-800 dark:text-white transition-all focus:ring-2 focus:ring-[#1e40af]/20 shadow-sm" />
                         </div>
                       </div>
                     </div>
@@ -421,7 +426,7 @@ export default function SyncMeetingView() {
                         value={decisions}
                         onChange={e => setDecisions(e.target.value)}
                         placeholder="Record key decisions..."
-                        className="flex-1 w-full bg-gray-50 dark:bg-navy-900 p-3 rounded-xl border border-gray-100 dark:border-navy-700 outline-none text-[11px] font-bold text-gray-800 dark:text-white transition-all focus:ring-2 focus:ring-blue-100 min-h-[100px] resize-none custom-scrollbar"
+                        className="flex-1 w-full bg-[#FFFBF0] dark:bg-navy-900 p-3 rounded-xl border border-orange-100 dark:border-navy-700/50 outline-none text-[11px] font-bold text-gray-800 dark:text-white transition-all focus:ring-2 focus:ring-blue-100 min-h-[100px] resize-none custom-scrollbar shadow-sm"
                       />
                     </div>
 
@@ -478,13 +483,13 @@ export default function SyncMeetingView() {
                       value={notes}
                       onChange={e => setNotes(e.target.value)}
                       placeholder="General notes, details, context..."
-                      className="w-full bg-gray-50 dark:bg-navy-900 p-3 rounded-xl border border-gray-100 dark:border-navy-700 outline-none text-[11px] font-bold text-gray-800 dark:text-white transition-all focus:ring-2 focus:ring-blue-100 min-h-[80px] resize-none custom-scrollbar"
+                      className="w-full bg-[#FFFBF0] dark:bg-navy-900 p-3 rounded-xl border border-orange-100 dark:border-navy-700/50 outline-none text-[11px] font-bold text-gray-800 dark:text-white transition-all focus:ring-2 focus:ring-blue-100 min-h-[80px] resize-none custom-scrollbar shadow-sm"
                     />
                   </div>
                 </div>
 
                 {/* Modal Footer (Save Action) */}
-                <div className="bg-white dark:bg-navy-800 p-4 border-t border-gray-100 dark:border-navy-700 flex items-center justify-between shrink-0">
+                <div className="bg-[#FFFBF0] dark:bg-navy-900 px-8 py-4 border-t border-gray-100 dark:border-navy-800 flex items-center justify-between shrink-0">
                   <button
                     onClick={resetForm}
                     className="px-6 py-3 text-gray-400 hover:text-gray-900 dark:hover:text-white font-black text-[10px] uppercase tracking-widest transition-colors"
@@ -494,14 +499,14 @@ export default function SyncMeetingView() {
                   <button
                     disabled={isSaving}
                     onClick={handleSave}
-                    className="bg-[#c5a242] text-white px-10 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 hover:shadow-xl shadow-lg active:scale-95 transition-all relative overflow-hidden"
+                    className="px-12 py-3 rounded-xl text-[11px] font-black uppercase tracking-widest text-white bg-[#003875] dark:bg-[#FFD500] dark:text-black hover:shadow-xl transition-all active:scale-95 shadow-lg border-b-4 border-black/20 flex items-center gap-2"
                   >
                     {isSaving ? (
                       <ArrowPathIcon className="w-4 h-4 animate-spin" />
                     ) : (
                       <ClipboardDocumentCheckIcon className="w-4 h-4" />
                     )}
-                    {meetingId ? 'Update meeting record' : 'Save meeting record'}
+                    {meetingId ? 'Update Record' : 'Save Record'}
                   </button>
                 </div>
               </motion.div>

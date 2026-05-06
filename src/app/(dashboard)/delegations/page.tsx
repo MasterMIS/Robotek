@@ -446,7 +446,7 @@ const fetcher = (url: string) => fetch(url).then((res) => res.json());
       id: "",
       title: "",
       description: "",
-      assigned_by: userRole?.toUpperCase() === 'USER' ? currentUser : "",
+      assigned_by: (userRole?.toUpperCase() === 'USER' || userRole?.toUpperCase() === 'SALES' || userRole?.toUpperCase() === 'CRM') ? currentUser : "",
       assigned_to: "",
       department: "",
       priority: "Medium",
@@ -668,7 +668,8 @@ const fetcher = (url: string) => fetch(url).then((res) => res.json());
     return 'Pending';
   };
 
-  const baseDelegations = userRole === 'USER' 
+  const isRegularUser = userRole?.toUpperCase() === 'USER' || userRole?.toUpperCase() === 'SALES' || userRole?.toUpperCase() === 'CRM';
+  const baseDelegations = isRegularUser 
     ? delegations.filter(d => d.assigned_to === currentUser)
     : delegations;
 

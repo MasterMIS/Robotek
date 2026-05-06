@@ -1,18 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { eaMdService } from "@/lib/ea-md-sheets";
+import { saveTeamQueryItems } from "@/lib/team-queries-sheets";
+import { updateTeamQueryRow, deleteTeamQueryRow } from "./team-queries-utils";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
-
-export async function GET() {
-  try {
-    const items = await eaMdService.teamQueries.getAll();
-    return NextResponse.json({ items });
-  } catch (error: any) {
-    console.error("GET Team Queries Error:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
-  }
-}
 
 export async function POST(req: Request) {
   try {
@@ -23,18 +14,13 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Invalid or empty items array" }, { status: 400 });
     }
 
-    const ids: string[] = [];
-    for (const item of items) {
-      const newItem = {
-        ...item,
-        id: item.id || `TQ-${Date.now()}-${Math.random()}`,
-        timestamp: new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }),
-      };
-      await eaMdService.teamQueries.add(newItem);
-      ids.push(newItem.id);
-    }
+    const result = await saveTeamQueryItems(items);
 
-    return NextResponse.json({ success: true, ids });
+    if (result.success) {
+      return NextResponse.json({ success: true, ids: result.ids });
+    } else {
+      return NextResponse.json({ error: "Failed to save to sheet", details: result.error }, { status: 500 });
+    }
   } catch (error: any) {
     console.error("POST Team Queries Error:", error);
     return NextResponse.json({ error: "Server error: " + error.message }, { status: 500 });
@@ -48,8 +34,13 @@ export async function PUT(req: Request) {
     if (!id) return NextResponse.json({ error: "Missing item id" }, { status: 400 });
 
     const updates = await req.json();
-    await eaMdService.teamQueries.update(id, updates);
-    return NextResponse.json({ success: true });
+    const result = await updateTeamQueryRow(id, updates);
+
+    if (result.success) {
+      return NextResponse.json({ success: true });
+    } else {
+      return NextResponse.json({ error: "Failed to update", details: result.error }, { status: 500 });
+    }
   } catch (error: any) {
     console.error("PUT Team Queries Error:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
@@ -62,8 +53,13 @@ export async function DELETE(req: Request) {
     const id = searchParams.get("id");
     if (!id) return NextResponse.json({ error: "Missing item id" }, { status: 400 });
 
-    await eaMdService.teamQueries.delete(id);
-    return NextResponse.json({ success: true });
+    const result = await deleteTeamQueryRow(id);
+
+    if (result.success) {
+      return NextResponse.json({ success: true });
+    } else {
+      return NextResponse.json({ error: "Failed to delete", details: result.error }, { status: 500 });
+    }
   } catch (error: any) {
     console.error("DELETE Team Queries Error:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });

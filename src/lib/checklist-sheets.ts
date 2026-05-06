@@ -272,8 +272,9 @@ export async function getChecklistsPaginated(
 ) {
   const allChecklists = await checklistService.getAll();
 
-  // Base filter: USER role sees only items assigned to them
-  const baseChecklists = userRole.toUpperCase() === 'USER'
+  // Base filter: USER/SALES/CRM role sees only items assigned to them
+  const isRegularUser = userRole.toUpperCase() === 'USER' || userRole.toUpperCase() === 'SALES' || userRole.toUpperCase() === 'CRM';
+  const baseChecklists = isRegularUser
     ? allChecklists.filter(c => c.assigned_to === currentUser)
     : allChecklists;
 

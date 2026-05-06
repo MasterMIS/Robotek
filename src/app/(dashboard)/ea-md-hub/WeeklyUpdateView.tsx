@@ -455,23 +455,29 @@ export default function WeeklyUpdateView() {
         <Portal>
           <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={closeModal} />
-            <div className="relative bg-white dark:bg-navy-900 w-full max-w-xl rounded-2xl shadow-2xl flex flex-col animate-in fade-in zoom-in-95 duration-200 border border-gray-100 dark:border-navy-700">
-
-              {/* Modal header */}
-              <div className="px-6 py-4 border-b border-gray-100 dark:border-navy-800 flex justify-between items-center bg-gray-50/50 dark:bg-navy-900">
-                <h2 className="text-xl font-bold tracking-tight text-[#001736] dark:text-[#FFD500]">
-                  {editingItem ? "Edit Item" : (
-                    <>
-                      {activeModal === 'completed'   && "Add Completed item"}
-                      {activeModal === 'in-progress' && "Add In-progress item"}
-                      {activeModal === 'pending'     && "Add Pending MD action"}
-                      {activeModal === 'deadline'    && "Add Upcoming deadline"}
-                      {activeModal === 'team-query'  && "Add Team query"}
-                    </>
-                  )}
-                </h2>
-                <button onClick={closeModal} className="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-navy-800 rounded-lg transition-colors">
-                  <XMarkIcon className="w-5 h-5" />
+            <div className="relative bg-white dark:bg-navy-900 w-full max-w-xl rounded-2xl shadow-2xl flex flex-col animate-in fade-in zoom-in-95 duration-200 border border-white/20 overflow-hidden">
+              <div className="px-8 py-6 border-b border-gray-100 dark:border-navy-800 flex justify-between items-center bg-[#FFFBF0] dark:bg-navy-900">
+                <div>
+                  <h2 className="text-xl font-black text-gray-900 dark:text-white tracking-tight uppercase">
+                    {editingItem ? "Edit Item" : (
+                      <>
+                        {activeModal === 'completed'   && "Add Completed item"}
+                        {activeModal === 'in-progress' && "Add In-progress item"}
+                        {activeModal === 'pending'     && "Add Pending MD action"}
+                        {activeModal === 'deadline'    && "Add Upcoming deadline"}
+                        {activeModal === 'team-query'  && "Add Team query"}
+                      </>
+                    )}
+                  </h2>
+                  <div className="flex items-center gap-2 mt-1">
+                    <p className="text-gray-400 dark:text-slate-400 font-bold text-[8px] uppercase tracking-widest">EA-MD Hub</p>
+                    <span className="px-2 py-0.5 bg-orange-50 dark:bg-navy-800 text-[8px] font-black text-[#003875] dark:text-[#FFD500] rounded border border-orange-100 dark:border-navy-700 uppercase">
+                      Weekly Update
+                    </span>
+                  </div>
+                </div>
+                <button onClick={closeModal} className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-white transition-colors">
+                  <XMarkIcon className="w-8 h-8" />
                 </button>
               </div>
 
@@ -487,7 +493,12 @@ export default function WeeklyUpdateView() {
                 </div>
               )}
 
-              <form onSubmit={handleAddItem} className="p-6 space-y-5">
+              <form onSubmit={handleAddItem} className="p-8 space-y-6 bg-white dark:bg-navy-800/50 max-h-[80vh] overflow-y-auto">
+                {/* Section Header */}
+                <div>
+                  <p className="text-[10px] font-black text-[#003875] dark:text-[#FFD500] uppercase tracking-[0.2em] mb-1">Item Details</p>
+                  <div className="h-0.5 w-10 bg-[#003875] dark:bg-[#FFD500] rounded-full mb-4"></div>
+                </div>
                 {/* Team member field — team-query only */}
                 {(activeModal === 'team-query' || editingItem?.categoryType === 'team-query') && (
                   <div className="space-y-1">
@@ -497,12 +508,13 @@ export default function WeeklyUpdateView() {
                       value={modalTeamMember}
                       onChange={setModalTeamMember}
                       placeholder="Select Team Member"
+                      className="bg-[#FFFBF0] dark:bg-navy-900 border border-orange-100 dark:border-navy-700/50 shadow-sm"
                     />
                   </div>
                 )}
 
                 <div>
-                  <label className="block text-[11px] font-black text-gray-700 dark:text-slate-300 uppercase tracking-widest mb-1.5 px-1">Description *</label>
+                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 px-1">Description *</label>
                   <textarea
                     required rows={4}
                     value={modalDescription}
@@ -514,7 +526,7 @@ export default function WeeklyUpdateView() {
                       activeModal === 'deadline'    ? "Deadline or event?" :
                       activeModal === 'team-query'  ? "Query for MD?" : "Enter description"
                     }
-                    className="w-full bg-white dark:bg-navy-800 px-3 py-2.5 rounded-lg border border-gray-200 dark:border-navy-600 focus:border-[#003875] outline-none text-sm text-gray-800 dark:text-zinc-100 transition-all shadow-sm resize-none"
+                    className="w-full bg-[#FFFBF0] dark:bg-navy-900 px-4 py-3 rounded-xl border border-orange-100 dark:border-navy-700/50 focus:border-[#003875] dark:focus:border-[#FFD500] focus:bg-white outline-none text-[13px] font-bold text-gray-800 dark:text-white transition-all shadow-sm resize-none"
                   />
                 </div>
 
@@ -526,19 +538,19 @@ export default function WeeklyUpdateView() {
                     <div className="relative group/date">
                       <CalendarDaysIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none group-focus-within/date:text-[#003875]" />
                       <input type="date" value={modalDate} onChange={e => setModalDate(e.target.value)}
-                        className="w-full bg-white dark:bg-navy-800 pr-10 pl-3 py-2.5 rounded-lg border border-gray-200 dark:border-navy-600 focus:border-[#003875] outline-none text-sm text-gray-900 dark:text-white transition-all shadow-sm" />
+                        className="w-full bg-[#FFFBF0] dark:bg-navy-900 pr-10 pl-3 py-2.5 rounded-xl border border-orange-100 dark:border-navy-700/50 focus:border-[#003875] outline-none text-sm text-gray-900 dark:text-white transition-all shadow-sm" />
                     </div>
                   </div>
                 )}
 
-                <div className="pt-2 flex items-center justify-end gap-3 border-t border-gray-100 dark:border-navy-800 mt-2">
-                  <button type="button" onClick={closeModal} disabled={isSaving}
-                    className="px-5 py-2 rounded-lg text-sm font-bold text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-navy-800 border border-gray-200 dark:border-navy-700 transition-colors shadow-sm bg-white dark:bg-transparent disabled:opacity-50">
-                    Cancel
+                <div className="pt-4 flex justify-end gap-5">
+                  <button type="button" onClick={closeModal} disabled={isSaving} className="px-8 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-gray-900 transition-colors">
+                    Dismiss
                   </button>
-                  <button type="submit" disabled={isSaving}
-                    className="px-5 py-2 rounded-lg text-sm font-black text-white bg-[#1e40af] hover:bg-[#1e3a8a] transition-colors shadow-md border border-[#1e3a8a] disabled:opacity-50">
-                    {isSaving ? (editingItem ? "Updating..." : "Saving...") : editingItem ? "Update Item" : "Add item"}
+                  <button type="submit" disabled={isSaving} 
+                    className="px-12 py-3 rounded-xl text-[11px] font-black uppercase tracking-widest text-white bg-[#003875] dark:bg-[#FFD500] dark:text-black hover:shadow-xl transition-all active:scale-95 shadow-lg border-b-4 border-black/20"
+                  >
+                    {isSaving ? (editingItem ? "Updating..." : "Saving...") : editingItem ? "Update Item" : "Confirm & Create"}
                   </button>
                 </div>
               </form>

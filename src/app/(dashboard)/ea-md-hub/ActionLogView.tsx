@@ -345,7 +345,7 @@ export default function ActionLogView() {
         <Portal>
           <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-[#001736]/60 backdrop-blur-md" onClick={closeModal} />
-            <div className="relative bg-white dark:bg-navy-900 w-full max-w-xl rounded-[2rem] shadow-2xl flex flex-col animate-in fade-in zoom-in-95 duration-200 border border-white/20 overflow-hidden">
+            <div className="relative bg-white dark:bg-navy-900 w-full max-w-xl rounded-2xl shadow-2xl flex flex-col animate-in fade-in zoom-in-95 duration-200 border border-white/20 overflow-hidden">
                          <div className="px-8 py-6 border-b border-gray-100 dark:border-navy-800 flex justify-between items-center bg-[#FFFBF0] dark:bg-navy-900">
                 <div>
                   <h2 className="text-xl font-black text-gray-900 dark:text-white tracking-tight uppercase">
@@ -390,7 +390,13 @@ export default function ActionLogView() {
                     <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 px-1 block">
                       Owner *
                     </label>
-                    <SearchableSelect options={users} value={formOwner} onChange={setFormOwner} placeholder="Assign to" />
+                    <SearchableSelect 
+                      options={users} 
+                      value={formOwner} 
+                      onChange={setFormOwner} 
+                      placeholder="Assign to" 
+                      className="bg-[#FFFBF0] dark:bg-navy-900 border border-orange-100 dark:border-navy-700/50"
+                    />
                   </div>
                   <div>
                     <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 px-1 block">
