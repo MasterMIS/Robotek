@@ -13,12 +13,14 @@ export function useSchedulerData() {
     tickets: any[];
     o2d: any[];
     meetings: any[];
+    scotCalls: any[];
   }>({
     delegations: [],
     checklists: [],
     tickets: [],
     o2d: [],
     meetings: [],
+    scotCalls: [],
   });
   const [loading, setLoading] = useState(true);
 
@@ -26,20 +28,29 @@ export function useSchedulerData() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [delRes, checkRes, tickRes, o2dRes, meetRes] = await Promise.all([
+      const [delRes, checkRes, tickRes, o2dRes, meetRes, scotRes] = await Promise.all([
         fetch("/api/delegations"),
         fetch("/api/checklists"),
         fetch("/api/tickets"),
         fetch("/api/o2d?all=true"),
         fetch("/api/scheduler/meetings"),
+        fetch("/api/scot?tab=calls"),
       ]);
 
+      const delJson = delRes.ok ? await delRes.json() : [];
+      const checkJson = checkRes.ok ? await checkRes.json() : [];
+      const tickJson = tickRes.ok ? await tickRes.json() : [];
+      const o2dJson = o2dRes.ok ? await o2dRes.json() : [];
+      const meetJson = meetRes.ok ? await meetRes.json() : [];
+      const scotJson = scotRes.ok ? await scotRes.json() : [];
+
       setData({
-        delegations: delRes.ok ? await delRes.json() : [],
-        checklists: checkRes.ok ? await checkRes.json() : [],
-        tickets: tickRes.ok ? await tickRes.json() : [],
-        o2d: o2dRes.ok ? await o2dRes.json() : [],
-        meetings: meetRes.ok ? await meetRes.json() : [],
+        delegations: Array.isArray(delJson) ? delJson : delJson.data || [],
+        checklists: Array.isArray(checkJson) ? checkJson : checkJson.data || [],
+        tickets: Array.isArray(tickJson) ? tickJson : tickJson.data || [],
+        o2d: Array.isArray(o2dJson) ? o2dJson : o2dJson.data || [],
+        meetings: Array.isArray(meetJson) ? meetJson : meetJson.data || [],
+        scotCalls: Array.isArray(scotJson) ? scotJson : scotJson.data || [],
       });
     } catch (error) {
       console.error("Failed to fetch scheduler data:", error);
@@ -166,6 +177,43 @@ export function useSchedulerData() {
         itemData: m,
       });
     });
+
+    // 6. SCOT Follow Ups
+    console.log("SCOT CALLS FETCHED:", data.scotCalls.length);
+    data.scotCalls.forEach((call) => {
+      let followUpDateStr = call.latestNextDate;
+      
+      // Compute effective follow-up date logic if missing
+      if (!followUpDateStr || followUpDateStr === "-") {
+        if (call.lastOrderDate && call.lastOrderDate !== "-" && call.frequencyOfCallingAfterOrderPlaced) {
+          const freq = parseInt(call.frequencyOfCallingAfterOrderPlaced);
+          if (!isNaN(freq) && freq > 0) {
+             const base = new Date(call.lastOrderDate);
+             if (!isNaN(base.getTime())) {
+                base.setDate(base.getDate() + freq);
+                followUpDateStr = base.toISOString().split('T')[0];
+             }
+          }
+        }
+      }
+
+      if (!followUpDateStr || followUpDateStr === "-") return;
+      const start = parseDateString(followUpDateStr);
+      if (!start) return;
+
+      events.push({
+        id: `scot-${call.partyName}`,
+        title: `Follow Up: ${call.partyName}`,
+        description: `Concern Person: ${call.concernPerson || "N/A"}\nMobile: ${call.mobileNum || "N/A"}\nStatus: ${call.latestStatus || "Pending"}`,
+        type: "scot",
+        start,
+        status: call.latestStatus,
+        assignedTo: call.concernPerson,
+        itemData: call,
+      });
+    });
+
+    console.log("TOTAL EVENTS AFTER SCOT:", events.filter(e => e.type === "scot").length);
 
     return events.filter(e => {
         if (e.type === "meeting") return true;

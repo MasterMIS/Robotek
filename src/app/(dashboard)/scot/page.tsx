@@ -117,8 +117,14 @@ export default function ScotPage() {
         fetch('/api/party-management'),
         fetch('/api/users')
       ]);
-      if (pmRes.ok) setPartyManagementParties(await pmRes.json());
-      if (userRes.ok) setUsers(await userRes.json());
+      if (pmRes.ok) {
+        const pmData = await pmRes.json();
+        setPartyManagementParties(Array.isArray(pmData) ? pmData : pmData.data || []);
+      }
+      if (userRes.ok) {
+        const userData = await userRes.json();
+        setUsers(Array.isArray(userData) ? userData : []);
+      }
     } catch (err) {
       console.error("Error fetching support data:", err);
     }
@@ -183,8 +189,11 @@ export default function ScotPage() {
     if (record.latestNextDate) return record.latestNextDate;
     if (record.lastOrderDate) {
       const freq = parseInt(record.frequencyOfCallingAfterOrderPlaced) || 30;
-      const date = new Date(new Date(record.lastOrderDate).getTime() + freq * 24 * 60 * 60 * 1000);
-      return getNextWorkingDay(date.toISOString().split('T')[0]);
+      const time = new Date(record.lastOrderDate).getTime();
+      if (!isNaN(time)) {
+        const date = new Date(time + freq * 24 * 60 * 60 * 1000);
+        return getNextWorkingDay(date.toISOString().split('T')[0]);
+      }
     }
     return "";
   };
@@ -241,7 +250,8 @@ export default function ScotPage() {
         try {
           const res = await fetch('/api/scot?tab=calls&skipO2D=true');
           if (res.ok) {
-            setCallsData([...await res.json()].reverse());
+            const json = await res.json();
+            setCallsData(Array.isArray(json) ? [...json].reverse() : []);
           } else {
             toast.error(`Failed to load client data (${res.status})`);
           }
@@ -273,11 +283,11 @@ export default function ScotPage() {
       if (res.ok) {
         const json = await res.json();
         if (activeTab === 'calls') {
-          setCallsData([...json].reverse()); // Latest first
+          setCallsData(Array.isArray(json) ? [...json].reverse() : []); // Latest first
         } else if (activeTab === 'lost') {
-          setCallsData(json);
+          setCallsData(Array.isArray(json) ? json : []);
         } else {
-          setData(json);
+          setData(Array.isArray(json) ? json : []);
         }
       } else {
         toast.error(`Failed to load ${activeTab} data`);
@@ -294,27 +304,28 @@ export default function ScotPage() {
     setCurrentPage(1);
   }, [activeTab]);
 
-  const isAdmin = (session?.user as any)?.role === 'ADMIN';
+  const userRole = (session?.user as any)?.role || "User";
+  const isAdmin = userRole.toUpperCase() === 'ADMIN' || userRole.toUpperCase() === 'EA' || userRole.toUpperCase() === 'SALES' || userRole.toUpperCase() === 'CRM';
   const currentUsername = (session?.user as any)?.username || "";
 
   // Filtering Logic
   const filteredData = (activeTab === 'feeder' ? data : callsData).filter(record => {
     if (activeTab === 'feeder') {
       const r = record as ScotRecord;
-      const matchesUser = isAdmin || r.employeeName.toLowerCase() === currentUsername.toLowerCase();
+      const matchesUser = isAdmin || String(r.employeeName || "").toLowerCase().trim() === currentUsername.toLowerCase().trim();
       const matchesSearch = 
-        r.employeeName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        r.toName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        r.toNumber.includes(searchTerm) ||
-        r.uniqueId.toLowerCase().includes(searchTerm.toLowerCase());
+        String(r.employeeName || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+        String(r.toName || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+        String(r.toNumber || "").includes(searchTerm) ||
+        String(r.uniqueId || "").toLowerCase().includes(searchTerm.toLowerCase());
       return matchesUser && matchesSearch;
     } else {
       const r = record as CallRecord;
       const matchesSearch = 
-        (r.partyName?.toLowerCase() || "").includes(searchTerm.toLowerCase()) ||
-        (r.concernPerson?.toLowerCase() || "").includes(searchTerm.toLowerCase()) ||
-        (r.firmName?.toLowerCase() || "").includes(searchTerm.toLowerCase()) ||
-        (r.mobileNum || "").includes(searchTerm);
+        String(r.partyName || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+        String(r.concernPerson || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+        String(r.firmName || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+        String(r.mobileNum || "").includes(searchTerm);
       
       let matchesDate = true;
       if (dateFilters.length > 0) {

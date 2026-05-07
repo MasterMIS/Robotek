@@ -30,7 +30,8 @@ import {
   UserGroupIcon,
   ClipboardDocumentCheckIcon,
   TicketIcon,
-  TruckIcon
+  TruckIcon,
+  PhoneIcon
 } from "@heroicons/react/24/outline";
 import { CalendarEvent, CalendarEventType } from "@/types/calendar";
 
@@ -54,7 +55,8 @@ export default function SchedulerCalendar({
     checklist: "bg-purple-500",
     ticket: "bg-orange-500",
     o2d: "bg-emerald-500",
-    meeting: "bg-rose-500"
+    meeting: "bg-rose-500",
+    scot: "bg-indigo-500"
   };
 
   const categoryIcons: Record<CalendarEventType, any> = {
@@ -62,7 +64,8 @@ export default function SchedulerCalendar({
     delegation: UserGroupIcon,
     checklist: ClipboardDocumentCheckIcon,
     ticket: TicketIcon,
-    o2d: TruckIcon
+    o2d: TruckIcon,
+    scot: PhoneIcon
   };
 
   const nextDate = () => {
@@ -412,6 +415,7 @@ export default function SchedulerCalendar({
                   e.type === 'delegation' ? 'bg-blue-500/10 border-blue-500/20' :
                   e.type === 'checklist' ? 'bg-purple-500/10 border-purple-500/20' :
                   e.type === 'ticket' ? 'bg-orange-500/10 border-orange-500/20' :
+                  e.type === 'scot' ? 'bg-indigo-500/10 border-indigo-500/20' :
                   'bg-emerald-500/10 border-emerald-500/20';
 
                 const iconTextClass = 
@@ -419,6 +423,7 @@ export default function SchedulerCalendar({
                   e.type === 'delegation' ? 'text-blue-500' :
                   e.type === 'checklist' ? 'text-purple-500' :
                   e.type === 'ticket' ? 'text-orange-500' :
+                  e.type === 'scot' ? 'text-indigo-500' :
                   'text-emerald-500';
 
                 return (

@@ -24,7 +24,8 @@ import { format } from "date-fns";
 
 export default function SchedulerPage() {
   const { data: session } = useSession();
-  const isAdmin = (session?.user as any)?.role === "ADMIN";
+  const userRole = (session?.user as any)?.role || "USER";
+  const isAdmin = userRole.toUpperCase() === 'ADMIN' || userRole.toUpperCase() === 'EA' || userRole.toUpperCase() === 'SALES' || userRole.toUpperCase() === 'CRM';
   const currentUsername = (session?.user as any)?.username || "";
 
   const [view, setView] = useState<'month' | 'week' | 'day'>('month');
@@ -185,6 +186,7 @@ export default function SchedulerPage() {
                     selectedEvent.type === 'delegation' ? 'bg-blue-500/10 text-blue-500' :
                     selectedEvent.type === 'checklist' ? 'bg-purple-500/10 text-purple-500' :
                     selectedEvent.type === 'ticket' ? 'bg-orange-500/10 text-orange-500' :
+                    selectedEvent.type === 'scot' ? 'bg-indigo-500/10 text-indigo-500' :
                     'bg-emerald-500/10 text-emerald-500'
                   }`}>
                     {selectedEvent.type === 'meeting' ? <CalendarIcon className="w-6 h-6" /> : <InformationCircleIcon className="w-6 h-6" />}

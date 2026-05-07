@@ -33,6 +33,48 @@ export async function GET(req: NextRequest) {
       return NextResponse.json(itemNames);
     }
 
+    if (type === "scotDashboard") {
+      const allO2Ds = await o2dService.getAll();
+      const currentMonthStr = `${new Date().getFullYear()}-${new Date().getMonth()}`;
+      
+      const dashboardOrderCounts: Record<string, number> = {};
+      const dashboardHistoricalAvg: Record<string, number> = {};
+
+      const partyGroups = allO2Ds.reduce((acc: any, curr: any) => {
+        const partyName = (curr.party_name || "").trim().toLowerCase();
+        if (!partyName) return acc;
+        if (!acc[partyName]) acc[partyName] = [];
+        acc[partyName].push(curr);
+        return acc;
+      }, {});
+
+      for (const [partyName, partyO2Ds] of Object.entries(partyGroups)) {
+        const pO2Ds = partyO2Ds as any[];
+        const monthOrderSets: Record<string, Set<string>> = {};
+        
+        pO2Ds.forEach((o: any) => {
+          const orderNo = (o.order_no || "").trim();
+          if (!orderNo) return;
+          const d = new Date(o.created_at);
+          if (isNaN(d.getTime())) return;
+          const key = `${d.getFullYear()}-${d.getMonth()}`;
+          if (!monthOrderSets[key]) monthOrderSets[key] = new Set();
+          monthOrderSets[key].add(orderNo);
+        });
+
+        const currentMonthCount = monthOrderSets[currentMonthStr]?.size || 0;
+        dashboardOrderCounts[partyName] = currentMonthCount;
+
+        const monthlyUniqueCounts = Object.values(monthOrderSets).map(s => s.size);
+        const calcMonthly = monthlyUniqueCounts.length > 0
+          ? monthlyUniqueCounts.reduce((a, b) => a + b, 0) / monthlyUniqueCounts.length
+          : 0;
+        dashboardHistoricalAvg[partyName] = Math.round(calcMonthly);
+      }
+
+      return NextResponse.json({ dashboardOrderCounts, dashboardHistoricalAvg });
+    }
+
     const page = parseInt(searchParams.get("page") || "1", 10);
     const limit = parseInt(searchParams.get("limit") || "10", 10);
     const search = searchParams.get("search") || "";

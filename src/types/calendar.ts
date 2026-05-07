@@ -1,4 +1,4 @@
-export type CalendarEventType = 'delegation' | 'checklist' | 'ticket' | 'o2d' | 'meeting';
+export type CalendarEventType = 'delegation' | 'checklist' | 'ticket' | 'o2d' | 'meeting' | 'scot';
 
 export interface CalendarEvent {
   id: string;

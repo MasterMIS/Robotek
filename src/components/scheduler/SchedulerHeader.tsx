@@ -58,7 +58,8 @@ export default function SchedulerHeader({
     { value: 'checklist', label: 'Checklist', colorClass: 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20' },
     { value: 'ticket', label: 'Help Ticket', colorClass: 'bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/20' },
     { value: 'o2d', label: 'O2D', colorClass: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20' },
-    { value: 'meeting', label: 'Meeting', colorClass: 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20' }
+    { value: 'meeting', label: 'Meeting', colorClass: 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20' },
+    { value: 'scot', label: 'Scot Calls', colorClass: 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/20' }
   ];
 
   const bgMap: Record<string, string> = {
@@ -67,6 +68,7 @@ export default function SchedulerHeader({
     'ticket': 'bg-orange-500',
     'o2d': 'bg-emerald-500',
     'meeting': 'bg-rose-500',
+    'scot': 'bg-indigo-500',
     'All': 'bg-slate-400 dark:bg-slate-500'
   };
 
