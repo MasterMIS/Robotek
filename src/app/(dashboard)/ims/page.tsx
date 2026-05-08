@@ -44,6 +44,7 @@ export default function IMSPage() {
     est_amount_item: "",
     gst: "",
     final_amount: "",
+    category: "",
   });
 
   // Action Status States
@@ -94,6 +95,9 @@ export default function IMSPage() {
     )
   );
 
+  // Unique categories for dropdown
+  const existingCategories = Array.from(new Set(items.map(i => i.category).filter(Boolean))).sort();
+
   // Sorting
   const sortedItems = [...filteredItems].sort((a, b) => {
     if (!sortConfig) return 0;
@@ -119,13 +123,14 @@ export default function IMSPage() {
   const paginatedItems = sortedItems.slice(startIndex, startIndex + itemsPerPage);
 
   const handleExport = () => {
-    const headers = ["ID", "Item Name", "Est. Amount/Item", "GST", "Final Amount"];
+    const headers = ["ID", "Item Name", "Est. Amount/Item", "GST", "Final Amount", "Category"];
     const rows = sortedItems.map((item) => [
       item.id,
       item.item_name,
       item.est_amount_item,
       item.gst,
       item.final_amount,
+      item.category,
     ]);
 
     const csvContent = [
@@ -218,6 +223,7 @@ export default function IMSPage() {
           est_amount_item: "",
           gst: "",
           final_amount: "",
+          category: "",
         });
         mutateItems();
       } else {
@@ -312,6 +318,7 @@ export default function IMSPage() {
                     est_amount_item: "",
                     gst: "",
                     final_amount: "",
+                    category: "",
                   });
                   setIsModalOpen(true);
                 }}
@@ -462,6 +469,14 @@ export default function IMSPage() {
                       Final Amount <SortIcon column="final_amount" />
                     </div>
                   </th>
+                  <th
+                    onClick={() => handleSort("category")}
+                    className="px-3 md:px-4 py-3 text-[9px] md:text-[10px] font-black uppercase tracking-widest cursor-pointer hover:bg-white/5 transition-colors"
+                  >
+                    <div className="flex items-center">
+                      Category <SortIcon column="category" />
+                    </div>
+                  </th>
                   <th className="px-3 md:px-4 py-3 text-[9px] md:text-[10px] font-black uppercase tracking-widest">
                     Actions
                   </th>
@@ -487,6 +502,9 @@ export default function IMSPage() {
                     </td>
                     <td className="px-3 md:px-4 py-3 text-[11px] md:text-[12px] text-gray-600 dark:text-slate-400">
                       {item.final_amount}
+                    </td>
+                    <td className="px-3 md:px-4 py-3 text-[11px] md:text-[12px] text-gray-600 dark:text-slate-400">
+                      {item.category}
                     </td>
                     <td className="px-3 md:px-4 py-3 text-[11px] md:text-[12px]">
                       <div className="flex items-center gap-2">
@@ -542,6 +560,7 @@ export default function IMSPage() {
                     est_amount_item: "",
                     gst: "",
                     final_amount: "",
+                    category: "",
                   });
                 }}
                 className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
@@ -609,6 +628,26 @@ export default function IMSPage() {
                   className="w-full px-3 py-2 border border-gray-200 dark:border-navy-700/50 rounded-lg bg-gray-100 dark:bg-navy-950 text-gray-500 dark:text-slate-400 text-[12px] font-bold cursor-not-allowed"
                 />
               </div>
+
+              <div>
+                <label className="block text-[10px] font-black text-gray-700 dark:text-gray-300 mb-1 uppercase tracking-wider">
+                  Category
+                </label>
+                <input
+                  type="text"
+                  name="category"
+                  list="category-list"
+                  value={formData.category || ""}
+                  onChange={handleInputChange}
+                  placeholder="Enter or select category"
+                  className="w-full px-3 py-2 border border-gray-200 dark:border-navy-700/50 rounded-lg bg-white dark:bg-navy-900 text-gray-900 dark:text-white focus:outline-none focus:border-[#FFD500] text-[12px] font-bold"
+                />
+                <datalist id="category-list">
+                  {existingCategories.map(cat => (
+                    <option key={cat} value={cat} />
+                  ))}
+                </datalist>
+              </div>
             </div>
 
             <div className="flex gap-2 mt-6">
@@ -622,6 +661,7 @@ export default function IMSPage() {
                     est_amount_item: "",
                     gst: "",
                     final_amount: "",
+                    category: "",
                   });
                 }}
                 className="flex-1 px-4 py-2 border-2 border-[#003875] dark:border-[#FFD500] text-[#003875] dark:text-[#FFD500] rounded-lg hover:bg-gray-100 dark:hover:bg-navy-900 transition-colors font-black uppercase text-[9px] tracking-wider"

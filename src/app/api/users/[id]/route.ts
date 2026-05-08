@@ -30,6 +30,14 @@ export async function PUT(
     const success = await updateUser(id, userData);
     if (!success) throw new Error("Failed to update user in Sheets");
 
+    // Sync permissions if provided
+    if (userData.permissions) {
+      const { navigation } = await import("@/lib/navigation");
+      const { updateUserPermissions } = await import("@/lib/google-sheets");
+      const allPageIds = navigation.map(n => n.id);
+      await updateUserPermissions(id, userData.username, userData.permissions, allPageIds);
+    }
+
     return NextResponse.json({ message: "User updated successfully" });
   } catch (error: any) {
     console.error("PUT User Error:", error);

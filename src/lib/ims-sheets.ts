@@ -7,7 +7,7 @@ const SHEET_NAME = "Details";
 class IMSService extends BaseSheetsService<IMS> {
   protected spreadsheetId = GOOGLE_SHEET_ID;
   protected sheetName = SHEET_NAME;
-  protected range = "A:E";
+  protected range = "A:F";
   protected idColumnIndex = 0;
 
   mapRowToItem(row: any[]): IMS {
@@ -22,13 +22,14 @@ class IMSService extends BaseSheetsService<IMS> {
       est_amount_item: get("est._amount/item", 2),
       gst: get("gst", 3),
       final_amount: get("final_amount", 4),
+      category: get("category", 5),
     };
   }
 
   mapItemToRow(ims: IMS): any[] {
     // Use hMap when available, otherwise fall back to known column order:
-    // A(0)=ID, B(1)=item name, C(2)=est._amount/item, D(3)=gst, E(4)=final_amount
-    const row: any[] = ["", "", "", "", ""];
+    // A(0)=ID, B(1)=item name, C(2)=est._amount/item, D(3)=gst, E(4)=final_amount, F(5)=category
+    const row: any[] = ["", "", "", "", "", ""];
     const set = (h: string, fallbackIdx: number, val: any) => {
       const idx = this.hMap[h.toLowerCase()];
       row[idx !== undefined ? idx : fallbackIdx] = val ?? "";
@@ -39,6 +40,7 @@ class IMSService extends BaseSheetsService<IMS> {
     set("est._amount/item", 2, ims.est_amount_item);
     set("gst", 3, ims.gst);
     set("final_amount", 4, ims.final_amount);
+    set("category", 5, ims.category);
 
     return row;
   }

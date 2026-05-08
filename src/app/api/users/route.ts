@@ -36,6 +36,14 @@ export async function POST(req: NextRequest) {
     const success = await addUser(userData);
     if (!success) throw new Error("Failed to add user to Sheets");
 
+    // Sync permissions if provided
+    if (userData.permissions) {
+      const { navigation } = await import("@/lib/navigation");
+      const { updateUserPermissions } = await import("@/lib/google-sheets");
+      const allPageIds = navigation.map(n => n.id);
+      await updateUserPermissions(userData.id, userData.username, userData.permissions, allPageIds);
+    }
+
     return NextResponse.json({ message: "User added successfully" });
   } catch (error: any) {
     console.error("POST User Error:", error);

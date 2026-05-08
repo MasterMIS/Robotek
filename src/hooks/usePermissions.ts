@@ -20,7 +20,7 @@ export function usePermissions() {
       revalidateOnFocus: false,
       revalidateIfStale: false,
       revalidateOnReconnect: false,
-      dedupingInterval: 600000, // 10 minutes deduping
+      dedupingInterval: 30000, // 30 seconds deduping
     }
   );
 

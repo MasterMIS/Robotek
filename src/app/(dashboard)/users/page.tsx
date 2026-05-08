@@ -16,7 +16,8 @@ import {
   UsersIcon,
   EyeIcon,
   MapPinIcon,
-  GlobeAmericasIcon
+  GlobeAmericasIcon,
+  CheckIcon
 } from "@heroicons/react/24/outline";
 import PremiumDatePicker from "@/components/PremiumDatePicker";
 import ActionStatusModal from "@/components/ActionStatusModal";
@@ -784,15 +785,18 @@ export default function UsersPage() {
                     </td>
                     {navigation.map(page => (
                       <td key={page.id} className="px-6 py-4 text-center">
-                        <label className="relative inline-flex items-center cursor-pointer group/check">
-                          <input 
-                            type="checkbox" 
-                            className="sr-only peer"
-                            checked={user.permissions?.includes(page.id) || false}
-                            onChange={() => handlePermissionToggle(user.id, page.id)}
-                          />
-                          <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-[#CE2029] dark:peer-checked:bg-[#FFD500]"></div>
-                        </label>
+                        <button
+                          onClick={() => handlePermissionToggle(user.id, page.id)}
+                          className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all transform active:scale-90 ${
+                            user.permissions?.includes(page.id)
+                              ? "bg-emerald-500 text-white shadow-lg shadow-emerald-500/30 rotate-0"
+                              : "bg-gray-100 dark:bg-white/5 text-gray-300 dark:text-gray-700 hover:bg-gray-200 dark:hover:bg-white/10"
+                          }`}
+                        >
+                          <CheckIcon className={`w-5 h-5 transition-all duration-300 ${
+                            user.permissions?.includes(page.id) ? "scale-100 opacity-100" : "scale-75 opacity-50"
+                          }`} />
+                        </button>
                       </td>
                     ))}
                   </tr>

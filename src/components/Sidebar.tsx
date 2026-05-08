@@ -123,7 +123,7 @@ export default function Sidebar({ mobileOpen, setMobileOpen }: SidebarProps) {
 
     // If matrix permissions exist, use them strictly
     if (userPermissions.length > 0) {
-      return userPermissions.includes(item.id);
+      return userPermissions.some(p => p.toLowerCase() === item.id.toLowerCase());
     }
     // Fallback: Default to allowing Admins if no matrix data exists yet
     return isAdmin;

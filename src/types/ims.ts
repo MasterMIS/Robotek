@@ -4,4 +4,5 @@ export interface IMS {
   est_amount_item: string;
   gst: string;
   final_amount: string;
+  category: string;
 }

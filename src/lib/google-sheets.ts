@@ -29,29 +29,38 @@ async function getSheetsClient() {
 export async function getUsers(): Promise<User[]> {
   try {
     const sheets = await getSheetsClient();
-    const response = await sheets.spreadsheets.values.get({
-      spreadsheetId: GOOGLE_SHEET_ID,
-      range: `${SHEET_NAME}!A:M`,
-    });
+    const [userRes, permRes] = await Promise.all([
+      sheets.spreadsheets.values.get({
+        spreadsheetId: GOOGLE_SHEET_ID,
+        range: `${SHEET_NAME}!A:M`,
+      }),
+      getPagePermissions()
+    ]);
 
-    const rows = response.data.values;
+    const rows = userRes.data.values;
     if (!rows || rows.length <= 1) return [];
 
-      return rows.slice(1).map((row) => ({
-      id: row[0] || "",
-      username: row[1] || "",
-      email: row[2] || "",
-      password: row[3] || "",
-      phone: row[4] || "",
-      role_name: row[5] || "",
-      late_long: row[6] || "",
-      image_url: row[7] || "",
-      dob: row[8] || "",
-      office: row[9] || "",
-      designation: row[10] || "",
-      department: row[11] || "",
-      last_active: row[12] || "",
-    }));
+    const allPermissions = permRes;
+
+    return rows.slice(1).map((row) => {
+      const id = row[0] || "";
+      return {
+        id,
+        username: row[1] || "",
+        email: row[2] || "",
+        password: row[3] || "",
+        phone: row[4] || "",
+        role_name: row[5] || "",
+        late_long: row[6] || "",
+        image_url: row[7] || "",
+        dob: row[8] || "",
+        office: row[9] || "",
+        designation: row[10] || "",
+        department: row[11] || "",
+        last_active: row[12] || "",
+        permissions: allPermissions[id] || [],
+      };
+    });
   } catch (error) {
     console.error("Error fetching users from Google Sheets:", error);
     return [];
@@ -209,8 +218,9 @@ export async function updateUserPermissions(userId: string, username: string, us
     
     // 3. Ensure allPageIds are in headers
     let headersChanged = false;
+    const lowerHeaders = headers.map(h => h.toLowerCase());
     for (const pageId of allPageIds) {
-      if (!headers.includes(pageId)) {
+      if (!lowerHeaders.includes(pageId.toLowerCase())) {
         headers.push(pageId);
         headersChanged = true;
       }
