@@ -1,6 +1,14 @@
 "use client";
 
 import { useState, useRef, useEffect, useMemo } from "react";
+
+// Local-timezone ISO date string (avoids UTC rollback for IST and similar zones)
+const toLocalISO = (d: Date): string => {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+};
 import { 
   ChevronLeftIcon, 
   ChevronRightIcon,
@@ -62,7 +70,7 @@ export default function PremiumDateRangePicker({
   };
 
   const handleDateClick = (date: Date) => {
-    const dateStr = date.toISOString().split('T')[0];
+    const dateStr = toLocalISO(date);
     
     if (selectionPhase === 'start') {
       // First click — set start date, wait for end
@@ -108,12 +116,12 @@ export default function PremiumDateRangePicker({
           {blanks.map(b => <div key={`b-${b}`} className="h-8" />)}
           {days.map(d => {
             const date = new Date(year, month, d);
-            const dateStr = date.toISOString().split('T')[0];
+            const dateStr = toLocalISO(date);
             const selected = isSelected(dateStr);
             const inRange = isInRange(dateStr);
             const isStart = dateStr === value.from;
             const isEnd = dateStr === value.to;
-            const today = new Date().toISOString().split('T')[0];
+            const today = toLocalISO(new Date());
 
             return (
               <button
@@ -140,7 +148,9 @@ export default function PremiumDateRangePicker({
 
   const formatDate = (dateStr: string) => {
     if (!dateStr) return 'Select Date';
-    return new Date(dateStr).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+    // Parse as local date (avoid UTC shift)
+    const [y, m, d] = dateStr.split('-').map(Number);
+    return new Date(y, m - 1, d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
   };
 
   return (
@@ -197,14 +207,14 @@ export default function PremiumDateRangePicker({
                      <button 
                       key={s.label}
                       onClick={() => {
-                        const end = new Date();
-                        let start = new Date();
-                        if (s.type === 'month') {
-                          start = new Date(end.getFullYear(), end.getMonth(), 1);
-                        } else {
-                          start.setDate(end.getDate() - (s.days as number));
-                        }
-                        onChange({ from: start.toISOString().split('T')[0], to: end.toISOString().split('T')[0] });
+                         const end = new Date();
+                         let start = new Date();
+                         if (s.type === 'month') {
+                           start = new Date(end.getFullYear(), end.getMonth(), 1);
+                         } else {
+                           start.setDate(end.getDate() - (s.days as number));
+                         }
+                         onChange({ from: toLocalISO(start), to: toLocalISO(end) });
                       }}
                       className="px-3 py-1.5 bg-gray-50 hover:bg-gray-100 rounded-lg text-[9px] font-black text-gray-500 uppercase transition-all"
                      >

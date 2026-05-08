@@ -228,9 +228,13 @@ function generateTrendData(items: any[], dateRange: { from: string, to: string }
 
 const getTaskDelayMs = (item: any) => {
   if (!item.plannedDate) return 0;
+  // Respect the server-side isLate flag (checklists use date-only comparison)
+  // If the API says it's not late, never show delay regardless of timestamps
+  if (item.isLate === false && item.actualDate) return 0;
+  
   const planned = new Date(item.plannedDate);
-  const now = new Date();
-  const actual = item.actualDate ? new Date(item.actualDate) : null;
+  const now     = new Date();
+  const actual  = item.actualDate ? new Date(item.actualDate) : null;
   
   if (actual && actual > planned) {
     return actual.getTime() - planned.getTime();
@@ -1343,63 +1347,29 @@ function ScorePageContent() {
 
   const handleDownloadPDF = async () => {
     if (!selectedUserId) return;
-    
-    // Find the current user data
     const userToPrint = (data?.users || []).find((u: any) => u.user.id === selectedUserId);
     if (!userToPrint) return;
-
     setIsGeneratingPDF(true);
-    // @ts-ignore
-    const toastId = (window as any).toast?.loading?.("Generating High-Fidelity MIS Report...");
-    
     try {
-      // Initialize Portrait A4 PDF
-      const pdf = new jsPDF('p', 'mm', 'a4');
-      const pageWidth = pdf.internal.pageSize.getWidth();
-      const pageHeight = pdf.internal.pageSize.getHeight();
-
-      const captureAndAddPage = async (ref: any, pageNum: number) => {
-        if (!ref.current) return;
-        
-        const canvas = await htmlToImage.toCanvas(ref.current, {
-           quality: 1,
-           pixelRatio: 2,
-           backgroundColor: '#FFFDF2'
-        });
-        
-        const imgData = canvas.toDataURL('image/png');
-        if (pageNum > 1) pdf.addPage();
-        pdf.addImage(imgData, 'PNG', 0, 0, pageWidth, pageHeight);
-      };
-
-      // Select refs from the DOM (they are hidden in PDFHiddenReport)
-      // Since they are inside UserDrilldownContent, they exist when user is selected
-      const p1 = document.querySelector('[ref-id="pdf-page-1"]') as any;
-      const p2 = document.querySelector('[ref-id="pdf-page-2"]') as any;
-      const p3 = document.querySelector('[ref-id="pdf-page-3"]') as any;
-      const p4 = document.querySelector('[ref-id="pdf-page-4"]') as any;
-
-      // We need a small delay to ensure everything is rendered in the hidden container
-      await new Promise(r => setTimeout(r, 800));
-
-      // Capture sequential pages
-      await captureAndAddPage({ current: document.querySelector('[ref-id="pdf-page-1"]') }, 1);
-      await captureAndAddPage({ current: document.querySelector('[ref-id="pdf-page-2"]') }, 2);
-      await captureAndAddPage({ current: document.querySelector('[ref-id="pdf-page-3"]') }, 3);
-      await captureAndAddPage({ current: document.querySelector('[ref-id="pdf-page-4"]') }, 4);
-      await captureAndAddPage({ current: document.querySelector('[ref-id="pdf-page-5"]') }, 5);
-
-      pdf.save(`Robotek_MIS_${userToPrint.user.username}.pdf`);
-      
+      const { generateUserPDF } = await import("@/lib/utils/scorePdfReport");
+      await generateUserPDF(
+        userToPrint,
+        dateRange,
+        isNegativeMode,
+        chartGranularity,
+        calculateDelayHours,
+        generateTrendData,
+        getTaskDelayMs,
+        formatDuration,
+      );
       // @ts-ignore
       (window as any).toast?.success?.("Report generated successfully!");
     } catch (error: any) {
-       console.error("PDF Generation Error:", error);
-       // @ts-ignore
-       (window as any).toast?.error?.(`Report generation failed: ${error?.message || 'Unknown error'}`);
+      console.error("PDF Generation Error:", error);
+      // @ts-ignore
+      (window as any).toast?.error?.(`Report failed: ${error?.message || "Unknown error"}`);
     } finally {
-       setIsGeneratingPDF(false);
-       if (toastId) (window as any).toast?.dismiss?.(toastId);
+      setIsGeneratingPDF(false);
     }
   };
 

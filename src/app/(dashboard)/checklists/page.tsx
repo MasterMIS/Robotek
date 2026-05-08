@@ -177,7 +177,7 @@ export default function ChecklistsPage() {
   }>(checklistSWRKey, fetcher, {
     revalidateOnFocus: true,
     revalidateOnMount: true,
-    refreshInterval: 0, // No background polling — SSE handles change detection
+    refreshInterval: 10000, // 10s background polling for other users
   });
   const isLoading = isPageLoading;
 
@@ -245,20 +245,11 @@ export default function ChecklistsPage() {
       return;
     }
 
-    const optimisticStatus = updatingStatus;
-    
-    // Optimistic Update
-    mutateChecklists((current: any) => {
-      if (!current?.data) return current;
-      return {
-        ...current,
-        data: current.data.map((item: Checklist) => 
-          item.id === selectedTask.id ? { ...item, status: optimisticStatus } : item
-        )
-      };
-    }, false);
-    
+    setIsStatusModalOpen(true);
+    setActionStatus('loading');
+    setActionMessage("Syncing with sheet...");
     setIsSubmittingUpdate(true);
+    
     try {
       const formDataToSend = new FormData();
       formDataToSend.append("status", updatingStatus);
@@ -274,21 +265,27 @@ export default function ChecklistsPage() {
       });
 
       if (res.ok) {
+        await mutateChecklists(); // Wait for sync from sheet
         setUpdatingStatus("");
         setRevisionReason("");
         setEvidenceFile(null);
         setRevisedDueDate("");
-        fetchHistory(selectedTask.id);
-        mutateChecklists(); // Background revalidate
+        setSelectedTask(null); // Close sidebar
+
+        setActionStatus('success');
+        setActionMessage("Status updated successfully!");
+        setTimeout(() => setIsStatusModalOpen(false), 1500);
       } else {
         const err = await res.json();
-        alert(err.error || "Failed to update status");
-        mutateChecklists(); // Rollback
+        setActionStatus('error');
+        setActionMessage(err.error || "Failed to update status");
+        setTimeout(() => setIsStatusModalOpen(false), 3000);
       }
     } catch (error) {
       console.error("Error updating status:", error);
-      alert("An error occurred while updating status");
-      mutateChecklists(); // Rollback
+      setActionStatus('error');
+      setActionMessage("An error occurred while updating status");
+      setTimeout(() => setIsStatusModalOpen(false), 3000);
     } finally {
       setIsSubmittingUpdate(false);
     }
@@ -297,7 +294,11 @@ export default function ChecklistsPage() {
   const handleAddRemark = async () => {
     if (!selectedTask || !remarkText.trim()) return;
 
+    setIsStatusModalOpen(true);
+    setActionStatus('loading');
+    setActionMessage("Adding remark to sheet...");
     setIsSubmittingUpdate(true);
+
     try {
       const res = await fetch(`/api/checklists/${selectedTask.id}/remarks`, {
         method: "POST",
@@ -307,14 +308,22 @@ export default function ChecklistsPage() {
 
       if (res.ok) {
         setRemarkText("");
-        fetchHistory(selectedTask.id);
+        await mutateChecklists(); // Wait for sync
+        
+        setActionStatus('success');
+        setActionMessage("Remark added successfully!");
+        setTimeout(() => setIsStatusModalOpen(false), 1500);
       } else {
         const err = await res.json();
-        alert(err.error || "Failed to add remark");
+        setActionStatus('error');
+        setActionMessage(err.error || "Failed to add remark");
+        setTimeout(() => setIsStatusModalOpen(false), 3000);
       }
     } catch (error) {
       console.error("Error adding remark:", error);
-      alert("An error occurred while adding remark");
+      setActionStatus('error');
+      setActionMessage("An error occurred while adding remark");
+      setTimeout(() => setIsStatusModalOpen(false), 3000);
     } finally {
       setIsSubmittingUpdate(false);
     }

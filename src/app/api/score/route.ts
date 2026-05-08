@@ -154,7 +154,10 @@ export async function GET(request: Request) {
         plannedDate: planned,
         actualDate: actual,
         isCompleted: !!actual,
-        isLate: planned && actual ? actual > planned : false,
+        // Checklists: compare DATE only (ignore time) — same day = On Time
+        isLate: planned && actual
+          ? actual.toISOString().split('T')[0] > planned.toISOString().split('T')[0]
+          : false,
         title: c.task,
         id: c.id,
         status: c.status

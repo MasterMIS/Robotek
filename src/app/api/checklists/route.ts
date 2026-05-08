@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getChecklists, addChecklist, getChecklistsPaginated } from "@/lib/checklist-sheets";
+import { getChecklists, addChecklist, addChecklists, getChecklistsPaginated } from "@/lib/checklist-sheets";
 import { getUserByUsernameOrEmail } from "@/lib/google-sheets";
 import { Checklist } from "@/types/checklist";
 import { sendWhatsAppMessage } from "@/lib/maytapi";
@@ -55,7 +55,7 @@ export async function GET(req: NextRequest) {
     );
 
     return NextResponse.json(result, {
-      headers: { 'Cache-Control': 'private, max-age=60, stale-while-revalidate=300' },
+      headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate' },
     });
   } catch (error) {
     console.error('Checklist pagination error:', error);
