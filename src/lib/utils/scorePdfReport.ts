@@ -29,6 +29,15 @@ const fmtShort = (iso: string) => {
 const loadImg = (src: string): Promise<HTMLImageElement|null> =>
   new Promise(r => { const i=new Image(); i.crossOrigin="anonymous"; i.onload=()=>r(i); i.onerror=()=>r(null); i.src=src; });
 
+// Helper to get ISO week number
+const getWeekNumber = (d: Date): number => {
+  const date = new Date(d.getTime());
+  date.setHours(0, 0, 0, 0);
+  date.setDate(date.getDate() + 3 - (date.getDay() + 6) % 7);
+  const week1 = new Date(date.getFullYear(), 0, 4);
+  return 1 + Math.round(((date.getTime() - week1.getTime()) / 86400000 - 3 + (week1.getDay() + 6) % 7) / 7);
+};
+
 // ─── Page header ─────────────────────────────────────────────────────────
 function drawHeader(doc: jsPDF, PW: number, page: number, total: number,
   username: string, from: string, to: string, logo: HTMLImageElement|null) {
@@ -45,13 +54,34 @@ function drawHeader(doc: jsPDF, PW: number, page: number, total: number,
   doc.setFontSize(6); doc.setFont("helvetica","normal"); doc.setTextColor(180,210,255);
   doc.text("MIS PERFORMANCE REPORT",26,18.5);
 
-  // Right side — bigger fonts
+  // Right side context
+  const dFrom = new Date(from);
+  const dTo = new Date(to);
+  const isSameMonth = dFrom.getMonth() === dTo.getMonth() && dFrom.getFullYear() === dTo.getFullYear();
+  const diffDays = Math.ceil(Math.abs(dTo.getTime() - dFrom.getTime()) / (1000 * 60 * 60 * 24));
+  
+  let periodLabel = "";
+  if (diffDays <= 7) {
+    periodLabel = `WEEK ${getWeekNumber(dFrom)}, ${dFrom.getFullYear()}`;
+  } else if (isSameMonth && diffDays > 25) {
+    periodLabel = `${dFrom.toLocaleString('default', { month: 'long' }).toUpperCase()} ${dFrom.getFullYear()}`;
+  }
+
   doc.setTextColor(...WHITE); doc.setFontSize(9); doc.setFont("helvetica","bold");
   doc.text(username.toUpperCase(), PW-10, 10, {align:"right"});
-  doc.setFontSize(7.5); doc.setFont("helvetica","normal"); doc.setTextColor(200,220,255);
-  doc.text(`${fmtShort(from)}  –  ${fmtShort(to)}`, PW-10, 17, {align:"right"});
+  
+  if (periodLabel) {
+    doc.setFontSize(7.5); doc.setFont("helvetica","bold"); doc.setTextColor(...GOLD);
+    doc.text(periodLabel, PW-10, 14.5, {align:"right"});
+    doc.setFontSize(6.5); doc.setFont("helvetica","normal"); doc.setTextColor(200,220,255);
+    doc.text(`${fmtShort(from)} – ${fmtShort(to)}`, PW-10, 18.5, {align:"right"});
+  } else {
+    doc.setFontSize(7.5); doc.setFont("helvetica","normal"); doc.setTextColor(200,220,255);
+    doc.text(`${fmtShort(from)} – ${fmtShort(to)}`, PW-10, 17, {align:"right"});
+  }
+
   doc.setTextColor(...GOLD); doc.setFontSize(7);
-  doc.text(`Page ${page} / ${total}`, PW-10, 21, {align:"right"});
+  doc.text(`Page ${page} / ${total}`, PW-10, 21.5, {align:"right"});
 }
 
 // ─── Gauge bar ────────────────────────────────────────────────────────────
@@ -83,7 +113,7 @@ function drawTile(doc: jsPDF, x: number, y: number, w: number, h: number,
   doc.text(label.toUpperCase(), x+w/2, y+h-3.5, {align:"center"});
 }
 
-// ─── Trend table (Score % + On-Time % per period) ─────────────────────────
+// ─── Trend table ─────────────────────────
 function drawTrendTable(doc: jsPDF, M: number, startY: number, CW: number,
   trendData: any[], isNeg: boolean, color: [number,number,number], title: string): number {
   if (!trendData || trendData.length < 2) return startY;
@@ -163,25 +193,23 @@ export async function generateUserPDF(
     {label:"SCOT TRACKING", dispLabel:"SCOT Tracking",items:userToPrint.scotStats?.items      ||[], color:[124,58,237] as [number,number,number]},
   ];
 
-  const TOTAL_PAGES = 5;
+  const categoriesWithPending = categories.map(cat => ({
+    ...cat,
+    pendingItems: cat.items.filter((item: any) => !item.actualDate)
+  })).filter(cat => cat.pendingItems.length > 0);
 
   // ════════════════════════════════════════════════════════════════════
   // PAGE 1 — SUMMARY
   // ════════════════════════════════════════════════════════════════════
-  drawHeader(doc,PW,1,TOTAL_PAGES,username,dateRange.from,dateRange.to,logo);
   let y = 29;
-
-  // Profile card
   doc.setFillColor(230,240,255); doc.roundedRect(M,y,CW,36,3,3,"F");
   doc.setFillColor(...NAVY);     doc.roundedRect(M,y,4,36,2,2,"F");
 
-  // Avatar — larger circle + much bigger initial
   doc.setFillColor(...NAVY); doc.circle(M+22,y+18,12,"F");
   doc.setDrawColor(...GOLD); doc.setLineWidth(1.2); doc.circle(M+22,y+18,12,"S");
   doc.setTextColor(...WHITE); doc.setFontSize(22); doc.setFont("helvetica","bold");
   doc.text(username.charAt(0).toUpperCase(), M+22, y+23.5, {align:"center"});
 
-  // Name / chip / info
   doc.setTextColor(...NAVY); doc.setFontSize(13); doc.setFont("helvetica","bold");
   doc.text(username.toUpperCase(), M+40, y+12);
   if (userToPrint.user.roleName) {
@@ -193,14 +221,12 @@ export async function generateUserPDF(
   if (userToPrint.user.designation) doc.text(userToPrint.user.designation, M+40, y+27);
   if (userToPrint.user.office)      doc.text(`Office: ${userToPrint.user.office}`, M+40, y+33);
 
-  // Gauges — right side of card, fixed layout
   const gaugeStartX = M+116, gaugeBarW = 56;
   doc.setFillColor(210,228,250); doc.roundedRect(gaugeStartX-4,y+2,70,32,2,2,"F");
   drawGauge(doc,gaugeStartX,y+10,gaugeBarW,userToPrint.score,     userToPrint.total,    "Score %",   isNegativeMode);
   drawGauge(doc,gaugeStartX,y+24,gaugeBarW,userToPrint.onTimeRate,userToPrint.completed,"On-Time %", isNegativeMode);
   y += 42;
 
-  // 6 stat tiles — single row
   const tiles = [
     {v:userToPrint.total,     l:"Total Tasks",    s:"All assigned",     c:NAVY   },
     {v:userToPrint.completed, l:"Completed",      s:"Done on time",     c:EMERALD},
@@ -213,14 +239,11 @@ export async function generateUserPDF(
   tiles.forEach((t,i) => drawTile(doc,M+i*(tw+1),y,tw,24,t.v,t.l,t.s,t.c));
   y += 30;
 
-  // ── Overall trend table (replaces chart) ─────────────────────────────
   const overallTrend = generateTrendData(allItems, trendRange, chartGranularity);
   y = drawTrendTable(doc, M, y, CW, overallTrend, isNegativeMode, NAVY, "OVERALL PERFORMANCE TREND");
 
-  // Overall category table
   doc.setFontSize(8); doc.setFont("helvetica","bold"); doc.setTextColor(...NAVY);
   doc.text("CATEGORY PERFORMANCE", M, y); y+=3;
-
   const catRows = [
     ["Delegations",  userToPrint.delegationStats],
     ["Checklists",   userToPrint.checklistStats],
@@ -249,62 +272,72 @@ export async function generateUserPDF(
   });
   y=(doc as any).lastAutoTable.finalY+8;
 
-  // All 4 category weekly/period trend tables — on Page 1 (overflow naturally to page 2 if needed)
   categories.forEach(cat=>{
     const catTrend = generateTrendData(cat.items, trendRange, chartGranularity);
     y = drawTrendTable(doc,M,y,CW,catTrend,isNegativeMode,cat.color,`${cat.dispLabel} — Weekly Performance`);
   });
 
   // ════════════════════════════════════════════════════════════════════
-  // PAGES 2-5 — TASK DETAIL LISTS PER CATEGORY
+  // PAGES 2+ — PENDING TASK LISTS (Flowing layout)
   // ════════════════════════════════════════════════════════════════════
-  categories.forEach((cat,pi)=>{
+  if (categoriesWithPending.length > 0) {
     doc.addPage();
-    drawHeader(doc,PW,pi+2,TOTAL_PAGES,username,dateRange.from,dateRange.to,logo);
-    let ty=29;
+    let ty = 29;
+    const PH = doc.internal.pageSize.getHeight();
 
-    // Title bar
-    doc.setFillColor(...cat.color); doc.roundedRect(M,ty,CW,11,2,2,"F");
-    doc.setTextColor(...WHITE); doc.setFontSize(9); doc.setFont("helvetica","bold");
-    doc.text(cat.label, M+5, ty+7.5);
-    const d2=cat.items.filter((i:any)=>i.isLate).length;
-    const dn=cat.items.filter((i:any)=>i.actualDate&&!i.isLate).length;
-    const pd=cat.items.filter((i:any)=>!i.actualDate).length;
-    doc.setFontSize(6.5); doc.setFont("helvetica","normal");
-    doc.text(`${cat.items.length} Total  •  ${dn} Done  •  ${pd} Pending  •  ${d2} Delayed`,PW-M,ty+7.5,{align:"right"});
-    ty+=15;
+    categoriesWithPending.forEach((cat) => {
+      if (ty + 25 > PH - 15) {
+        doc.addPage();
+        ty = 29;
+      }
 
-    if (cat.items.length===0){
-      doc.setFontSize(9); doc.setTextColor(...GRAY);
-      doc.text("No tasks for this category in the selected period.",M,ty+8);
-    } else {
-      const rows=cat.items.map((item:any)=>{
-        const dlMs=getTaskDelayMs(item);
-        const dlStr=dlMs>0?(formatDuration(dlMs)||"—"):"—";
-        const status=item.actualDate&&dlMs<=0?"On Time":item.actualDate&&dlMs>0?"Late (Done)":dlMs>0?"Overdue":"Pending";
-        return [item.title||"—",fmtDate(item.plannedDate),item.actualDate?fmtDate(item.actualDate):"—",status,dlStr];
+      doc.setFillColor(...cat.color); doc.roundedRect(M, ty, CW, 11, 2, 2, "F");
+      doc.setTextColor(...WHITE); doc.setFontSize(9); doc.setFont("helvetica", "bold");
+      doc.text(`${cat.label} (PENDING)`, M + 5, ty + 7.5);
+      
+      const d2 = cat.items.filter((i: any) => i.isLate).length;
+      const dn = cat.items.filter((i: any) => i.actualDate && !i.isLate).length;
+      const pd = cat.pendingItems.length;
+      
+      doc.setFontSize(6.5); doc.setFont("helvetica", "normal");
+      doc.text(`${cat.items.length} Total  •  ${dn} Done  •  ${pd} Pending  •  ${d2} Delayed`, PW - M, ty + 7.5, { align: "right" });
+      
+      ty += 15;
+
+      const rows = cat.pendingItems.map((item: any) => {
+        const dlMs = getTaskDelayMs(item);
+        const dlStr = dlMs > 0 ? (formatDuration(dlMs) || "—") : "—";
+        return [item.title || "—", fmtDate(item.plannedDate), "—", "Pending", dlStr];
       });
-      autoTable(doc,{
-        startY:ty, margin:{left:M,right:M},
-        head:[["Task","Target","Done At","Status","Delay"]],
-        body:rows, theme:"striped",
-        headStyles:{fillColor:cat.color,textColor:WHITE,fontSize:7,fontStyle:"bold"},
-        bodyStyles:{fontSize:7,valign:"middle"},
-        columnStyles:{
-          0:{cellWidth:83},1:{cellWidth:26,halign:"center"},
-          2:{cellWidth:26,halign:"center"},3:{cellWidth:30,halign:"center",fontStyle:"bold"},
-          4:{halign:"center"},
+
+      autoTable(doc, {
+        startY: ty,
+        margin: { left: M, right: M },
+        head: [["Task", "Target", "Done At", "Status", "Delay"]],
+        body: rows,
+        theme: "striped",
+        headStyles: { fillColor: cat.color, textColor: WHITE, fontSize: 7, fontStyle: "bold" },
+        bodyStyles: { fontSize: 7, valign: "middle" },
+        columnStyles: {
+          0: { cellWidth: 83 }, 1: { cellWidth: 26, halign: "center" },
+          2: { cellWidth: 26, halign: "center" }, 3: { cellWidth: 30, halign: "center", fontStyle: "bold" },
+          4: { halign: "center" },
         },
-        didParseCell:(d)=>{
-          if (d.section==="body"&&d.column.index===3){
-            const v=String(d.cell.raw);
-            d.cell.styles.textColor=v==="On Time"?EMERALD:v==="Pending"?AMBER:ROSE;
-          }
-          if (d.section==="body"&&d.column.index===4&&d.cell.raw!=="—") d.cell.styles.textColor=ROSE;
-        },
+        didParseCell: (d) => {
+          if (d.section === "body" && d.column.index === 3) d.cell.styles.textColor = AMBER;
+          if (d.section === "body" && d.column.index === 4 && d.cell.raw !== "—") d.cell.styles.textColor = ROSE;
+        }
       });
-    }
-  });
+
+      ty = (doc as any).lastAutoTable.finalY + 12;
+    });
+  }
+
+  const pageCount = doc.internal.getNumberOfPages();
+  for (let i = 1; i <= pageCount; i++) {
+    doc.setPage(i);
+    drawHeader(doc, PW, i, pageCount, username, dateRange.from, dateRange.to, logo);
+  }
 
   doc.save(`Robotek_MIS_${username}_${dateRange.from}.pdf`);
 }
