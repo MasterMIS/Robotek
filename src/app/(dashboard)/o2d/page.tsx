@@ -1176,6 +1176,27 @@ export default function O2DPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Mandatory Field Validation
+    if (!editingOrderNo && !screenshotFile) {
+      setActionStatus("error");
+      setActionMessage("Order Proof (Attachment) is mandatory for new orders.");
+      setIsStatusModalOpen(true);
+      return;
+    }
+    if (!commonData.party_name) {
+      setActionStatus("error");
+      setActionMessage("Partner Name is mandatory.");
+      setIsStatusModalOpen(true);
+      return;
+    }
+    if (items.length === 0 || !items[0].item_name || !items[0].item_qty) {
+      setActionStatus("error");
+      setActionMessage("At least one item with name and quantity is mandatory.");
+      setIsStatusModalOpen(true);
+      return;
+    }
+
     const now = new Date().toISOString();
 
     // Show loader
@@ -1889,6 +1910,44 @@ export default function O2DPage() {
   const handleStepUpdateSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedOrderNo) return;
+
+    // Mandatory Field Validation (only if status is "Yes")
+    const stepIdx = currentStepToUpdate;
+    const fields = stepUpdateFields;
+    const first = selectedOrder[0] as any;
+
+    if (fields.status === "Yes") {
+      let errorMsg = "";
+      const existingAttachment =
+        stepIdx === 1 ? first.upload_so_1 :
+        stepIdx === 5 ? first.upload_pi_5 :
+        stepIdx === 9 ? first.attach_bilty_9 : "";
+
+      if (stepIdx === 1) {
+        if (!fields.so_number_1) errorMsg = "SO Number is mandatory.";
+        else if (!fields.final_amount_1) errorMsg = "Final Amount is mandatory.";
+        else if (!stepAttachment && !existingAttachment) errorMsg = "SO Attachment is mandatory.";
+      } else if (stepIdx === 5) {
+        if (!fields.num_of_parcel_5) errorMsg = "Number of Parcels is mandatory.";
+        else if (!fields.actual_date_of_order_packed_5) errorMsg = "Actual Date of Packing is mandatory.";
+        else if (!stepAttachment && !existingAttachment) errorMsg = "PI Attachment is mandatory.";
+      } else if (stepIdx === 7) {
+        if (!fields.voucher_num_7) errorMsg = "Voucher Number is mandatory.";
+      } else if (stepIdx === 8) {
+        if (!fields.voucher_num_51_8) errorMsg = "Voucher Number (51) is mandatory.";
+        else if (!fields.t_amt_8) errorMsg = "Total Amount is mandatory.";
+      } else if (stepIdx === 9) {
+        if (!fields.num_of_parcel_9) errorMsg = "Number of Parcels is mandatory.";
+        else if (!stepAttachment && !existingAttachment) errorMsg = "Bilty Attachment is mandatory.";
+      }
+
+      if (errorMsg) {
+        setActionStatus("error");
+        setActionMessage(errorMsg);
+        setIsStatusModalOpen(true);
+        return;
+      }
+    }
 
     const timestamp = new Date().toISOString();
     const currentO2Ds = allO2DsRaw;
@@ -2895,7 +2954,7 @@ export default function O2DPage() {
                     <div className="relative group">
                       <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1.5 mb-2">
                         <PhotoIcon className="w-3 h-3 text-[#FFD500]" />
-                        Order Proof
+                        Order Proof <span className="text-red-500 ml-1">*</span>
                       </label>
                       <label
                         className="flex flex-col items-center justify-center w-28 h-28 bg-gray-50/50 dark:bg-navy-900 border-2 border-dashed border-gray-100 dark:border-navy-700 rounded-3xl hover:border-[#FFD500] cursor-pointer transition-all active:scale-95 shadow-inner overflow-hidden relative"
@@ -2964,7 +3023,7 @@ export default function O2DPage() {
                       <div className="flex gap-2 items-end">
                         <div className="flex-1 min-w-0">
                           <SearchableDropdown
-                            label="Partner Name"
+                            label="Partner Name *"
                             icon={BuildingOfficeIcon}
                             value={commonData.party_name}
                             onFocus={centerOnFocus}
@@ -3068,7 +3127,7 @@ export default function O2DPage() {
                             <div className="flex gap-2 items-end">
                               <div className="flex-1 min-w-0">
                                  <SearchableDropdown
-                                  label="Nomenclature"
+                                  label="Nomenclature *"
                                   icon={ArchiveBoxIcon}
                                   value={item.item_name}
                                   data-nomenclature-trigger={index}
@@ -3106,7 +3165,7 @@ export default function O2DPage() {
                           <div className="md:col-span-2">
                             <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1 mb-1.5">
                               <HashtagIcon className="w-2.5 h-2.5" />
-                              Qty
+                              Qty <span className="text-red-500 ml-0.5">*</span>
                             </label>
                             <input
                               type="text"
@@ -3396,7 +3455,7 @@ export default function O2DPage() {
                     <div className="grid grid-cols-2 gap-3">
                       <div>
                         <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">
-                          Final Amount
+                          Final Amount <span className="text-red-500">*</span>
                         </label>
                         <input
                           type="text"
@@ -3413,7 +3472,7 @@ export default function O2DPage() {
                       </div>
                       <div>
                         <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">
-                          SO Number
+                          SO Number <span className="text-red-500">*</span>
                         </label>
                         <input
                           type="text"
@@ -3464,7 +3523,7 @@ export default function O2DPage() {
                     </div>
                     <div>
                       <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block flex items-center gap-1.5">
-                        <PhotoIcon className="w-3 h-3" /> Upload SO (Attachment)
+                        <PhotoIcon className="w-3 h-3" /> Upload SO (Attachment) <span className="text-red-500">*</span>
                       </label>
                       <label
                         className="flex items-center justify-center w-full h-24 border-2 border-dashed border-orange-100 rounded-2xl hover:bg-orange-50/30 cursor-pointer overflow-hidden relative"
@@ -3525,7 +3584,7 @@ export default function O2DPage() {
                   <div className="space-y-4 pt-2 border-t border-gray-100 dark:border-white/5">
                     <div>
                       <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block font-bold">
-                        Number of Parcel
+                        Number of Parcel <span className="text-red-500">*</span>
                       </label>
                       <input
                         type="text"
@@ -3542,7 +3601,7 @@ export default function O2DPage() {
                     </div>
                     <div>
                       <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest block font-bold">
-                        Actual Date of Packing
+                        Actual Date of Packing <span className="text-red-500">*</span>
                       </label>
                       <input
                         type="date"
@@ -3568,7 +3627,7 @@ export default function O2DPage() {
                     </div>
                     <div>
                       <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest block flex items-center gap-1.5 font-bold">
-                        <PhotoIcon className="w-3 h-3" /> Upload PI (Attachment)
+                        <PhotoIcon className="w-3 h-3" /> Upload PI (Attachment) <span className="text-red-500">*</span>
                       </label>
                       <label
                         className="flex items-center justify-center w-full h-24 border-2 border-dashed border-orange-100 rounded-2xl hover:bg-orange-50/30 cursor-pointer overflow-hidden relative mt-1.5"
@@ -3629,7 +3688,7 @@ export default function O2DPage() {
                   <div className="space-y-4 pt-2 border-t border-gray-100 dark:border-white/5">
                     <div>
                       <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block font-bold">
-                        Voucher Number
+                        Voucher Number <span className="text-red-500">*</span>
                       </label>
                       <input
                         type="text"
@@ -3662,7 +3721,7 @@ export default function O2DPage() {
                     <div className="grid grid-cols-2 gap-3">
                       <div>
                         <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block font-bold">
-                          Voucher Num (51)
+                          Voucher Num (51) <span className="text-red-500">*</span>
                         </label>
                         <input
                           type="text"
@@ -3679,7 +3738,7 @@ export default function O2DPage() {
                       </div>
                       <div>
                         <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block font-bold">
-                          T. Amount
+                          T. Amount <span className="text-red-500">*</span>
                         </label>
                         <input
                           type="text"
@@ -3702,7 +3761,7 @@ export default function O2DPage() {
                   <div className="space-y-4 pt-2 border-t border-gray-100 dark:border-white/5">
                     <div>
                       <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block font-bold">
-                        Number of Parcel
+                        Number of Parcel <span className="text-red-500">*</span>
                       </label>
                       <input
                         type="text"
@@ -3720,7 +3779,7 @@ export default function O2DPage() {
                     <div>
                       <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest block flex items-center gap-1.5 font-bold font-bold">
                         <PhotoIcon className="w-3 h-3" /> Attach Bilty to CRM
-                        (Attachment)
+                        (Attachment) <span className="text-red-500">*</span>
                       </label>
                       <label
                         className="flex items-center justify-center w-full h-24 border-2 border-dashed border-orange-100 rounded-2xl hover:bg-orange-50/30 cursor-pointer overflow-hidden relative mt-1.5"
@@ -3849,6 +3908,7 @@ export default function O2DPage() {
         isOpen={isStatusModalOpen}
         status={actionStatus}
         message={actionMessage}
+        onClose={() => setIsStatusModalOpen(false)}
       />
 
       <ItemFormModal

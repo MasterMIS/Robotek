@@ -17,6 +17,46 @@ export async function GET(req: NextRequest) {
     const startDateParam = searchParams.get("startDate");
     const endDateParam = searchParams.get("endDate");
     const targetDate = searchParams.get("targetDate"); // For Roadmap
+    const granularity = searchParams.get("granularity") || "month";
+
+    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+    const getTrendKey = (date: Date, gran: string) => {
+      const y = date.getFullYear();
+      const m = date.getMonth();
+      if (gran === 'day') return date.toISOString().split('T')[0];
+      if (gran === 'week') {
+        const d = new Date(date);
+        const day = d.getDay();
+        const diff = d.getDate() - day;
+        const startOfWeek = new Date(d.setDate(diff));
+        return startOfWeek.toISOString().split('T')[0];
+      }
+      if (gran === 'quarter') {
+        const q = Math.floor(m / 3) + 1;
+        return `${y}-Q${q}`;
+      }
+      if (gran === 'year') return `${y}`;
+      return `${y}-${String(m + 1).padStart(2, '0')}`;
+    };
+
+    const getTrendLabel = (key: string, gran: string) => {
+      if (gran === 'day') {
+        const [y, m, d] = key.split('-');
+        return `${d}-${months[parseInt(m) - 1]}`;
+      }
+      if (gran === 'week') {
+        const [y, m, d] = key.split('-');
+        return `W/C ${d}-${months[parseInt(m) - 1]}`;
+      }
+      if (gran === 'quarter') {
+        const [y, q] = key.split('-');
+        return `${q}-${y}`;
+      }
+      if (gran === 'year') return key;
+      const [y, m] = key.split('-');
+      return `${months[parseInt(m) - 1]}-${y}`;
+    };
 
     // 1. Fetch all data
     const [allO2Ds, allIMS] = await Promise.all([
@@ -111,32 +151,33 @@ export async function GET(req: NextRequest) {
     }
 
     // 4. Monthly Trends
-    const monthlyTrends: Record<string, { month: string, count: number, amount: number, otdCount: number, deliveredCount: number }> = {};
+    const trendDataMap: Record<string, { month: string, count: number, amount: number, otdCount: number, deliveredCount: number }> = {};
     filteredOrders.forEach(o => {
-      const monthKey = `${o.createdAt.getFullYear()}-${String(o.createdAt.getMonth() + 1).padStart(2, '0')}`;
-      if (!monthlyTrends[monthKey]) {
-        monthlyTrends[monthKey] = { 
-          month: o.createdAt.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
+      const key = getTrendKey(o.createdAt, granularity);
+      if (!trendDataMap[key]) {
+        trendDataMap[key] = { 
+          month: getTrendLabel(key, granularity),
           count: 0, 
           amount: 0,
           otdCount: 0,
           deliveredCount: 0
         };
       }
-      monthlyTrends[monthKey].count++;
-      monthlyTrends[monthKey].amount += o.totalAmount;
+      trendDataMap[key].count++;
+      trendDataMap[key].amount += o.totalAmount;
       if (o.isDispatched) {
-        monthlyTrends[monthKey].deliveredCount++;
-        if (o.isOTD) monthlyTrends[monthKey].otdCount++;
+        trendDataMap[key].deliveredCount++;
+        if (o.isOTD) trendDataMap[key].otdCount++;
       }
     });
-    const monthlyTrendData = Object.entries(monthlyTrends)
+    const monthlyTrendData = Object.entries(trendDataMap)
       .map(([key, data]) => ({ 
         key, 
         ...data,
         otdRate: data.deliveredCount > 0 ? Math.round((data.otdCount / data.deliveredCount) * 100) : 0
       }))
-      .sort((a, b) => a.key.localeCompare(b.key));
+      .sort((a, b) => a.key.localeCompare(b.key))
+      .slice(-24);
 
     // 5. Basic Stats
     const stats = {
@@ -238,23 +279,25 @@ export async function GET(req: NextRequest) {
     const partyList = Object.values(partyStats).map((p: any) => {
       const groupedHistory: Record<string, { date: string, amount: number, count: number, otdCount: number, deliveredCount: number }> = {};
       p.history.forEach((h: any) => {
-        // Group by Month (e.g., "2024-05")
-        const monthKey = h.date.substring(0, 7); 
-        if (!groupedHistory[monthKey]) {
-          groupedHistory[monthKey] = { date: monthKey, amount: 0, count: 0, otdCount: 0, deliveredCount: 0 };
+        const key = getTrendKey(new Date(h.date), granularity);
+        if (!groupedHistory[key]) {
+          groupedHistory[key] = { date: key, amount: 0, count: 0, otdCount: 0, deliveredCount: 0 };
         }
-        groupedHistory[monthKey].amount += h.amount;
-        groupedHistory[monthKey].count += 1;
+        groupedHistory[key].amount += h.amount;
+        groupedHistory[key].count += 1;
         if (h.isDispatched) {
-          groupedHistory[monthKey].deliveredCount++;
-          if (h.isOTD) groupedHistory[monthKey].otdCount++;
+          groupedHistory[key].deliveredCount++;
+          if (h.isOTD) groupedHistory[key].otdCount++;
         }
       });
 
-      const sortedHistory = Object.values(groupedHistory).map((t: any) => ({
-        ...t,
-        otdRate: t.deliveredCount > 0 ? Math.round((t.otdCount / t.deliveredCount) * 100) : 0
-      })).sort((a: any, b: any) => a.date.localeCompare(b.date));
+      const sortedHistory = Object.values(groupedHistory).map((t: any) => {
+        return {
+          ...t,
+          displayDate: getTrendLabel(t.date, granularity),
+          otdRate: t.deliveredCount > 0 ? Math.round((t.otdCount / t.deliveredCount) * 100) : 0
+        };
+      }).sort((a: any, b: any) => a.date.localeCompare(b.date)).slice(-24);
       
       const categoryList = Object.entries(p.categories).map(([name, stats]: any) => ({
         category: name,
@@ -284,22 +327,25 @@ export async function GET(req: NextRequest) {
       // Group category history by month for dual metrics
       const groupedHist: Record<string, { date: string, amount: number, count: number, otdCount: number, deliveredCount: number }> = {};
       c.history.forEach((h: any) => {
-        const monthKey = h.date.substring(0, 7);
-        if (!groupedHist[monthKey]) {
-          groupedHist[monthKey] = { date: monthKey, amount: 0, count: 0, otdCount: 0, deliveredCount: 0 };
+        const key = getTrendKey(new Date(h.date), granularity);
+        if (!groupedHist[key]) {
+          groupedHist[key] = { date: key, amount: 0, count: 0, otdCount: 0, deliveredCount: 0 };
         }
-        groupedHist[monthKey].amount += h.amount;
-        groupedHist[monthKey].count += 1; // Item qty/count
+        groupedHist[key].amount += h.amount;
+        groupedHist[key].count += 1;
         if (h.isDispatched) {
-          groupedHist[monthKey].deliveredCount++;
-          if (h.isOTD) groupedHist[monthKey].otdCount++;
+          groupedHist[key].deliveredCount++;
+          if (h.isOTD) groupedHist[key].otdCount++;
         }
       });
 
-      const sortedHistory = Object.values(groupedHist).map((t: any) => ({
-        ...t,
-        otdRate: t.deliveredCount > 0 ? Math.round((t.otdCount / t.deliveredCount) * 100) : 0
-      })).sort((a: any, b: any) => a.date.localeCompare(b.date));
+      const sortedHistory = Object.values(groupedHist).map((t: any) => {
+        return {
+          ...t,
+          displayDate: getTrendLabel(t.date, granularity),
+          otdRate: t.deliveredCount > 0 ? Math.round((t.otdCount / t.deliveredCount) * 100) : 0
+        };
+      }).sort((a: any, b: any) => a.date.localeCompare(b.date)).slice(-24);
 
       const allItems = Object.entries(c.items).map(([name, stats]: any) => ({
         name,
@@ -400,7 +446,7 @@ export async function GET(req: NextRequest) {
       },
       roadmap: roadmapData,
       searchableOrders,
-      todayCount: orders.filter(o => o.createdAt.toISOString().split('T')[0] === new Date().toISOString().split('T')[0]).length
+      todayCount: orders.filter(o => o.createdAt.toISOString().split('T')[0] === targetStr).length
     });
 
   } catch (error: any) {

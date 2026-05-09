@@ -107,9 +107,10 @@ export default function MetrixPage() {
   const [drillDownCategory, setDrillDownCategory] = useState<any>(null);
   const [forecastType, setForecastType] = useState("category");
   const [forecastTarget, setForecastTarget] = useState("");
+  const [granularity, setGranularity] = useState("month");
 
   const { data, error, isLoading } = useSWR(
-    `/api/metrix?startDate=${dateRange.startDate}&endDate=${dateRange.endDate}&targetDate=${targetDate}`,
+    `/api/metrix?startDate=${dateRange.startDate}&endDate=${dateRange.endDate}&targetDate=${targetDate}&granularity=${granularity}`,
     fetcher
   );
 
@@ -191,6 +192,27 @@ export default function MetrixPage() {
                     }`}
                 >
                   {tab}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex items-center gap-1 bg-gray-50 dark:bg-navy-900 p-1 rounded-xl border border-gray-100 dark:border-white/5">
+              {[
+                { id: 'day', label: 'Day', color: 'text-rose-500 bg-rose-50 dark:bg-rose-500/10' },
+                { id: 'week', label: 'Week', color: 'text-amber-500 bg-amber-50 dark:bg-amber-500/10' },
+                { id: 'month', label: 'Month', color: 'text-emerald-500 bg-emerald-50 dark:bg-emerald-500/10' },
+                { id: 'quarter', label: 'Quarterly', color: 'text-indigo-500 bg-indigo-50 dark:bg-indigo-500/10' },
+                { id: 'year', label: 'Yearly', color: 'text-violet-500 bg-violet-50 dark:bg-violet-500/10' }
+              ].map(g => (
+                <button
+                  key={g.id}
+                  onClick={() => setGranularity(g.id)}
+                  className={`px-3 py-1 rounded-lg text-[8px] font-black uppercase tracking-widest transition-all ${granularity === g.id
+                      ? `${g.color} shadow-sm ring-1 ring-black/5`
+                      : 'text-gray-400 hover:text-gray-600'
+                    }`}
+                >
+                  {g.label}
                 </button>
               ))}
             </div>
@@ -502,7 +524,7 @@ export default function MetrixPage() {
                           <LineChart data={drillDownParty.history} margin={{ top: 20, right: 30, left: 40, bottom: 40 }}>
                             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
                             <XAxis
-                              dataKey="date"
+                              dataKey="displayDate"
                               axisLine={false}
                               tickLine={false}
                               tick={{ fontSize: 8, fontWeight: 900, fill: '#9ca3af' }}
@@ -526,7 +548,7 @@ export default function MetrixPage() {
                         <ResponsiveContainer width="100%" height="100%">
                           <LineChart data={drillDownParty.history} margin={{ top: 10, right: 20, left: 40, bottom: 40 }}>
                             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
-                            <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fontSize: 8, fontWeight: 900, fill: '#9ca3af' }} />
+                            <XAxis dataKey="displayDate" axisLine={false} tickLine={false} tick={{ fontSize: 8, fontWeight: 900, fill: '#9ca3af' }} />
                             <YAxis hide domain={[0, 100]} />
                             <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }} />
                             <Line type="monotone" dataKey="otdRate" stroke="#003875" strokeWidth={3} dot={{ r: 3, fill: "#003875" }}>
@@ -680,7 +702,7 @@ export default function MetrixPage() {
                         <ResponsiveContainer width="100%" height="100%">
                           <LineChart data={drillDownCategory.history} margin={{ top: 20, right: 30, left: 30, bottom: 40 }}>
                             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
-                            <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fontSize: 9, fontWeight: 900, fill: '#9ca3af' }} dy={10} />
+                            <XAxis dataKey="displayDate" axisLine={false} tickLine={false} tick={{ fontSize: 9, fontWeight: 900, fill: '#9ca3af' }} dy={10} />
                             <YAxis yAxisId="left" hide />
                             <YAxis yAxisId="right" orientation="right" hide />
                             <Tooltip contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }} />
@@ -699,7 +721,7 @@ export default function MetrixPage() {
                         <ResponsiveContainer width="100%" height="100%">
                           <LineChart data={drillDownCategory.history} margin={{ top: 10, right: 20, left: 40, bottom: 40 }}>
                             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
-                            <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fontSize: 8, fontWeight: 900, fill: '#9ca3af' }} />
+                            <XAxis dataKey="displayDate" axisLine={false} tickLine={false} tick={{ fontSize: 8, fontWeight: 900, fill: '#9ca3af' }} />
                             <YAxis hide domain={[0, 100]} />
                             <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }} />
                             <Line type="monotone" dataKey="otdRate" stroke="#10B981" strokeWidth={3} dot={{ r: 3, fill: "#10B981" }}>
@@ -758,7 +780,7 @@ export default function MetrixPage() {
                  <div><h3 className="text-xl font-black text-gray-900 dark:text-white uppercase tracking-tighter">Execution Roadmap</h3><p className="text-[8px] font-black text-gray-400 uppercase tracking-[0.2em] mt-0.5">Real-time Logistics Lifecycle</p></div>
                  <div className="h-10 w-px bg-gray-100 dark:bg-white/10 hidden md:block" />
                  <div className="flex flex-col">
-                   <p className="text-[10px] font-black text-gray-400 uppercase leading-none">Today's Orders</p>
+                   <p className="text-[10px] font-black text-gray-400 uppercase leading-none">{targetDate === new Date().toISOString().split('T')[0] ? "Today's Orders" : "Filtered Orders"}</p>
                    <p className="text-xl font-black text-[#003875] dark:text-[#FFD500] leading-none mt-1">{data.todayCount || 0}</p>
                  </div>
                </div>

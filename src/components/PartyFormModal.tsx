@@ -659,7 +659,7 @@ export default function PartyFormModal({
           </div>
         </form>
       </div>
-      <ActionStatusModal isOpen={isStatusModalOpen} status={actionStatus} message={actionMessage} />
+      <ActionStatusModal isOpen={isStatusModalOpen} status={actionStatus} message={actionMessage} onClose={() => setIsStatusModalOpen(false)} />
     </div>
   );
 }

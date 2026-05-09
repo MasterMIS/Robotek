@@ -197,6 +197,7 @@ export default function ItemFormModal({
         isOpen={isStatusModalOpen} 
         status={actionStatus} 
         message={actionMessage} 
+        onClose={() => setIsStatusModalOpen(false)}
       />
     </div>
   );
