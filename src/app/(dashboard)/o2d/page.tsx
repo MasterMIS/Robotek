@@ -1178,12 +1178,7 @@ export default function O2DPage() {
     e.preventDefault();
 
     // Mandatory Field Validation
-    if (!editingOrderNo && !screenshotFile) {
-      setActionStatus("error");
-      setActionMessage("Order Proof (Attachment) is mandatory for new orders.");
-      setIsStatusModalOpen(true);
-      return;
-    }
+
     if (!commonData.party_name) {
       setActionStatus("error");
       setActionMessage("Partner Name is mandatory.");
