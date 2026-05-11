@@ -133,6 +133,10 @@ export async function updateMessage(id: string, message: ChatMessage): Promise<b
   return messageService.update(id, message);
 }
 
+export async function deleteMessage(id: string): Promise<boolean> {
+  return messageService.delete(id);
+}
+
 /**
  * Group specific functions
  */

@@ -215,6 +215,70 @@ export abstract class BaseSheetsService<T extends SheetItem> {
     return map;
   }
 
+  /**
+   * Ensures the given column names exist as headers in row 1.
+   * If any are missing they are appended to the right of the last used column.
+   * The hMap is refreshed afterwards so subsequent reads/writes work immediately.
+   */
+  async ensureColumns(names: string[]): Promise<void> {
+    await this.ensureHeaders();
+    const sheets = await this.getSheetsClient();
+
+    // Find missing headers (case-insensitive)
+    const missing = names.filter((n) => this.hMap[n.toLowerCase()] === undefined);
+    if (missing.length === 0) return;
+
+    // Determine the next free column index (right after the last known header)
+    const maxIdx = Object.values(this.hMap).reduce((m, v) => Math.max(m, v), -1);
+    let nextIdx = maxIdx + 1;
+
+    try {
+      const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId: this.spreadsheetId });
+      const sheetInfo = spreadsheet.data.sheets?.find(s => s.properties?.title === this.sheetName);
+      const sheetId = sheetInfo?.properties?.sheetId;
+      let currentMaxCols = sheetInfo?.properties?.gridProperties?.columnCount || 0;
+
+      for (const name of missing) {
+        // Expand grid if necessary
+        if (nextIdx >= currentMaxCols && sheetId !== undefined) {
+          console.log(`[SHEETS] Expanding grid for ${this.sheetName} to accommodate index ${nextIdx}`);
+          await sheets.spreadsheets.batchUpdate({
+            spreadsheetId: this.spreadsheetId,
+            requestBody: {
+              requests: [{
+                appendDimension: {
+                  sheetId: sheetId,
+                  dimension: "COLUMNS",
+                  length: nextIdx - currentMaxCols + 1,
+                }
+              }]
+            }
+          });
+          currentMaxCols = nextIdx + 1;
+        }
+
+        const colLetter = getColumnLetter(nextIdx);
+        console.log(`[SHEETS] Creating missing column "${name}" at ${colLetter}1 in ${this.sheetName}`);
+        await sheets.spreadsheets.values.update({
+          spreadsheetId: this.spreadsheetId,
+          range: `${this.sheetName}!${colLetter}1`,
+          valueInputOption: "USER_ENTERED",
+          requestBody: { values: [[name]] },
+        });
+        // Update local hMap immediately so the caller can use it
+        this.hMap[name.toLowerCase()] = nextIdx;
+        nextIdx++;
+      }
+
+      // Invalidate header cache so next full fetch picks up the new columns
+      const headerCacheKey = `${this.spreadsheetId}_${this.sheetName}_headers`;
+      globalCache.delete(headerCacheKey);
+    } catch (error) {
+      console.error(`Error ensuring columns for ${this.sheetName}:`, error);
+      throw error;
+    }
+  }
+
   private updateInMemoryCache(action: 'add' | 'update' | 'delete', items: T | T[]) {
     const cacheKey = `${this.spreadsheetId}_${this.sheetName}`;
     const cachedData = globalCache.get<T[]>(cacheKey);
@@ -263,7 +327,7 @@ export abstract class BaseSheetsService<T extends SheetItem> {
       return true;
     } catch (error) {
       console.error(`Error adding to ${this.sheetName}:`, error);
-      return false;
+      throw error;
     }
   }
 

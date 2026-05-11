@@ -119,11 +119,11 @@ export default function Sidebar({ mobileOpen, setMobileOpen }: SidebarProps) {
 
   const filteredNavigation = navigation.filter(item => {
     // Dashboard is the system home, visible to all authenticated users, Chat is available to all, Scheduler set to visible
-    if (item.id === 'dashboard' || item.id === 'chat' || item.id === 'scheduler') return true;
+    if (item.id === 'dashboard' || item.id === 'chat' || item.id === 'scheduler' || item.id === 'grn') return true;
 
     // If matrix permissions exist, use them strictly
     if (userPermissions.length > 0) {
-      return userPermissions.some(p => p.toLowerCase() === item.id.toLowerCase());
+      return userPermissions.some((p: string) => p.toLowerCase() === item.id.toLowerCase());
     }
     // Fallback: Default to allowing Admins if no matrix data exists yet
     return isAdmin;

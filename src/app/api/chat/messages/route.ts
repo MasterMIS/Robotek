@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getMessages, addMessage, ChatMessage } from "@/lib/chat-sheets";
+import { getMessages, addMessage, ChatMessage, deleteMessage } from "@/lib/chat-sheets";
 import { auth } from "@/auth";
 import { v4 as uuidv4 } from "uuid";
 
@@ -60,5 +60,43 @@ export async function POST(req: Request) {
   } catch (error) {
     console.error("Error sending message:", error);
     return NextResponse.json({ error: "Failed to send message" }, { status: 500 });
+  }
+}
+
+export async function DELETE(req: Request) {
+  try {
+    const session = await auth();
+    if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+    const currentUsername = (session.user as any).username as string;
+    const { searchParams } = new URL(req.url);
+    const messageId = searchParams.get("messageId");
+
+    if (!messageId) return NextResponse.json({ error: "messageId is required" }, { status: 400 });
+
+    // For security, we should verify the sender. 
+    // Since we don't have a getById, we check if the message exists and was sent by current user
+    const { messageService } = await import("@/lib/chat-sheets");
+    const all = await messageService.getAll();
+    const msg = all.find(m => m.id === messageId);
+
+    if (!msg) {
+      return NextResponse.json({ error: "Message not found" }, { status: 404 });
+    }
+
+    if (msg.sender_id !== currentUsername) {
+      return NextResponse.json({ error: "You can only delete your own messages" }, { status: 403 });
+    }
+
+    const success = await deleteMessage(messageId);
+
+    if (!success) {
+      return NextResponse.json({ error: "Failed to delete message" }, { status: 500 });
+    }
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error("Error deleting message:", error);
+    return NextResponse.json({ error: "Failed to delete message" }, { status: 500 });
   }
 }

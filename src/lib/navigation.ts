@@ -13,6 +13,7 @@ import {
   PhoneIcon,
   InboxIcon,
   ArchiveBoxIcon,
+  ArrowDownTrayIcon,
 } from "@heroicons/react/24/outline";
 
 export const navigation = [
@@ -25,6 +26,7 @@ export const navigation = [
   { name: 'O2D', id: 'o2d', href: '/o2d', icon: ShoppingBagIcon },
   { name: 'Metrix', id: 'metrix', href: '/metrix', icon: ChartBarIcon },
   { name: 'I2R', id: 'i2r', href: '/i2r', icon: ArchiveBoxIcon },
+  { name: 'GRN', id: 'grn', href: '/grn', icon: ArrowDownTrayIcon },
   { name: 'IMS', id: 'ims', href: '/ims', icon: InboxIcon },
   { name: 'Party Management', id: 'party-management', href: '/party-management', icon: UserGroupIcon },
   { name: 'Attendance', id: 'attendance', href: '/attendance', icon: ClipboardDocumentListIcon },

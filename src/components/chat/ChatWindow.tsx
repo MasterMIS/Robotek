@@ -225,6 +225,40 @@ export default function ChatWindow({ chatId, currentUsername, onBack }: ChatWind
     }
   };
 
+  const handleDeleteMessage = async (msg: ChatMessage) => {
+    setConfirmModal({
+      isOpen: true,
+      title: "Delete Message",
+      message: "Are you sure you want to delete this message? This action cannot be undone.",
+      type: "danger",
+      confirmLabel: "Delete",
+      onConfirm: async () => {
+        try {
+          // Optimistic update
+          mutate(
+            currentMessages => (currentMessages || []).filter(m => m.id !== msg.id),
+            false
+          );
+
+          const res = await fetch(`/api/chat/messages?messageId=${msg.id}`, {
+            method: "DELETE"
+          });
+
+          if (!res.ok) {
+            const errorData = await res.json();
+            throw new Error(errorData.error || "Failed to delete message");
+          }
+
+          mutate();
+        } catch (err: any) {
+          console.error("Delete error:", err);
+          alert(err.message || "Failed to delete message");
+          mutate(); // Rollback
+        }
+      }
+    });
+  };
+
   return (
     <div className="flex-1 flex flex-col h-full bg-gradient-to-br from-[#FEF5E7] via-[#fdfaf5] to-[#FCE4EC] md:rounded-br-[24px] transition-colors duration-500">
       
@@ -498,6 +532,7 @@ export default function ChatWindow({ chatId, currentUsername, onBack }: ChatWind
                   showTail={showTail}
                   onImageClick={(url) => setPreviewMediaUrl(url)}
                   onForwardClick={(msgToForward) => setForwardingMessage(msgToForward as any)}
+                  onDeleteClick={handleDeleteMessage as any}
                 />
               </React.Fragment>
             );
