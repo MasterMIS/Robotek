@@ -4,6 +4,7 @@ import { getDriveImageUrl } from "./drive-utils";
 
 const IMAGE_FOLDER_ID = "1WJiXLo7XVy8YDoSN1pNPCRatGzDA7yb9";
 export const O2D_UPLOADS_FOLDER_ID = "19ZqWS5zYD2P4SIpcGNQR8gXcDiagH2rq";
+export const I2R_UPLOADS_FOLDER_ID = "16rv4h7PBrc1n0EtC91RNfRGeIxrGFSQo";
 
 async function getDriveClient() {
   const oauth2Client = new google.auth.OAuth2(

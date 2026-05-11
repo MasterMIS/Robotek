@@ -8,7 +8,7 @@ const SHEET_NAME = "I2R";
 class I2RService extends BaseSheetsService<I2R> {
   protected spreadsheetId = GOOGLE_SHEET_ID;
   protected sheetName = SHEET_NAME;
-  protected range = "A:AJ"; // A-H base cols + 9 steps * 3 cols each + Cancelled
+  protected range = "A:AQ"; // A-H base cols + 10 steps * 3 cols each + Cancelled + 4 Extra Cols
   protected idColumnIndex = 0;
 
   mapRowToItem(row: any[]): I2R {
@@ -24,16 +24,20 @@ class I2RService extends BaseSheetsService<I2R> {
       updated_at: get("updated_at"),
       cancelled: get("cancelled"),
     };
-    for (let i = 1; i <= 9; i++) {
+    for (let i = 1; i <= 10; i++) {
       item[`planned_${i}`] = get(`planned_${i}`);
-      item[`acual_${i}`] = get(`acual_${i}`);
+      item[`actual_${i}`] = get(`actual_${i}`);
       item[`status_${i}`] = get(`status_${i}`);
     }
+    item.supplier_name_3 = get("supplier_name_3");
+    item.lead_time_acc_to_vendor_4 = get("lead_time_acc_to_vendor_4");
+    item.sample_pic_5 = get("sample_pic_5");
+    item.po_number_6 = get("po_number_6");
     return item as I2R;
   }
 
   mapItemToRow(item: I2R): any[] {
-    const totalCols = Object.keys(this.hMap).length || 35;
+    const totalCols = Object.keys(this.hMap).length || 43;
     const row: any[] = Array(totalCols).fill("");
     const set = (h: string, val: any) => {
       const idx = this.hMap[h.toLowerCase()];
@@ -50,11 +54,16 @@ class I2RService extends BaseSheetsService<I2R> {
     set("updated_at", item.updated_at);
     set("cancelled", item.cancelled);
 
-    for (let i = 1; i <= 9; i++) {
+    for (let i = 1; i <= 10; i++) {
       set(`planned_${i}`, (item as any)[`planned_${i}`]);
-      set(`acual_${i}`, (item as any)[`acual_${i}`]);
+      set(`actual_${i}`, (item as any)[`actual_${i}`]);
       set(`status_${i}`, (item as any)[`status_${i}`]);
     }
+
+    set("supplier_name_3", item.supplier_name_3);
+    set("lead_time_acc_to_vendor_4", item.lead_time_acc_to_vendor_4);
+    set("sample_pic_5", item.sample_pic_5);
+    set("po_number_6", item.po_number_6);
 
     return row;
   }
@@ -195,8 +204,12 @@ export async function addI2RItem(data: Partial<I2R>): Promise<boolean> {
 
 export async function updateI2RItem(id: string, data: I2R): Promise<boolean> {
   data.updated_at = new Date().toISOString();
-  // Ensure the cancelled column exists in the sheet before writing
-  await i2rService.ensureColumns(["cancelled"]);
+  // Ensure the cancelled and new step columns exist in the sheet before writing
+  const newCols = ["cancelled", "supplier_name_3", "lead_time_acc_to_vendor_4", "sample_pic_5", "po_number_6"];
+  for (let i = 1; i <= 10; i++) {
+    newCols.push(`planned_${i}`, `actual_${i}`, `status_${i}`);
+  }
+  await i2rService.ensureColumns(newCols);
   return i2rService.update(id, data);
 }
 
