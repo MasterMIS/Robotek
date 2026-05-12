@@ -226,14 +226,25 @@ export default function GRNDashboard() {
 
   const [formData, setFormData] = useState<Partial<GRN>>({});
   const [bulkToggles, setBulkToggles] = useState<Record<string, boolean>>({});
+  const [bulkData, setBulkData] = useState<Record<string, any>>({});
   const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
+
+  const [isRemoveFollowUpModalOpen, setIsRemoveFollowUpModalOpen] = useState(false);
+  const [targetItemForRemoveFollowUp, setTargetItemForRemoveFollowUp] = useState<GRN | null>(null);
+  const [removeFollowUpStep, setRemoveFollowUpStep] = useState(1);
+  const [removeFollowUpType, setRemoveFollowUpType] = useState<'particular' | 'onwards'>('particular');
 
   const getActiveStep = (item: GRN) => {
     if (item.cancelled) return -1;
     for (let i = 1; i <= 9; i++) {
-      if (!(item as any)[`actual_${i}`]) return i;
+      if ((item as any)[`planned_${i}`] && !(item as any)[`actual_${i}`]) return i;
     }
-    return 0; // Completed
+    // Check if all planned are actualized
+    let lastActual = 0;
+    for (let i = 1; i <= 9; i++) {
+      if ((item as any)[`actual_${i}`]) lastActual = i;
+    }
+    return lastActual === 9 || (lastActual > 0 && !(item as any)[`planned_${lastActual + 1}`]) ? 0 : 1;
   };
 
   const filteredItems = useMemo(() => {
@@ -442,8 +453,21 @@ export default function GRNDashboard() {
 
   const openBulkModal = () => {
     const initialToggles: Record<string, boolean> = {};
-    selectedIds.forEach(id => { initialToggles[id] = true; });
+    const initialData: Record<string, any> = {};
+    selectedIds.forEach(id => { 
+      initialToggles[id] = true; 
+      const item = items.find(it => it.id === id);
+      if (item) {
+        const step = getActiveStep(item);
+        initialData[id] = {
+          remarks: "",
+          visitDate: new Date().toISOString().slice(0, 16),
+          status: (step === 1 || step === 3 || step === 5) ? "Approved" : "Completed"
+        };
+      }
+    });
     setBulkToggles(initialToggles);
+    setBulkData(initialData);
     setIsBulkModalOpen(true);
   };
 
@@ -462,10 +486,15 @@ export default function GRNDashboard() {
         const stepIdx = getActiveStep(item);
         if (stepIdx <= 0 || stepIdx > 9) continue;
 
+        const data = bulkData[id] || {};
         const updates: any = { id };
         updates[`actual_${stepIdx}`] = new Date().toISOString();
-        updates[`status_${stepIdx}`] = "Completed";
+        updates[`status_${stepIdx}`] = data.status || "Completed";
         updates.updated_at = new Date().toISOString();
+
+        if (stepIdx === 1) updates.remarks_1 = data.remarks;
+        if (stepIdx === 3) updates.remarks_3 = data.remarks;
+        if (stepIdx === 4) updates.vendor_visit_date_4 = data.visitDate;
 
         await fetch("/api/grn", {
           method: "PUT",
@@ -488,8 +517,60 @@ export default function GRNDashboard() {
     }
   };
 
+  const openRemoveFollowUpModal = (item: GRN) => {
+    setTargetItemForRemoveFollowUp(item);
+    setRemoveFollowUpStep(getActiveStep(item) || 1);
+    setRemoveFollowUpType('particular');
+    setIsRemoveFollowUpModalOpen(true);
+  };
+
+  const handleRemoveFollowUp = async () => {
+    if (!targetItemForRemoveFollowUp) return;
+    setActionStatus("loading"); setActionMessage("Removing Follow Up..."); setIsStatusModalOpen(true);
+    const upd = { ...targetItemForRemoveFollowUp } as any;
+    const now = new Date().toISOString();
+    const startStep = removeFollowUpStep;
+
+    if (removeFollowUpType === 'particular') {
+      upd[`actual_${startStep}`] = "";
+      upd[`status_${startStep}`] = "";
+      if (startStep === 1) upd.remarks_1 = "";
+      if (startStep === 3) upd.remarks_3 = "";
+      if (startStep === 4) upd.vendor_visit_date_4 = "";
+    } else {
+      for (let s = startStep; s <= 9; s++) {
+        upd[`actual_${s}`] = "";
+        upd[`status_${s}`] = "";
+        if (s > startStep) upd[`planned_${s}`] = "";
+        if (s === 1) upd.remarks_1 = "";
+        if (s === 3) upd.remarks_3 = "";
+        if (s === 4) upd.vendor_visit_date_4 = "";
+      }
+    }
+    upd.updated_at = now;
+
+    try {
+      const res = await fetch("/api/grn", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(upd) });
+      if (res.ok) setActionStatus("success"); else setActionStatus("error");
+    } catch { setActionStatus("error"); }
+    setTimeout(() => { setIsStatusModalOpen(false); setIsRemoveFollowUpModalOpen(false); mutate(); }, 1500);
+  };
+
   const fmtDt = (d?: string) => d ? new Date(d).toLocaleDateString("en-GB", { day: "2-digit", month: "short" }) : "—";
   const fmtTm = (d?: string) => d ? new Date(d).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }) : "";
+
+  const getDelay = (planned: string, actual: string | null) => {
+    if (!planned) return null;
+    const pl = new Date(planned);
+    const ac = actual ? new Date(actual) : now;
+    const diff = ac.getTime() - pl.getTime();
+    if (diff <= 0) return null;
+    
+    const hrs = Math.floor(diff / 3600000);
+    const mins = Math.floor((diff % 3600000) / 60000);
+    if (hrs > 0) return `${hrs}h ${mins}m`;
+    return `${mins}m`;
+  };
 
   return (
     <div className="flex flex-col h-screen bg-[#FEFBF0] dark:bg-navy-950 overflow-hidden">
@@ -677,7 +758,16 @@ export default function GRNDashboard() {
                               </button>
                             )}
                             <div className="flex items-center gap-1 px-2 py-1 bg-white dark:bg-navy-800 rounded-full border border-slate-100 dark:border-navy-700 shadow-lg ring-1 ring-slate-50">
+                              <button 
+                                onClick={e => { e.stopPropagation(); setExpandedTiles(p => ({ ...p, [item.id]: !exp })); }} 
+                                className={`p-2 rounded-full transition-all active:scale-90 ${exp ? "text-[#003875] dark:text-[#FFD500] bg-slate-50 dark:bg-navy-700" : "text-slate-400 hover:bg-slate-50"}`}
+                                title={exp ? "Hide Pipeline" : "Show Pipeline"}
+                              >
+                                {exp ? <ChevronUpIcon className="w-4 h-4 stroke-[3]" /> : <ChevronDownIcon className="w-4 h-4 stroke-[3]" />}
+                              </button>
+                              <div className="w-[1px] h-4 bg-slate-100 dark:bg-navy-700 mx-0.5" />
                               <button onClick={e => { e.stopPropagation(); openEditModal(item); }} className="p-2 text-blue-500 hover:bg-blue-50 rounded-full transition-all active:scale-90"><PencilSquareIcon className="w-4 h-4" /></button>
+                              <button onClick={e => { e.stopPropagation(); openRemoveFollowUpModal(item); }} className="p-2 text-purple-500 hover:bg-purple-50 dark:hover:bg-purple-900/20 rounded-full transition-all active:scale-90" title="Remove Follow Up"><ArrowUturnLeftIcon className="w-4 h-4" /></button>
                               {item.cancelled ? (
                                 <button onClick={e => { e.stopPropagation(); confirmCancelRestore(item); }} className="p-2 text-emerald-500 hover:bg-emerald-50 rounded-full transition-all active:scale-90" title="Restore"><ArrowUturnLeftIcon className="w-4 h-4 stroke-[3]" /></button>
                               ) : (
@@ -714,42 +804,60 @@ export default function GRNDashboard() {
                           </div>
                         </div>
                         
-                        <button onClick={e => { e.stopPropagation(); setExpandedTiles(p => ({ ...p, [item.id]: !exp })); }} className="w-full text-center pt-2.5 text-[9px] font-black text-slate-300 dark:text-navy-700 hover:text-[#003875] dark:hover:text-[#FFD500] transition-all uppercase tracking-[0.2em] flex items-center justify-center gap-2 border-t border-slate-50 dark:border-navy-700">
-                          {exp ? 'HIDE PIPELINE' : 'SHOW ALL 9 STEPS'} <ChevronDownIcon className={`w-3.5 h-3.5 transition-transform ${exp ? 'rotate-180' : ''}`} />
-                        </button>
+                        {/* Empty space filler when collapsed to maintain card aesthetics if needed, or just removed as requested */}
 
                         {exp && (
-                          <div className="mt-4 grid grid-cols-5 gap-3 animate-in slide-in-from-top-2 duration-300">
-                            {Array.from({ length: 9 }, (_, i) => {
-                              const n = i + 1; const act = (item as any)[`actual_${n}`]; const pl = (item as any)[`planned_${n}`]; 
-                              const done = !!act; const isPending = !done && n === getActiveStep(item);
-                              
-                              let statusClasses = "bg-slate-50 dark:bg-navy-900 border-slate-100 dark:border-navy-800 text-slate-400";
-                              if (done) statusClasses = "bg-emerald-50 border-emerald-100 text-emerald-700 shadow-sm";
-                              else if (isPending) statusClasses = "bg-orange-50 border-orange-200 text-orange-700 shadow-sm ring-2 ring-orange-100";
+                          <div className="mt-2 grid grid-cols-5 gap-2 animate-in slide-in-from-top-2 duration-300">
+                             {Array.from({ length: 9 }, (_, i) => {
+                               const n = i + 1; const act = (item as any)[`actual_${n}`]; const pl = (item as any)[`planned_${n}`]; 
+                               const done = !!act; const isPending = !done && n === getActiveStep(item);
+                               const delay = getDelay(pl, act);
+                               
+                               let statusClasses = "bg-slate-50 dark:bg-navy-900 border-slate-100 dark:border-navy-800 text-slate-400";
+                               if (done) statusClasses = "bg-emerald-50 border-emerald-100 text-emerald-700 shadow-sm";
+                               else if (isPending) statusClasses = "bg-orange-50 border-orange-200 text-orange-700 shadow-sm ring-2 ring-orange-100";
 
-                              return (
-                                <div key={n} className={`p-3 rounded-2xl border transition-all ${statusClasses}`}>
-                                  <div className="flex items-center justify-between mb-1.5">
-                                    <p className={`text-[8px] font-black uppercase tracking-widest ${done ? "text-emerald-500" : isPending ? "text-orange-500" : "text-slate-300"}`}>ST {n}</p>
-                                    {done && <CheckCircleIcon className="w-3.5 h-3.5 text-emerald-500" />}
-                                    {isPending && <ClockIcon className="w-3.5 h-3.5 text-orange-500 animate-pulse" />}
-                                  </div>
-                                  <p className={`text-[10px] font-black leading-tight min-h-[2rem] line-clamp-2 ${done ? "text-emerald-900" : isPending ? "text-orange-900" : "text-slate-500"}`}>{GRN_STEP_SHORT[i]}</p>
-                                  
-                                  <div className={`mt-1 space-y-0.5 pt-1.5 border-t ${done ? "border-emerald-100" : "border-slate-100 dark:border-navy-800"}`}>
-                                    <div className="flex justify-between items-center text-[7.5px] font-black uppercase tracking-tighter">
-                                      <span className="opacity-50 text-slate-400">Planned</span>
-                                      <span className="text-slate-600 dark:text-white/70">{fmtDt(pl)}</span>
-                                    </div>
-                                    <div className="flex justify-between items-center text-[7.5px] font-black uppercase tracking-tighter">
-                                      <span className="opacity-50 text-slate-400">Actual</span>
-                                      <span className={done ? "text-emerald-700" : "opacity-30"}>{act ? fmtDt(act) : "—"}</span>
-                                    </div>
-                                  </div>
-                                </div>
-                              );
-                            })}
+                               return (
+                                 <div key={n} className={`p-1 rounded-xl border transition-all ${statusClasses}`}>
+                                   <div className="flex items-center justify-between mb-0.5">
+                                     <p className={`text-[9px] font-black uppercase tracking-widest ${done ? "text-emerald-500" : isPending ? "text-orange-500" : "text-slate-300"}`}>ST {n}</p>
+                                     <div className="flex items-center gap-1">
+                                       {delay && <span className="text-[8px] font-black text-rose-500 bg-rose-50 px-1 rounded">-{delay}</span>}
+                                       {done && <CheckCircleIcon className="w-3 h-3 text-emerald-500" />}
+                                       {isPending && <ClockIcon className="w-3 h-3 text-orange-500 animate-pulse" />}
+                                     </div>
+                                   </div>
+                                   <p className={`text-[10px] font-black leading-tight min-h-[1.2rem] line-clamp-2 ${done ? "text-emerald-900" : isPending ? "text-orange-900" : "text-slate-500"}`}>{GRN_STEP_SHORT[i]}</p>
+                                   
+                                   <div className={`mt-0.5 space-y-0 pt-0.5 border-t ${done ? "border-emerald-100" : "border-slate-100 dark:border-navy-800"}`}>
+                                     <div className="flex justify-between items-center text-[9px] font-black uppercase tracking-tighter">
+                                       <span className="opacity-40 text-slate-400 text-[7px]">PLANNED</span>
+                                       <span className="text-slate-600 dark:text-white/70">{fmtDt(pl)} {fmtTm(pl)}</span>
+                                     </div>
+                                     <div className="flex justify-between items-center text-[9px] font-black uppercase tracking-tighter">
+                                       <span className="opacity-40 text-slate-400 text-[7px]">ACTUAL</span>
+                                       <span className={done ? "text-emerald-700" : "opacity-30"}>{act ? `${fmtDt(act)} ${fmtTm(act)}` : "—"}</span>
+                                     </div>
+                                     {n === 1 && item.remarks_1 && (
+                                       <div className="mt-1 p-1 bg-slate-50 dark:bg-navy-950 rounded text-[10px] font-bold text-slate-500 border border-slate-100 dark:border-navy-800 italic">
+                                         "{item.remarks_1}"
+                                       </div>
+                                     )}
+                                     {n === 3 && item.remarks_3 && (
+                                       <div className="mt-1 p-1 bg-slate-50 dark:bg-navy-950 rounded text-[10px] font-bold text-slate-500 border border-slate-100 dark:border-navy-800 italic">
+                                         "{item.remarks_3}"
+                                       </div>
+                                     )}
+                                     {n === 4 && item.vendor_visit_date_4 && (
+                                       <div className="mt-1 flex items-center justify-between text-[10px] font-black uppercase tracking-tighter text-blue-500">
+                                         <span className="opacity-40 text-[8px]">VISIT DATE</span>
+                                         <span>{fmtDt(item.vendor_visit_date_4)} {fmtTm(item.vendor_visit_date_4)}</span>
+                                       </div>
+                                     )}
+                                   </div>
+                                 </div>
+                               );
+                             })}
                           </div>
                         )}
                       </div>
@@ -780,13 +888,14 @@ export default function GRNDashboard() {
                         <td className="p-4 text-center sticky left-0 z-10 bg-white dark:bg-navy-900 group-hover:bg-slate-50 transition-all"><input type="checkbox" checked={selectedIds.has(it.id)} onChange={() => { const n = new Set(selectedIds); if (n.has(it.id)) n.delete(it.id); else n.add(it.id); setSelectedIds(n); }} className="rounded border-slate-300 text-[#003875] focus:ring-[#003875]" /></td>
                         <td className="p-4 sticky left-10 z-10 bg-white dark:bg-navy-900 group-hover:bg-slate-50 transition-all">
                           <div className="flex items-center gap-2">
-                            <button onClick={() => openEditModal(it)} className="p-2 text-blue-500 hover:bg-blue-50 rounded-md transition-all"><PencilSquareIcon className="w-4 h-4" /></button>
+                             <button onClick={() => openEditModal(it)} className="p-2 text-blue-500 hover:bg-blue-50 rounded-md transition-all"><PencilSquareIcon className="w-4 h-4" /></button>
+                             <button onClick={() => openRemoveFollowUpModal(it)} className="p-2 text-purple-500 hover:bg-purple-50 rounded-md transition-all" title="Remove Follow Up"><ArrowUturnLeftIcon className="w-4 h-4" /></button>
                             {it.cancelled ? (
                               <button onClick={() => confirmCancelRestore(it)} className="p-2 text-emerald-500 hover:bg-emerald-50 rounded-md transition-all" title="Restore"><ArrowUturnLeftIcon className="w-4 h-4" /></button>
                             ) : (
                               <button onClick={() => confirmCancelRestore(it)} className="p-2 text-red-500 hover:bg-red-50 rounded-md transition-all" title="Cancel GRN"><XCircleIcon className="w-4 h-4" /></button>
                             )}
-                            <button onClick={() => confirmDelete(it)} className="p-2 text-red-400 hover:bg-red-50 rounded-md transition-all"><TrashIcon className="w-4 h-4" /></button>
+                             <button onClick={() => confirmDelete(it)} className="p-2 text-red-400 hover:bg-red-50 rounded-md transition-all"><TrashIcon className="w-4 h-4" /></button>
                           </div>
                         </td>
                         <td className="p-4 sticky left-24 z-10 bg-white dark:bg-navy-900 group-hover:bg-slate-50 transition-all font-black text-[#003875] dark:text-blue-400">{it.GRN_No}</td>
@@ -805,6 +914,10 @@ export default function GRNDashboard() {
                                 <div className="space-y-1">
                                   <div className="flex justify-between gap-4 text-[9px] uppercase whitespace-nowrap"><span className="text-slate-400 font-bold">PLANNED</span><span className="font-black text-slate-600 dark:text-white/70">{fmtDt(pl)}</span></div>
                                   <div className="flex justify-between gap-4 text-[9px] uppercase whitespace-nowrap"><span className="text-slate-400 font-bold">ACTUAL</span><span className={`font-black ${done ? 'text-emerald-500' : isPending ? 'text-orange-500' : 'text-slate-300'}`}>{act ? fmtDt(act) : isPending ? 'Pending >' : '—'}</span></div>
+                                  
+                                  {n === 1 && it.remarks_1 && <div className="text-[10px] text-slate-400 italic max-w-[150px] truncate">"{it.remarks_1}"</div>}
+                                  {n === 3 && it.remarks_3 && <div className="text-[10px] text-slate-400 italic max-w-[150px] truncate">"{it.remarks_3}"</div>}
+                                  {n === 4 && it.vendor_visit_date_4 && <div className="text-[10px] text-blue-500 font-black">VISIT: {fmtDt(it.vendor_visit_date_4)}</div>}
                                 </div>
                               ) : <span className="text-slate-100">—</span>}
                             </td>
@@ -845,24 +958,81 @@ export default function GRNDashboard() {
             </div>
             <div className="flex-1 overflow-y-auto px-10 pb-24 pt-4 space-y-3 custom-scrollbar">
               {Array.from(selectedIds).map(id => {
-                const it = items.find(r => r.id === id); if (!it) return null; const n = getActiveStep(it); const t = bulkToggles[id] ?? true;
+                const it = items.find(r => r.id === id); if (!it) return null; 
+                const n = getActiveStep(it); 
+                const t = bulkToggles[id] ?? true;
+                const data = bulkData[id] || {};
+                const isCheckStep = n === 1 || n === 3 || n === 5;
+                
                 return (
                   <div key={id} className={`p-5 bg-white dark:bg-navy-900 rounded-3xl border transition-all ${t ? "border-[#003875]/20 dark:border-[#FFD500]/20 shadow-sm" : "border-slate-100 dark:border-navy-800 opacity-40 shadow-none grayscale"}`}>
-                    <div className="grid grid-cols-[1fr_2fr_auto] items-center gap-8">
+                    <div className="grid grid-cols-[1fr_1.5fr_1.5fr] items-center gap-6">
                        <div className="flex items-center gap-4">
-                          <button onClick={() => setBulkToggles({...bulkToggles, [id]: !t})} className={`w-8 h-8 rounded-xl border-2 flex items-center justify-center transition-all ${t ? "bg-[#003875] border-[#003875] text-white" : "border-slate-100 text-transparent"}`}><CheckCircleIcon className="w-5 h-5" /></button>
-                          <div><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{it.GRN_No}</p><p className="text-[14px] font-black text-[#003875] dark:text-white uppercase truncate">{it.Item_Name}</p></div>
+                          <button onClick={() => setBulkToggles({...bulkToggles, [id]: !t})} className={`w-8 h-8 rounded-xl border-2 flex items-center justify-center shrink-0 transition-all ${t ? "bg-[#003875] border-[#003875] text-white" : "border-slate-100 text-transparent"}`}><CheckCircleIcon className="w-5 h-5" /></button>
+                          <div className="min-w-0"><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest truncate">{it.GRN_No}</p><p className="text-[13px] font-black text-[#003875] dark:text-white uppercase truncate">{it.Item_Name}</p></div>
                        </div>
+
                        <div className="flex items-center gap-4">
-                          <div className="px-4 py-2 bg-slate-50 dark:bg-navy-800 rounded-xl border border-slate-100 dark:border-navy-700">
+                          <div className="flex-1 px-4 py-2 bg-slate-50 dark:bg-navy-800 rounded-xl border border-slate-100 dark:border-navy-700 min-w-0">
                              <p className="text-[8px] font-black text-slate-400 uppercase">CURRENT STEP</p>
-                             <p className="text-[11px] font-black text-slate-700 dark:text-white uppercase truncate">{n <= 9 && n > 0 ? GRN_STEP_SHORT[n-1] : "COMPLETED"}</p>
+                             <p className="text-[10px] font-black text-slate-700 dark:text-white uppercase truncate">{n <= 9 && n > 0 ? GRN_STEP_SHORT[n-1] : "COMPLETED"}</p>
                           </div>
-                          {n <= 9 && n > 0 && <div className="text-[#003875] animate-pulse"><ChevronRightIcon className="w-4 h-4" /></div>}
+                          {n <= 9 && n > 0 && <ChevronRightIcon className="w-4 h-4 text-slate-300 shrink-0" />}
                           {n <= 9 && n > 0 && (
-                            <div className="px-4 py-2 bg-[#FFFBF0] dark:bg-[#FFD500]/10 rounded-xl border border-[#FFD500]/30">
+                            <div className="flex-1 px-4 py-2 bg-[#FFFBF0] dark:bg-[#FFD500]/10 rounded-xl border border-[#FFD500]/30 min-w-0">
                                <p className="text-[8px] font-black text-slate-400 uppercase">ACTION</p>
-                               <p className="text-[11px] font-black text-[#003875] dark:text-[#FFD500] uppercase truncate">Complete {GRN_STEP_SHORT[n-1]}</p>
+                               <p className="text-[10px] font-black text-[#003875] dark:text-[#FFD500] uppercase truncate">Complete Step {n}</p>
+                            </div>
+                          )}
+                       </div>
+
+                       <div className="flex flex-col gap-3">
+                          <div className="flex items-center gap-2">
+                             {isCheckStep ? (
+                               <div className="flex bg-slate-100 dark:bg-navy-950 p-1 rounded-xl w-full border border-slate-200 dark:border-navy-800 shadow-inner">
+                                  <button 
+                                    onClick={() => setBulkData({...bulkData, [id]: {...data, status: "Approved"}})}
+                                    className={`flex-1 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${data.status === "Approved" ? "bg-emerald-500 text-white shadow-md" : "text-slate-400"}`}
+                                  >
+                                    Approved
+                                  </button>
+                                  <button 
+                                    onClick={() => setBulkData({...bulkData, [id]: {...data, status: "Rejected"}})}
+                                    className={`flex-1 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${data.status === "Rejected" ? "bg-rose-500 text-white shadow-md" : "text-slate-400"}`}
+                                  >
+                                    Rejected
+                                  </button>
+                               </div>
+                             ) : (
+                               <div className="flex bg-slate-100 dark:bg-navy-950 p-1 rounded-xl w-full border border-slate-200 dark:border-navy-800 shadow-inner">
+                                  <button 
+                                    className="flex-1 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest bg-[#003875] dark:bg-[#FFD500] text-[#FFD500] dark:text-navy-950 shadow-md"
+                                  >
+                                    Done
+                                  </button>
+                               </div>
+                             )}
+                          </div>
+
+                          {(n === 1 || n === 3) && (
+                            <input 
+                              type="text" 
+                              placeholder="Add Remarks..."
+                              value={data.remarks || ""}
+                              onChange={e => setBulkData({...bulkData, [id]: {...data, remarks: e.target.value}})}
+                              className="w-full px-3 py-2 bg-white dark:bg-navy-800 border border-slate-200 dark:border-navy-700 rounded-xl text-[10px] font-bold outline-none focus:border-[#003875] dark:focus:border-[#FFD500] transition-all"
+                            />
+                          )}
+
+                          {n === 4 && (
+                            <div className="space-y-1">
+                               <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest ml-1">VENDOR VISIT DATE</p>
+                               <input 
+                                 type="datetime-local" 
+                                 value={data.visitDate || ""}
+                                 onChange={e => setBulkData({...bulkData, [id]: {...data, visitDate: e.target.value}})}
+                                 className="w-full px-3 py-2 bg-white dark:bg-navy-800 border border-slate-200 dark:border-navy-700 rounded-xl text-[10px] font-bold outline-none focus:border-[#003875] dark:focus:border-[#FFD500] transition-all"
+                               />
                             </div>
                           )}
                        </div>
@@ -1028,6 +1198,93 @@ export default function GRNDashboard() {
           </div>
         </div>
       )}
+
+      {/* ─── Remove Follow Up Modal ─── */}
+      {isRemoveFollowUpModalOpen && (
+        <div className="fixed inset-0 z-[1300] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-[#001a33]/60 backdrop-blur-md" onClick={() => setIsRemoveFollowUpModalOpen(false)} />
+          <div className="relative bg-white dark:bg-navy-800 w-full max-w-md rounded-3xl shadow-2xl overflow-hidden flex flex-col p-8 animate-in zoom-in-95 duration-300">
+            <div className="flex items-start justify-between mb-6">
+              <div>
+                <h2 className="text-xl font-black text-[#003875] dark:text-white uppercase leading-none">Remove Follow Up</h2>
+                <p className="text-[10px] font-black text-purple-600 dark:text-purple-400 mt-2 uppercase">GRN: {targetItemForRemoveFollowUp?.GRN_No} — {targetItemForRemoveFollowUp?.Item_Name}</p>
+              </div>
+              <button onClick={() => setIsRemoveFollowUpModalOpen(false)} className="text-slate-300 dark:text-navy-700 hover:text-slate-900 dark:hover:text-white transition-colors"><XMarkIcon className="w-6 h-6" /></button>
+            </div>
+
+            <div className="space-y-6">
+              <div>
+                <label className="text-[11px] font-black text-slate-800 dark:text-white/80 uppercase block mb-3">Select Step to Reset</label>
+                <div className="grid grid-cols-5 gap-2">
+                  {Array.from({ length: 9 }, (_, i) => i + 1).map(s => (
+                    <button
+                      key={s}
+                      onClick={() => setRemoveFollowUpStep(s)}
+                      className={`py-2 rounded-xl text-[10px] font-black transition-all border-2 ${
+                        removeFollowUpStep === s
+                          ? "bg-purple-500 border-purple-500 text-white shadow-lg scale-110 z-10"
+                          : "bg-slate-50 dark:bg-navy-900 border-slate-100 dark:border-navy-700 text-slate-400 dark:text-navy-600 hover:border-purple-200 dark:hover:border-purple-900"
+                      }`}
+                    >
+                      ST {s}
+                    </button>
+                  ))}
+                </div>
+                <p className="mt-2 text-[10px] font-bold text-slate-400 dark:text-navy-600 italic">
+                  {GRN_STEP_SHORT[removeFollowUpStep - 1]}
+                </p>
+              </div>
+
+              <div className="space-y-3">
+                <label className="text-[11px] font-black text-slate-800 dark:text-white/80 uppercase block">Removal Logic</label>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setRemoveFollowUpType('particular')}
+                    className={`flex-1 py-4 px-4 rounded-2xl border-2 text-left transition-all ${
+                      removeFollowUpType === 'particular'
+                        ? "border-purple-500 bg-purple-50 dark:bg-purple-900/10"
+                        : "border-slate-100 dark:border-navy-700 bg-white dark:bg-navy-900"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 mb-1">
+                      <div className={`w-3 h-3 rounded-full border-2 ${removeFollowUpType === 'particular' ? "border-purple-500 bg-purple-500" : "border-slate-300 dark:border-navy-700"}`} />
+                      <span className={`text-[11px] font-black uppercase ${removeFollowUpType === 'particular' ? "text-purple-600 dark:text-purple-400" : "text-slate-500 dark:text-navy-400"}`}>Particular Step</span>
+                    </div>
+                    <p className="text-[9px] font-bold text-slate-400 dark:text-navy-600 leading-tight">Only reset the selected step. Keeps planned time.</p>
+                  </button>
+                  <button
+                    onClick={() => setRemoveFollowUpType('onwards')}
+                    className={`flex-1 py-4 px-4 rounded-2xl border-2 text-left transition-all ${
+                      removeFollowUpType === 'onwards'
+                        ? "border-purple-500 bg-purple-50 dark:bg-purple-900/10"
+                        : "border-slate-100 dark:border-navy-700 bg-white dark:bg-navy-900"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 mb-1">
+                      <div className={`w-3 h-3 rounded-full border-2 ${removeFollowUpType === 'onwards' ? "border-purple-500 bg-purple-500" : "border-slate-300 dark:border-navy-700"}`} />
+                      <span className={`text-[11px] font-black uppercase ${removeFollowUpType === 'onwards' ? "text-purple-600 dark:text-purple-400" : "text-slate-500 dark:text-navy-400"}`}>Step Onwards</span>
+                    </div>
+                    <p className="text-[9px] font-bold text-slate-400 dark:text-navy-600 leading-tight">Reset selected step & remove all future steps.</p>
+                  </button>
+                </div>
+              </div>
+
+              <div className="p-4 bg-orange-50 dark:bg-orange-900/10 rounded-2xl border border-orange-100 dark:border-orange-900/20 flex gap-3">
+                <ExclamationCircleIcon className="w-5 h-5 text-orange-500 shrink-0" />
+                <p className="text-[10px] font-bold text-orange-700 dark:text-orange-400 leading-relaxed">
+                  This will clear "Actual" dates and step-specific data (Remarks, Visit Dates) for the selected steps. Planned time for Step {removeFollowUpStep} will be preserved.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex gap-4 mt-8">
+              <button onClick={() => setIsRemoveFollowUpModalOpen(false)} className="flex-1 py-3.5 bg-white dark:bg-navy-800 border border-slate-200 dark:border-navy-700 text-slate-500 dark:text-navy-400 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-slate-50 dark:hover:bg-navy-700 transition-all">Cancel</button>
+              <button onClick={handleRemoveFollowUp} className="flex-1 py-3.5 bg-purple-600 dark:bg-purple-500 text-white rounded-xl font-black text-xs uppercase tracking-widest hover:bg-purple-700 dark:hover:bg-purple-400 transition-all shadow-lg active:scale-95">Reset Step</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ─── Confirm Modal ─── */}
       <ConfirmModal
         isOpen={isConfirmOpen}

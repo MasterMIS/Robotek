@@ -306,12 +306,29 @@ export async function updateGRNItem(id: string, updates: Partial<GRN>): Promise<
   const stepConfig = await grnService.getStepConfig();
   for (let i = 1; i < 9; i++) {
     const actKey = `actual_${i}` as keyof GRN;
-    const nextPlanKey = `planned_${i + 1}` as keyof GRN;
-    const nextStatusKey = `status_${i + 1}` as keyof GRN;
+    const statusKey = `status_${i}` as keyof GRN;
 
     // If step i was just completed in this update
     if (updates[actKey] && !existing[actKey]) {
-      const nextCfg = stepConfig[i]; // stepConfig[1] is Step 2, etc.
+      const status = (updates[statusKey] || existing[statusKey]) as string;
+      let nextStepIdx = i + 1;
+
+      // Branching logic
+      if (i === 1) {
+        if (status === "Approved") nextStepIdx = 3;
+        else nextStepIdx = 2;
+      } else if (i === 3) {
+        if (status === "Approved") nextStepIdx = 7;
+        else nextStepIdx = 4;
+      } else if (i === 5) {
+        if (status === "Approved") nextStepIdx = 7;
+        else nextStepIdx = 6;
+      }
+
+      const nextPlanKey = `planned_${nextStepIdx}` as keyof GRN;
+      const nextStatusKey = `status_${nextStepIdx}` as keyof GRN;
+      const nextCfg = stepConfig[nextStepIdx - 1];
+
       if (nextCfg) {
         const nextPlanned = calculateGRNPlannedDate(updates[actKey] as string, nextCfg.tat || "24 Hrs");
         (merged as any)[nextPlanKey] = nextPlanned;
