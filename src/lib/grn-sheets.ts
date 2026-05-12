@@ -1,5 +1,5 @@
 import { BaseSheetsService } from "./sheets/base-service";
-import { GRN } from "@/types/grn";
+import { GRN, GRNStepConfig } from "@/types/grn";
 import { globalCache } from "./cache";
 
 const GOOGLE_SHEET_ID = "170_kSzQKoO5N7euODaLz1kaJVXN7QRlRqHdnBn0kdos";
@@ -8,12 +8,12 @@ const SHEET_NAME = "GRN";
 class GRNService extends BaseSheetsService<GRN> {
   protected spreadsheetId = GOOGLE_SHEET_ID;
   protected sheetName = SHEET_NAME;
-  protected range = "A:Z"; // Flexible range
+  protected range = "A:AZ"; // Wider range for all columns
   protected idColumnIndex = 0;
 
   mapRowToItem(row: any[]): GRN {
     const get = (h: string) => row[this.hMap[h.toLowerCase()]] ?? "";
-    return {
+    const item: any = {
       id: get("id"),
       GRN_No: get("grn_no"),
       PO_Number: get("po_number"),
@@ -27,11 +27,23 @@ class GRNService extends BaseSheetsService<GRN> {
       filled_by: get("filled_by"),
       updated_at: get("updated_at"),
       indent_id: get("indent_id"),
+      cancelled: get("cancelled"),
     };
+
+    // Map 9 steps
+    for (let i = 1; i <= 9; i++) {
+      item[`planned_${i}`] = get(`planned_${i}`);
+      item[`actual_${i}`] = get(`actual_${i}`);
+      item[`status_${i}`] = get(`status_${i}`);
+      if ([1, 3].includes(i)) item[`remarks_${i}`] = get(`remarks_${i}`);
+      if (i === 4) item[`vendor_visit_date_4`] = get(`vendor_visit_date_4`);
+    }
+
+    return item;
   }
 
   mapItemToRow(item: GRN): any[] {
-    const totalCols = Math.max(...Object.values(this.hMap)) + 1 || 12;
+    const totalCols = Math.max(...Object.values(this.hMap)) + 1 || 44;
     const row: any[] = Array(totalCols).fill("");
     const set = (h: string, val: any) => {
       const idx = this.hMap[h.toLowerCase()];
@@ -51,8 +63,61 @@ class GRNService extends BaseSheetsService<GRN> {
     set("filled_by", item.filled_by);
     set("updated_at", item.updated_at);
     set("indent_id", item.indent_id);
+    set("cancelled", item.cancelled);
+
+    // Map 9 steps
+    for (let i = 1; i <= 9; i++) {
+      set(`planned_${i}`, (item as any)[`planned_${i}`]);
+      set(`actual_${i}`, (item as any)[`actual_${i}`]);
+      set(`status_${i}`, (item as any)[`status_${i}`]);
+      if ([1, 3].includes(i)) set(`remarks_${i}`, (item as any)[`remarks_${i}`]);
+      if (i === 4) set(`vendor_visit_date_4`, (item as any)[`vendor_visit_date_4`]);
+    }
 
     return row;
+  }
+
+  async getStepConfig(): Promise<GRNStepConfig[]> {
+    const cacheKey = `${this.spreadsheetId}_grn_step_config`;
+    const cached = globalCache.get<GRNStepConfig[]>(cacheKey);
+    if (cached) return cached;
+
+    try {
+      const sheets = await this.getSheetsClient();
+      const response = await sheets.spreadsheets.values.get({
+        spreadsheetId: this.spreadsheetId,
+        range: `GRN Step Configuration!A2:C`,
+      });
+      const data: GRNStepConfig[] = response.data.values?.map(row => ({
+        step_name: row[0] || "",
+        tat: row[1] || "",
+        responsible_person: row[2] || ""
+      })) || [];
+
+      globalCache.set(cacheKey, data, 60 * 60 * 1000);
+      return data;
+    } catch (error) {
+      console.error("Error fetching GRN step config:", error);
+      return [];
+    }
+  }
+
+  async updateStepConfig(configs: GRNStepConfig[]): Promise<boolean> {
+    try {
+      const sheets = await this.getSheetsClient();
+      const values = configs.map(c => [c.step_name, c.tat, c.responsible_person]);
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: this.spreadsheetId,
+        range: `GRN Step Configuration!A2:C${configs.length + 1}`,
+        valueInputOption: "RAW",
+        requestBody: { values },
+      });
+      globalCache.delete(`${this.spreadsheetId}_grn_step_config`);
+      return true;
+    } catch (error) {
+      console.error("Error updating GRN step config:", error);
+      return false;
+    }
   }
 
   async getNextNumericalId(): Promise<number> {
@@ -91,12 +156,12 @@ class GRNService extends BaseSheetsService<GRN> {
     }
   }
 
-  async getNextPOSuffix(basePONumber: string): Promise<string> {
+  async getNextGlobalPONum(): Promise<string> {
     await this.ensureHeaders();
     try {
       const sheets = await this.getSheetsClient();
       const colIdx = this.hMap["po_number"];
-      if (colIdx === undefined) return `${basePONumber}_1`;
+      if (colIdx === undefined) return "PO0001";
 
       const letter = this.getColLetter(colIdx);
       const response = await sheets.spreadsheets.values.get({
@@ -105,21 +170,20 @@ class GRNService extends BaseSheetsService<GRN> {
       });
 
       const values = response.data.values?.slice(1) || [];
-      let maxSuffix = 0;
-      const regex = new RegExp(`^${basePONumber}_(\\d+)$`, 'i');
-      
+      let maxNum = 0;
       for (const row of values) {
         const val = String(row[0] || "");
-        const match = val.match(regex);
+        const match = val.match(/PO(\d+)/i);
         if (match) {
-          const suffix = parseInt(match[1]);
-          if (suffix > maxSuffix) maxSuffix = suffix;
+          const num = parseInt(match[1]);
+          if (num > maxNum) maxNum = num;
         }
       }
-      return `${basePONumber}_${maxSuffix + 1}`;
+      const nextNum = maxNum + 1;
+      return `PO${nextNum.toString().padStart(4, '0')}`;
     } catch (error) {
-      console.error("Error generating PO suffix:", error);
-      return `${basePONumber}_1`;
+      console.error("Error generating global PO num:", error);
+      return "PO0001";
     }
   }
 
@@ -135,6 +199,53 @@ class GRNService extends BaseSheetsService<GRN> {
   }
 }
 
+function calculateGRNPlannedDate(base: Date | string, tat: string): string {
+  let date = new Date(base);
+  if (isNaN(date.getTime())) return "";
+  
+  const val = parseFloat(tat) || 0;
+  const unit = (tat.toLowerCase().includes("day") || tat.toLowerCase().includes("days")) ? "day" : "hr";
+  
+  // Working hours: 9:30 AM to 7:30 PM (10 hours)
+  let mins = unit === "day" ? val * 10 * 60 : val * 60;
+  
+  while (mins > 0) {
+    // If Sunday, skip to Monday 9:30 AM
+    if (date.getDay() === 0) {
+      date.setDate(date.getDate() + 1);
+      date.setHours(9, 30, 0, 0);
+      continue;
+    }
+    
+    const curHour = date.getHours() + date.getMinutes() / 60;
+    
+    // If after 7:30 PM, skip to tomorrow 9:30 AM
+    if (curHour >= 19.5) {
+      date.setDate(date.getDate() + 1);
+      date.setHours(9, 30, 0, 0);
+      continue;
+    }
+    
+    // If before 9:30 AM, jump to 9:30 AM
+    if (curHour < 9.5) {
+      date.setHours(9, 30, 0, 0);
+    }
+    
+    const remainingTodayMins = (19.5 - (date.getHours() + date.getMinutes() / 60)) * 60;
+    
+    if (mins <= remainingTodayMins) {
+      date.setMinutes(date.getMinutes() + mins);
+      mins = 0;
+    } else {
+      mins -= remainingTodayMins;
+      date.setDate(date.getDate() + 1);
+      date.setHours(9, 30, 0, 0);
+    }
+  }
+  
+  return date.toISOString();
+}
+
 export const grnService = new GRNService();
 
 export async function addGRNEntry(data: Partial<GRN>): Promise<string> {
@@ -145,16 +256,36 @@ export async function addGRNEntry(data: Partial<GRN>): Promise<string> {
     data.GRN_No = await grnService.getNextGRNNum();
   }
   
-  // Handle PO suffixing if PO_Number is provided
-  if (data.PO_Number && !data.PO_Number.includes('_')) {
-    data.PO_Number = await grnService.getNextPOSuffix(data.PO_Number);
-  }
-
   const now = new Date().toISOString();
   data.updated_at = now;
 
-  // Ensure columns exist
-  await grnService.ensureColumns(["id", "GRN_No", "PO_Number", "Item_Name", "Category", "Qty", "Country", "Attach_Bill", "Payment_Terms_(In_days)", "Payment_Completed", "filled_by", "updated_at", "indent_id"]);
+  // Final column list for GRN
+  const headers = [
+    "id", "GRN_No", "PO_Number", "Item_Name", "Category", "Qty", "Country", "Attach_Bill", 
+    "Payment_Terms_(In_days)", "Payment_Completed", "filled_by", "Cancelled",
+    "Planned_1", "Actual_1", "Status_1", "Remarks_1",
+    "Planned_2", "Actual_2", "Status_2",
+    "Planned_3", "Actual_3", "Status_3", "Remarks_3",
+    "Planned_4", "Actual_4", "Status_4", "Vendor_Visit_Date_4",
+    "Planned_5", "Actual_5", "Status_5",
+    "Planned_6", "Actual_6", "Status_6",
+    "Planned_7", "Actual_7", "Status_7",
+    "Planned_8", "Actual_8", "Status_8",
+    "Planned_9", "Actual_9", "Status_9",
+    "updated_at", "indent_id"
+  ];
+
+  await grnService.ensureColumns(headers);
+
+  // Initialize Step 1 only
+  const stepConfig = await grnService.getStepConfig();
+  if (stepConfig.length > 0) {
+    const config = stepConfig[0];
+    if (config) {
+      data.planned_1 = calculateGRNPlannedDate(now, config.tat || "24 Hrs");
+      data.status_1 = "Pending";
+    }
+  }
 
   const success = await grnService.add(data as GRN);
   return success ? data.PO_Number! : "";
@@ -162,4 +293,48 @@ export async function addGRNEntry(data: Partial<GRN>): Promise<string> {
 
 export async function getGRNItems(): Promise<GRN[]> {
   return grnService.getAll();
+}
+
+export async function updateGRNItem(id: string, updates: Partial<GRN>): Promise<boolean> {
+  const items = await grnService.getAll();
+  const existing = items.find(it => String(it.id) === String(id));
+  if (!existing) return false;
+
+  const merged = { ...existing, ...updates };
+
+  // Trigger next step planned date if a step was just completed
+  const stepConfig = await grnService.getStepConfig();
+  for (let i = 1; i < 9; i++) {
+    const actKey = `actual_${i}` as keyof GRN;
+    const nextPlanKey = `planned_${i + 1}` as keyof GRN;
+    const nextStatusKey = `status_${i + 1}` as keyof GRN;
+
+    // If step i was just completed in this update
+    if (updates[actKey] && !existing[actKey]) {
+      const nextCfg = stepConfig[i]; // stepConfig[1] is Step 2, etc.
+      if (nextCfg) {
+        const nextPlanned = calculateGRNPlannedDate(updates[actKey] as string, nextCfg.tat || "24 Hrs");
+        (merged as any)[nextPlanKey] = nextPlanned;
+        (merged as any)[nextStatusKey] = "Pending";
+      }
+    }
+  }
+
+  return grnService.update(id, merged);
+}
+
+export async function deleteGRNItem(id: string): Promise<boolean> {
+  return grnService.delete(id);
+}
+
+export async function getNextGlobalPONumber(): Promise<string> {
+  return grnService.getNextGlobalPONum();
+}
+
+export async function getGRNStepConfig(): Promise<GRNStepConfig[]> {
+  return grnService.getStepConfig();
+}
+
+export async function updateGRNStepConfig(configs: GRNStepConfig[]): Promise<boolean> {
+  return grnService.updateStepConfig(configs);
 }

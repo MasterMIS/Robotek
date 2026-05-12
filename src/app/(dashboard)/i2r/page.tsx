@@ -32,6 +32,11 @@ import {
   ArrowPathIcon,
   ExclamationCircleIcon,
   ArrowUturnLeftIcon,
+  GlobeAltIcon,
+  CheckBadgeIcon,
+  QueueListIcon,
+  HashtagIcon,
+  PaperClipIcon
 } from "@heroicons/react/24/outline";
 import ActionStatusModal from "@/components/ActionStatusModal";
 import ConfirmModal from "@/components/ConfirmModal";
@@ -514,9 +519,22 @@ export default function I2RPage() {
     setTimeout(() => { setIsStatusModalOpen(false); setIsRemoveFollowUpModalOpen(false); mutateItems(); }, 1500);
   };
 
-  const openPOModal = (item: I2R) => {
+  const openPOModal = async (item: I2R) => {
+    let initialPO = item.po_number_6 || "";
+    
+    // If not in I2R, fetch next global PO from server
+    if (!initialPO) {
+      try {
+        const res = await fetch("/api/grn");
+        const data = await res.json();
+        if (data.nextPO) initialPO = data.nextPO;
+      } catch (err) {
+        console.error("Failed to fetch next PO", err);
+      }
+    }
+
     setPoFormData({
-      PO_Number: "",
+      PO_Number: initialPO,
       Qty: "",
       Country: "",
       Attach_Bill: "",
@@ -922,18 +940,27 @@ export default function I2RPage() {
       {isModalOpen && (
         <div className="fixed inset-0 z-[1200] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-[#001a33]/40 backdrop-blur-sm" onClick={closeModal} />
-          <div className="relative bg-white dark:bg-navy-800 w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden flex flex-col p-8 animate-in zoom-in-95 duration-300">
-            <div className="flex items-start justify-between mb-6">
+          <div className="relative bg-white dark:bg-navy-900 w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-300 border border-slate-200 dark:border-white/10">
+            {/* Cream Header */}
+            <div className="p-6 pb-4 bg-[#FFFBF0] dark:bg-navy-950 border-b border-orange-100/50 dark:border-zinc-800 flex items-start justify-between">
               <div>
                 <h2 className="text-2xl font-black text-[#003875] dark:text-white uppercase leading-none">{editingItem ? "Edit Indent Request" : "New Indent Request"}</h2>
-                <p className="text-[12px] font-black text-blue-600 dark:text-[#FFD500] mt-2 uppercase">INDT- {editingItem?.id || (items.length + 1)}</p>
+                <p className="text-[12px] font-black text-blue-600 dark:text-[#FFD500] mt-2 uppercase tracking-widest flex items-center gap-2">
+                  <HashtagIcon className="w-3.5 h-3.5" />
+                  INDT- {editingItem?.id || (items.length + 1)}
+                </p>
               </div>
               <button onClick={closeModal} className="text-slate-300 dark:text-navy-700 hover:text-slate-900 dark:hover:text-white transition-colors"><XMarkIcon className="w-6 h-6" /></button>
             </div>
-            <div className="space-y-5">
+
+            {/* White Body */}
+            <div className="p-6 pt-6 space-y-5 bg-white dark:bg-navy-900">
               <div ref={comboRef} className="relative">
-                <label className="text-[11px] font-black text-slate-800 dark:text-white/80 uppercase block mb-1.5">Item Name <span className="text-red-500">*</span></label>
-                <input type="text" value={formData.item_name || ""} placeholder="Type or select item name" onChange={e => { setFormData({ ...formData, item_name: e.target.value }); setItemNameOpen(true); }} className="w-full px-4 py-3 bg-white dark:bg-navy-900 border border-slate-200 dark:border-navy-800 rounded-xl font-bold text-sm text-gray-900 dark:text-white outline-none focus:border-[#003875] dark:focus:border-[#FFD500] transition-all" />
+                <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2 mb-1.5">
+                  <CubeIcon className="w-3.5 h-3.5 text-[#FFD500]" />
+                  Item Name <span className="text-red-500 ml-0.5">*</span>
+                </label>
+                <input type="text" value={formData.item_name || ""} placeholder="Type or select item name" onChange={e => { setFormData({ ...formData, item_name: e.target.value }); setItemNameOpen(true); }} className="w-full px-4 py-3 bg-[#FFFBF0] dark:bg-navy-900 border border-orange-100/50 dark:border-navy-800 rounded-xl font-bold text-sm text-gray-900 dark:text-white outline-none focus:border-[#003875] dark:focus:border-[#FFD500] transition-all shadow-sm" />
                 {itemNameOpen && (
                   <ul className="absolute z-[1001] w-full mt-1 bg-white dark:bg-navy-900 border border-slate-100 dark:border-navy-800 rounded-xl shadow-2xl max-h-40 overflow-y-auto p-1.5">
                     {imsItems.filter(i => i.item_name.toLowerCase().includes((formData.item_name||"").toLowerCase())).map(i => (
@@ -942,13 +969,35 @@ export default function I2RPage() {
                   </ul>
                 )}
               </div>
-              <div><label className="text-[11px] font-black text-slate-800 dark:text-white/80 uppercase block mb-1.5">Quantity <span className="text-red-500">*</span></label><input type="text" value={formData.quantity || ""} placeholder="Enter quantity" onChange={e => setFormData({ ...formData, quantity: e.target.value })} className="w-full px-4 py-3 bg-white dark:bg-navy-900 border border-slate-200 dark:border-navy-800 rounded-xl font-bold text-sm text-gray-900 dark:text-white outline-none focus:border-[#003875] dark:focus:border-[#FFD500] transition-all" /></div>
-              <div><label className="text-[11px] font-black text-slate-800 dark:text-white/80 uppercase block mb-1.5">Category <span className="text-red-500">*</span></label><input type="text" value={formData.category || ""} placeholder="Enter category" onChange={e => setFormData({ ...formData, category: e.target.value })} className="w-full px-4 py-3 bg-white dark:bg-navy-900 border border-slate-200 dark:border-navy-800 rounded-xl font-bold text-sm text-gray-900 dark:text-white outline-none focus:border-[#003875] dark:focus:border-[#FFD500] transition-all" /></div>
-              <div><label className="text-[11px] font-black text-slate-800 dark:text-white/80 uppercase block mb-1.5">Filled By</label><input type="text" value={formData.filled_by || ""} readOnly className="w-full px-4 py-3 bg-slate-50 dark:bg-navy-900/50 border border-slate-100 dark:border-navy-800 rounded-xl font-bold text-sm text-slate-500 dark:text-navy-600 cursor-not-allowed outline-none" /></div>
+              <div>
+                <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2 mb-1.5">
+                  <QueueListIcon className="w-3.5 h-3.5 text-[#FFD500]" />
+                  Quantity <span className="text-red-500 ml-0.5">*</span>
+                </label>
+                <input type="text" value={formData.quantity || ""} placeholder="Enter quantity" onChange={e => setFormData({ ...formData, quantity: e.target.value })} className="w-full px-4 py-3 bg-[#FFFBF0] dark:bg-navy-900 border border-orange-100/50 dark:border-navy-800 rounded-xl font-bold text-sm text-gray-900 dark:text-white outline-none focus:border-[#003875] dark:focus:border-[#FFD500] transition-all shadow-sm" />
+              </div>
+              <div>
+                <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2 mb-1.5">
+                  <TagIcon className="w-3.5 h-3.5 text-[#FFD500]" />
+                  Category <span className="text-red-500 ml-0.5">*</span>
+                </label>
+                <input type="text" value={formData.category || ""} placeholder="Enter category" onChange={e => setFormData({ ...formData, category: e.target.value })} className="w-full px-4 py-3 bg-[#FFFBF0] dark:bg-navy-900 border border-orange-100/50 dark:border-navy-800 rounded-xl font-bold text-sm text-gray-900 dark:text-white outline-none focus:border-[#003875] dark:focus:border-[#FFD500] transition-all shadow-sm" />
+              </div>
+              <div>
+                <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2 mb-1.5">
+                  <UserIcon className="w-3.5 h-3.5 text-[#FFD500]" />
+                  Filled By
+                </label>
+                <input type="text" value={formData.filled_by || ""} readOnly className="w-full px-4 py-3 bg-[#FFFBF0] dark:bg-navy-900/50 border border-orange-100/50 dark:border-navy-800 rounded-xl font-bold text-sm text-slate-500 dark:text-navy-600 cursor-not-allowed outline-none shadow-sm" />
+              </div>
             </div>
-            <div className="flex gap-4 mt-8">
+
+            {/* Cream Footer */}
+            <div className="p-6 py-4 bg-[#FFFBF0] dark:bg-navy-950 border-t border-orange-100/50 dark:border-zinc-800 flex gap-4">
               <button onClick={closeModal} className="flex-1 py-3.5 bg-white dark:bg-navy-800 border border-slate-200 dark:border-navy-700 text-slate-500 dark:text-navy-400 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-slate-50 dark:hover:bg-navy-700 transition-all">Cancel</button>
-              <button onClick={handleSave} className="flex-1 py-3.5 bg-[#003875] dark:bg-[#FFD500] text-white dark:text-navy-950 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-[#002855] dark:hover:bg-[#FFE600] transition-all shadow-lg active:scale-95">Submit</button>
+              <button onClick={handleSave} className="flex-1 py-3.5 bg-[#003875] dark:bg-[#FFD500] text-white dark:text-navy-950 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-[#002855] dark:hover:bg-[#FFE600] transition-all shadow-lg active:scale-95">
+                {editingItem ? "Update Indent" : "Create Indent"}
+              </button>
             </div>
           </div>
         </div>
@@ -1106,16 +1155,19 @@ export default function I2RPage() {
           <div className="absolute inset-0 bg-[#001a33]/40 backdrop-blur-sm" onClick={() => setIsPOModalOpen(false)} />
           <div className="relative bg-white dark:bg-navy-900 w-full max-w-xl rounded-3xl shadow-2xl border border-slate-200 dark:border-white/10 overflow-hidden flex flex-col animate-in zoom-in-95 duration-300">
             {/* Cream Header */}
-            <div className="p-8 pb-6 bg-[#FFFBF0] dark:bg-navy-950 border-b border-orange-100/50 dark:border-zinc-800 flex items-start justify-between">
+            <div className="p-6 pb-4 bg-[#FFFBF0] dark:bg-navy-950 border-b border-orange-100/50 dark:border-zinc-800 flex items-start justify-between">
               <div>
                 <h2 className="text-2xl font-black text-[#003875] dark:text-white uppercase leading-none">Make PO / GRN Entry</h2>
-                <p className="text-[12px] font-black text-blue-600 dark:text-[#FFD500] mt-2 uppercase">INDT- {poFormData.indent_id}</p>
+                <p className="text-[12px] font-black text-blue-600 dark:text-[#FFD500] mt-2 uppercase tracking-widest flex items-center gap-2">
+                   <HashtagIcon className="w-3.5 h-3.5" />
+                   INDT- {poFormData.indent_id}
+                </p>
               </div>
               <button onClick={() => setIsPOModalOpen(false)} className="text-slate-300 dark:text-navy-700 hover:text-slate-900 dark:hover:text-white transition-colors"><XMarkIcon className="w-8 h-8" /></button>
             </div>
             
             {/* White Body */}
-            <div className="p-8 pt-6 grid grid-cols-2 gap-4 max-h-[60vh] overflow-y-auto custom-scrollbar bg-white dark:bg-navy-900">
+            <div className="p-6 pt-4 grid grid-cols-2 gap-4 max-h-[60vh] overflow-y-auto custom-scrollbar bg-white dark:bg-navy-900">
               <div className="col-span-2 space-y-6">
                 {/* Section: Basic Info */}
                 <div className="space-y-4">
@@ -1124,15 +1176,24 @@ export default function I2RPage() {
                   
                   <div className="grid grid-cols-3 gap-4">
                     <div className="space-y-1">
-                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Item Name</label>
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1.5">
+                        <CubeIcon className="w-3 h-3" />
+                        Item Name
+                      </label>
                       <input type="text" value={poFormData.Item_Name} readOnly className="w-full px-4 py-2.5 bg-[#FFFBF0] dark:bg-zinc-900 border border-orange-100/50 dark:border-zinc-800 rounded-xl font-bold text-xs text-slate-500 cursor-not-allowed outline-none" />
                     </div>
                     <div className="space-y-1">
-                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Category</label>
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1.5">
+                        <TagIcon className="w-3 h-3" />
+                        Category
+                      </label>
                       <input type="text" value={poFormData.Category} readOnly className="w-full px-4 py-2.5 bg-[#FFFBF0] dark:bg-zinc-900 border border-orange-100/50 dark:border-zinc-800 rounded-xl font-bold text-xs text-slate-500 cursor-not-allowed outline-none" />
                     </div>
                     <div className="space-y-1">
-                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Filled By</label>
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1.5">
+                        <UserIcon className="w-3 h-3" />
+                        Filled By
+                      </label>
                       <input type="text" value={poFormData.filled_by} readOnly className="w-full px-4 py-2.5 bg-[#FFFBF0] dark:bg-zinc-900 border border-orange-100/50 dark:border-zinc-800 rounded-xl font-bold text-xs text-slate-500 cursor-not-allowed outline-none" />
                     </div>
                   </div>
@@ -1145,25 +1206,44 @@ export default function I2RPage() {
 
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-1.5">
-                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">PO Number <span className="text-red-500">*</span></label>
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1.5">
+                        <HashtagIcon className="w-3 h-3" />
+                        PO Number <span className="text-red-500 ml-0.5">*</span>
+                      </label>
                       <input type="text" value={poFormData.PO_Number} onChange={e => setPoFormData({...poFormData, PO_Number: e.target.value})} placeholder="Enter PO Number" className="w-full px-4 py-3 bg-[#FFFBF0] dark:bg-zinc-900 border border-orange-100/50 dark:border-zinc-800 rounded-xl font-bold text-sm text-gray-900 dark:text-white outline-none focus:border-[#FFD500] focus:bg-[#FFFBF0] dark:focus:bg-zinc-900 transition-all shadow-sm" />
                     </div>
                     <div className="space-y-1.5">
-                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">Quantity <span className="text-red-500">*</span></label>
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1.5">
+                        <QueueListIcon className="w-3 h-3" />
+                        Quantity <span className="text-red-500 ml-0.5">*</span>
+                      </label>
                       <input type="text" value={poFormData.Qty} onChange={e => setPoFormData({...poFormData, Qty: e.target.value})} placeholder="Enter Quantity" className="w-full px-4 py-3 bg-[#FFFBF0] dark:bg-zinc-900 border border-orange-100/50 dark:border-zinc-800 rounded-xl font-bold text-sm text-gray-900 dark:text-white outline-none focus:border-[#FFD500] focus:bg-[#FFFBF0] dark:focus:bg-zinc-900 transition-all shadow-sm" />
                     </div>
                     <div className="space-y-1.5">
-                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">Country</label>
-                      <input type="text" value={poFormData.Country} onChange={e => setPoFormData({...poFormData, Country: e.target.value})} placeholder="Enter Country" className="w-full px-4 py-3 bg-[#FFFBF0] dark:bg-zinc-900 border border-orange-100/50 dark:border-zinc-800 rounded-xl font-bold text-sm text-gray-900 dark:text-white outline-none focus:border-[#FFD500] focus:bg-[#FFFBF0] dark:focus:bg-zinc-900 transition-all shadow-sm" />
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1.5">
+                        <GlobeAltIcon className="w-3 h-3" />
+                        Country
+                      </label>
+                      <select value={poFormData.Country} onChange={e => setPoFormData({...poFormData, Country: e.target.value})} className="w-full px-4 py-3 bg-[#FFFBF0] dark:bg-zinc-900 border border-orange-100/50 dark:border-zinc-800 rounded-xl font-bold text-sm text-gray-900 dark:text-white outline-none focus:border-[#FFD500] focus:bg-[#FFFBF0] dark:focus:bg-zinc-900 transition-all shadow-sm cursor-pointer">
+                        <option value="">Select Country</option>
+                        <option value="India">India</option>
+                        <option value="China">China</option>
+                      </select>
                     </div>
                     <div className="space-y-1.5">
-                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">Payment Terms (Days)</label>
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1.5">
+                        <CalendarIcon className="w-3 h-3" />
+                        Payment Terms (Days)
+                      </label>
                       <input type="text" value={poFormData.Payment_Terms_In_days} onChange={e => setPoFormData({...poFormData, Payment_Terms_In_days: e.target.value})} placeholder="Enter Days" className="w-full px-4 py-3 bg-[#FFFBF0] dark:bg-zinc-900 border border-orange-100/50 dark:border-zinc-800 rounded-xl font-bold text-sm text-gray-900 dark:text-white outline-none focus:border-[#FFD500] focus:bg-[#FFFBF0] dark:focus:bg-zinc-900 transition-all shadow-sm" />
                     </div>
                   </div>
 
                   <div className="space-y-1.5">
-                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">Payment Completed</label>
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1.5">
+                      <CheckBadgeIcon className="w-3 h-3" />
+                      Payment Completed
+                    </label>
                     <select value={poFormData.Payment_Completed} onChange={e => setPoFormData({...poFormData, Payment_Completed: e.target.value})} className="w-full px-4 py-3 bg-[#FFFBF0] dark:bg-zinc-900 border border-orange-100/50 dark:border-zinc-800 rounded-xl font-bold text-sm text-gray-900 dark:text-white outline-none focus:border-[#FFD500] focus:bg-[#FFFBF0] dark:focus:bg-zinc-900 transition-all shadow-sm cursor-pointer">
                       <option value="No">No</option>
                       <option value="Yes">Yes</option>
@@ -1172,7 +1252,10 @@ export default function I2RPage() {
                   </div>
 
                   <div className="space-y-1.5">
-                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">Attach Bill</label>
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1.5">
+                      <PaperClipIcon className="w-3 h-3" />
+                      Attach Bill
+                    </label>
                     <div className="relative group">
                       <input type="file" id="po-bill" hidden onChange={e => setPoFile(e.target.files?.[0] || null)} />
                       <label htmlFor="po-bill" className="flex items-center justify-between w-full px-4 py-3 bg-[#FFFBF0] dark:bg-zinc-900/50 border-2 border-dashed border-orange-100/50 dark:border-zinc-800 rounded-xl font-bold text-sm text-slate-400 cursor-pointer group-hover:border-[#FFD500] transition-all">
@@ -1186,7 +1269,7 @@ export default function I2RPage() {
             </div>
 
             {/* Cream Footer */}
-            <div className="p-8 py-6 bg-[#FFFBF0] dark:bg-navy-950 border-t border-orange-100/50 dark:border-zinc-800 flex gap-4">
+            <div className="p-6 py-4 bg-[#FFFBF0] dark:bg-navy-950 border-t border-orange-100/50 dark:border-zinc-800 flex gap-4">
               <button onClick={() => setIsPOModalOpen(false)} className="flex-1 py-3.5 bg-white dark:bg-navy-800 border border-slate-200 dark:border-navy-700 text-slate-500 dark:text-navy-400 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-slate-50 dark:hover:bg-navy-700 transition-all">Cancel</button>
               <button onClick={handlePOSubmit} disabled={!poFormData.PO_Number || !poFormData.Qty} className="flex-1 py-3.5 bg-[#003875] dark:bg-[#FFD500] text-white dark:text-navy-950 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-[#002855] dark:hover:bg-[#FFE600] transition-all shadow-lg active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed">
                 {isUploading ? "Uploading..." : "Submit PO"}
