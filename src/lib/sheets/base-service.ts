@@ -238,10 +238,11 @@ export abstract class BaseSheetsService<T extends SheetItem> {
       const sheetId = sheetInfo?.properties?.sheetId;
       let currentMaxCols = sheetInfo?.properties?.gridProperties?.columnCount || 0;
 
-      for (const name of missing) {
+      if (missing.length > 0) {
         // Expand grid if necessary
-        if (nextIdx >= currentMaxCols && sheetId !== undefined) {
-          console.log(`[SHEETS] Expanding grid for ${this.sheetName} to accommodate index ${nextIdx}`);
+        const targetMaxIdx = maxIdx + missing.length;
+        if (targetMaxIdx >= currentMaxCols && sheetId !== undefined) {
+          console.log(`[SHEETS] Expanding grid for ${this.sheetName} to accommodate index ${targetMaxIdx}`);
           await sheets.spreadsheets.batchUpdate({
             spreadsheetId: this.spreadsheetId,
             requestBody: {
@@ -249,25 +250,32 @@ export abstract class BaseSheetsService<T extends SheetItem> {
                 appendDimension: {
                   sheetId: sheetId,
                   dimension: "COLUMNS",
-                  length: nextIdx - currentMaxCols + 1,
+                  length: targetMaxIdx - currentMaxCols + 1,
                 }
               }]
             }
           });
-          currentMaxCols = nextIdx + 1;
         }
 
-        const colLetter = getColumnLetter(nextIdx);
-        console.log(`[SHEETS] Creating missing column "${name}" at ${colLetter}1 in ${this.sheetName}`);
-        await sheets.spreadsheets.values.update({
-          spreadsheetId: this.spreadsheetId,
-          range: `${this.sheetName}!${colLetter}1`,
-          valueInputOption: "USER_ENTERED",
-          requestBody: { values: [[name]] },
+        // Prepare batch update for all missing headers
+        const data = missing.map((name, i) => {
+          const colIdx = nextIdx + i;
+          const colLetter = getColumnLetter(colIdx);
+          this.hMap[name.toLowerCase()] = colIdx;
+          return {
+            range: `${this.sheetName}!${colLetter}1`,
+            values: [[name]]
+          };
         });
-        // Update local hMap immediately so the caller can use it
-        this.hMap[name.toLowerCase()] = nextIdx;
-        nextIdx++;
+
+        console.log(`[SHEETS] Batch creating ${missing.length} missing columns for ${this.sheetName}`);
+        await sheets.spreadsheets.values.batchUpdate({
+          spreadsheetId: this.spreadsheetId,
+          requestBody: {
+            valueInputOption: "USER_ENTERED",
+            data: data
+          }
+        });
       }
 
       // Invalidate header cache so next full fetch picks up the new columns
@@ -313,14 +321,19 @@ export abstract class BaseSheetsService<T extends SheetItem> {
         (item as any).updated_at = new Date().toISOString();
       }
 
-      await sheets.spreadsheets.values.append({
+      const row = this.mapItemToRow(item);
+      console.log(`[SHEETS] Appending row to ${this.sheetName}:`, JSON.stringify(row));
+
+      const res = await sheets.spreadsheets.values.append({
         spreadsheetId: this.spreadsheetId,
-        range: `${this.sheetName}!A:A`, // Append to start of data
+        range: `${this.sheetName}!A:A`, 
         valueInputOption: "USER_ENTERED",
         requestBody: {
-          values: [this.mapItemToRow(item)],
+          values: [row],
         },
       });
+
+      console.log(`[SHEETS] Append response for ${this.sheetName}:`, res.status, res.statusText);
 
       this.updateInMemoryCache('add', item);
       void this.writeLastModified(); // meta-level heartbeat

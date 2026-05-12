@@ -8,8 +8,23 @@ const SHEET_NAME = "I2R";
 class I2RService extends BaseSheetsService<I2R> {
   protected spreadsheetId = GOOGLE_SHEET_ID;
   protected sheetName = SHEET_NAME;
-  protected range = "A:AQ"; // A-H base cols + 10 steps * 3 cols each + Cancelled + 4 Extra Cols
+  protected range = "A:AQ"; 
   protected idColumnIndex = 0;
+
+  private readonly CANONICAL_HEADERS = [
+    "id", "Indend_Num", "Item_Name", "Quantity", "Category", "filled_by", "created_at", "updated_at",
+    "Planned_1", "Actual_1", "Status_1",
+    "Planned_2", "Actual_2", "Status_2",
+    "Planned_3", "Actual_3", "Status_3", "Supplier_Name_3",
+    "Planned_4", "Actual_4", "Status_4", "Lead_time_Acc_to_Vendor_4",
+    "Planned_5", "Actual_5", "Status_5", "Sample_Pic_5", "Sample_Qty_5",
+    "Planned_6", "Actual_6", "Status_6", "PO_Number_6",
+    "Planned_7", "Actual_7", "Status_7",
+    "Planned_8", "Actual_8", "Status_8",
+    "Planned_9", "Actual_9", "Status_9",
+    "Planned_10", "Actual_10", "Status_10",
+    "Cancelled"
+  ];
 
   mapRowToItem(row: any[]): I2R {
     const get = (h: string) => row[this.hMap[h.toLowerCase()]] ?? "";
@@ -32,6 +47,7 @@ class I2RService extends BaseSheetsService<I2R> {
     item.supplier_name_3 = get("supplier_name_3");
     item.lead_time_acc_to_vendor_4 = get("lead_time_acc_to_vendor_4");
     item.sample_pic_5 = get("sample_pic_5");
+    item.sample_qty_5 = get("sample_qty_5");
     item.po_number_6 = get("po_number_6");
     return item as I2R;
   }
@@ -63,6 +79,7 @@ class I2RService extends BaseSheetsService<I2R> {
     set("supplier_name_3", item.supplier_name_3);
     set("lead_time_acc_to_vendor_4", item.lead_time_acc_to_vendor_4);
     set("sample_pic_5", item.sample_pic_5);
+    set("sample_qty_5", item.sample_qty_5);
     set("po_number_6", item.po_number_6);
 
     return row;
@@ -160,7 +177,12 @@ export async function addI2RItem(data: Partial<I2R>): Promise<boolean> {
       const now = new Date().toISOString();
       data.created_at = now;
       data.updated_at = now;
-      return i2rService.add(data as I2R);
+      console.log(`[I2R] Adding item:`, data.id, data.item_name);
+      await i2rService.ensureColumns((i2rService as any).CANONICAL_HEADERS);
+
+      const success = await i2rService.add(data as I2R);
+      console.log(`[I2R] Add result:`, success);
+      return success;
     })
     .catch((err) => {
       console.error("Error in addI2RItem lock:", err);
@@ -170,12 +192,8 @@ export async function addI2RItem(data: Partial<I2R>): Promise<boolean> {
 
 export async function updateI2RItem(id: string, data: I2R): Promise<boolean> {
   data.updated_at = new Date().toISOString();
-  // Ensure the cancelled and new step columns exist in the sheet before writing
-  const newCols = ["cancelled", "supplier_name_3", "lead_time_acc_to_vendor_4", "sample_pic_5", "po_number_6"];
-  for (let i = 1; i <= 10; i++) {
-    newCols.push(`planned_${i}`, `actual_${i}`, `status_${i}`);
-  }
-  await i2rService.ensureColumns(newCols);
+  // Ensure the canonical columns exist in the sheet before writing
+  await i2rService.ensureColumns((i2rService as any).CANONICAL_HEADERS);
   return i2rService.update(id, data);
 }
 

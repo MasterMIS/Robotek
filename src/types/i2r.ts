@@ -23,6 +23,7 @@ export interface I2R {
   supplier_name_3: string;
   lead_time_acc_to_vendor_4: string;
   sample_pic_5: string;
+  sample_qty_5: string;
   po_number_6: string;
 }
 

@@ -28,7 +28,10 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const data = await request.json();
-    await addI2RItem(data);
+    const success = await addI2RItem(data);
+    if (!success) {
+      return NextResponse.json({ error: "Failed to add I2R item" }, { status: 500 });
+    }
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("Error adding I2R item:", error);
