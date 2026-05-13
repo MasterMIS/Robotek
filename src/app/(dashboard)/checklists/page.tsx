@@ -734,6 +734,27 @@ export default function ChecklistsPage() {
     );
   };
 
+  const renderUserAvatar = (username: string) => {
+    if (!username || username === "—") return <span className="font-bold text-gray-500 dark:text-gray-400">—</span>;
+    const user = usersList.find((u) => u.username === username);
+    if (user?.image_url) {
+      return (
+        <div className="flex items-center gap-2">
+          <img src={user.image_url} alt={username} className="w-6 h-6 rounded-full object-cover border border-gray-200 dark:border-white/10 shadow-sm" />
+          <span className="font-bold text-gray-900 dark:text-white text-[11px] truncate">{username}</span>
+        </div>
+      );
+    }
+    return (
+      <div className="flex items-center gap-2">
+        <div className="w-6 h-6 rounded-full shrink-0 bg-gradient-to-br from-[#003875] to-[#002855] text-white flex items-center justify-center text-[10px] font-bold shadow-sm">
+          {username.charAt(0).toUpperCase()}
+        </div>
+        <span className="font-bold text-gray-900 dark:text-white text-[11px] truncate">{username}</span>
+      </div>
+    );
+  };
+
   return (
     <div className="space-y-6">
       {/* Sticky Top Header & Filters */}
@@ -997,8 +1018,11 @@ export default function ChecklistsPage() {
                 <th onClick={() => handleSort('task')} className="px-4 py-3 text-[10px] font-black uppercase tracking-widest cursor-pointer hover:bg-white/5 transition-colors min-w-[200px]">
                   <div className="flex items-center">Task <SortIcon column="task" /></div>
                 </th>
-                <th onClick={() => handleSort('assigned_to')} className="px-4 py-3 text-[10px] font-black uppercase tracking-widest cursor-pointer hover:bg-white/5 transition-colors hidden sm:table-cell">
-                  <div className="flex items-center">Personnel <SortIcon column="assigned_to" /></div>
+                <th onClick={() => handleSort('assigned_to')} className="px-4 py-3 text-[10px] font-black uppercase tracking-widest cursor-pointer hover:bg-white/5 transition-colors hidden sm:table-cell min-w-[140px]">
+                  <div className="flex items-center">Assigned To <SortIcon column="assigned_to" /></div>
+                </th>
+                <th onClick={() => handleSort('assigned_by')} className="px-4 py-3 text-[10px] font-black uppercase tracking-widest cursor-pointer hover:bg-white/5 transition-colors hidden sm:table-cell min-w-[140px]">
+                  <div className="flex items-center">Assigned By <SortIcon column="assigned_by" /></div>
                 </th>
                 <th onClick={() => handleSort('department')} className="px-4 py-3 text-[10px] font-black uppercase tracking-widest cursor-pointer hover:bg-white/5 transition-colors hidden md:table-cell">
                   <div className="flex items-center">Dept <SortIcon column="department" /></div>
@@ -1021,14 +1045,14 @@ export default function ChecklistsPage() {
             <tbody className="divide-y divide-gray-200 dark:divide-white/10">
               {isLoading ? (
                 <tr>
-                  <td colSpan={9} className="px-4 py-10 text-center">
+                  <td colSpan={10} className="px-4 py-10 text-center">
                     <div className="w-6 h-6 border-2 border-gray-100 border-t-[#FFD500] rounded-full animate-spin mx-auto mb-2" />
                     <p className="text-gray-400 font-bold uppercase tracking-widest text-[8px]">Syncing...</p>
                   </td>
                 </tr>
               ) : paginatedChecklists.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="px-4 py-10 text-center">
+                  <td colSpan={10} className="px-4 py-10 text-center">
                     <p className="text-xs text-gray-400 font-bold uppercase tracking-widest">No checklists found</p>
                   </td>
                 </tr>
@@ -1045,10 +1069,10 @@ export default function ChecklistsPage() {
                       )}
                     </td>
                     <td className="px-4 py-3 hidden sm:table-cell">
-                      <div className="flex flex-col">
-                        <span className="text-xs font-black text-gray-800 dark:text-gray-200">{item.assigned_to || "—"}</span>
-                        <span className="text-[10px] text-gray-400 font-bold">By: {item.assigned_by || "—"}</span>
-                      </div>
+                      {renderUserAvatar(item.assigned_to)}
+                    </td>
+                    <td className="px-4 py-3 hidden sm:table-cell">
+                      {renderUserAvatar(item.assigned_by)}
                     </td>
                     <td className="px-4 py-3 hidden md:table-cell">
                       {getDeptBadge(item.department)}
@@ -1155,9 +1179,9 @@ export default function ChecklistsPage() {
                     {/* Card Body */}
                     <div className="p-3 md:p-4 flex-1 flex flex-col gap-4">
                       <div className="grid grid-cols-2 gap-3 mt-auto">
-                        <div className="flex flex-col gap-1 overflow-hidden">
-                          <span className="text-[8px] font-black text-gray-400 uppercase tracking-widest">Personnel</span>
-                          <span className="text-[10px] font-black text-gray-800 dark:text-gray-200 truncate">{item.assigned_to || "—"}</span>
+                        <div className="flex flex-col gap-1.5 overflow-hidden">
+                          <span className="text-[8px] font-black text-gray-400 uppercase tracking-widest">Assigned To</span>
+                          {renderUserAvatar(item.assigned_to)}
                         </div>
                         <div className="flex flex-col gap-1 overflow-hidden">
                           <span className="text-[8px] font-black text-gray-400 uppercase tracking-widest">Dept</span>
@@ -1169,9 +1193,9 @@ export default function ChecklistsPage() {
                           <span className="text-[8px] font-black text-gray-400 uppercase tracking-widest">Due Date</span>
                           <span className="text-[10px] font-black text-gray-700 dark:text-slate-300 truncate">{formatDateDisplay(item.due_date) || "—"}</span>
                         </div>
-                        <div className="flex flex-col gap-1 overflow-hidden">
+                        <div className="flex flex-col gap-1.5 overflow-hidden">
                           <span className="text-[8px] font-black text-gray-400 uppercase tracking-widest">Assigned By</span>
-                          <span className="text-[10px] font-bold text-gray-500 dark:text-gray-400 truncate">{item.assigned_by || "—"}</span>
+                          {renderUserAvatar(item.assigned_by)}
                         </div>
                       </div>
 

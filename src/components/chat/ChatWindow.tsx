@@ -92,7 +92,8 @@ export default function ChatWindow({ chatId, currentUsername, onBack }: ChatWind
     fetcher
   );
 
-  const { data: allUsers } = useSWR<any[]>(isGroup ? "/api/chat/users" : null, fetcher);
+  const { data: allUsers } = useSWR<any[]>("/api/chat/users", fetcher);
+  const partnerUser = !isGroup && allUsers ? allUsers.find(u => u.username === chatId) : null;
   
   const [showGroupInfo, setShowGroupInfo] = useState(false);
   const [newParticipant, setNewParticipant] = useState("");
@@ -275,10 +276,16 @@ export default function ChatWindow({ chatId, currentUsername, onBack }: ChatWind
               </svg>
             </button>
           )}
-          <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm border border-white/20 shadow-sm bg-gradient-to-br ${getAvatarGradient(isGroup ? (groupInfo?.name || chatId) : chatId)}`}>
-            {isGroup ? <UserGroupIcon className="w-5 h-5" /> : chatId.charAt(0).toUpperCase()}
+          <div className={`w-10 h-10 rounded-full flex-shrink-0 flex items-center justify-center text-white font-bold text-sm border border-white/20 shadow-sm overflow-hidden bg-gradient-to-br ${getAvatarGradient(isGroup ? (groupInfo?.name || chatId) : chatId)}`}>
+            {isGroup ? (
+              <UserGroupIcon className="w-5 h-5" />
+            ) : partnerUser?.image_url ? (
+              <img src={partnerUser.image_url} alt={chatId} className="w-full h-full object-cover" />
+            ) : (
+              chatId.charAt(0).toUpperCase()
+            )}
           </div>
-          <div>
+          <div className="flex-1 min-w-0">
             {isGroup && isEditingGroupName ? (
               <div className="flex items-center gap-2">
                 <input 
@@ -359,8 +366,11 @@ export default function ChatWindow({ chatId, currentUsername, onBack }: ChatWind
                 return (
                   <div key={username} className="flex justify-between items-center p-2 rounded-lg bg-gray-50 dark:bg-white/5">
                     <div className="flex items-center gap-2">
-                       <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] text-white font-bold bg-gradient-to-br ${getAvatarGradient(username)}`}>
-                          {username.charAt(0).toUpperCase()}
+                       <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] text-white font-bold overflow-hidden shrink-0 bg-gradient-to-br ${getAvatarGradient(username)}`}>
+                          {(() => {
+                            const u = allUsers?.find(user => user.username === username);
+                            return u?.image_url ? <img src={u.image_url} className="w-full h-full object-cover" /> : username.charAt(0).toUpperCase();
+                          })()}
                        </div>
                        <span className="text-xs font-bold text-foreground">{username}</span>
                        {isAdmin && <span className="text-[8px] bg-red-500 text-white px-1 rounded uppercase font-black">Admin</span>}

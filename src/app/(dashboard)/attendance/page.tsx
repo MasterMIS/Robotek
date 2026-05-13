@@ -1283,6 +1283,8 @@ export default function AttendancePage() {
                                                 let dotText = '';
                                                 let rawIn = record?.inTime;
                                                 let rawOut = record?.outTime;
+                                                let inPhoto = record?.inPhoto;
+                                                let outPhoto = record?.outPhoto;
 
                                                 if (isSunday) {
                                                     statusChar = 'SUN';
@@ -1312,7 +1314,7 @@ export default function AttendancePage() {
                                                     dotText = '-1';
                                                 }
 
-                                                dayCells.push({ d, statusChar, statusColor, dotText, rawIn, rawOut });
+                                                dayCells.push({ d, statusChar, statusColor, dotText, rawIn, rawOut, inPhoto, outPhoto });
                                             }
 
                                             const monthlyScore = (presents * 1) + (halfDays * 0.5) - (absents * 1);
@@ -1358,8 +1360,28 @@ export default function AttendancePage() {
                                                                         <div className={`text-xs font-black uppercase tracking-tighter ${c.statusColor}`}>{c.statusChar}</div>
                                                                     ) : (
                                                                         <>
-                                                                            <div className="text-[9px] font-bold text-gray-500 dark:text-gray-400">{c.rawIn ? formatTimeIST(c.rawIn) : '-'}</div>
-                                                                            <div className="text-[9px] font-bold text-gray-500 dark:text-gray-400">{c.rawOut ? formatTimeIST(c.rawOut) : '-'}</div>
+                                                                            <div className="text-[9px] font-bold text-gray-500 dark:text-gray-400 flex items-center justify-center">
+                                                                                {c.rawIn ? (
+                                                                                    c.inPhoto ? (
+                                                                                        <a href={c.inPhoto.startsWith('http') ? c.inPhoto : `https://drive.google.com/file/d/${c.inPhoto}/view`} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:text-blue-600 underline decoration-blue-300 hover:decoration-blue-600 transition-colors" title="View Check-in Photo">
+                                                                                            {formatTimeIST(c.rawIn)}
+                                                                                        </a>
+                                                                                    ) : (
+                                                                                        formatTimeIST(c.rawIn)
+                                                                                    )
+                                                                                ) : '-'}
+                                                                            </div>
+                                                                            <div className="text-[9px] font-bold text-gray-500 dark:text-gray-400 flex items-center justify-center">
+                                                                                {c.rawOut ? (
+                                                                                    c.outPhoto ? (
+                                                                                        <a href={c.outPhoto.startsWith('http') ? c.outPhoto : `https://drive.google.com/file/d/${c.outPhoto}/view`} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:text-blue-600 underline decoration-blue-300 hover:decoration-blue-600 transition-colors" title="View Check-out Photo">
+                                                                                            {formatTimeIST(c.rawOut)}
+                                                                                        </a>
+                                                                                    ) : (
+                                                                                        formatTimeIST(c.rawOut)
+                                                                                    )
+                                                                                ) : '-'}
+                                                                            </div>
                                                                         </>
                                                                     )}
                                                                 </div>

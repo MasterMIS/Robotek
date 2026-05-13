@@ -972,6 +972,24 @@ const fetcher = (url: string) => fetch(url).then((res) => res.json());
     );
   };
 
+  const renderUserAvatar = (username: string | undefined) => {
+    const user = usersList.find((u) => u.username === username);
+    const imageUrl = user?.image_url;
+    const initials = username ? username.substring(0, 2).toUpperCase() : "?";
+
+    return (
+      <div className="flex items-center gap-2">
+        <div className="w-7 h-7 rounded-full bg-[#003875]/10 dark:bg-[#FFD500]/10 border border-[#003875]/20 dark:border-[#FFD500]/20 flex items-center justify-center text-[10px] font-black text-[#003875] dark:text-[#FFD500] overflow-hidden shrink-0">
+          {imageUrl ? (
+            <img src={imageUrl} alt={username} className="w-full h-full object-cover" />
+          ) : (
+            initials
+          )}
+        </div>
+        <span className="text-xs font-black text-gray-800 dark:text-gray-200 truncate">{username || "—"}</span>
+      </div>
+    );
+  };
 
   const totalPages = Math.ceil(sortedDelegations.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
@@ -1237,7 +1255,10 @@ const fetcher = (url: string) => fetch(url).then((res) => res.json());
                     <div className="flex items-center">Title &amp; Desc <SortIcon column="title" /></div>
                   </th>
                   <th onClick={() => handleSort('assigned_to')} className="px-4 py-3 text-[10px] font-black uppercase tracking-widest cursor-pointer hover:bg-white/5 transition-colors hidden sm:table-cell">
-                    <div className="flex items-center">Personnel <SortIcon column="assigned_to" /></div>
+                    <div className="flex items-center">Assigned To <SortIcon column="assigned_to" /></div>
+                  </th>
+                  <th onClick={() => handleSort('assigned_by')} className="px-4 py-3 text-[10px] font-black uppercase tracking-widest cursor-pointer hover:bg-white/5 transition-colors hidden sm:table-cell">
+                    <div className="flex items-center">Assigned By <SortIcon column="assigned_by" /></div>
                   </th>
                   <th onClick={() => handleSort('department')} className="px-4 py-3 text-[10px] font-black uppercase tracking-widest cursor-pointer hover:bg-white/5 transition-colors hidden md:table-cell">
                     <div className="flex items-center">Dept <SortIcon column="department" /></div>
@@ -1257,14 +1278,14 @@ const fetcher = (url: string) => fetch(url).then((res) => res.json());
               <tbody className="divide-y divide-gray-200 dark:divide-white/10">
                 {isLoading ? (
                   <tr>
-                    <td colSpan={8} className="px-4 py-10 text-center">
+                    <td colSpan={9} className="px-4 py-10 text-center">
                       <div className="w-6 h-6 border-2 border-gray-100 border-t-[#FFD500] rounded-full animate-spin mx-auto mb-2" />
                       <p className="text-gray-400 font-bold uppercase tracking-widest text-[8px]">Syncing...</p>
                     </td>
                   </tr>
                 ) : paginatedDelegations.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="px-4 py-10 text-center text-gray-400 text-xs">No delegations found</td>
+                    <td colSpan={9} className="px-4 py-10 text-center text-gray-400 text-xs">No delegations found</td>
                   </tr>
                 ) : (
                   paginatedDelegations.map((del) => (
@@ -1277,10 +1298,10 @@ const fetcher = (url: string) => fetch(url).then((res) => res.json());
                         <p className="font-bold text-[10px] text-gray-500 dark:text-gray-400 leading-tight line-clamp-1 mt-0.5">{del.description}</p>
                       </td>
                       <td className="px-4 py-3 hidden sm:table-cell">
-                        <div className="flex flex-col">
-                          <span className="text-xs font-black text-gray-800 dark:text-gray-200">{del.assigned_to || "—"}</span>
-                          <span className="text-[10px] text-gray-400 font-bold">By: {del.assigned_by || "—"}</span>
-                        </div>
+                        {renderUserAvatar(del.assigned_to)}
+                      </td>
+                      <td className="px-4 py-3 hidden sm:table-cell">
+                        {renderUserAvatar(del.assigned_by)}
                       </td>
                       <td className="px-4 py-3 hidden md:table-cell">
                         {getDepartmentBadge(del.department)}

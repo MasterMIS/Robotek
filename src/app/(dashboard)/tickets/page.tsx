@@ -104,7 +104,7 @@ export default function TicketsPage() {
     }
   }, [swrTickets]);
 
-  const [usersList, setUsersList] = useState<{ username: string }[]>([]);
+  const [usersList, setUsersList] = useState<{ username: string; image_url?: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [activeStatusFilters, setActiveStatusFilters] = useState<string[]>([]);
@@ -482,6 +482,27 @@ export default function TicketsPage() {
     return 'bg-gray-500 text-white border-gray-600 shadow-md';
   };
 
+  const renderUserAvatar = (username: string) => {
+    if (!username || username === "System" || username === "Unassigned") {
+      return (
+        <div className="w-7 h-7 rounded-full shrink-0 bg-gray-100 dark:bg-navy-800 text-gray-400 flex items-center justify-center shadow-sm border border-gray-200 dark:border-navy-700">
+          <UserIcon className="w-3.5 h-3.5" />
+        </div>
+      );
+    }
+    const user = usersList.find((u) => u.username === username);
+    if (user?.image_url) {
+      return (
+        <img src={user.image_url} alt={username} className="w-7 h-7 rounded-full object-cover shrink-0 border border-gray-200 dark:border-white/10 shadow-sm" />
+      );
+    }
+    return (
+      <div className="w-7 h-7 rounded-full shrink-0 bg-gradient-to-br from-[#003875] to-[#002855] text-white flex items-center justify-center text-[10px] font-bold shadow-sm">
+        {username.charAt(0).toUpperCase()}
+      </div>
+    );
+  };
+
   return (
     <div className="space-y-6">
       {/* Sticky Top Header & Filters */}
@@ -672,11 +693,9 @@ export default function TicketsPage() {
                     </p>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-3">
                     <div className="flex items-center gap-2 min-w-0">
-                      <div className="p-1.5 bg-blue-50/50 dark:bg-blue-900/20 rounded-lg text-blue-600 dark:text-blue-400 border border-blue-100/50 dark:border-blue-800/30 shrink-0">
-                        <UserCircleIcon className="w-4 h-4" />
-                      </div>
+                      {renderUserAvatar(ticket.raised_by || "System")}
                       <div className="min-w-0">
                         <p className="text-[8px] font-black text-blue-400 dark:text-blue-500 uppercase tracking-widest leading-none mb-0.5">Raised By</p>
                         <p className="text-[11px] font-bold text-gray-900 dark:text-gray-100 truncate">{ticket.raised_by || "System"}</p>
@@ -684,9 +703,7 @@ export default function TicketsPage() {
                     </div>
 
                     <div className="flex items-center gap-2 min-w-0">
-                      <div className="p-1.5 bg-emerald-50/50 dark:bg-emerald-900/20 rounded-lg text-emerald-600 dark:text-emerald-400 border border-emerald-100/50 dark:border-emerald-800/30 shrink-0">
-                        <ShieldCheckIcon className="w-4 h-4" />
-                      </div>
+                      {renderUserAvatar(ticket.solver_person || "Unassigned")}
                       <div className="min-w-0">
                         <p className="text-[8px] font-black text-emerald-400 dark:text-emerald-500 uppercase tracking-widest leading-none mb-0.5">Assignee</p>
                         <p className="text-[11px] font-bold text-gray-900 dark:text-gray-100 truncate">{ticket.solver_person || "Unassigned"}</p>

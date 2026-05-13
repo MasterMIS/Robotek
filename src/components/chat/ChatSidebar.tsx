@@ -168,9 +168,9 @@ export default function ChatSidebar({ currentUsername, activeChatId, onSelectCha
                         : "bg-gradient-to-br from-[#FEF5E7] to-[#FCE4EC] dark:from-white/5 dark:to-white/10 dark:text-white shadow-sm border-none"
                     }`}
                   >
-                    <div className="relative">
-                      <div className={`w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-lg border border-white/20 shadow-sm bg-gradient-to-br ${getAvatarGradient(user.username)}`}>
-                        {user.username.charAt(0).toUpperCase()}
+                    <div className="relative flex-shrink-0">
+                      <div className={`w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-lg border border-white/20 shadow-sm overflow-hidden bg-gradient-to-br ${getAvatarGradient(user.username)}`}>
+                        {user.image_url ? <img src={user.image_url} alt={user.username} className="w-full h-full object-cover" /> : user.username.charAt(0).toUpperCase()}
                       </div>
                     </div>
                     <div className="flex-1 min-w-0 text-left">
