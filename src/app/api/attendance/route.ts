@@ -7,6 +7,21 @@ import { parseLatLong, getShortestDistance } from "@/lib/locationUtils";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
+function normalizeDate(dateVal: string | undefined | null) {
+  if (!dateVal) return '';
+  let dateStr = dateVal.split('T')[0];
+  if (/^\d{2}\/\d{2}\/\d{4}$/.test(dateStr)) {
+    const [p1, p2, yyyy] = dateStr.split('/');
+    let mm = p1, dd = p2;
+    if (parseInt(p1) > 12) {
+      dd = p1;
+      mm = p2;
+    }
+    dateStr = `${yyyy}-${mm}-${dd}`;
+  }
+  return dateStr;
+}
+
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
@@ -22,10 +37,12 @@ export async function GET(req: NextRequest) {
     const istNow = new Date(now.getTime() + istOffset);
     const todayStr = istNow.toISOString().split('T')[0];
 
-    const normalizedHistory = userRecords.map(r => ({
-      ...r,
-      date: (r.date || '').split('T')[0]
-    }));
+    const normalizedHistory = userRecords.map(r => {
+      return {
+        ...r,
+        date: normalizeDate(r.date)
+      };
+    });
 
     const todayRecord = normalizedHistory.find(r => r.date === todayStr);
 
@@ -105,7 +122,7 @@ export async function POST(req: NextRequest) {
       const records = await getAttendanceRecords();
       const todayRecord = records.find(r =>
         String(r.userId) === String(userId) &&
-        r.date === dateStr &&
+        normalizeDate(r.date) === dateStr &&
         r.status === 'IN'
       );
 

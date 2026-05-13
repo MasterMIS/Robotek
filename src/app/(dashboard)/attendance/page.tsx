@@ -460,10 +460,15 @@ export default function AttendancePage() {
     const formatDateIST = (dateStr: string) => {
         if (!dateStr) return "-";
         
-        // Handle DD/MM/YYYY
+        // Handle DD/MM/YYYY or MM/DD/YYYY
         let parsedStr = dateStr;
         if (/^\d{2}\/\d{2}\/\d{4}$/.test(dateStr)) {
-            const [dd, mm, yyyy] = dateStr.split('/');
+            const [p1, p2, yyyy] = dateStr.split('/');
+            let mm = p1, dd = p2;
+            if (parseInt(p1) > 12) {
+                dd = p1;
+                mm = p2;
+            }
             parsedStr = `${yyyy}-${mm}-${dd}`;
         }
         
@@ -481,7 +486,12 @@ export default function AttendancePage() {
     const normalizeDateSheet = (dStr: string): string => {
         if (!dStr) return '';
         if (/^\d{2}\/\d{2}\/\d{4}$/.test(dStr)) {
-            const [dd, mm, yyyy] = dStr.split('/');
+            const [p1, p2, yyyy] = dStr.split('/');
+            let mm = p1, dd = p2;
+            if (parseInt(p1) > 12) {
+                dd = p1;
+                mm = p2;
+            }
             return `${yyyy}-${mm}-${dd}`;
         }
         return dStr.split('T')[0];
