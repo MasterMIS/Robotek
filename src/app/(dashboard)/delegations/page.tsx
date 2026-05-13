@@ -2601,6 +2601,7 @@ const fetcher = (url: string) => fetch(url).then((res) => res.json());
           isOpen={isStatusModalOpen}
           status={actionStatus}
           message={actionMessage}
+          onClose={() => setIsStatusModalOpen(false)}
         />
         </Portal>
 

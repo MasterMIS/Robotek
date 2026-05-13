@@ -18,7 +18,7 @@ export default function ActionStatusModal({ isOpen, status, message, onClose }: 
 
   return (
     <div className="fixed inset-0 z-[200000] flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/20 backdrop-blur-[2px]" />
+      <div className="absolute inset-0 bg-black/20 backdrop-blur-[2px]" onClick={!isLoading ? onClose : undefined} />
       <div 
         style={{ borderColor: 'var(--panel-border)' }}
         className="relative bg-white dark:bg-navy-900 rounded-3xl shadow-2xl p-8 w-full max-w-[320px] text-center animate-in fade-in zoom-in duration-300 border dark:border-navy-700"
