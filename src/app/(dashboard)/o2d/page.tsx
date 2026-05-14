@@ -4514,6 +4514,37 @@ function O2DDetailPanel({
   getDownloadUrl,
   fullParties,
 }: O2DDetailPanelProps) {
+  const topScrollRef = useRef<HTMLDivElement>(null);
+  const bottomScrollRef = useRef<HTMLDivElement>(null);
+  const [tableScrollWidth, setTableScrollWidth] = useState(0);
+
+  useEffect(() => {
+    if (detailViewMode === "table" && bottomScrollRef.current) {
+      const updateWidth = () => {
+        const tableElement = bottomScrollRef.current?.querySelector("table");
+        if (tableElement) {
+          setTableScrollWidth(tableElement.offsetWidth);
+        }
+      };
+
+      const observer = new ResizeObserver(updateWidth);
+      observer.observe(bottomScrollRef.current);
+      updateWidth();
+      return () => observer.disconnect();
+    }
+  }, [detailViewMode, selectedOrder]);
+
+  const handleTopScroll = () => {
+    if (topScrollRef.current && bottomScrollRef.current) {
+      bottomScrollRef.current.scrollLeft = topScrollRef.current.scrollLeft;
+    }
+  };
+
+  const handleBottomScroll = () => {
+    if (topScrollRef.current && bottomScrollRef.current) {
+      topScrollRef.current.scrollLeft = bottomScrollRef.current.scrollLeft;
+    }
+  };
   return (
     <div
       key={selectedOrderNo || "none"}
@@ -5258,7 +5289,21 @@ function O2DDetailPanel({
             </div>
           ) : (
             /* Pure Simple Table View - Cream Background Theme */
-            <div className="flex-1 overflow-y-auto overflow-x-auto no-scrollbar p-6 animate-in slide-in-from-bottom-2 duration-200">
+            <div className="flex-1 flex flex-col overflow-hidden bg-white dark:bg-navy-900 animate-in slide-in-from-bottom-2 duration-200">
+              {/* Top Synchronized Scrollbar */}
+              <div 
+                ref={topScrollRef}
+                onScroll={handleTopScroll}
+                className="mx-6 mt-4 overflow-x-auto overflow-y-hidden theme-scrollbar h-3 shrink-0"
+              >
+                <div style={{ width: tableScrollWidth, height: '1px' }}></div>
+              </div>
+
+              <div 
+                ref={bottomScrollRef}
+                onScroll={handleBottomScroll}
+                className="flex-1 overflow-y-auto overflow-x-auto no-scrollbar p-6 pt-2"
+              >
               <div className="bg-white dark:bg-navy-900 rounded-xl border-2 border-gray-100 dark:border-navy-700 shadow-xl w-max min-w-full overflow-hidden">
                 <table className="w-full text-left border-collapse whitespace-nowrap">
                   <thead>
@@ -5421,7 +5466,8 @@ function O2DDetailPanel({
                 </table>
               </div>
             </div>
-          )}
+          </div>
+        )}
         </div>
       ) : (
         <div className="flex-1 flex flex-col items-center justify-center p-10 opacity-30">

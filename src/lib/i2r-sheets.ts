@@ -20,8 +20,8 @@ class I2RService extends BaseSheetsService<I2R> {
     "Planned_5", "Actual_5", "Status_5", "Sample_Pic_5", "Sample_Qty_5",
     "Planned_6", "Actual_6", "Status_6", "PO_Number_6",
     "Planned_7", "Actual_7", "Status_7",
-    "Planned_8", "Actual_8", "Status_8",
-    "Planned_9", "Actual_9", "Status_9",
+    "Planned_8", "Actual_8", "Status_8", "Cargo_8",
+    "Planned_9", "Actual_9", "Status_9", "Received_Qty_9",
     "Planned_10", "Actual_10", "Status_10",
     "Cancelled"
   ];
@@ -49,6 +49,8 @@ class I2RService extends BaseSheetsService<I2R> {
     item.sample_pic_5 = get("sample_pic_5");
     item.sample_qty_5 = get("sample_qty_5");
     item.po_number_6 = get("po_number_6");
+    item.cargo_8 = get("cargo_8");
+    item.received_qty_9 = get("received_qty_9");
     return item as I2R;
   }
 
@@ -81,6 +83,8 @@ class I2RService extends BaseSheetsService<I2R> {
     set("sample_pic_5", item.sample_pic_5);
     set("sample_qty_5", item.sample_qty_5);
     set("po_number_6", item.po_number_6);
+    set("cargo_8", item.cargo_8);
+    set("received_qty_9", item.received_qty_9);
 
     return row;
   }

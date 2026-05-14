@@ -21,7 +21,7 @@ import {
   CompactTable,
   BirthdayCelebrationModal,
   UpcomingMeetingsPanel,
-  CompactPartyBirthdayCard
+  CompactPartyCelebrationCard
 } from "./DashboardComponents";
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
@@ -96,7 +96,7 @@ export default function Dashboard() {
             {!isLoading && data && <CompactOccasionCard birthdays={data.birthdays} anniversaries={data.anniversaries} />}
         </div>
         <div className="xl:col-span-3">
-            {!isLoading && data && <CompactPartyBirthdayCard partyBirthdays={data.partyBirthdays} />}
+            {!isLoading && data && <CompactPartyCelebrationCard partyBirthdays={data.partyBirthdays} partyAnniversaries={data.partyAnniversaries} />}
         </div>
       </div>
 
@@ -194,7 +194,7 @@ export default function Dashboard() {
         />
       </div>
 
-      <BirthdayCelebrationModal birthdays={data?.birthdays} anniversaries={data?.anniversaries} partyBirthdays={data?.partyBirthdays} currentUser={firstName} />
+      <BirthdayCelebrationModal birthdays={data?.birthdays} anniversaries={data?.anniversaries} partyBirthdays={data?.partyBirthdays} partyAnniversaries={data?.partyAnniversaries} currentUser={firstName} />
     </div>
   );
 }

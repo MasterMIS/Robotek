@@ -159,8 +159,9 @@ export function CompactOccasionCard({ birthdays = [], anniversaries = [] }: any)
   );
 }
 
-export function CompactPartyBirthdayCard({ partyBirthdays }: any) {
+export function CompactPartyCelebrationCard({ partyBirthdays = [], partyAnniversaries = [] }: any) {
   const [showAll, setShowAll] = useState(false);
+  const totalCount = (partyBirthdays?.length || 0) + (partyAnniversaries?.length || 0);
 
   return (
     <div className="bg-gradient-to-br from-amber-500 to-orange-600 p-4 rounded-[2rem] shadow-lg border border-white/10 relative overflow-hidden h-full flex flex-col justify-center text-white min-h-[140px]">
@@ -168,23 +169,23 @@ export function CompactPartyBirthdayCard({ partyBirthdays }: any) {
         <SparklesIcon className="w-16 h-16" />
       </div>
       <div className="relative z-10">
-        <p className="text-[8px] font-black text-white/50 uppercase tracking-widest mb-3">Party Birthdays</p>
+        <p className="text-[8px] font-black text-white/50 uppercase tracking-widest mb-3">Party Celebrations</p>
         
-        {partyBirthdays && partyBirthdays.length > 0 ? (
+        {totalCount > 0 ? (
           <div className="flex flex-col items-center gap-2">
             <div className="flex -space-x-3 overflow-hidden cursor-pointer" onClick={() => setShowAll(true)}>
-              {partyBirthdays.slice(0, 3).map((b: any, i: number) => (
-                <div key={i} className="inline-block h-10 w-10 rounded-full ring-2 ring-white/20 bg-orange-400 flex items-center justify-center text-sm font-black overflow-hidden bg-cover bg-center text-white">
+              {[...(partyBirthdays || []), ...(partyAnniversaries || [])].slice(0, 3).map((b: any, i: number) => (
+                <div key={i} className={`inline-block h-10 w-10 rounded-full ring-2 ring-white/20 flex items-center justify-center text-sm font-black overflow-hidden bg-cover bg-center text-white ${partyAnniversaries.some((pa: any) => pa.partyName === b.partyName) ? 'bg-rose-400' : 'bg-orange-400'}`}>
                   {b.partyName.charAt(0)}
                 </div>
               ))}
-              {partyBirthdays.length > 3 && (
+              {totalCount > 3 && (
                 <div className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-white/20 bg-gray-800 text-[10px] font-black text-white">
-                  +{partyBirthdays.length - 3}
+                  +{totalCount - 3}
                 </div>
               )}
             </div>
-            <button onClick={() => setShowAll(true)} className="text-[8px] font-black text-[#003875] uppercase tracking-widest hover:underline animate-pulse">Celebration List ({partyBirthdays.length})</button>
+            <button onClick={() => setShowAll(true)} className="text-[8px] font-black text-[#003875] uppercase tracking-widest hover:underline animate-pulse">Celebration List ({totalCount})</button>
           </div>
         ) : (
           <p className="text-[10px] font-bold text-white/70 uppercase">No occasions today</p>
@@ -215,7 +216,7 @@ export function CompactPartyBirthdayCard({ partyBirthdays }: any) {
                 </div>
                 <div className="p-6 max-h-[400px] overflow-y-auto space-y-4">
                     {partyBirthdays.map((b: any, i: number) => (
-                        <div key={i} className="flex items-center gap-4 p-3 rounded-2xl bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-white/5 shadow-sm">
+                        <div key={`pb-${i}`} className="flex items-center gap-4 p-3 rounded-2xl bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-white/5 shadow-sm">
                             <div className="w-12 h-12 rounded-xl bg-orange-400 flex items-center justify-center text-white text-xl font-black overflow-hidden bg-cover bg-center ring-4 ring-[#003875]/20">
                                 {b.partyName.charAt(0)}
                             </div>
@@ -224,13 +225,27 @@ export function CompactPartyBirthdayCard({ partyBirthdays }: any) {
                                 <p className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mt-1">{b.partyType}</p>
                             </div>
                             <div className="ml-auto">
-                                <span className="p-2 bg-amber-50 dark:bg-amber-950/30 text-amber-500 rounded-full flex items-center justify-center">🎉</span>
+                                <span className="p-2 bg-amber-50 dark:bg-amber-950/30 text-amber-500 rounded-full flex items-center justify-center" title="Party Birthday">🎂</span>
+                            </div>
+                        </div>
+                    ))}
+                    {partyAnniversaries.map((b: any, i: number) => (
+                        <div key={`pa-${i}`} className="flex items-center gap-4 p-3 rounded-2xl bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-white/5 shadow-sm">
+                            <div className="w-12 h-12 rounded-xl bg-rose-400 flex items-center justify-center text-white text-xl font-black overflow-hidden bg-cover bg-center ring-4 ring-[#003875]/20">
+                                {b.partyName.charAt(0)}
+                            </div>
+                            <div>
+                                <p className="font-black text-gray-900 dark:text-white uppercase leading-none">{b.partyName}</p>
+                                <p className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mt-1">{b.partyType}</p>
+                            </div>
+                            <div className="ml-auto">
+                                <span className="p-2 bg-rose-50 dark:bg-rose-950/30 text-rose-500 rounded-full flex items-center justify-center" title="Party Anniversary">💍</span>
                             </div>
                         </div>
                     ))}
                 </div>
                 <div className="p-4 bg-gray-50 dark:bg-navy-950/50 text-center border-t border-gray-100 dark:border-white/5">
-                   <p className="text-[10px] font-black text-[#003875] dark:text-[#FFD500] uppercase tracking-widest animate-pulse">Team Robotek Wishes A Happy Birthday!</p>
+                   <p className="text-[10px] font-black text-[#003875] dark:text-[#FFD500] uppercase tracking-widest animate-pulse">Team Robotek Wishes A Happy Day!</p>
                 </div>
             </motion.div>
           </motion.div>
@@ -507,20 +522,21 @@ export function CompactTable({ title, icon: Icon, data, columns, linkHref }: any
 
 // --- ROW 4 COMPONENTS (MODALS & OVERLAYS) ---
 
-export function BirthdayCelebrationModal({ birthdays = [], anniversaries = [], partyBirthdays = [], currentUser }: { birthdays?: any[], anniversaries?: any[], partyBirthdays?: any[], currentUser: string }) {
+export function BirthdayCelebrationModal({ birthdays = [], anniversaries = [], partyBirthdays = [], partyAnniversaries = [], currentUser }: { birthdays?: any[], anniversaries?: any[], partyBirthdays?: any[], partyAnniversaries?: any[], currentUser: string }) {
   const [show, setShow] = useState(false);
 
   const allCelebrants = [
     ...(birthdays || []).map((b: any) => ({ ...b, type: 'user', subType: 'birthday' })),
     ...(anniversaries || []).map((a: any) => ({ ...a, type: 'user', subType: 'anniversary' })),
-    ...(partyBirthdays || []).map((p: any) => ({ username: p.partyName, role: p.partyType, image: null, type: 'party', subType: 'birthday' }))
+    ...(partyBirthdays || []).map((p: any) => ({ username: p.partyName, role: p.partyType, image: null, type: 'party', subType: 'birthday' })),
+    ...(partyAnniversaries || []).map((p: any) => ({ username: p.partyName, role: p.partyType, image: null, type: 'party', subType: 'anniversary' }))
   ];
 
   useEffect(() => {
     if (allCelebrants.length > 0) {
       setShow(true);
     }
-  }, [birthdays, anniversaries, partyBirthdays]);
+  }, [birthdays, anniversaries, partyBirthdays, partyAnniversaries]);
 
   const handleClose = () => {
     setShow(false);

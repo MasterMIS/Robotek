@@ -7,7 +7,7 @@ const SHEET_NAME = "party_management";
 class PartyManagementService extends BaseSheetsService<PartyManagement> {
   protected spreadsheetId = GOOGLE_SHEET_ID;
   protected sheetName = SHEET_NAME;
-  protected range = "A:L";
+  protected range = "A:M";
   protected idColumnIndex = 0;
 
 
@@ -23,13 +23,14 @@ class PartyManagementService extends BaseSheetsService<PartyManagement> {
       firstOrderItems: row[7] || "",
       detailsAndInstructions: row[8] || "",
       remarks: row[9] || "",
-      filledBy: row[10] || "",
-      timestamp: row[11] || "",
+      anniversary: row[10] || "",
+      filledBy: row[11] || "",
+      timestamp: row[12] || "",
     };
   }
 
   mapItemToRow(p: PartyManagement): any[] {
-    const row: any[] = new Array(12).fill("");
+    const row: any[] = new Array(13).fill("");
     row[0] = p.id || Date.now().toString();
     row[1] = p.customerType || "";
     row[2] = p.partyName || "";
@@ -40,8 +41,9 @@ class PartyManagementService extends BaseSheetsService<PartyManagement> {
     row[7] = p.firstOrderItems || "";
     row[8] = p.detailsAndInstructions || "";
     row[9] = p.remarks || "";
-    row[10] = p.filledBy || "";
-    row[11] = p.timestamp || new Date().toISOString();
+    row[10] = p.anniversary || "";
+    row[11] = p.filledBy || "";
+    row[12] = p.timestamp || new Date().toISOString();
     return row;
   }
 }

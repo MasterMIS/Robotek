@@ -25,6 +25,8 @@ export interface I2R {
   sample_pic_5: string;
   sample_qty_5: string;
   po_number_6: string;
+  cargo_8: string;
+  received_qty_9: string;
 }
 
 export interface I2RStepConfig {

@@ -9,6 +9,7 @@ export interface PartyManagement {
   firstOrderItems: string;
   detailsAndInstructions: string;
   remarks: string;
+  anniversary: string;
   filledBy: string;
   timestamp: string;
 }

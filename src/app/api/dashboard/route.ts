@@ -175,6 +175,25 @@ export async function GET(req: NextRequest) {
       return false;
     });
 
+    const partyAnniversaries = parties.filter((p: any) => {
+      if (!p.anniversary) return false;
+      const raw = String(p.anniversary).trim();
+      const normalized = normalizeDateStr(raw);
+      if (normalized) {
+        const parts = normalized.split('-');
+        if (parts.length === 3 && parts[1] === tMM && parts[2] === tDD) return true;
+      }
+      try {
+        const parsed = new Date(raw);
+        if (!isNaN(parsed.getTime())) {
+          const pm = String(parsed.getMonth() + 1).padStart(2, '0');
+          const pd = String(parsed.getDate()).padStart(2, '0');
+          if (pm === tMM && pd === tDD) return true;
+        }
+      } catch { /* ignore */ }
+      return false;
+    });
+
     const openTickets = tickets
         .filter((t: any) => t.status !== 'Resolved' && t.status !== 'Closed')
         .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
@@ -259,6 +278,7 @@ export async function GET(req: NextRequest) {
       birthdays: birthdays.map((u: any) => ({ username: u.username, role: u.role_name, image: u.image_url })),
       anniversaries: anniversaries.map((u: any) => ({ username: u.username, role: u.role_name, image: u.image_url })),
       partyBirthdays: partyBirthdays.map((p: any) => ({ partyName: p.partyName, partyType: p.partyType })),
+      partyAnniversaries: partyAnniversaries.map((p: any) => ({ partyName: p.partyName, partyType: p.partyType })),
       openTickets: (isAdmin ? openTickets : openTickets.filter((t: any) => t.raised_by === username || t.solver_person === username)).slice(0, 15),
       recentLeaves: (isAdmin ? leaves : leaves.filter((l: any) => l.userName === username)).slice(0, 5),
       upcomingMeetings,

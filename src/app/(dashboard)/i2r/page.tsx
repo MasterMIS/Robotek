@@ -72,7 +72,7 @@ const EMPTY_FORM: Partial<I2R> = {
   planned_8: "", actual_8: "", status_8: "",
   planned_9: "", actual_9: "", status_9: "",
   planned_10: "", actual_10: "", status_10: "",
-  supplier_name_3: "", lead_time_acc_to_vendor_4: "", sample_pic_5: "", sample_qty_5: "", po_number_6: "",
+  supplier_name_3: "", lead_time_acc_to_vendor_4: "", sample_pic_5: "", sample_qty_5: "", po_number_6: "", cargo_8: "", received_qty_9: "",
 };
 
 function UserMultiCombobox({
@@ -215,6 +215,8 @@ export default function I2RPage() {
   const [bulkPOInputs, setBulkPOInputs] = useState<Record<string, string>>({});
   const [bulkSampleFiles, setBulkSampleFiles] = useState<Record<string, File>>({});
   const [bulkSampleQtyInputs, setBulkSampleQtyInputs] = useState<Record<string, string>>({});
+  const [bulkCargoInputs, setBulkCargoInputs] = useState<Record<string, string>>({});
+  const [bulkReceivedQtyInputs, setBulkReceivedQtyInputs] = useState<Record<string, string>>({});
 
   const [cancelTargetId, setCancelTargetId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<"active" | "cancelled">("active");
@@ -446,12 +448,12 @@ export default function I2RPage() {
   };
 
   const openBulkModal = () => {
-    const ts: Record<string, boolean> = {}; const ss: Record<string, string> = {}; const ls: Record<string, string> = {}; const ps: Record<string, string> = {}; const qs: Record<string, string> = {}; const os: Record<string, string> = {};
+    const ts: Record<string, boolean> = {}; const ss: Record<string, string> = {}; const ls: Record<string, string> = {}; const ps: Record<string, string> = {}; const qs: Record<string, string> = {}; const os: Record<string, string> = {}; const cs: Record<string, string> = {}; const rs: Record<string, string> = {};
     selectedIds.forEach(id => {
       const it = items.find(r => r.id === id); if (!it) return;
-      ts[id] = true; ss[id] = it.supplier_name_3 || ""; ls[id] = it.lead_time_acc_to_vendor_4 || ""; ps[id] = it.sample_pic_5 || ""; qs[id] = it.sample_qty_5 || ""; os[id] = it.po_number_6 || "";
+      ts[id] = true; ss[id] = it.supplier_name_3 || ""; ls[id] = it.lead_time_acc_to_vendor_4 || ""; ps[id] = it.sample_pic_5 || ""; qs[id] = it.sample_qty_5 || ""; os[id] = it.po_number_6 || ""; cs[id] = it.cargo_8 || ""; rs[id] = it.received_qty_9 || "";
     });
-    setBulkToggles(ts); setBulkSupplierInputs(ss); setBulkLeadTimeInputs(ls); setBulkSamplePicInputs(ps); setBulkSampleQtyInputs(qs); setBulkPOInputs(os);
+    setBulkToggles(ts); setBulkSupplierInputs(ss); setBulkLeadTimeInputs(ls); setBulkSamplePicInputs(ps); setBulkSampleQtyInputs(qs); setBulkPOInputs(os); setBulkCargoInputs(cs); setBulkReceivedQtyInputs(rs);
     setBulkSampleFiles({});
     setIsBulkModalOpen(true);
   };
@@ -491,6 +493,8 @@ export default function I2RPage() {
         upd.sample_qty_5 = bulkSampleQtyInputs[id];
       }
       if (n === 6) upd.po_number_6 = bulkPOInputs[id];
+      if (n === 8) upd.cargo_8 = bulkCargoInputs[id];
+      if (n === 9) upd.received_qty_9 = bulkReceivedQtyInputs[id];
       if (n < 10) upd[`planned_${n+1}`] = calculatePlannedDate(now, globalConfigs[n-1].tat || "24 Hrs");
       try { const r = await fetch("/api/i2r", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(upd) }); if (!r.ok) errors++; } catch { errors++; }
     }
@@ -501,7 +505,7 @@ export default function I2RPage() {
   const handleExport = () => {
     const headers = [
       "ID", "Indent Num", "Item Name", "Quantity", "Category", "Filled By", "Created At", "Updated At",
-      "Supplier (ST3)", "Lead Time (ST4)", "Sample Pic (ST5)", "Sample Qty (ST5)", "PO Number (ST6)",
+      "Supplier (ST3)", "Lead Time (ST4)", "Sample Pic (ST5)", "Sample Qty (ST5)", "PO Number (ST6)", "Cargo (ST8)", "Received Qty (ST9)",
       "Country (GRN)", "Total Received (GRN)", "Remaining Qty",
       ...I2R_STEP_SHORT.flatMap((s, i) => [`ST${i+1} Planned`, `ST${i+1} Actual`, `ST${i+1} Status`]),
       "Cancelled"
@@ -520,7 +524,7 @@ export default function I2RPage() {
       
       const row = [
         i.id, i.indend_num, i.item_name, i.quantity, i.category, i.filled_by, fmtCsvDt(i.created_at), fmtCsvDt(i.updated_at),
-        i.supplier_name_3, i.lead_time_acc_to_vendor_4, i.sample_pic_5, i.sample_qty_5, i.po_number_6,
+        i.supplier_name_3, i.lead_time_acc_to_vendor_4, i.sample_pic_5, i.sample_qty_5, i.po_number_6, i.cargo_8, i.received_qty_9,
         stats?.country || "—", stats?.totalRec || 0, rem,
         ...Array.from({length: 10}, (_, idx) => {
           const n = idx + 1;
@@ -587,6 +591,8 @@ export default function I2RPage() {
       if (startStep === 4) upd.lead_time_acc_to_vendor_4 = "";
       if (startStep === 5) { upd.sample_pic_5 = ""; upd.sample_qty_5 = ""; }
       if (startStep === 6) upd.po_number_6 = "";
+      if (startStep === 8) upd.cargo_8 = "";
+      if (startStep === 9) upd.received_qty_9 = "";
     } else {
       for (let s = startStep; s <= 10; s++) {
         upd[`actual_${s}`] = "";
@@ -596,6 +602,8 @@ export default function I2RPage() {
         if (s === 4) upd.lead_time_acc_to_vendor_4 = "";
         if (s === 5) { upd.sample_pic_5 = ""; upd.sample_qty_5 = ""; }
         if (s === 6) upd.po_number_6 = "";
+        if (s === 8) upd.cargo_8 = "";
+        if (s === 9) upd.received_qty_9 = "";
       }
     }
     upd.updated_at = now;
@@ -872,10 +880,10 @@ export default function I2RPage() {
                         </div>
 
                         {/* Card Bottom Grid */}
-                        <div className="grid grid-cols-6 gap-2 py-2 border-t border-slate-50 dark:border-navy-700 mt-1.5">
-                          <div className="space-y-0.5">
+                        <div className="grid grid-cols-9 gap-1.5 py-2 border-t border-slate-50 dark:border-navy-700 mt-1.5">
+                          <div className="col-span-2 space-y-0.5">
                             <div className="flex items-center gap-1.5 text-emerald-500 dark:text-emerald-400"><BuildingOfficeIcon className="w-3.5 h-3.5" /><p className="text-[9px] font-black uppercase tracking-widest">SUPPLIER</p></div>
-                            <p className="text-[13px] font-black text-slate-800 dark:text-white ml-5 truncate">{item.supplier_name_3 || "—"}</p>
+                            <p className="text-[13px] font-black text-slate-800 dark:text-white ml-5 line-clamp-1">{item.supplier_name_3 || "—"}</p>
                           </div>
                           <div className="space-y-0.5">
                             <div className="flex items-center gap-1.5 text-orange-400 dark:text-orange-300"><ClockIcon className="w-3.5 h-3.5" /><p className="text-[9px] font-black uppercase tracking-widest">LEAD TIME</p></div>
@@ -907,6 +915,16 @@ export default function I2RPage() {
                           <div className="space-y-0.5">
                             <div className="flex items-center gap-1.5 text-rose-500 dark:text-rose-400"><DocumentTextIcon className="w-3.5 h-3.5" /><p className="text-[9px] font-black uppercase tracking-widest">PO NO</p></div>
                             <p className="text-[13px] font-black text-slate-800 dark:text-white ml-5 truncate">{item.po_number_6 || "—"}</p>
+                          </div>
+
+                          <div className="space-y-0.5">
+                            <div className="flex items-center gap-1.5 text-indigo-500 dark:text-indigo-400"><CubeIcon className="w-3.5 h-3.5" /><p className="text-[9px] font-black uppercase tracking-widest">CARGO</p></div>
+                            <p className="text-[13px] font-black text-slate-800 dark:text-white ml-5 truncate">{item.cargo_8 || "—"}</p>
+                          </div>
+
+                          <div className="space-y-0.5">
+                            <div className="flex items-center gap-1.5 text-emerald-500 dark:text-emerald-400"><HashtagIcon className="w-3.5 h-3.5" /><p className="text-[9px] font-black uppercase tracking-widest">REC QTY</p></div>
+                            <p className="text-[13px] font-black text-slate-800 dark:text-white ml-5 truncate">{item.received_qty_9 || "—"}</p>
                           </div>
 
                           <div className="space-y-0.5">
@@ -997,6 +1015,8 @@ export default function I2RPage() {
                       <th className="p-3 whitespace-nowrap bg-blue-900/40 dark:bg-navy-900/50">LEAD TIME (ST-4)</th>
                       <th className="p-3 whitespace-nowrap bg-blue-900/40 dark:bg-navy-900/50">SAMPLE PIC (ST-5)</th>
                       <th className="p-3 whitespace-nowrap bg-blue-900/40 dark:bg-navy-900/50">PO NUMBER (ST-6)</th>
+                      <th className="p-3 whitespace-nowrap bg-blue-900/40 dark:bg-navy-900/50">CARGO (ST-8)</th>
+                      <th className="p-3 whitespace-nowrap bg-blue-900/40 dark:bg-navy-900/50">REC QTY (ST-9)</th>
                       <th className="p-3 whitespace-nowrap bg-emerald-900/40 dark:bg-emerald-900/50">COUNTRY</th>
                       <th className="p-3 whitespace-nowrap bg-emerald-900/40 dark:bg-emerald-900/50 text-center">GRN REC</th>
                       <th className="p-3 whitespace-nowrap bg-emerald-900/40 dark:bg-emerald-900/50 text-center">REMAINING</th>
@@ -1040,6 +1060,8 @@ export default function I2RPage() {
                           ) : <span className="text-slate-300 dark:text-navy-700 font-bold uppercase text-[9px]">NO PIC</span>}
                         </td>
                         <td className="p-3 font-black text-rose-600 dark:text-rose-400 uppercase">{it.po_number_6 || "—"}</td>
+                        <td className="p-3 font-black text-indigo-600 dark:text-indigo-400 uppercase">{it.cargo_8 || "—"}</td>
+                        <td className="p-3 font-black text-emerald-600 dark:text-emerald-400 uppercase">{it.received_qty_9 || "—"}</td>
                         {(() => {
                           const stats = getGRNStats(it.po_number_6 || "");
                           const rem = (parseFloat(it.quantity) || 0) - (stats?.totalRec || 0);
@@ -1223,7 +1245,7 @@ export default function I2RPage() {
                             <input type="text" value={bulkSampleQtyInputs[id]||""} onChange={e => setBulkSampleQtyInputs(p=>({...p,[id]:e.target.value}))} className="w-full px-4 py-2 bg-slate-50 dark:bg-navy-900 border border-slate-100 dark:border-navy-800 rounded-xl font-bold text-xs text-gray-900 dark:text-white outline-none focus:border-[#003875] dark:focus:border-[#FFD500]" placeholder="Qty..." />
                           </div>
                         </div>
-                      )}{n === 6 && (<div className="space-y-1"><label className="text-[9px] font-black uppercase text-slate-400 dark:text-navy-600 tracking-widest px-1">PO Number</label><input type="text" value={bulkPOInputs[id]||""} onChange={e => setBulkPOInputs(p=>({...p,[id]:e.target.value}))} className="w-full px-4 py-2 bg-slate-50 dark:bg-navy-900 border border-slate-100 dark:border-navy-800 rounded-xl font-bold text-xs text-gray-900 dark:text-white outline-none focus:border-[#003875] dark:focus:border-[#FFD500]" placeholder="Enter PO#..." /></div>)}{![3,4,5,6].includes(n) && (<p className="text-[10px] font-black text-slate-300 dark:text-navy-700 uppercase tracking-widest italic">Standard status update only</p>)}</div>)}</div>
+                      )}{n === 6 && (<div className="space-y-1"><label className="text-[9px] font-black uppercase text-slate-400 dark:text-navy-600 tracking-widest px-1">PO Number</label><input type="text" value={bulkPOInputs[id]||""} onChange={e => setBulkPOInputs(p=>({...p,[id]:e.target.value}))} className="w-full px-4 py-2 bg-slate-50 dark:bg-navy-900 border border-slate-100 dark:border-navy-800 rounded-xl font-bold text-xs text-gray-900 dark:text-white outline-none focus:border-[#003875] dark:focus:border-[#FFD500]" placeholder="Enter PO#..." /></div>)}{n === 8 && (<div className="space-y-1"><label className="text-[9px] font-black uppercase text-slate-400 dark:text-navy-600 tracking-widest px-1">Cargo</label><select value={bulkCargoInputs[id]||""} onChange={e => setBulkCargoInputs(p=>({...p,[id]:e.target.value}))} className="w-full px-4 py-2 bg-slate-50 dark:bg-navy-900 border border-slate-100 dark:border-navy-800 rounded-xl font-bold text-xs text-gray-900 dark:text-white outline-none focus:border-[#003875] dark:focus:border-[#FFD500]"><option value="">Select Cargo</option><option value="Navy">Navy</option><option value="By Air">By Air</option><option value="Neelkanth">Neelkanth</option><option value="Self">Self</option></select></div>)}{n === 9 && (<div className="space-y-1"><label className="text-[9px] font-black uppercase text-slate-400 dark:text-navy-600 tracking-widest px-1">Received Qty</label><input type="text" value={bulkReceivedQtyInputs[id]||""} onChange={e => setBulkReceivedQtyInputs(p=>({...p,[id]:e.target.value}))} className="w-full px-4 py-2 bg-slate-50 dark:bg-navy-900 border border-slate-100 dark:border-navy-800 rounded-xl font-bold text-xs text-gray-900 dark:text-white outline-none focus:border-[#003875] dark:focus:border-[#FFD500]" placeholder="Enter qty..." /></div>)}{![3,4,5,6,8,9].includes(n) && (<p className="text-[10px] font-black text-slate-300 dark:text-navy-700 uppercase tracking-widest italic">Standard status update only</p>)}</div>)}</div>
                       <div className="flex items-center gap-3 pr-2"><p className={`text-[9px] font-black uppercase tracking-widest ${t ? 'text-[#003875] dark:text-[#FFD500]' : 'text-slate-300 dark:text-navy-800'}`}>{t ? 'INCLUDE' : 'SKIP'}</p><button onClick={() => setBulkToggles(p => ({...p, [id]: !t}))} className={`w-10 h-5 rounded-full relative p-0.5 transition-all shadow-inner ${t ? "bg-[#003875] dark:bg-[#FFD500]" : "bg-slate-200 dark:bg-navy-700"}`}><div className={`w-4 h-4 bg-white dark:bg-navy-900 rounded-full shadow-md transition-all transform duration-300 ${t ? "translate-x-5" : "translate-x-0"}`} /></button></div>
                     </div>
                   </div>

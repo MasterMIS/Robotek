@@ -349,6 +349,7 @@ export default function PartyFormModal({
     firstOrderItems: "",
     detailsAndInstructions: "",
     remarks: "",
+    anniversary: "",
     filledBy: "",
     timestamp: "",
   };
@@ -541,11 +542,18 @@ export default function PartyFormModal({
             )}
           </div>
 
-          <div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <PremiumDatePicker 
               label="Date of Birth"
               value={formData.dateOfBirth || ""} 
               onChange={(val) => setFormData({ ...formData, dateOfBirth: val })}
+              allowPast={true}
+              allowSundays={true}
+            />
+            <PremiumDatePicker 
+              label="Anniversary"
+              value={formData.anniversary || ""} 
+              onChange={(val) => setFormData({ ...formData, anniversary: val })}
               allowPast={true}
               allowSundays={true}
             />
