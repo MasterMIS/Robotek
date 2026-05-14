@@ -21,16 +21,30 @@ export async function GET(req: NextRequest) {
       );
     }
 
+    // Sort by ID descending (latest first)
+    filtered.sort((a, b) => {
+      const aN = parseInt(String(a.id));
+      const bN = parseInt(String(b.id));
+      if (!isNaN(aN) && !isNaN(bN)) return bN - aN;
+      return String(b.id || "").localeCompare(String(a.id || ""));
+    });
+
     const total = filtered.length;
-    const start = (page - 1) * limit;
-    const paginatedData = filtered.slice(start, start + limit);
+    
+    let responseData;
+    if (limit === -1) {
+      responseData = filtered;
+    } else {
+      const start = (page - 1) * limit;
+      responseData = filtered.slice(start, start + limit);
+    }
 
     return NextResponse.json({
-      data: paginatedData,
+      data: responseData,
       total,
       page,
       limit,
-      totalPages: Math.ceil(total / limit)
+      totalPages: limit === -1 ? 1 : Math.ceil(total / limit)
     });
   } catch (error: any) {
     console.error("GET Parties Error:", error);
@@ -41,16 +55,28 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const id = body.id || `PARTY-${Date.now()}`;
+    const allParties = await getParties();
+    
+    // Generate sequential ID
+    let newId = "1";
+    if (allParties.length > 0) {
+      const ids = allParties.map(p => parseInt(String(p.id))).filter(id => !isNaN(id));
+      if (ids.length > 0) {
+        newId = (Math.max(...ids) + 1).toString();
+      } else {
+        newId = (allParties.length + 1).toString();
+      }
+    }
+    
     const timestamp = new Date().toISOString();
 
     await addParty({
       ...body,
-      id,
+      id: newId,
       timestamp: body.timestamp || timestamp
     });
 
-    return NextResponse.json({ message: "Party added successfully" });
+    return NextResponse.json({ message: "Party added successfully", id: newId });
   } catch (error: any) {
     console.error("POST Party Error:", error);
     return NextResponse.json({ error: error.message || "Invalid request" }, { status: 400 });

@@ -13,10 +13,13 @@ export interface User {
   late_long?: string; // Stringified JSON array of LocationEntry
   image_url?: string;
   dob?: string;
+  anniversary_date?: string;
+  doj?: string;
   office?: string;
   designation?: string;
   department?: string;
   last_active?: string;
+  isActive?: boolean;
   permissions?: string[];
   locations?: LocationEntry[]; // Added for UI convenience
 }

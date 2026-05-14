@@ -26,6 +26,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         const user = await getUserByUsernameOrEmail(credentials.username as string);
 
         if (user && user.password === credentials.password) {
+          if (user.isActive === false) return null;
           const { password, ...userWithoutPassword } = user;
           return userWithoutPassword;
         }

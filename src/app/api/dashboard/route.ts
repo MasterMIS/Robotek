@@ -148,6 +148,14 @@ export async function GET(req: NextRequest) {
       return m === tMM && d === tDD;
     });
 
+    const anniversaries = users.filter((u: any) => {
+      if (!u.anniversary_date) return false;
+      const normalized = normalizeDateStr(u.anniversary_date);
+      if (!normalized) return false;
+      const [y, m, d] = normalized.split('-');
+      return m === tMM && d === tDD;
+    });
+
     const partyBirthdays = parties.filter((p: any) => {
       if (!p.dateOfBirth) return false;
       const raw = String(p.dateOfBirth).trim();
@@ -249,6 +257,7 @@ export async function GET(req: NextRequest) {
       },
       leaveDates: Array.from(new Set(leaveDates)),
       birthdays: birthdays.map((u: any) => ({ username: u.username, role: u.role_name, image: u.image_url })),
+      anniversaries: anniversaries.map((u: any) => ({ username: u.username, role: u.role_name, image: u.image_url })),
       partyBirthdays: partyBirthdays.map((p: any) => ({ partyName: p.partyName, partyType: p.partyType })),
       openTickets: (isAdmin ? openTickets : openTickets.filter((t: any) => t.raised_by === username || t.solver_person === username)).slice(0, 15),
       recentLeaves: (isAdmin ? leaves : leaves.filter((l: any) => l.userName === username)).slice(0, 5),
@@ -263,3 +272,4 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
 }
+

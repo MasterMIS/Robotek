@@ -29,21 +29,25 @@ async function getSheetsClient() {
 export async function getUsers(): Promise<User[]> {
   try {
     const sheets = await getSheetsClient();
-    const [userRes, permRes] = await Promise.all([
-      sheets.spreadsheets.values.get({
-        spreadsheetId: GOOGLE_SHEET_ID,
-        range: `${SHEET_NAME}!A:M`,
-      }),
-      getPagePermissions()
-    ]);
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId: GOOGLE_SHEET_ID,
+      range: `${SHEET_NAME}!A:P`,
+    });
 
-    const rows = userRes.data.values;
+    const rows = response.data.values;
     if (!rows || rows.length <= 1) return [];
-
-    const allPermissions = permRes;
 
     return rows.slice(1).map((row) => {
       const id = row[0] || "";
+      let permissions: string[] = [];
+      try {
+        if (row[15]) {
+          permissions = JSON.parse(row[15]);
+        }
+      } catch (e) {
+        console.error("Error parsing permissions for user", id, e);
+      }
+
       return {
         id,
         username: row[1] || "",
@@ -54,11 +58,14 @@ export async function getUsers(): Promise<User[]> {
         late_long: row[6] || "",
         image_url: row[7] || "",
         dob: row[8] || "",
+        anniversary_date: row[12] || "",
+        doj: row[13] || "",
         office: row[9] || "",
         designation: row[10] || "",
         department: row[11] || "",
-        last_active: row[12] || "",
-        permissions: allPermissions[id] || [],
+        last_active: "", // Placeholder or remove if not needed
+        isActive: row[14] === "TRUE" || row[14] === true || row[14] === undefined || row[14] === "", // Now O column (index 14)
+        permissions: permissions,
       };
     });
   } catch (error) {
@@ -72,7 +79,7 @@ export async function addUser(user: User): Promise<boolean> {
     const sheets = await getSheetsClient();
     await sheets.spreadsheets.values.append({
       spreadsheetId: GOOGLE_SHEET_ID,
-      range: `${SHEET_NAME}!A:M`,
+      range: `${SHEET_NAME}!A:P`,
       valueInputOption: "USER_ENTERED",
       requestBody: {
         values: [[
@@ -88,7 +95,10 @@ export async function addUser(user: User): Promise<boolean> {
           user.office || "",
           user.designation || "",
           user.department || "",
-          (user as any).last_active || ""
+          user.anniversary_date || "",
+          user.doj || "",
+          user.isActive !== false ? "TRUE" : "FALSE", // Index 14 (O)
+          JSON.stringify(user.permissions || []) // Index 15 (P)
         ]],
       },
     });
@@ -115,7 +125,7 @@ export async function updateUser(id: string, user: User): Promise<boolean> {
 
     await sheets.spreadsheets.values.update({
       spreadsheetId: GOOGLE_SHEET_ID,
-      range: `${SHEET_NAME}!A${rowIndex + 1}:M${rowIndex + 1}`,
+      range: `${SHEET_NAME}!A${rowIndex + 1}:P${rowIndex + 1}`,
       valueInputOption: "USER_ENTERED",
       requestBody: {
         values: [[
@@ -131,7 +141,10 @@ export async function updateUser(id: string, user: User): Promise<boolean> {
           user.office || "",
           user.designation || "",
           user.department || "",
-          (user as any).last_active || ""
+          user.anniversary_date || "",
+          user.doj || "",
+          user.isActive !== false ? "TRUE" : "FALSE", // Index 14 (O)
+          JSON.stringify(user.permissions || []) // Index 15 (P)
         ]],
       },
     });
@@ -155,30 +168,31 @@ export async function getPagePermissions(): Promise<Record<string, string[]>> {
   }
 
   try {
-    console.log("[API CALL] Fetching Permissions...");
+    console.log("[API CALL] Fetching Permissions from User sheet...");
     const sheets = await getSheetsClient();
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: GOOGLE_SHEET_ID,
-      range: `${VISIBILITY_SHEET_NAME}!A:Z`,
+      range: `${SHEET_NAME}!A:P`,
     });
 
     const rows = response.data.values;
     if (!rows || rows.length <= 1) return {};
 
-    const headers = rows[0]; // [ "User ID", "users", "delegations", ... ]
     const permissions: Record<string, string[]> = {};
 
     for (let i = 1; i < rows.length; i++) {
         const row = rows[i];
         const userId = row[0];
-        const userPerms: string[] = [];
+        let userPerms: string[] = [];
         
-        // Skip Index 0 (User ID) and Index 1 (User Name)
-        for (let j = 2; j < headers.length; j++) {
-            if (row[j] === "TRUE" || row[j] === "true") {
-                userPerms.push(headers[j]);
-            }
+        try {
+          if (row[15]) {
+            userPerms = JSON.parse(row[15]);
+          }
+        } catch (e) {
+          console.error("Error parsing permissions for user", userId, e);
         }
+        
         permissions[userId] = userPerms;
     }
 
@@ -194,74 +208,26 @@ export async function updateUserPermissions(userId: string, username: string, us
   try {
     const sheets = await getSheetsClient();
     
-    // 1. Get current data
+    // 1. Get current data from user sheet
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: GOOGLE_SHEET_ID,
-      range: `${VISIBILITY_SHEET_NAME}!A:Z`,
+      range: `${SHEET_NAME}!A:P`,
     });
 
     let rows = response.data.values || [];
-    
-    // 2. Initialize headers if empty
-    if (rows.length === 0) {
-      const initialHeaders = ["User ID", "User Name", ...allPageIds];
-      await sheets.spreadsheets.values.update({
-        spreadsheetId: GOOGLE_SHEET_ID,
-        range: `${VISIBILITY_SHEET_NAME}!A1`,
-        valueInputOption: "USER_ENTERED",
-        requestBody: { values: [initialHeaders] },
-      });
-      rows = [initialHeaders];
-    }
+    if (rows.length === 0) return false;
 
-    let headers = rows[0];
-    
-    // 3. Ensure allPageIds are in headers
-    let headersChanged = false;
-    const lowerHeaders = headers.map(h => h.toLowerCase());
-    for (const pageId of allPageIds) {
-      if (!lowerHeaders.includes(pageId.toLowerCase())) {
-        headers.push(pageId);
-        headersChanged = true;
-      }
-    }
-    
-    if (headersChanged) {
-      await sheets.spreadsheets.values.update({
-        spreadsheetId: GOOGLE_SHEET_ID,
-        range: `${VISIBILITY_SHEET_NAME}!A1`,
-        valueInputOption: "USER_ENTERED",
-        requestBody: { values: [headers] },
-      });
-    }
-
-    // 4. Find user row
+    // 2. Find user row
     const rowIndex = rows.findIndex(row => row[0] === userId);
+    if (rowIndex === -1) return false;
     
-    // 5. Construct user row
-    const newRow = [userId, username];
-    for (let i = 2; i < headers.length; i++) {
-        const pageId = headers[i];
-        newRow.push(userPermissions.includes(pageId) ? "TRUE" : "FALSE");
-    }
-
-    if (rowIndex === -1) {
-      // Append new user
-      await sheets.spreadsheets.values.append({
-        spreadsheetId: GOOGLE_SHEET_ID,
-        range: `${VISIBILITY_SHEET_NAME}!A:A`,
-        valueInputOption: "USER_ENTERED",
-        requestBody: { values: [newRow] },
-      });
-    } else {
-      // Update existing user
-      await sheets.spreadsheets.values.update({
-        spreadsheetId: GOOGLE_SHEET_ID,
-        range: `${VISIBILITY_SHEET_NAME}!A${rowIndex + 1}`,
-        valueInputOption: "USER_ENTERED",
-        requestBody: { values: [newRow] },
-      });
-    }
+    // 3. Update the permissions column (P is index 15)
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: GOOGLE_SHEET_ID,
+      range: `${SHEET_NAME}!P${rowIndex + 1}`,
+      valueInputOption: "USER_ENTERED",
+      requestBody: { values: [[JSON.stringify(userPermissions)]] },
+    });
 
     globalCache.delete("page_permissions");
     return true;
@@ -323,34 +289,6 @@ export async function deleteUser(id: string): Promise<boolean> {
       }
     ];
 
-    // Find row in visibility sheet and delete if exists
-    if (visibilitySheetId !== undefined) {
-      try {
-        const visResponse = await sheets.spreadsheets.values.get({
-          spreadsheetId: GOOGLE_SHEET_ID,
-          range: `${VISIBILITY_SHEET_NAME}!A:A`,
-        });
-        const visRows = visResponse.data.values;
-        if (visRows) {
-          const visRowIndex = visRows.findIndex(row => row[0] === id);
-          if (visRowIndex !== -1) {
-            requests.push({
-              deleteDimension: {
-                range: {
-                  sheetId: visibilitySheetId,
-                  dimension: "ROWS",
-                  startIndex: visRowIndex,
-                  endIndex: visRowIndex + 1
-                }
-              }
-            });
-          }
-        }
-      } catch (e) {
-        console.error("Error fetching visibility rows for deletion:", e);
-      }
-    }
-
     await sheets.spreadsheets.batchUpdate({
       spreadsheetId: GOOGLE_SHEET_ID,
       requestBody: {
@@ -370,7 +308,7 @@ export async function getUserByUsernameOrEmail(identifier: string): Promise<User
     const sheets = await getSheetsClient();
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: GOOGLE_SHEET_ID,
-      range: `${SHEET_NAME}!A:J`,
+      range: `${SHEET_NAME}!A:P`,
     });
 
     const rows = response.data.values;
@@ -397,17 +335,19 @@ export async function getUserByUsernameOrEmail(identifier: string): Promise<User
       office: userRow[9],
       designation: userRow[10],
       department: userRow[11],
-      last_active: userRow[12] || "",
+      anniversary_date: userRow[12],
+      doj: userRow[13],
+      last_active: "",
+      isActive: userRow[14] === "TRUE" || userRow[14] === true || userRow[14] === undefined || userRow[14] === "",
+      permissions: (() => {
+        try {
+          return userRow[15] ? JSON.parse(userRow[15]) : [];
+        } catch (e) {
+          return [];
+        }
+      })()
     } as any;
 
-    // Fetch and attach permissions for this user
-    try {
-      const allPermissions = await getPagePermissions();
-      user.permissions = allPermissions[user.id] || [];
-    } catch (permError) {
-      console.error("Error fetching permissions for login:", permError);
-      user.permissions = [];
-    }
 
     return user;
   } catch (error) {

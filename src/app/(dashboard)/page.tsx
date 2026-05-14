@@ -14,7 +14,7 @@ import {
 import { 
   CompactWelcome,
   CompactScore,
-  CompactBirthdayCard,
+  CompactOccasionCard,
   StatusTile,
   QuickActionSquare,
   HighightedCalendar,
@@ -93,7 +93,7 @@ export default function Dashboard() {
             {!isLoading && data && <CompactScore score={data.score.onTimeRate} total={data.score.completed} label="ACCURACY GAP" isNegative={true} />}
         </div>
         <div className="xl:col-span-3">
-            {!isLoading && data && <CompactBirthdayCard birthdays={data.birthdays} />}
+            {!isLoading && data && <CompactOccasionCard birthdays={data.birthdays} anniversaries={data.anniversaries} />}
         </div>
         <div className="xl:col-span-3">
             {!isLoading && data && <CompactPartyBirthdayCard partyBirthdays={data.partyBirthdays} />}
@@ -194,7 +194,7 @@ export default function Dashboard() {
         />
       </div>
 
-      <BirthdayCelebrationModal birthdays={data?.birthdays} partyBirthdays={data?.partyBirthdays} currentUser={firstName} />
+      <BirthdayCelebrationModal birthdays={data?.birthdays} anniversaries={data?.anniversaries} partyBirthdays={data?.partyBirthdays} currentUser={firstName} />
     </div>
   );
 }

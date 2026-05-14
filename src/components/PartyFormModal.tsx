@@ -380,7 +380,6 @@ export default function PartyFormModal({
       } else {
         setFormData({
           ...emptyForm,
-          id: Date.now().toString(),
           filledBy: salePersonName || "",
           timestamp: new Date().toISOString()
         });

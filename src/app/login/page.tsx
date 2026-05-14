@@ -35,7 +35,20 @@ export default function LoginPage() {
       });
 
       if (result?.error) {
-        setError("Invalid username/email or password");
+        // If login fails, check if it's because the user is inactive
+        try {
+          const statusRes = await fetch(`/api/users/status?identifier=${encodeURIComponent(identifier)}`);
+          const statusData = await statusRes.json();
+          
+          if (statusData.exists && statusData.isActive === false) {
+            setError("Now you are not an active user for this company. If it's wrong, then contact administration.");
+          } else {
+            setError("Invalid username/email or password");
+          }
+        } catch (e) {
+          // Fallback if status check fails
+          setError("Invalid username/email or password");
+        }
       } else {
         router.push("/");
         router.refresh();

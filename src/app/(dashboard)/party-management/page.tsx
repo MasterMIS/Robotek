@@ -159,32 +159,74 @@ export default function PartyManagementPage() {
   };
 
   // ─── Export ───────────────────────────────────────────────────────────────────
-  const handleExport = () => {
-    const headers = ["ID", "Timestamp", "Customer Type", "Party Name", "Date of Birth", "Party Type", "Sales Funnel Unique Num", "Sale Person Name", "Add following items with First order :", "Details and Instructions :", "Remarks", "Filled By"];
-    const rows = sortedParties.map((p) => [
-      p.id, 
-      p.timestamp ? new Date(p.timestamp).toLocaleString("en-GB", { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true }) : "",
-      p.customerType, 
-      p.partyName, 
-      p.dateOfBirth,
-      p.partyType, 
-      p.salesFunnelUniqueNum, 
-      p.salePersonName, 
-      p.firstOrderItems, 
-      p.detailsAndInstructions, 
-      p.remarks, 
-      p.filledBy
-    ]);
-    const csvContent = [headers.join(","), ...rows.map((r) => r.map((v) => `"${v}"`).join(","))].join("\n");
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.setAttribute("href", url);
-    link.setAttribute("download", `party_management_export_${new Date().toISOString().split("T")[0]}.csv`);
-    link.style.visibility = "hidden";
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  const handleExport = async () => {
+    try {
+      setActionStatus("loading");
+      setActionMessage("Preparing export data...");
+      setIsStatusModalOpen(true);
+
+      // Fetch all filtered data
+      const res = await fetch(`/api/party-management?limit=-1&search=${debouncedSearch}`);
+      const result = await res.json();
+      
+      if (!res.ok) throw new Error(result.error || "Failed to fetch data for export");
+      
+      const allData: PartyManagement[] = result.data || [];
+      
+      // Apply current sorting if any
+      const exportData = [...allData].sort((a, b) => {
+        if (!sortConfig) {
+          const aN = parseInt(String(a.id));
+          const bN = parseInt(String(b.id));
+          if (!isNaN(aN) && !isNaN(bN)) return bN - aN;
+          return 0;
+        }
+        
+        const { key, direction } = sortConfig;
+        let aV = a[key] || ""; let bV = b[key] || "";
+        if (key === "id") { 
+          const aN = parseInt(String(aV)); 
+          const bN = parseInt(String(bV)); 
+          if (!isNaN(aN) && !isNaN(bN)) return direction === "asc" ? aN - bN : bN - aN; 
+        }
+        if (aV < bV) return direction === "asc" ? -1 : 1;
+        if (aV > bV) return direction === "asc" ? 1 : -1;
+        return 0;
+      });
+
+      const headers = ["ID", "Timestamp", "Customer Type", "Party Name", "Date of Birth", "Party Type", "Sales Funnel Unique Num", "Sale Person Name", "Add following items with First order :", "Details and Instructions :", "Remarks", "Filled By"];
+      const rows = exportData.map((p) => [
+        p.id, 
+        p.timestamp ? new Date(p.timestamp).toLocaleString("en-GB", { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true }) : "",
+        p.customerType, 
+        p.partyName, 
+        p.dateOfBirth,
+        p.partyType, 
+        p.salesFunnelUniqueNum, 
+        p.salePersonName, 
+        p.firstOrderItems, 
+        p.detailsAndInstructions, 
+        p.remarks, 
+        p.filledBy
+      ]);
+      const csvContent = [headers.join(","), ...rows.map((r) => r.map((v) => `"${v}"`).join(","))].join("\n");
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.setAttribute("href", url);
+      link.setAttribute("download", `party_management_export_${new Date().toISOString().split("T")[0]}.csv`);
+      link.style.visibility = "hidden";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      setIsStatusModalOpen(false);
+    } catch (error) {
+      console.error("Export error:", error);
+      setActionStatus("error");
+      setActionMessage("Failed to export data");
+      setTimeout(() => setIsStatusModalOpen(false), 2000);
+    }
   };
 
   // Client-side filtering is now minimized because search happens on server
@@ -290,6 +332,7 @@ export default function PartyManagementPage() {
           <table className="w-full text-left border-collapse table-auto">
             <thead>
               <tr className="bg-[#003875] dark:bg-navy-950 text-white dark:text-slate-200">
+                <th onClick={() => handleSort("id")} className="px-3 md:px-4 py-3 text-[9px] md:text-[10px] font-black uppercase tracking-widest cursor-pointer hover:bg-white/5 transition-colors w-16 md:w-20"><div className="flex items-center">ID <SortIcon column="id" /></div></th>
                 <th onClick={() => handleSort("partyName")} className="px-3 md:px-4 py-3 text-[9px] md:text-[10px] font-black uppercase tracking-widest cursor-pointer hover:bg-white/5 transition-colors"><div className="flex items-center">Party Name <SortIcon column="partyName" /></div></th>
                 <th onClick={() => handleSort("dateOfBirth")} className="px-3 md:px-4 py-3 text-[9px] md:text-[10px] font-black uppercase tracking-widest cursor-pointer hover:bg-white/5 transition-colors"><div className="flex items-center">DOB <SortIcon column="dateOfBirth" /></div></th>
                 <th onClick={() => handleSort("customerType")} className="px-3 md:px-4 py-3 text-[9px] md:text-[10px] font-black uppercase tracking-widest cursor-pointer hover:bg-white/5 transition-colors hidden sm:table-cell"><div className="flex items-center">Customer Type <SortIcon column="customerType" /></div></th>
@@ -311,6 +354,9 @@ export default function PartyManagementPage() {
               ) : (
                 paginatedParties.map((party) => (
                   <tr key={party.id} className="hover:bg-orange-50/10 border-b-2 border-gray-200 dark:border-white/10 last:border-0 transition-colors group">
+                    <td className="px-3 md:px-4 py-3">
+                      <span className="font-black text-[11px] md:text-xs text-gray-900 dark:text-white leading-tight">{party.id}</span>
+                    </td>
                     <td className="px-3 md:px-4 py-3">
                       <div className="min-w-0">
                         <p className="font-black text-[11px] md:text-xs text-gray-900 dark:text-white leading-tight truncate">{party.partyName || "Unnamed Party"}</p>

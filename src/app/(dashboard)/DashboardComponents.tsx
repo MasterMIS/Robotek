@@ -13,7 +13,8 @@ import {
   ChevronRightIcon,
   PlusIcon,
   SparklesIcon,
-  XMarkIcon
+  XMarkIcon,
+  HeartIcon
 } from "@heroicons/react/24/outline";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
@@ -62,8 +63,9 @@ export function CompactScore({ score, total, label, isNegative = false }: any) {
     );
 }
 
-export function CompactBirthdayCard({ birthdays }: any) {
+export function CompactOccasionCard({ birthdays = [], anniversaries = [] }: any) {
   const [showAll, setShowAll] = useState(false);
+  const totalCount = (birthdays?.length || 0) + (anniversaries?.length || 0);
 
   return (
     <div className="bg-gradient-to-br from-purple-600 to-indigo-700 p-4 rounded-[2rem] shadow-lg border border-white/10 relative overflow-hidden h-full flex flex-col justify-center text-white min-h-[140px]">
@@ -71,23 +73,23 @@ export function CompactBirthdayCard({ birthdays }: any) {
         <CakeIcon className="w-16 h-16" />
       </div>
       <div className="relative z-10">
-        <p className="text-[8px] font-black text-white/50 uppercase tracking-widest mb-3">Today's Birthdays</p>
+        <p className="text-[8px] font-black text-white/50 uppercase tracking-widest mb-3">Today's Occasions</p>
         
-        {birthdays && birthdays.length > 0 ? (
+        {totalCount > 0 ? (
           <div className="flex flex-col items-center gap-2">
             <div className="flex -space-x-3 overflow-hidden cursor-pointer" onClick={() => setShowAll(true)}>
-              {birthdays.slice(0, 3).map((b: any, i: number) => (
+              {[...(birthdays || []), ...(anniversaries || [])].slice(0, 3).map((b: any, i: number) => (
                 <div key={i} className="inline-block h-10 w-10 rounded-full ring-2 ring-white/20 bg-indigo-500 flex items-center justify-center text-sm font-black overflow-hidden bg-cover bg-center" style={b.image ? {backgroundImage: `url(${b.image})`} : {}}>
                   {!b.image && b.username.charAt(0)}
                 </div>
               ))}
-              {birthdays.length > 3 && (
+              {totalCount > 3 && (
                 <div className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-white/20 bg-gray-800 text-[10px] font-black text-white">
-                  +{birthdays.length - 3}
+                  +{totalCount - 3}
                 </div>
               )}
             </div>
-            <button onClick={() => setShowAll(true)} className="text-[8px] font-black text-[#FFD500] uppercase tracking-widest hover:underline animate-pulse">Celebration List ({birthdays.length})</button>
+            <button onClick={() => setShowAll(true)} className="text-[8px] font-black text-[#FFD500] uppercase tracking-widest hover:underline animate-pulse">Celebration List ({totalCount})</button>
           </div>
         ) : (
           <p className="text-[10px] font-bold text-white/70 uppercase">No occasions today</p>
@@ -109,7 +111,7 @@ export function CompactBirthdayCard({ birthdays }: any) {
             >
                 <div className="bg-gradient-to-r from-purple-600 to-indigo-700 p-6 flex justify-between items-center text-white">
                     <div className="flex items-center gap-3">
-                        <CakeIcon className="w-8 h-8 animate-bounce" />
+                        <SparklesIcon className="w-8 h-8 animate-bounce" />
                         <h3 className="text-xl font-black uppercase tracking-tighter">Celebrants Today!</h3>
                     </div>
                     <button onClick={() => setShowAll(false)} className="p-2 hover:bg-white/10 rounded-full transition-colors">
@@ -118,7 +120,7 @@ export function CompactBirthdayCard({ birthdays }: any) {
                 </div>
                 <div className="p-6 max-h-[400px] overflow-y-auto space-y-4">
                     {birthdays.map((b: any, i: number) => (
-                        <div key={i} className="flex items-center gap-4 p-3 rounded-2xl bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-white/5 shadow-sm">
+                        <div key={`b-${i}`} className="flex items-center gap-4 p-3 rounded-2xl bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-white/5 shadow-sm">
                             <div className="w-12 h-12 rounded-xl bg-indigo-500 flex items-center justify-center text-white text-xl font-black overflow-hidden bg-cover bg-center ring-4 ring-[#FFD500]/20" style={b.image ? {backgroundImage: `url(${b.image})`} : {}}>
                                 {!b.image && b.username.charAt(0)}
                             </div>
@@ -127,13 +129,27 @@ export function CompactBirthdayCard({ birthdays }: any) {
                                 <p className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mt-1">{b.role}</p>
                             </div>
                             <div className="ml-auto">
-                                <span className="p-2 bg-pink-50 dark:bg-pink-950/30 text-pink-500 rounded-full flex items-center justify-center">🎂</span>
+                                <span className="p-2 bg-pink-50 dark:bg-pink-950/30 text-pink-500 rounded-full flex items-center justify-center" title="Birthday">🎂</span>
+                            </div>
+                        </div>
+                    ))}
+                    {anniversaries.map((b: any, i: number) => (
+                        <div key={`a-${i}`} className="flex items-center gap-4 p-3 rounded-2xl bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-white/5 shadow-sm">
+                            <div className="w-12 h-12 rounded-xl bg-rose-500 flex items-center justify-center text-white text-xl font-black overflow-hidden bg-cover bg-center ring-4 ring-[#FFD500]/20" style={b.image ? {backgroundImage: `url(${b.image})`} : {}}>
+                                {!b.image && b.username.charAt(0)}
+                            </div>
+                            <div>
+                                <p className="font-black text-gray-900 dark:text-white uppercase leading-none">{b.username}</p>
+                                <p className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mt-1">{b.role}</p>
+                            </div>
+                            <div className="ml-auto">
+                                <span className="p-2 bg-rose-50 dark:bg-rose-950/30 text-rose-500 rounded-full flex items-center justify-center" title="Work Anniversary">💍</span>
                             </div>
                         </div>
                     ))}
                 </div>
                 <div className="p-4 bg-gray-50 dark:bg-navy-950/50 text-center border-t border-gray-100 dark:border-white/5">
-                   <p className="text-[10px] font-black text-[#003875] dark:text-[#FFD500] uppercase tracking-widest animate-pulse">Team Robotek Wishes You A Happy Birthday!</p>
+                   <p className="text-[10px] font-black text-[#003875] dark:text-[#FFD500] uppercase tracking-widest animate-pulse">Team Robotek Wishes You A Great Day!</p>
                 </div>
             </motion.div>
           </motion.div>
@@ -491,25 +507,27 @@ export function CompactTable({ title, icon: Icon, data, columns, linkHref }: any
 
 // --- ROW 4 COMPONENTS (MODALS & OVERLAYS) ---
 
-export function BirthdayCelebrationModal({ birthdays, partyBirthdays, currentUser }: { birthdays: any[], partyBirthdays?: any[], currentUser: string }) {
+export function BirthdayCelebrationModal({ birthdays = [], anniversaries = [], partyBirthdays = [], currentUser }: { birthdays?: any[], anniversaries?: any[], partyBirthdays?: any[], currentUser: string }) {
   const [show, setShow] = useState(false);
 
   const allCelebrants = [
-    ...(birthdays || []).map((b: any) => ({ ...b, type: 'user' })),
-    ...(partyBirthdays || []).map((p: any) => ({ username: p.partyName, role: p.partyType, image: null, type: 'party' }))
+    ...(birthdays || []).map((b: any) => ({ ...b, type: 'user', subType: 'birthday' })),
+    ...(anniversaries || []).map((a: any) => ({ ...a, type: 'user', subType: 'anniversary' })),
+    ...(partyBirthdays || []).map((p: any) => ({ username: p.partyName, role: p.partyType, image: null, type: 'party', subType: 'birthday' }))
   ];
 
   useEffect(() => {
     if (allCelebrants.length > 0) {
       setShow(true);
     }
-  }, [birthdays, partyBirthdays]);
+  }, [birthdays, anniversaries, partyBirthdays]);
 
   const handleClose = () => {
     setShow(false);
   };
 
   const isMyBirthday = birthdays?.some((b: any) => b.username === currentUser);
+  const isMyAnniversary = anniversaries?.some((a: any) => a.username === currentUser);
 
   return (
     <AnimatePresence>
@@ -537,11 +555,11 @@ export function BirthdayCelebrationModal({ birthdays, partyBirthdays, currentUse
                          rotate: [0, Math.random() * 1080 - 540] 
                       }}
                       transition={{ 
-                        duration: 3.5 + Math.random() * 3, 
-                        ease: "easeOut", 
-                        delay: Math.random() * 1.5, 
-                        repeat: Infinity, 
-                        repeatDelay: Math.random() * 2 
+                         duration: 3.5 + Math.random() * 3, 
+                         ease: "easeOut", 
+                         delay: Math.random() * 1.5, 
+                         repeat: Infinity, 
+                         repeatDelay: Math.random() * 2 
                       }}
                       className="absolute bottom-0 text-5xl md:text-7xl select-none"
                     >
@@ -568,9 +586,9 @@ export function BirthdayCelebrationModal({ birthdays, partyBirthdays, currentUse
                       transition={{ duration: 3, repeat: Infinity, delay: i * 0.2, ease: "easeInOut" }}
                     >
                        <div className="absolute inset-0 bg-[#FFD500] blur-3xl opacity-20 rounded-full"></div>
-                       {/* Avatar: orange tint for party, indigo for users */}
+                       {/* Avatar: orange tint for party, indigo for users, rose for anniversary */}
                        <div 
-                         className={`w-24 h-24 md:w-36 md:h-36 rounded-full border-[3px] border-[#FFD500] shadow-[0_0_40px_rgba(255,213,0,0.4)] flex items-center justify-center text-white text-4xl md:text-5xl font-black overflow-hidden bg-cover bg-center z-10 ${b.type === 'party' ? 'bg-orange-500' : 'bg-indigo-500'}`}
+                         className={`w-24 h-24 md:w-36 md:h-36 rounded-full border-[3px] border-[#FFD500] shadow-[0_0_40px_rgba(255,213,0,0.4)] flex items-center justify-center text-white text-4xl md:text-5xl font-black overflow-hidden bg-cover bg-center z-10 ${b.type === 'party' ? 'bg-orange-500' : (b.subType === 'anniversary' ? 'bg-rose-500' : 'bg-indigo-500')}`}
                          style={b.image ? {backgroundImage: `url(${b.image})`} : {}}
                        >
                             {!b.image && b.username.charAt(0)}
@@ -578,28 +596,32 @@ export function BirthdayCelebrationModal({ birthdays, partyBirthdays, currentUse
                        <div className="mt-3 text-xs md:text-sm font-black text-[#FFD500] uppercase tracking-widest px-4 py-1.5 bg-black/40 backdrop-blur-md rounded-full shadow-xl border border-[#FFD500]/30 z-10 w-full truncate max-w-[140px]">
                            {b.username}
                        </div>
-                       {/* Party badge */}
-                       {b.type === 'party' && (
-                         <div className="mt-1 text-[8px] font-black text-orange-300 uppercase tracking-widest px-2 py-0.5 bg-orange-500/20 rounded-full border border-orange-400/30">
-                           Party 🎉
-                         </div>
-                       )}
+                       {/* Badge */}
+                       <div className={`mt-1 text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full border ${
+                         b.type === 'party' 
+                           ? 'text-orange-300 bg-orange-500/20 border-orange-400/30' 
+                           : (b.subType === 'anniversary' 
+                               ? 'text-rose-300 bg-rose-500/20 border-rose-400/30' 
+                               : 'text-indigo-300 bg-indigo-500/20 border-indigo-400/30')
+                       }`}>
+                         {b.type === 'party' ? 'Party 🎉' : (b.subType === 'anniversary' ? 'Anniversary 💍' : 'Birthday 🎂')}
+                       </div>
                     </motion.div>
                  ))}
               </div>
 
               <h2 className="text-3xl md:text-5xl font-black text-white uppercase tracking-tighter mb-3 drop-shadow-[0_4px_10px_rgba(0,0,0,0.8)] whitespace-pre-line leading-tight">
-                 {isMyBirthday 
-                    ? (allCelebrants.length > 1 ? `HAPPY BIRTHDAY,\n${currentUser} & TEAM!` : `HAPPY BIRTHDAY,\n${currentUser}!`)
+                 {isMyBirthday || isMyAnniversary
+                    ? (allCelebrants.length > 1 ? `CONGRATULATIONS,\n${currentUser} & TEAM!` : `CONGRATULATIONS,\n${currentUser}!`)
                     : "LET'S CELEBRATE! 🎉"}
               </h2>
               
               <p className="text-[#FFD500] font-black text-sm md:text-xl uppercase tracking-widest mb-8 drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] leading-relaxed max-w-lg mx-auto px-4 whitespace-pre-line">
-                 {isMyBirthday 
+                 {isMyBirthday || isMyAnniversary
                    ? (allCelebrants.length > 1 
-                      ? "Wishing you an amazing year ahead! 🎈💥\n\nAlso, don't forget to wish the other celebrants a great day too! ✨🎊" 
-                      : "Wishing you an amazing year ahead from the entire Robotek Team! 🎈💥")
-                   : `It's time to wish ${allCelebrants.length} celebrant${allCelebrants.length > 1 ? 's' : ''} a very happy birthday today! ✨🎊`}
+                      ? "Wishing you an amazing day ahead! 🎈💥\n\nAlso, don't forget to wish the other celebrants a great day too! ✨🎊" 
+                      : "Wishing you an amazing day ahead from the entire Robotek Team! 🎈💥")
+                   : `It's time to wish ${allCelebrants.length} celebrant${allCelebrants.length > 1 ? 's' : ''} a very happy day today! ✨🎊`}
               </p>
 
               <button 

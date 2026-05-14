@@ -34,7 +34,7 @@ export default function UsersPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
-  const [sortConfig, setSortConfig] = useState<{ key: keyof User; direction: 'asc' | 'desc' } | null>(null);
+  const [sortConfig, setSortConfig] = useState<{ key: keyof User; direction: 'asc' | 'desc' } | null>({ key: 'id', direction: 'desc' });
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
@@ -50,10 +50,13 @@ export default function UsersPage() {
     late_long: "",
     image_url: "",
     dob: "",
+    anniversary_date: "",
+    doj: "",
     office: "",
     designation: "",
     department: "",
     locations: [{ name: "Main", coords: "" }],
+    isActive: true
   });
 
   const [dropdowns, setDropdowns] = useState<{ departments: string[], designations: string[] }>({
@@ -145,6 +148,14 @@ export default function UsersPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Check for duplicate Employee Code
+    const duplicateUser = users.find(u => u.id === formData.id && u.id !== editingUser?.id);
+    if (duplicateUser) {
+      alert(`The Employee Code "${formData.id}" is already used by ${duplicateUser.username}. Please use a unique code.`);
+      return;
+    }
+    
     
     // Show loading
     setActionStatus('loading');
@@ -189,10 +200,13 @@ export default function UsersPage() {
           late_long: "",
           image_url: "",
           dob: "",
+          anniversary_date: "",
+          doj: "",
           office: "",
           designation: "",
           department: "",
           locations: [{ name: "Main", coords: "" }],
+          isActive: true
         });
         fetchUsers();
       } else {
@@ -291,7 +305,9 @@ export default function UsersPage() {
     setFormData({
       ...user,
       locations: parsedLocations,
-      dob: formatDatePickerValue(user.dob || "")
+      dob: formatDatePickerValue(user.dob || ""),
+      anniversary_date: formatDatePickerValue(user.anniversary_date || ""),
+      doj: formatDatePickerValue(user.doj || "")
     });
     setImagePreview(user.image_url || null);
     setIsModalOpen(true);
@@ -324,7 +340,7 @@ export default function UsersPage() {
   };
 
   const handleExport = () => {
-    const headers = ["Employee Code", "Username", "Email", "Phone", "Role", "DOB", "Office", "Designation", "Department", "Coordinates"];
+    const headers = ["Employee Code", "Username", "Email", "Phone", "Role", "DOB", "Anniversary Date", "Date of Joining", "Office", "Designation", "Department", "Coordinates"];
     const rows = sortedUsers.map(u => [
       u.id,
       u.username,
@@ -332,6 +348,8 @@ export default function UsersPage() {
       u.phone || "",
       u.role_name || "USER",
       u.dob || "",
+      u.anniversary_date || "",
+      u.doj || "",
       u.office || "",
       u.designation || "",
       u.department || "",
@@ -435,12 +453,19 @@ export default function UsersPage() {
     let aValue = a[key] || "";
     let bValue = b[key] || "";
     
-    // Numeric sort for ID
+    // Alphanumeric sort for ID (e.g., RE080, RA001)
     if (key === 'id') {
-      const aNum = parseInt(String(aValue));
-      const bNum = parseInt(String(bValue));
-      if (!isNaN(aNum) && !isNaN(bNum)) {
-        return direction === 'asc' ? aNum - bNum : bNum - aNum;
+      const aStr = String(aValue);
+      const bStr = String(bValue);
+      const aNumMatch = aStr.match(/\d+/);
+      const bNumMatch = bStr.match(/\d+/);
+      
+      if (aNumMatch && bNumMatch) {
+        const aNum = parseInt(aNumMatch[0], 10);
+        const bNum = parseInt(bNumMatch[0], 10);
+        if (aNum !== bNum) {
+          return direction === 'asc' ? aNum - bNum : bNum - aNum;
+        }
       }
     }
 
@@ -526,6 +551,7 @@ export default function UsersPage() {
                   phone: "",
                   role_name: "",
                   locations: [{ name: "Main", coords: "" }],
+                  isActive: true
                 });
                 setIsModalOpen(true);
               }}
@@ -622,8 +648,17 @@ export default function UsersPage() {
                 <th onClick={() => handleSort('dob')} className="px-3 md:px-4 py-3 text-[9px] md:text-[10px] font-black uppercase tracking-widest cursor-pointer hover:bg-white/5 transition-colors hidden lg:table-cell">
                   <div className="flex items-center">DOB <SortIcon column="dob" /></div>
                 </th>
+                <th onClick={() => handleSort('anniversary_date')} className="px-3 md:px-4 py-3 text-[9px] md:text-[10px] font-black uppercase tracking-widest cursor-pointer hover:bg-white/5 transition-colors hidden lg:table-cell">
+                  <div className="flex items-center">Anniv. <SortIcon column="anniversary_date" /></div>
+                </th>
+                <th onClick={() => handleSort('doj')} className="px-3 md:px-4 py-3 text-[9px] md:text-[10px] font-black uppercase tracking-widest cursor-pointer hover:bg-white/5 transition-colors hidden lg:table-cell">
+                  <div className="flex items-center">DOJ <SortIcon column="doj" /></div>
+                </th>
                 <th onClick={() => handleSort('late_long')} className="px-3 md:px-4 py-3 text-[9px] md:text-[10px] font-black uppercase tracking-widest cursor-pointer hover:bg-white/5 transition-colors hidden xl:table-cell">
                   <div className="flex items-center">Site Locations <SortIcon column="late_long" /></div>
+                </th>
+                <th onClick={() => handleSort('isActive')} className="px-3 md:px-4 py-3 text-[9px] md:text-[10px] font-black uppercase tracking-widest cursor-pointer hover:bg-white/5 transition-colors">
+                  <div className="flex items-center">Status <SortIcon column="isActive" /></div>
                 </th>
                 <th className="px-3 md:px-4 py-3 text-[9px] md:text-[10px] font-black uppercase tracking-widest text-right">Actions</th>
               </tr>
@@ -695,6 +730,12 @@ export default function UsersPage() {
                   <td className="px-3 md:px-4 py-3 hidden lg:table-cell">
                     <p className="text-[11px] md:text-xs font-bold text-gray-600 dark:text-slate-300">{user.dob || "—"}</p>
                   </td>
+                  <td className="px-3 md:px-4 py-3 hidden lg:table-cell">
+                    <p className="text-[11px] md:text-xs font-bold text-gray-600 dark:text-slate-300">{user.anniversary_date || "—"}</p>
+                  </td>
+                  <td className="px-3 md:px-4 py-3 hidden lg:table-cell">
+                    <p className="text-[11px] md:text-xs font-bold text-gray-600 dark:text-slate-300">{user.doj || "—"}</p>
+                  </td>
                   <td className="px-3 md:px-4 py-3 hidden xl:table-cell">
                     <div className="flex flex-col gap-1">
                       {(() => {
@@ -714,6 +755,15 @@ export default function UsersPage() {
                         }
                       })()}
                     </div>
+                  </td>
+                  <td className="px-3 md:px-4 py-3">
+                    <span className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest border ${
+                      user.isActive 
+                        ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' 
+                        : 'bg-rose-500/10 text-rose-500 border-rose-500/20'
+                    }`}>
+                      {user.isActive ? 'Active' : 'Inactive'}
+                    </span>
                   </td>
                   <td className="px-3 md:px-4 py-2 text-right">
                     <div className="flex items-center justify-end gap-1">
@@ -746,13 +796,13 @@ export default function UsersPage() {
           style={{ borderColor: 'var(--panel-border)', backgroundColor: 'var(--panel-card)' }}
           className="rounded-2xl border overflow-hidden shadow-sm transition-all duration-500"
         >
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto overflow-y-auto max-h-[70vh] no-scrollbar">
             <table className="w-full text-left border-collapse table-auto">
               <thead>
                 <tr className="bg-[#003875] dark:bg-navy-950 text-white dark:text-slate-200">
-                  <th className="px-3 md:px-6 py-3 md:py-4 text-[9px] md:text-[10px] font-black uppercase tracking-widest border-r border-white/10 w-40 md:w-64 sticky left-0 bg-[#003875] dark:bg-navy-950 z-10">User Name</th>
+                  <th className="px-3 md:px-6 py-3 md:py-4 text-[9px] md:text-[10px] font-black uppercase tracking-widest border-r border-white/10 w-40 md:w-64 sticky left-0 top-0 bg-[#003875] dark:bg-navy-950 z-30">User Name</th>
                   {navigation.map(page => (
-                    <th key={page.id} className="px-3 md:px-6 py-3 md:py-4 text-[9px] md:text-[10px] font-black uppercase tracking-widest text-center whitespace-nowrap">
+                    <th key={page.id} className="px-3 md:px-6 py-3 md:py-4 text-[9px] md:text-[10px] font-black uppercase tracking-widest text-center whitespace-nowrap sticky top-0 bg-[#003875] dark:bg-navy-950 z-20">
                       {page.name}
                     </th>
                   ))}
@@ -787,13 +837,13 @@ export default function UsersPage() {
                       <td key={page.id} className="px-6 py-4 text-center">
                         <button
                           onClick={() => handlePermissionToggle(user.id, page.id)}
-                          className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all transform active:scale-90 ${
+                          className={`w-7 h-7 rounded-full flex items-center justify-center transition-all transform active:scale-90 ${
                             user.permissions?.includes(page.id)
                               ? "bg-emerald-500 text-white shadow-lg shadow-emerald-500/30 rotate-0"
                               : "bg-gray-100 dark:bg-white/5 text-gray-300 dark:text-gray-700 hover:bg-gray-200 dark:hover:bg-white/10"
                           }`}
                         >
-                          <CheckIcon className={`w-5 h-5 transition-all duration-300 ${
+                          <CheckIcon className={`w-3.5 h-3.5 transition-all duration-300 ${
                             user.permissions?.includes(page.id) ? "scale-100 opacity-100" : "scale-75 opacity-50"
                           }`} />
                         </button>
@@ -886,10 +936,25 @@ export default function UsersPage() {
                     type="text"
                     value={formData.id}
                     onChange={(e) => setFormData({ ...formData, id: e.target.value })}
-                    className="w-full bg-[#FFFBF0] dark:bg-zinc-900 px-3 py-1.5 rounded-lg border border-orange-100 dark:border-zinc-800 focus:border-[#FFD500] focus:bg-white dark:focus:bg-zinc-900 outline-none font-bold text-xs text-gray-800 dark:text-zinc-100 transition-all shadow-sm"
+                    className={`w-full bg-[#FFFBF0] dark:bg-zinc-900 px-3 py-1.5 rounded-lg border focus:border-[#FFD500] focus:bg-white dark:focus:bg-zinc-900 outline-none font-bold text-xs text-gray-800 dark:text-zinc-100 transition-all shadow-sm ${
+                      users.some(u => u.id === formData.id && u.id !== editingUser?.id) 
+                        ? 'border-red-500' 
+                        : 'border-orange-100 dark:border-zinc-800'
+                    }`}
                     placeholder="Enter Unique Emp Code"
                     required
                   />
+                  {(() => {
+                    const existingUser = users.find(u => u.id === formData.id && u.id !== editingUser?.id);
+                    if (existingUser) {
+                      return (
+                        <p className="mt-1 text-[10px] font-black text-red-500 uppercase tracking-widest animate-pulse">
+                          ⚠️ This ID is already used by {existingUser.username}
+                        </p>
+                      );
+                    }
+                    return null;
+                  })()}
                 </div>
 
                 <div>
@@ -942,7 +1007,42 @@ export default function UsersPage() {
                   label="Date of Birth"
                   value={formData.dob || ""}
                   onChange={(val) => setFormData({ ...formData, dob: val })}
+                  allowPast={true}
                 />
+
+                <PremiumDatePicker 
+                  label="Anniversary Date"
+                  value={formData.anniversary_date || ""}
+                  onChange={(val) => setFormData({ ...formData, anniversary_date: val })}
+                  allowPast={true}
+                />
+
+                <PremiumDatePicker 
+                  label="Date Of Joining"
+                  value={formData.doj || ""}
+                  onChange={(val) => setFormData({ ...formData, doj: val })}
+                  allowPast={true}
+                />
+
+                <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-navy-950/50 rounded-xl border border-gray-100 dark:border-navy-800/50">
+                  <div>
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">Account Status</label>
+                    <p className="text-[9px] font-bold text-gray-500 uppercase">Active / Inactive</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setFormData({ ...formData, isActive: !formData.isActive })}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
+                      formData.isActive ? 'bg-emerald-500' : 'bg-gray-300 dark:bg-navy-700'
+                    }`}
+                  >
+                    <span
+                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                        formData.isActive ? 'translate-x-6' : 'translate-x-1'
+                      }`}
+                    />
+                  </button>
+                </div>
 
                 {/* Section: Professional Details */}
                 <div className="md:col-span-2 mt-2">
