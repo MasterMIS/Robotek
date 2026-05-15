@@ -3,6 +3,7 @@
 import React, { useState, useMemo } from "react";
 import useSWR from "swr";
 import { motion, AnimatePresence } from "framer-motion";
+import CooReport from "@/components/CooReport";
 import {
   ChartBarIcon,
   ShoppingBagIcon,
@@ -44,8 +45,13 @@ import {
   XAxis,
   YAxis,
   CartesianGrid,
-  LabelList
+  LabelList,
+  ComposedChart,
+  Bar,
+  BarChart,
+  ReferenceLine,
 } from "recharts";
+
 
 const fetcher = (url: string) => fetch(url).then(res => res.json());
 
@@ -109,10 +115,20 @@ export default function MetrixPage() {
   const [forecastTarget, setForecastTarget] = useState("");
   const [granularity, setGranularity] = useState("month");
 
-  const { data, error, isLoading } = useSWR(
+  const { data, error, isLoading, isValidating } = useSWR(
     `/api/metrix?startDate=${dateRange.startDate}&endDate=${dateRange.endDate}&targetDate=${targetDate}&granularity=${granularity}`,
-    fetcher
+    fetcher,
+    { keepPreviousData: true }
   );
+
+  const { data: cooData, isLoading: cooLoading } = useSWR(
+    activeTab === "forecast"
+      ? `/api/metrix/coo?startDate=${dateRange.startDate}&endDate=${dateRange.endDate}&granularity=${granularity}`
+      : null,
+    fetcher,
+    { keepPreviousData: true, refreshInterval: 300000 }
+  );
+
 
   const [roadmapSearchQuery, setRoadmapSearchQuery] = useState("");
   const [extraRoadmapOrders, setExtraRoadmapOrders] = useState<any[]>([]);
@@ -169,10 +185,16 @@ export default function MetrixPage() {
       <div className="w-full space-y-3">
 
         {/* Header */}
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-white dark:bg-navy-800 p-3 rounded-2xl border border-gray-100 dark:border-white/5">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-white dark:bg-navy-800 p-3 rounded-2xl border border-gray-100 dark:border-white/5 relative">
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-[#003875] dark:bg-[#FFD500] rounded-xl">
+            <div className="p-2 bg-[#003875] dark:bg-[#FFD500] rounded-xl relative">
               <ChartBarIcon className="w-5 h-5 text-white dark:text-[#003875]" />
+              {isValidating && (
+                <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                </span>
+              )}
             </div>
             <div>
               <h1 className="text-xl font-black text-gray-900 dark:text-white uppercase tracking-tighter leading-none">O2D <span className="text-[#003875] dark:text-[#FFD500] italic">ENGINE</span></h1>
@@ -182,18 +204,29 @@ export default function MetrixPage() {
 
           <div className="flex flex-wrap items-center gap-3">
             <div className="flex items-center gap-1 bg-gray-50 dark:bg-navy-900 p-1 rounded-xl">
-              {["overview", "roadmap", "parties", "categories", "forecast"].map(tab => (
+              {([
+                { key: "overview", label: "Overview" },
+                { key: "roadmap", label: "Roadmap" },
+                { key: "parties", label: "Parties" },
+                { key: "categories", label: "Categories" },
+                { key: "forecast", label: "⚡ COO Report" },
+              ]).map(({ key, label }) => (
                 <button
-                  key={tab}
-                  onClick={() => { setActiveTab(tab); setDrillDownParty(null); setDrillDownCategory(null); }}
-                  className={`px-4 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${activeTab === tab
-                      ? 'bg-white dark:bg-navy-800 text-[#003875] dark:text-[#FFD500] shadow-sm'
-                      : 'text-gray-400 hover:text-gray-600'
+                  key={key}
+                  onClick={() => { setActiveTab(key); setDrillDownParty(null); setDrillDownCategory(null); }}
+                  className={`px-4 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${activeTab === key
+                      ? key === "forecast"
+                        ? 'bg-[#003875] text-white shadow-sm'
+                        : 'bg-white dark:bg-navy-800 text-[#003875] dark:text-[#FFD500] shadow-sm'
+                      : key === "forecast"
+                        ? 'text-[#003875] dark:text-amber-400 hover:text-[#003875]'
+                        : 'text-gray-400 hover:text-gray-600'
                     }`}
                 >
-                  {tab}
+                  {label}
                 </button>
               ))}
+
             </div>
 
             <div className="flex items-center gap-1 bg-gray-50 dark:bg-navy-900 p-1 rounded-xl border border-gray-100 dark:border-white/5">
@@ -256,7 +289,7 @@ export default function MetrixPage() {
                     <CompactTile label="OTD Count" value={data.stats.otdCount} icon={CheckBadgeIcon} color="bg-emerald-600" />
                     <CompactTile label="Delayed" value={data.stats.delayedCount} icon={ExclamationCircleIcon} color="bg-rose-600" />
                     <CompactTile label="Pending" value={data.stats.pending} icon={ArrowPathIcon} color="bg-amber-600" />
-                    <CompactTile label="Dispatching" value={data.stats.toDispatch} icon={TruckIcon} color="bg-indigo-600" />
+                    <CompactTile label="OTD %" value={`${data.stats.otdRate}%`} icon={ChartBarIcon} color="bg-indigo-600" />
                   </div>
 
                   {/* Delivery Performance (OTD %) */}
@@ -264,13 +297,13 @@ export default function MetrixPage() {
                     <h3 className="text-[10px] font-black text-gray-900 dark:text-white uppercase tracking-widest mb-6">Delivery Performance (OTD %)</h3>
                     <div className="h-[230px]">
                       <ResponsiveContainer width="100%" height="100%">
-                        <LineChart data={data.trends} margin={{ top: 20, right: 30, left: 0, bottom: 20 }}>
+                        <LineChart data={data.trends} margin={{ top: 20, right: 30, left: 0, bottom: 0 }}>
                           <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
-                          <XAxis dataKey="month" axisLine={{ stroke: '#f0f0f0' }} tick={{ fontSize: 8, fontWeight: 900, fill: '#9ca3af' }} />
+                          <XAxis dataKey="month" axisLine={{ stroke: '#f0f0f0' }} tick={{ fontSize: 11, fontWeight: 900, fill: '#9ca3af' }} angle={-45} textAnchor="end" height={60} />
                           <YAxis hide domain={[0, 100]} />
                           <Tooltip contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }} />
                           <Line type="monotone" dataKey="otdRate" stroke="#003875" strokeWidth={3} dot={{ r: 3, fill: "#003875" }}>
-                            <LabelList dataKey="otdRate" position="top" offset={10} style={{ fontSize: 9, fontWeight: 900, fill: '#003875' }} formatter={(val: any) => `${val}%`} />
+                            <LabelList dataKey="otdRate" position="top" offset={10} style={{ fontSize: 12, fontWeight: 900, fill: '#003875' }} />
                           </Line>
                         </LineChart>
                       </ResponsiveContainer>
@@ -312,9 +345,9 @@ export default function MetrixPage() {
                           <div key={i} className="flex items-center justify-between p-2 bg-gray-50 dark:bg-white/5 rounded-xl border border-transparent">
                             <div className="flex items-center gap-2 overflow-hidden">
                               <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: colors[i % colors.length] }} />
-                              <p className="text-[8px] font-black uppercase text-gray-900 dark:text-white truncate">{p.party}</p>
+                              <p className="text-[11px] font-black uppercase text-gray-900 dark:text-white truncate">{p.party}</p>
                             </div>
-                            <p className="text-[8px] font-black text-[#003875] dark:text-[#FFD500]">{p.count}</p>
+                            <p className="text-[11px] font-black text-[#003875] dark:text-[#FFD500]">{p.count}</p>
                           </div>
                         ))}
                       </div>
@@ -352,9 +385,9 @@ export default function MetrixPage() {
                           <div key={i} className="flex items-center justify-between p-2 bg-gray-50 dark:bg-white/5 rounded-xl border border-transparent">
                             <div className="flex items-center gap-2 overflow-hidden">
                               <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: colors[i % colors.length] }} />
-                              <p className="text-[8px] font-black uppercase text-gray-900 dark:text-white truncate">{c.category}</p>
+                              <p className="text-[11px] font-black uppercase text-gray-900 dark:text-white truncate">{c.category}</p>
                             </div>
-                            <p className="text-[8px] font-black text-[#003875] dark:text-[#FFD500]">{(c.amount / 1000).toFixed(0)}k</p>
+                            <p className="text-[11px] font-black text-[#003875] dark:text-[#FFD500]">{(c.amount / 1000).toFixed(0)}k</p>
                           </div>
                         ))}
                       </div>
@@ -370,13 +403,13 @@ export default function MetrixPage() {
                   <h3 className="text-[10px] font-black text-gray-900 dark:text-white uppercase tracking-[0.2em] mb-8 border-b pb-4 border-gray-50 dark:border-white/5">Monthly Revenue Flow (Lacs)</h3>
                   <div className="h-[250px]">
                     <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={data.trends} margin={{ top: 20, right: 30, left: 10, bottom: 20 }}>
+                      <LineChart data={data.trends} margin={{ top: 20, right: 30, left: 10, bottom: 0 }}>
                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
-                        <XAxis dataKey="month" axisLine={{ stroke: '#f0f0f0' }} tick={{ fontSize: 8, fontWeight: 900, fill: '#9ca3af' }} />
-                        <YAxis axisLine={{ stroke: '#f0f0f0' }} tick={{ fontSize: 8, fontWeight: 900, fill: '#9ca3af' }} tickFormatter={(val) => `${(val / 100000).toFixed(1)}L`} />
+                        <XAxis dataKey="month" axisLine={{ stroke: '#f0f0f0' }} tick={{ fontSize: 11, fontWeight: 900, fill: '#9ca3af' }} angle={-45} textAnchor="end" height={60} />
+                        <YAxis axisLine={{ stroke: '#f0f0f0' }} tick={{ fontSize: 11, fontWeight: 900, fill: '#9ca3af' }} tickFormatter={(val) => `${(val / 100000).toFixed(1)}L`} />
                         <Tooltip contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }} />
                         <Line type="monotone" dataKey="amount" stroke="#10B981" strokeWidth={4} dot={{ r: 4, fill: "#10B981" }}>
-                          <LabelList dataKey="amount" position="top" offset={12} style={{ fontSize: 10, fontWeight: 900, fill: '#10B981' }} formatter={(val: any) => `${(val / 100000).toFixed(1)}L`} />
+                          <LabelList dataKey="amount" position="top" offset={12} style={{ fontSize: 12, fontWeight: 900, fill: '#10B981' }} formatter={(val: any) => `${(val / 100000).toFixed(1)}L`} />
                         </Line>
                       </LineChart>
                     </ResponsiveContainer>
@@ -388,13 +421,13 @@ export default function MetrixPage() {
                   <h3 className="text-[10px] font-black text-gray-900 dark:text-white uppercase tracking-[0.2em] mb-8 border-b pb-4 border-gray-50 dark:border-white/5">Monthly Order Velocity</h3>
                   <div className="h-[250px]">
                     <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={data.trends} margin={{ top: 20, right: 30, left: 10, bottom: 20 }}>
+                      <LineChart data={data.trends} margin={{ top: 20, right: 30, left: 10, bottom: 0 }}>
                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
-                        <XAxis dataKey="month" axisLine={{ stroke: '#f0f0f0' }} tick={{ fontSize: 8, fontWeight: 900, fill: '#9ca3af' }} />
-                        <YAxis axisLine={{ stroke: '#f0f0f0' }} tick={{ fontSize: 8, fontWeight: 900, fill: '#9ca3af' }} />
+                        <XAxis dataKey="month" axisLine={{ stroke: '#f0f0f0' }} tick={{ fontSize: 11, fontWeight: 900, fill: '#9ca3af' }} angle={-45} textAnchor="end" height={60} />
+                        <YAxis axisLine={{ stroke: '#f0f0f0' }} tick={{ fontSize: 11, fontWeight: 900, fill: '#9ca3af' }} />
                         <Tooltip contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }} />
                         <Line type="monotone" dataKey="count" stroke="#003875" strokeWidth={4} dot={{ r: 4, fill: "#003875" }}>
-                          <LabelList dataKey="count" position="top" offset={12} style={{ fontSize: 10, fontWeight: 900, fill: '#003875' }} />
+                          <LabelList dataKey="count" position="top" offset={12} style={{ fontSize: 12, fontWeight: 900, fill: '#003875' }} />
                         </Line>
                       </LineChart>
                     </ResponsiveContainer>
@@ -521,23 +554,26 @@ export default function MetrixPage() {
                           </div>
                         </div>
                         <ResponsiveContainer width="100%" height="100%">
-                          <LineChart data={drillDownParty.history} margin={{ top: 20, right: 30, left: 40, bottom: 40 }}>
+                          <LineChart data={drillDownParty.history} margin={{ top: 20, right: 30, left: 40, bottom: 10 }}>
                             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
                             <XAxis
                               dataKey="displayDate"
                               axisLine={false}
                               tickLine={false}
-                              tick={{ fontSize: 8, fontWeight: 900, fill: '#9ca3af' }}
+                              tick={{ fontSize: 11, fontWeight: 900, fill: '#9ca3af' }}
                               dy={5}
+                              angle={-45}
+                              textAnchor="end"
+                              height={60}
                             />
                             <YAxis yAxisId="left" hide />
                             <YAxis yAxisId="right" orientation="right" hide />
                             <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }} />
                             <Line yAxisId="left" type="monotone" dataKey="amount" stroke="#003875" strokeWidth={3} dot={{ r: 4, fill: '#003875' }} activeDot={{ r: 6 }}>
-                              <LabelList dataKey="amount" position="top" offset={10} formatter={(val: any) => `${(val / 100000).toFixed(1)}L`} style={{ fontSize: 9, fontWeight: 900, fill: '#003875' }} />
+                              <LabelList dataKey="amount" position="top" offset={10} formatter={(val: any) => `${(val / 100000).toFixed(1)}L`} style={{ fontSize: 12, fontWeight: 900, fill: '#003875' }} />
                             </Line>
                             <Line yAxisId="right" type="monotone" dataKey="count" stroke="#10B981" strokeWidth={3} dot={{ r: 4, fill: '#10B981' }} activeDot={{ r: 6 }}>
-                              <LabelList dataKey="count" position="bottom" offset={10} style={{ fontSize: 9, fontWeight: 900, fill: '#10B981' }} />
+                              <LabelList dataKey="count" position="bottom" offset={10} style={{ fontSize: 12, fontWeight: 900, fill: '#10B981' }} />
                             </Line>
                           </LineChart>
                         </ResponsiveContainer>
@@ -546,13 +582,13 @@ export default function MetrixPage() {
                       <div className="bg-white dark:bg-white/5 p-4 rounded-3xl h-[250px] shadow-2xl ring-1 ring-black/5">
                         <h4 className="text-[9px] font-black uppercase tracking-widest text-gray-400 mb-4">OTD% Performance Trend</h4>
                         <ResponsiveContainer width="100%" height="100%">
-                          <LineChart data={drillDownParty.history} margin={{ top: 10, right: 20, left: 40, bottom: 40 }}>
+                          <LineChart data={drillDownParty.history} margin={{ top: 10, right: 20, left: 40, bottom: 10 }}>
                             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
-                            <XAxis dataKey="displayDate" axisLine={false} tickLine={false} tick={{ fontSize: 8, fontWeight: 900, fill: '#9ca3af' }} />
+                            <XAxis dataKey="displayDate" axisLine={false} tickLine={false} tick={{ fontSize: 11, fontWeight: 900, fill: '#9ca3af' }} angle={-45} textAnchor="end" height={60} />
                             <YAxis hide domain={[0, 100]} />
                             <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }} />
                             <Line type="monotone" dataKey="otdRate" stroke="#003875" strokeWidth={3} dot={{ r: 3, fill: "#003875" }}>
-                              <LabelList dataKey="otdRate" position="top" offset={10} style={{ fontSize: 9, fontWeight: 900, fill: '#003875' }} formatter={(val: any) => `${val}%`} />
+                              <LabelList dataKey="otdRate" position="top" offset={10} style={{ fontSize: 12, fontWeight: 900, fill: '#003875' }} />
                             </Line>
                           </LineChart>
                         </ResponsiveContainer>
@@ -700,17 +736,17 @@ export default function MetrixPage() {
                           </div>
                         </div>
                         <ResponsiveContainer width="100%" height="100%">
-                          <LineChart data={drillDownCategory.history} margin={{ top: 20, right: 30, left: 30, bottom: 40 }}>
+                          <LineChart data={drillDownCategory.history} margin={{ top: 20, right: 30, left: 30, bottom: 10 }}>
                             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
-                            <XAxis dataKey="displayDate" axisLine={false} tickLine={false} tick={{ fontSize: 9, fontWeight: 900, fill: '#9ca3af' }} dy={10} />
+                            <XAxis dataKey="displayDate" axisLine={false} tickLine={false} tick={{ fontSize: 11, fontWeight: 900, fill: '#9ca3af' }} dy={10} angle={-45} textAnchor="end" height={60} />
                             <YAxis yAxisId="left" hide />
                             <YAxis yAxisId="right" orientation="right" hide />
                             <Tooltip contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }} />
                             <Line yAxisId="left" type="monotone" dataKey="amount" stroke="#003875" strokeWidth={4} dot={{ r: 6, fill: '#003875' }}>
-                              <LabelList dataKey="amount" position="top" offset={15} formatter={(val: any) => `${(val / 1000).toFixed(1)}k`} style={{ fontSize: 10, fontWeight: 900, fill: '#003875' }} />
+                              <LabelList dataKey="amount" position="top" offset={15} formatter={(val: any) => `${(val / 1000).toFixed(1)}k`} style={{ fontSize: 12, fontWeight: 900, fill: '#003875' }} />
                             </Line>
                             <Line yAxisId="right" type="monotone" dataKey="count" stroke="#10B981" strokeWidth={4} dot={{ r: 6, fill: '#10B981' }}>
-                              <LabelList dataKey="count" position="bottom" offset={15} style={{ fontSize: 10, fontWeight: 900, fill: '#10B981' }} />
+                              <LabelList dataKey="count" position="bottom" offset={15} style={{ fontSize: 12, fontWeight: 900, fill: '#10B981' }} />
                             </Line>
                           </LineChart>
                         </ResponsiveContainer>
@@ -719,13 +755,13 @@ export default function MetrixPage() {
                       <div className="bg-white dark:bg-white/5 p-4 rounded-[2rem] h-[250px] shadow-2xl ring-1 ring-black/5">
                         <h4 className="text-[9px] font-black uppercase tracking-widest text-gray-400 mb-4">OTD% Performance Trend</h4>
                         <ResponsiveContainer width="100%" height="100%">
-                          <LineChart data={drillDownCategory.history} margin={{ top: 10, right: 20, left: 40, bottom: 40 }}>
+                          <LineChart data={drillDownCategory.history} margin={{ top: 10, right: 20, left: 40, bottom: 10 }}>
                             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
-                            <XAxis dataKey="displayDate" axisLine={false} tickLine={false} tick={{ fontSize: 8, fontWeight: 900, fill: '#9ca3af' }} />
+                            <XAxis dataKey="displayDate" axisLine={false} tickLine={false} tick={{ fontSize: 11, fontWeight: 900, fill: '#9ca3af' }} angle={-45} textAnchor="end" height={60} />
                             <YAxis hide domain={[0, 100]} />
                             <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }} />
                             <Line type="monotone" dataKey="otdRate" stroke="#10B981" strokeWidth={3} dot={{ r: 3, fill: "#10B981" }}>
-                              <LabelList dataKey="otdRate" position="top" offset={10} style={{ fontSize: 9, fontWeight: 900, fill: '#10B981' }} formatter={(val: any) => `${val}%`} />
+                              <LabelList dataKey="otdRate" position="top" offset={10} style={{ fontSize: 12, fontWeight: 900, fill: '#10B981' }} />
                             </Line>
                           </LineChart>
                         </ResponsiveContainer>
@@ -738,38 +774,8 @@ export default function MetrixPage() {
           )}
 
           {activeTab === "forecast" && (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="bg-white dark:bg-navy-800 p-8 rounded-[2.5rem] border border-gray-100 dark:border-white/5 shadow-2xl ring-1 ring-black/5">
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-10">
-                <div><h3 className="text-2xl font-black text-gray-900 dark:text-white uppercase tracking-tight">Demand Forecast</h3><p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mt-1">Neural Demand Prediction</p></div>
-                <div className="flex items-center gap-2">
-                  <select value={forecastType} onChange={(e) => { setForecastType(e.target.value); setForecastTarget(""); }} className="px-4 py-2 bg-gray-50 dark:bg-navy-900 rounded-xl text-[9px] font-black uppercase outline-none shadow-sm ring-1 ring-black/5">
-                    <option value="category">Category</option><option value="party">Party</option>
-                  </select>
-                  <select value={forecastTarget} onChange={(e) => setForecastTarget(e.target.value)} className="px-4 py-2 bg-gray-50 dark:bg-navy-900 rounded-xl text-[9px] font-black uppercase outline-none min-w-[200px] shadow-sm ring-1 ring-black/5">
-                    <option value="">Select Target...</option>
-                    {forecastType === "category" ? (data.categories.all.map((c: any) => <option key={c.category} value={c.category}>{c.category}</option>)) : (data.parties.all.map((p: any) => <option key={p.party} value={p.party}>{p.party}</option>))}
-                  </select>
-                </div>
-              </div>
-              {forecastTarget ? (
-                <div className="h-[400px] w-full bg-gray-50/50 dark:bg-navy-900/50 p-6 rounded-3xl ring-1 ring-black/5">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={forecastData} margin={{ bottom: 30 }}>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
-                      <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fontSize: 9, fontWeight: 900, fill: '#9ca3af' }} dy={10} />
-                      <YAxis hide /><Tooltip />
-                      <Line type="monotone" data={forecastData.filter(d => !d.isForecast || d === forecastData.find(x => x.isForecast))} dataKey="amount" stroke="#003875" strokeWidth={4} dot={{ r: 6, fill: "#003875" }} />
-                      <Line type="monotone" data={forecastData.filter((d, i) => d.isForecast || (forecastData[i + 1]?.isForecast))} dataKey="amount" stroke="#FFD500" strokeWidth={4} strokeDasharray="8 8" dot={{ r: 8, fill: "#FFD500", stroke: "#003875", strokeWidth: 2 }}>
-                        <LabelList dataKey="amount" position="top" content={({ x, y, value, index }: any) => {
-                          const isForecastPoint = forecastData.filter((d, i) => d.isForecast || (forecastData[i + 1]?.isForecast))[index]?.isForecast;
-                          if (!isForecastPoint) return null;
-                          return <text x={x} y={y} dy={-15} fill="#003875" fontSize={10} fontStyle="italic" fontWeight={900} textAnchor="middle">{value} ★</text>;
-                        }} />
-                      </Line>
-                    </LineChart>
-                  </ResponsiveContainer>
-                </div>
-              ) : (<div className="flex flex-col items-center justify-center py-24"><SparklesIcon className="w-12 h-12 text-gray-100 mb-4" /><p className="text-gray-400 font-bold uppercase text-[9px] tracking-widest">Select target to initialize model</p></div>)}
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mt-2">
+              <CooReport data={cooData} loading={cooLoading} />
             </motion.div>
           )}
 

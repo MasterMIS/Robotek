@@ -143,20 +143,64 @@ export async function GET(req: NextRequest) {
 
     // 3. Filters
     let filteredOrders = orders;
+    let trendGrouping = granularity;
+
     if (startDateParam && endDateParam) {
       const start = new Date(startDateParam);
       const end = new Date(endDateParam);
       end.setHours(23, 59, 59, 999);
       filteredOrders = orders.filter(o => o.createdAt >= start && o.createdAt <= end);
+
+      const diffDays = Math.ceil((end.getTime() - start.getTime()) / (1000 * 3600 * 24));
+      if (diffDays <= 7) trendGrouping = 'day';
+      else if (diffDays <= 60) trendGrouping = 'week';
+      else if (diffDays <= 365) trendGrouping = 'month';
+      else trendGrouping = 'year';
+    } else {
+      const now = new Date();
+      let start = new Date(now);
+      start.setHours(0, 0, 0, 0);
+      let end = new Date(now);
+      end.setHours(23, 59, 59, 999);
+
+      if (granularity === 'day') {
+        // Today
+        trendGrouping = 'day';
+      } else if (granularity === 'week') {
+        const day = start.getDay();
+        const diff = start.getDate() - day; // Sunday
+        start.setDate(diff);
+        trendGrouping = 'week';
+      } else if (granularity === 'month') {
+        start.setDate(1);
+        trendGrouping = 'month';
+      } else if (granularity === 'quarter') {
+        const q = Math.floor(start.getMonth() / 3);
+        start.setMonth(q * 3, 1);
+        trendGrouping = 'quarter';
+      } else if (granularity === 'year') {
+        start.setMonth(0, 1);
+        trendGrouping = 'year';
+      }
+
+      filteredOrders = orders.filter(o => o.createdAt >= start && o.createdAt <= end);
     }
+
+    // Determine endDate for lookback
+    let lookbackEnd = new Date();
+    if (endDateParam) {
+      lookbackEnd = new Date(endDateParam);
+      lookbackEnd.setHours(23, 59, 59, 999);
+    }
+    const lookbackOrders = orders.filter(o => o.createdAt <= lookbackEnd);
 
     // 4. Monthly Trends
     const trendDataMap: Record<string, { month: string, count: number, amount: number, otdCount: number, deliveredCount: number }> = {};
-    filteredOrders.forEach(o => {
-      const key = getTrendKey(o.createdAt, granularity);
+    lookbackOrders.forEach(o => {
+      const key = getTrendKey(o.createdAt, trendGrouping);
       if (!trendDataMap[key]) {
         trendDataMap[key] = { 
-          month: getTrendLabel(key, granularity),
+          month: getTrendLabel(key, trendGrouping),
           count: 0, 
           amount: 0,
           otdCount: 0,
@@ -177,7 +221,7 @@ export async function GET(req: NextRequest) {
         otdRate: data.deliveredCount > 0 ? Math.round((data.otdCount / data.deliveredCount) * 100) : 0
       }))
       .sort((a, b) => a.key.localeCompare(b.key))
-      .slice(-24);
+      .slice(-15);
 
     // 5. Basic Stats
     const stats = {
@@ -217,13 +261,6 @@ export async function GET(req: NextRequest) {
       }
       if (o.isDelayed) partyStats[o.party].delayedCount++;
       
-      partyStats[o.party].history.push({
-        date: o.createdAt.toISOString().split('T')[0],
-        amount: o.totalAmount,
-        orderNo: o.orderNo,
-        isOTD: o.isOTD,
-        isDispatched: o.isDispatched
-      });
       o.items.forEach(item => {
         if (!partyStats[o.party].items[item.name]) partyStats[o.party].items[item.name] = 0;
         partyStats[o.party].items[item.name] += parseFloat(item.qty) || 1;
@@ -260,12 +297,6 @@ export async function GET(req: NextRequest) {
         }
         if (o.isDelayed) categoryStats[item.category].delayedCount++;
 
-        categoryStats[item.category].history.push({
-          date: o.createdAt.toISOString().split('T')[0],
-          amount: item.amount,
-          isOTD: o.isOTD,
-          isDispatched: o.isDispatched
-        });
         if (!categoryStats[item.category].items[item.name]) {
           categoryStats[item.category].items[item.name] = { count: 0, amount: 0 };
         }
@@ -274,12 +305,35 @@ export async function GET(req: NextRequest) {
       });
     });
 
+    // Populate History for Parties and Categories from lookbackOrders
+    lookbackOrders.forEach(o => {
+      if (partyStats[o.party]) {
+        partyStats[o.party].history.push({
+          date: o.createdAt.toISOString().split('T')[0],
+          amount: o.totalAmount,
+          orderNo: o.orderNo,
+          isOTD: o.isOTD,
+          isDispatched: o.isDispatched
+        });
+      }
+      o.items.forEach(item => {
+        if (categoryStats[item.category]) {
+          categoryStats[item.category].history.push({
+            date: o.createdAt.toISOString().split('T')[0],
+            amount: item.amount,
+            isOTD: o.isOTD,
+            isDispatched: o.isDispatched
+          });
+        }
+      });
+    });
+
     const allAvailableCategories = Object.keys(categoryStats);
 
     const partyList = Object.values(partyStats).map((p: any) => {
       const groupedHistory: Record<string, { date: string, amount: number, count: number, otdCount: number, deliveredCount: number }> = {};
       p.history.forEach((h: any) => {
-        const key = getTrendKey(new Date(h.date), granularity);
+        const key = getTrendKey(new Date(h.date), trendGrouping);
         if (!groupedHistory[key]) {
           groupedHistory[key] = { date: key, amount: 0, count: 0, otdCount: 0, deliveredCount: 0 };
         }
@@ -294,10 +348,10 @@ export async function GET(req: NextRequest) {
       const sortedHistory = Object.values(groupedHistory).map((t: any) => {
         return {
           ...t,
-          displayDate: getTrendLabel(t.date, granularity),
+          displayDate: getTrendLabel(t.date, trendGrouping),
           otdRate: t.deliveredCount > 0 ? Math.round((t.otdCount / t.deliveredCount) * 100) : 0
         };
-      }).sort((a: any, b: any) => a.date.localeCompare(b.date)).slice(-24);
+      }).sort((a: any, b: any) => a.date.localeCompare(b.date)).slice(-15);
       
       const categoryList = Object.entries(p.categories).map(([name, stats]: any) => ({
         category: name,
@@ -327,7 +381,7 @@ export async function GET(req: NextRequest) {
       // Group category history by month for dual metrics
       const groupedHist: Record<string, { date: string, amount: number, count: number, otdCount: number, deliveredCount: number }> = {};
       c.history.forEach((h: any) => {
-        const key = getTrendKey(new Date(h.date), granularity);
+        const key = getTrendKey(new Date(h.date), trendGrouping);
         if (!groupedHist[key]) {
           groupedHist[key] = { date: key, amount: 0, count: 0, otdCount: 0, deliveredCount: 0 };
         }
@@ -342,10 +396,10 @@ export async function GET(req: NextRequest) {
       const sortedHistory = Object.values(groupedHist).map((t: any) => {
         return {
           ...t,
-          displayDate: getTrendLabel(t.date, granularity),
+          displayDate: getTrendLabel(t.date, trendGrouping),
           otdRate: t.deliveredCount > 0 ? Math.round((t.otdCount / t.deliveredCount) * 100) : 0
         };
-      }).sort((a: any, b: any) => a.date.localeCompare(b.date)).slice(-24);
+      }).sort((a: any, b: any) => a.date.localeCompare(b.date)).slice(-15);
 
       const allItems = Object.entries(c.items).map(([name, stats]: any) => ({
         name,
