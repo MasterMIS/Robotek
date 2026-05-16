@@ -43,15 +43,15 @@ import ConfirmModal from "@/components/ConfirmModal";
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
 const REPLACE_STEP_SHORT = [
-  "Inward Receipt",
-  "Checking & Verification",
-  "Weight Confirmation",
-  "Detailed Analysis",
-  "Voucher Generation",
-  "Approval Workflow",
-  "Quality Assurance",
-  "Outward Preparation",
-  "Final Handover"
+  "Send Parcel To Kundli",
+  "Ask And Share Detail With Gst Bill From Customer To Replacement Team",
+  "Physical Checking",
+  "Update Rep Detail In Google Sheet",
+  "Rep. Update",
+  "Detail Match And Confirmation",
+  "Price Checking",
+  "Share Rep Bill",
+  "Call Customer And Confirm Replacement Detail"
 ];
 
 const EMPTY_FORM: Partial<Replace> = {
@@ -283,6 +283,7 @@ export default function ReplacePage() {
   const [bulkWeightInputs, setBulkWeightInputs] = useState<Record<string, string>>({});
   const [bulkVoucherNoInputs, setBulkVoucherNoInputs] = useState<Record<string, string>>({});
   const [bulkStepFiles, setBulkStepFiles] = useState<Record<string, File>>({});
+  const [bulkStep1Choices, setBulkStep1Choices] = useState<Record<string, "Yes" | "No">>({});
   const [parcelPhotoFile, setParcelPhotoFile] = useState<File | null>(null);
   const [restoreTargetId, setRestoreTargetId] = useState<string | null>(null);
 
@@ -341,8 +342,15 @@ export default function ReplacePage() {
   const getActiveStep = (item: Replace): number => {
     if (item.cancelled) return -1;
     for (let i = 1; i <= 9; i++) {
-      const val = (item as any)[`actual_${i}`];
-      if (!val || val.trim() === "") return i;
+      const act = (item as any)[`actual_${i}`];
+      const pl = (item as any)[`planned_${i}`];
+      // A step is active if it has a planned date but no actual date
+      if ((!act || act.trim() === "") && (pl && pl.trim() !== "")) return i;
+    }
+    // Fallback: first empty actual (for backward compatibility if planned is missing)
+    for (let i = 1; i <= 9; i++) {
+      const act = (item as any)[`actual_${i}`];
+      if (!act || act.trim() === "") return i;
     }
     return 0;
   };
@@ -570,11 +578,14 @@ export default function ReplacePage() {
 
   const openBulkModal = () => {
     const ts: Record<string, boolean> = {}; const ws: Record<string, string> = {}; const vs: Record<string, string> = {};
+    const s1: Record<string, "Yes" | "No"> = {};
     selectedIds.forEach(id => {
       const it = items.find(r => r.id === id); if (!it) return;
       ts[id] = true; ws[id] = it.total_weight_3 || ""; vs[id] = it.voucher_no_5 || "";
+      s1[id] = "Yes";
     });
     setBulkToggles(ts); setBulkWeightInputs(ws); setBulkVoucherNoInputs(vs); setBulkStepFiles({});
+    setBulkStep1Choices(s1);
     setIsBulkModalOpen(true);
   };
 
@@ -604,7 +615,17 @@ export default function ReplacePage() {
       if (n === 3) { upd.total_weight_3 = bulkWeightInputs[id]; upd.weight_image_3 = uploadedUrls[id] || it.weight_image_3; }
       if (n === 4) { upd.ss_of_detail_4 = uploadedUrls[id] || it.ss_of_detail_4; }
       if (n === 5) { upd.voucher_no_5 = bulkVoucherNoInputs[id]; upd.voucher_image_5 = uploadedUrls[id] || it.voucher_image_5; }
-      if (n < 9) upd[`planned_${n+1}`] = calculatePlannedDate(now, globalConfigs[n].tat || "24 Hrs");
+
+      if (n === 1 && bulkStep1Choices[id] === "No") {
+        // Skip Step 2: keep actual/status blank, clear planned_2, set planned_3
+        upd[`actual_2`] = "";
+        upd[`status_2`] = "";
+        upd[`planned_2`] = "";
+        if (n < 8) upd[`planned_3`] = calculatePlannedDate(now, globalConfigs[2].tat || "24 Hrs");
+      } else {
+        if (n < 9) upd[`planned_${n+1}`] = calculatePlannedDate(now, globalConfigs[n].tat || "24 Hrs");
+      }
+
       try { await fetch("/api/replace", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(upd) }); } catch { errors++; }
     }
     setActionStatus(errors ? "error" : "success"); setActionMessage(errors ? `Finished with ${errors} errors` : "All updated!");
@@ -659,17 +680,17 @@ export default function ReplacePage() {
         <div className="w-60 flex flex-col shrink-0 h-full overflow-y-auto custom-scrollbar border-r border-slate-100 dark:border-navy-800 pr-3 py-0.5">
           <p className="text-[10px] font-black text-slate-400 dark:text-navy-500 uppercase tracking-[0.3em] mb-1.5 px-2">FILTERS</p>
           <div className="space-y-1.5 pb-10">
-            <button onClick={() => setSelectedStepFilter("all")} className={`w-full flex items-center justify-between px-5 py-2.5 rounded-full transition-all border-b-4 ${selectedStepFilter === "all" ? "bg-[#e6dcc5] dark:bg-[#cbbca0]/20 border-[#cbbca0] text-[#003875] dark:text-[#FFD500] shadow-md" : "bg-white dark:bg-navy-900 border-slate-100 dark:border-navy-800 text-slate-500 dark:text-navy-400"}`}>
-              <span className="font-black text-[11px] uppercase tracking-widest">ALL REPLACES</span>
+            <button onClick={() => setSelectedStepFilter("all")} className={`w-full flex items-center justify-start gap-3 px-5 py-2.5 rounded-full transition-all border-b-4 ${selectedStepFilter === "all" ? "bg-[#e6dcc5] dark:bg-[#cbbca0]/20 border-[#cbbca0] text-[#003875] dark:text-[#FFD500] shadow-md" : "bg-white dark:bg-navy-900 border-slate-100 dark:border-navy-800 text-slate-500 dark:text-navy-400"}`}>
+              <span className="font-black text-[11px] uppercase tracking-widest text-left">ALL REPLACES</span>
             </button>
-            <button onClick={() => setSelectedStepFilter("completed")} className={`w-full flex items-center justify-between px-5 py-2.5 rounded-full transition-all border-b-4 ${selectedStepFilter === "completed" ? "bg-emerald-500 border-emerald-700 text-white shadow-md" : "bg-white dark:bg-navy-900 border-slate-100 dark:border-navy-800 text-slate-500 dark:text-navy-400"}`}>
-              <span className="font-black text-[11px] uppercase tracking-widest">COMPLETED</span>
-              {stepCounts.completed > 0 && <span className="w-5 h-5 flex items-center justify-center rounded-full text-[10px] font-black bg-white text-emerald-500">{stepCounts.completed}</span>}
+            <button onClick={() => setSelectedStepFilter("completed")} className={`w-full flex items-center justify-start gap-3 px-5 py-2.5 rounded-full transition-all border-b-4 ${selectedStepFilter === "completed" ? "bg-emerald-500 border-emerald-700 text-white shadow-md" : "bg-white dark:bg-navy-900 border-slate-100 dark:border-navy-800 text-slate-500 dark:text-navy-400"}`}>
+              <span className="font-black text-[11px] uppercase tracking-widest text-left">COMPLETED</span>
+              {stepCounts.completed > 0 && <span className="w-5 h-5 ml-auto flex items-center justify-center rounded-full text-[10px] font-black bg-white text-emerald-500">{stepCounts.completed}</span>}
             </button>
             {REPLACE_STEP_SHORT.map((name, i) => (
-              <button key={i} onClick={() => setSelectedStepFilter(i+1)} className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl transition-all border border-slate-50 dark:border-navy-800 bg-white dark:bg-navy-900 ${selectedStepFilter === i+1 ? "bg-[#e6dcc5] dark:bg-[#cbbca0]/20 border-[#cbbca0] shadow-md" : "text-slate-500 dark:text-navy-400"}`}>
-                <span className="text-[10px] font-black uppercase tracking-tight">Step {i+1} — {name}</span>
-                {stepCounts[i+1] > 0 && <span className="w-5 h-5 flex items-center justify-center rounded-full text-[10px] font-black bg-blue-500 text-white">{stepCounts[i+1]}</span>}
+              <button key={i} onClick={() => setSelectedStepFilter(i+1)} className={`w-full flex items-center justify-start gap-3 px-3 py-2.5 rounded-xl transition-all border border-slate-50 dark:border-navy-800 bg-white dark:bg-navy-900 ${selectedStepFilter === i+1 ? "bg-[#e6dcc5] dark:bg-[#cbbca0]/20 border-[#cbbca0] shadow-md" : "text-slate-500 dark:text-navy-400"}`}>
+                <span className="text-[10px] font-black uppercase tracking-tight text-left">Step {i+1} — {name}</span>
+                {stepCounts[i+1] > 0 && <span className="w-5 h-5 ml-auto shrink-0 flex items-center justify-center rounded-full text-[10px] font-black bg-blue-500 text-white">{stepCounts[i+1]}</span>}
               </button>
             ))}
           </div>
@@ -1040,7 +1061,23 @@ export default function ReplacePage() {
                                 <div className="space-y-1"><label className="text-[9px] font-black uppercase text-slate-400">Voucher Image</label><input type="file" onChange={e => { const f = e.target.files?.[0]; if (f) setBulkStepFiles(p => ({ ...p, [id]: f })); }} className="text-[10px]" /></div>
                               </div>
                             )}
-                            {![3,4,5].includes(n) && <p className="text-[10px] font-black text-slate-300 uppercase italic">Update Step {n} Status Only</p>}
+                            {n === 1 && (
+                              <div className="space-y-1.5">
+                                <label className="text-[9px] font-black uppercase text-slate-400">Continue with Verification (Step 2)?</label>
+                                <div className="flex items-center gap-2 bg-slate-50 dark:bg-navy-900 p-1 rounded-xl border border-slate-100 dark:border-navy-800 max-w-[160px]">
+                                  <button 
+                                    onClick={() => setBulkStep1Choices(p => ({ ...p, [id]: "Yes" }))}
+                                    className={`flex-1 py-1 rounded-lg text-[9px] font-black uppercase transition-all ${bulkStep1Choices[id] === "Yes" ? "bg-[#003875] text-[#FFD500] shadow-md" : "text-slate-400 hover:bg-slate-100"}`}
+                                  >Yes</button>
+                                  <button 
+                                    onClick={() => setBulkStep1Choices(p => ({ ...p, [id]: "No" }))}
+                                    className={`flex-1 py-1 rounded-lg text-[9px] font-black uppercase transition-all ${bulkStep1Choices[id] === "No" ? "bg-red-500 text-white shadow-md" : "text-slate-400 hover:bg-red-50"}`}
+                                  >No</button>
+                                </div>
+                              </div>
+                            )}
+                            {![1,3,4,5].includes(n) && <p className="text-[10px] font-black text-slate-300 uppercase italic">Update Step {n} Status Only</p>}
+                            {n === 1 && <p className="text-[9px] font-bold text-slate-300 uppercase italic mt-1">{bulkStep1Choices[id] === "No" ? "Will skip Step 2" : "Will proceed to Step 2"}</p>}
                           </div>
                         )}
                       </div>

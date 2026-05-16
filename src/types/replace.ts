@@ -69,13 +69,13 @@ export interface ReplaceStepConfig {
 }
 
 export const REPLACE_STEPS = [
-  "Inward Receipt",
-  "Checking & Verification",
-  "Weight Confirmation",
-  "Detailed Analysis",
-  "Voucher Generation",
-  "Approval Workflow",
-  "Quality Assurance",
-  "Outward Preparation",
-  "Final Handover"
+  "Send Parcel To Kundli",
+  "Ask And Share Detail With Gst Bill From Customer To Replacement Team",
+  "Physical Checking",
+  "Update Rep Detail In Google Sheet",
+  "Rep. Update",
+  "Detail Match And Confirmation",
+  "Price Checking",
+  "Share Rep Bill",
+  "Call Customer And Confirm Replacement Detail"
 ];
