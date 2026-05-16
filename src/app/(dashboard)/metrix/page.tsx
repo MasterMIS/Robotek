@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import useSWR from "swr";
 import { motion, AnimatePresence } from "framer-motion";
+import { useTheme } from "next-themes";
 import CooReport from "@/components/CooReport";
 import {
   ChartBarIcon,
@@ -114,6 +115,17 @@ export default function MetrixPage() {
   const [forecastType, setForecastType] = useState("category");
   const [forecastTarget, setForecastTarget] = useState("");
   const [granularity, setGranularity] = useState("month");
+  const { resolvedTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => { setMounted(true); }, []);
+
+  const isDark = mounted && resolvedTheme === "dark";
+  const chartTextColor = isDark ? "#ffffff" : "#9ca3af";
+  const chartLabelColor = isDark ? "#ffffff" : "#003875";
+  const chartGridColor = isDark ? "rgba(255, 255, 255, 0.2)" : "#f0f0f0";
+  const chartLineColor = isDark ? "#ffffff" : "#003875";
+  const revenueLineColor = isDark ? "#ffffff" : "#10B981";
 
   const { data, error, isLoading, isValidating } = useSWR(
     `/api/metrix?startDate=${dateRange.startDate}&endDate=${dateRange.endDate}&targetDate=${targetDate}&granularity=${granularity}`,
@@ -298,12 +310,12 @@ export default function MetrixPage() {
                     <div className="h-[230px]">
                       <ResponsiveContainer width="100%" height="100%">
                         <LineChart data={data.trends} margin={{ top: 20, right: 30, left: 0, bottom: 0 }}>
-                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
-                          <XAxis dataKey="month" axisLine={{ stroke: '#f0f0f0' }} tick={{ fontSize: 11, fontWeight: 900, fill: '#9ca3af' }} angle={-45} textAnchor="end" height={60} />
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={chartGridColor} />
+                          <XAxis dataKey="month" axisLine={{ stroke: chartGridColor }} tick={{ fontSize: 11, fontWeight: 900, fill: chartTextColor }} angle={-45} textAnchor="end" height={60} />
                           <YAxis hide domain={[0, 100]} />
-                          <Tooltip contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }} />
-                          <Line type="monotone" dataKey="otdRate" stroke="#003875" strokeWidth={3} dot={{ r: 3, fill: "#003875" }}>
-                            <LabelList dataKey="otdRate" position="top" offset={10} style={{ fontSize: 12, fontWeight: 900, fill: '#003875' }} />
+                          <Tooltip contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', backgroundColor: isDark ? '#1e293b' : '#fff', color: isDark ? '#fff' : '#000' }} />
+                          <Line type="monotone" dataKey="otdRate" stroke={chartLineColor} strokeWidth={3} dot={{ r: 3, fill: chartLineColor }}>
+                            <LabelList dataKey="otdRate" position="top" offset={10} style={{ fontSize: 12, fontWeight: 900, fill: chartLabelColor }} />
                           </Line>
                         </LineChart>
                       </ResponsiveContainer>
@@ -404,12 +416,12 @@ export default function MetrixPage() {
                   <div className="h-[250px]">
                     <ResponsiveContainer width="100%" height="100%">
                       <LineChart data={data.trends} margin={{ top: 20, right: 30, left: 10, bottom: 0 }}>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
-                        <XAxis dataKey="month" axisLine={{ stroke: '#f0f0f0' }} tick={{ fontSize: 11, fontWeight: 900, fill: '#9ca3af' }} angle={-45} textAnchor="end" height={60} />
-                        <YAxis axisLine={{ stroke: '#f0f0f0' }} tick={{ fontSize: 11, fontWeight: 900, fill: '#9ca3af' }} tickFormatter={(val) => `${(val / 100000).toFixed(1)}L`} />
-                        <Tooltip contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }} />
-                        <Line type="monotone" dataKey="amount" stroke="#10B981" strokeWidth={4} dot={{ r: 4, fill: "#10B981" }}>
-                          <LabelList dataKey="amount" position="top" offset={12} style={{ fontSize: 12, fontWeight: 900, fill: '#10B981' }} formatter={(val: any) => `${(val / 100000).toFixed(1)}L`} />
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={chartGridColor} />
+                        <XAxis dataKey="month" axisLine={{ stroke: chartGridColor }} tick={{ fontSize: 11, fontWeight: 900, fill: chartTextColor }} angle={-45} textAnchor="end" height={60} />
+                        <YAxis axisLine={{ stroke: chartGridColor }} tick={{ fontSize: 11, fontWeight: 900, fill: chartTextColor }} tickFormatter={(val) => `${(val / 100000).toFixed(1)}L`} />
+                        <Tooltip contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', backgroundColor: isDark ? '#1e293b' : '#fff', color: isDark ? '#fff' : '#000' }} />
+                        <Line type="monotone" dataKey="amount" stroke={revenueLineColor} strokeWidth={4} dot={{ r: 4, fill: revenueLineColor }}>
+                          <LabelList dataKey="amount" position="top" offset={12} style={{ fontSize: 12, fontWeight: 900, fill: revenueLineColor }} formatter={(val: any) => `${(val / 100000).toFixed(1)}L`} />
                         </Line>
                       </LineChart>
                     </ResponsiveContainer>
@@ -422,12 +434,12 @@ export default function MetrixPage() {
                   <div className="h-[250px]">
                     <ResponsiveContainer width="100%" height="100%">
                       <LineChart data={data.trends} margin={{ top: 20, right: 30, left: 10, bottom: 0 }}>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
-                        <XAxis dataKey="month" axisLine={{ stroke: '#f0f0f0' }} tick={{ fontSize: 11, fontWeight: 900, fill: '#9ca3af' }} angle={-45} textAnchor="end" height={60} />
-                        <YAxis axisLine={{ stroke: '#f0f0f0' }} tick={{ fontSize: 11, fontWeight: 900, fill: '#9ca3af' }} />
-                        <Tooltip contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }} />
-                        <Line type="monotone" dataKey="count" stroke="#003875" strokeWidth={4} dot={{ r: 4, fill: "#003875" }}>
-                          <LabelList dataKey="count" position="top" offset={12} style={{ fontSize: 12, fontWeight: 900, fill: '#003875' }} />
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={chartGridColor} />
+                        <XAxis dataKey="month" axisLine={{ stroke: chartGridColor }} tick={{ fontSize: 11, fontWeight: 900, fill: chartTextColor }} angle={-45} textAnchor="end" height={60} />
+                        <YAxis axisLine={{ stroke: chartGridColor }} tick={{ fontSize: 11, fontWeight: 900, fill: chartTextColor }} />
+                        <Tooltip contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', backgroundColor: isDark ? '#1e293b' : '#fff', color: isDark ? '#fff' : '#000' }} />
+                        <Line type="monotone" dataKey="count" stroke={chartLineColor} strokeWidth={4} dot={{ r: 4, fill: chartLineColor }}>
+                          <LabelList dataKey="count" position="top" offset={12} style={{ fontSize: 12, fontWeight: 900, fill: chartLabelColor }} />
                         </Line>
                       </LineChart>
                     </ResponsiveContainer>
@@ -555,12 +567,12 @@ export default function MetrixPage() {
                         </div>
                         <ResponsiveContainer width="100%" height="100%">
                           <LineChart data={drillDownParty.history} margin={{ top: 20, right: 30, left: 40, bottom: 10 }}>
-                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={chartGridColor} />
                             <XAxis
                               dataKey="displayDate"
                               axisLine={false}
                               tickLine={false}
-                              tick={{ fontSize: 11, fontWeight: 900, fill: '#9ca3af' }}
+                              tick={{ fontSize: 11, fontWeight: 900, fill: chartTextColor }}
                               dy={5}
                               angle={-45}
                               textAnchor="end"
@@ -568,12 +580,12 @@ export default function MetrixPage() {
                             />
                             <YAxis yAxisId="left" hide />
                             <YAxis yAxisId="right" orientation="right" hide />
-                            <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }} />
-                            <Line yAxisId="left" type="monotone" dataKey="amount" stroke="#003875" strokeWidth={3} dot={{ r: 4, fill: '#003875' }} activeDot={{ r: 6 }}>
-                              <LabelList dataKey="amount" position="top" offset={10} formatter={(val: any) => `${(val / 100000).toFixed(1)}L`} style={{ fontSize: 12, fontWeight: 900, fill: '#003875' }} />
+                            <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', backgroundColor: isDark ? '#1e293b' : '#fff', color: isDark ? '#fff' : '#000' }} />
+                            <Line yAxisId="left" type="monotone" dataKey="amount" stroke={chartLineColor} strokeWidth={3} dot={{ r: 4, fill: chartLineColor }} activeDot={{ r: 6 }}>
+                              <LabelList dataKey="amount" position="top" offset={10} formatter={(val: any) => `${(val / 100000).toFixed(1)}L`} style={{ fontSize: 12, fontWeight: 900, fill: chartLabelColor }} />
                             </Line>
-                            <Line yAxisId="right" type="monotone" dataKey="count" stroke="#10B981" strokeWidth={3} dot={{ r: 4, fill: '#10B981' }} activeDot={{ r: 6 }}>
-                              <LabelList dataKey="count" position="bottom" offset={10} style={{ fontSize: 12, fontWeight: 900, fill: '#10B981' }} />
+                            <Line yAxisId="right" type="monotone" dataKey="count" stroke={revenueLineColor} strokeWidth={3} dot={{ r: 4, fill: revenueLineColor }} activeDot={{ r: 6 }}>
+                              <LabelList dataKey="count" position="bottom" offset={10} style={{ fontSize: 12, fontWeight: 900, fill: revenueLineColor }} />
                             </Line>
                           </LineChart>
                         </ResponsiveContainer>
@@ -583,12 +595,12 @@ export default function MetrixPage() {
                         <h4 className="text-[9px] font-black uppercase tracking-widest text-gray-400 mb-4">OTD% Performance Trend</h4>
                         <ResponsiveContainer width="100%" height="100%">
                           <LineChart data={drillDownParty.history} margin={{ top: 10, right: 20, left: 40, bottom: 10 }}>
-                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
-                            <XAxis dataKey="displayDate" axisLine={false} tickLine={false} tick={{ fontSize: 11, fontWeight: 900, fill: '#9ca3af' }} angle={-45} textAnchor="end" height={60} />
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={chartGridColor} />
+                            <XAxis dataKey="displayDate" axisLine={false} tickLine={false} tick={{ fontSize: 11, fontWeight: 900, fill: chartTextColor }} angle={-45} textAnchor="end" height={60} />
                             <YAxis hide domain={[0, 100]} />
-                            <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }} />
-                            <Line type="monotone" dataKey="otdRate" stroke="#003875" strokeWidth={3} dot={{ r: 3, fill: "#003875" }}>
-                              <LabelList dataKey="otdRate" position="top" offset={10} style={{ fontSize: 12, fontWeight: 900, fill: '#003875' }} />
+                            <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', backgroundColor: isDark ? '#1e293b' : '#fff', color: isDark ? '#fff' : '#000' }} />
+                            <Line type="monotone" dataKey="otdRate" stroke={chartLineColor} strokeWidth={3} dot={{ r: 3, fill: chartLineColor }}>
+                              <LabelList dataKey="otdRate" position="top" offset={10} style={{ fontSize: 12, fontWeight: 900, fill: chartLabelColor }} />
                             </Line>
                           </LineChart>
                         </ResponsiveContainer>
@@ -737,16 +749,16 @@ export default function MetrixPage() {
                         </div>
                         <ResponsiveContainer width="100%" height="100%">
                           <LineChart data={drillDownCategory.history} margin={{ top: 20, right: 30, left: 30, bottom: 10 }}>
-                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
-                            <XAxis dataKey="displayDate" axisLine={false} tickLine={false} tick={{ fontSize: 11, fontWeight: 900, fill: '#9ca3af' }} dy={10} angle={-45} textAnchor="end" height={60} />
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={chartGridColor} />
+                            <XAxis dataKey="displayDate" axisLine={false} tickLine={false} tick={{ fontSize: 11, fontWeight: 900, fill: chartTextColor }} dy={10} angle={-45} textAnchor="end" height={60} />
                             <YAxis yAxisId="left" hide />
                             <YAxis yAxisId="right" orientation="right" hide />
-                            <Tooltip contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }} />
-                            <Line yAxisId="left" type="monotone" dataKey="amount" stroke="#003875" strokeWidth={4} dot={{ r: 6, fill: '#003875' }}>
-                              <LabelList dataKey="amount" position="top" offset={15} formatter={(val: any) => `${(val / 1000).toFixed(1)}k`} style={{ fontSize: 12, fontWeight: 900, fill: '#003875' }} />
+                            <Tooltip contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', backgroundColor: isDark ? '#1e293b' : '#fff', color: isDark ? '#fff' : '#000' }} />
+                            <Line yAxisId="left" type="monotone" dataKey="amount" stroke={chartLineColor} strokeWidth={4} dot={{ r: 6, fill: chartLineColor }}>
+                              <LabelList dataKey="amount" position="top" offset={15} formatter={(val: any) => `${(val / 1000).toFixed(1)}k`} style={{ fontSize: 12, fontWeight: 900, fill: chartLabelColor }} />
                             </Line>
-                            <Line yAxisId="right" type="monotone" dataKey="count" stroke="#10B981" strokeWidth={4} dot={{ r: 6, fill: '#10B981' }}>
-                              <LabelList dataKey="count" position="bottom" offset={15} style={{ fontSize: 12, fontWeight: 900, fill: '#10B981' }} />
+                            <Line yAxisId="right" type="monotone" dataKey="count" stroke={revenueLineColor} strokeWidth={4} dot={{ r: 6, fill: revenueLineColor }}>
+                              <LabelList dataKey="count" position="bottom" offset={15} style={{ fontSize: 12, fontWeight: 900, fill: revenueLineColor }} />
                             </Line>
                           </LineChart>
                         </ResponsiveContainer>
@@ -756,12 +768,12 @@ export default function MetrixPage() {
                         <h4 className="text-[9px] font-black uppercase tracking-widest text-gray-400 mb-4">OTD% Performance Trend</h4>
                         <ResponsiveContainer width="100%" height="100%">
                           <LineChart data={drillDownCategory.history} margin={{ top: 10, right: 20, left: 40, bottom: 10 }}>
-                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
-                            <XAxis dataKey="displayDate" axisLine={false} tickLine={false} tick={{ fontSize: 11, fontWeight: 900, fill: '#9ca3af' }} angle={-45} textAnchor="end" height={60} />
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={chartGridColor} />
+                            <XAxis dataKey="displayDate" axisLine={false} tickLine={false} tick={{ fontSize: 11, fontWeight: 900, fill: chartTextColor }} angle={-45} textAnchor="end" height={60} />
                             <YAxis hide domain={[0, 100]} />
-                            <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }} />
-                            <Line type="monotone" dataKey="otdRate" stroke="#10B981" strokeWidth={3} dot={{ r: 3, fill: "#10B981" }}>
-                              <LabelList dataKey="otdRate" position="top" offset={10} style={{ fontSize: 12, fontWeight: 900, fill: '#10B981' }} />
+                            <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', backgroundColor: isDark ? '#1e293b' : '#fff', color: isDark ? '#fff' : '#000' }} />
+                            <Line type="monotone" dataKey="otdRate" stroke={revenueLineColor} strokeWidth={3} dot={{ r: 3, fill: revenueLineColor }}>
+                              <LabelList dataKey="otdRate" position="top" offset={10} style={{ fontSize: 12, fontWeight: 900, fill: revenueLineColor }} />
                             </Line>
                           </LineChart>
                         </ResponsiveContainer>

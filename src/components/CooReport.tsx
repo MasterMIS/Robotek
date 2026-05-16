@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import {
   ResponsiveContainer,
   LineChart,
@@ -16,6 +16,7 @@ import {
   ReferenceLine,
 } from "recharts";
 
+import { useTheme } from "next-themes";
 import { motion } from "framer-motion";
 import {
   ArrowPathIcon,
@@ -37,6 +38,19 @@ interface CooReportProps {
 }
 
 export default function CooReport({ data: coo, loading }: CooReportProps) {
+  const { resolvedTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const isDark = mounted && resolvedTheme === "dark";
+  const chartTextColor = isDark ? "#ffffff" : "#9ca3af";
+  const chartGridColor = isDark ? "rgba(255, 255, 255, 0.15)" : "rgba(0, 0, 0, 0.05)";
+  const chartAxisLineColor = isDark ? "rgba(255, 255, 255, 0.2)" : "#e2e8f0";
+  const chartLineColor = isDark ? "#ffffff" : "#6366f1";
+
   if (loading && !coo) {
     return (
       <div className="flex flex-col items-center justify-center py-24 gap-4">
@@ -206,20 +220,20 @@ export default function CooReport({ data: coo, loading }: CooReportProps) {
           <div className="h-[280px] w-full">
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart data={charts.orderOtdTrend || []} margin={{ top: 20, right: 20, left: -20, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} strokeOpacity={0.1} />
-                <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: "#9ca3af", fontWeight: 700 }} />
-                <YAxis yAxisId="l" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: "#9ca3af" }} />
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={chartGridColor} />
+                <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: chartTextColor, fontWeight: 700 }} />
+                <YAxis yAxisId="l" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: chartTextColor }} />
                 <YAxis yAxisId="r" orientation="right" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: "#ef4444" }} domain={[0, 100]} />
                 <Tooltip 
-                  contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', background: '#1e293b', color: '#fff' }}
+                  contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', background: isDark ? '#1e293b' : '#1e293b', color: '#fff' }}
                   itemStyle={{ fontSize: '10px', fontWeight: 900, textTransform: 'uppercase' }}
                 />
-                <Bar yAxisId="l" dataKey="orders" fill="#6366f1" radius={[6, 6, 0, 0]} barSize={32}>
+                <Bar yAxisId="l" dataKey="orders" fill={isDark ? "#818cf8" : "#6366f1"} radius={[6, 6, 0, 0]} barSize={32}>
                   { (charts.orderOtdTrend || []).map((entry: any, index: number) => (
                     <Cell key={`cell-${index}`} fillOpacity={index === (charts.orderOtdTrend?.length - 1) ? 1 : 0.4} />
                   ))}
                 </Bar>
-                <Line yAxisId="r" type="monotone" dataKey="otdRate" stroke="#ef4444" strokeWidth={4} dot={{ r: 6, fill: "#ef4444", strokeWidth: 3, stroke: "#fff" }} />
+                <Line yAxisId="r" type="monotone" dataKey="otdRate" stroke="#ef4444" strokeWidth={4} dot={{ r: 6, fill: "#ef4444", strokeWidth: 3, stroke: isDark ? "#1e293b" : "#fff" }} />
                 <ReferenceLine yAxisId="r" y={85} stroke="#10b981" strokeDasharray="5 5" label={{ value: 'Target 85%', position: 'insideRight', fill: '#10b981', fontSize: 8, fontWeight: 900 }} />
               </ComposedChart>
             </ResponsiveContainer>
@@ -236,12 +250,12 @@ export default function CooReport({ data: coo, loading }: CooReportProps) {
           <div className="h-[280px] w-full">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={charts.orderOtdTrend || []} margin={{ top: 20, right: 20, left: -20, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} strokeOpacity={0.1} />
-                <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: "#9ca3af" }} />
-                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: "#9ca3af" }} domain={[-110, 20]} />
-                <Tooltip />
-                <Line type="monotone" dataKey="otdRate" stroke="#f59e0b" strokeWidth={4} dot={{ r: 5, fill: "#f59e0b" }} name="Combined Score" />
-                <Line type="monotone" dataKey="orders" stroke="#3b82f6" strokeWidth={4} dot={{ r: 5, fill: "#3b82f6" }} name="On-Time Rate" />
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={chartGridColor} />
+                <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: chartTextColor }} />
+                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: chartTextColor }} domain={[-110, 20]} />
+                <Tooltip contentStyle={{ borderRadius: '16px', border: 'none', background: isDark ? '#1e293b' : '#fff', color: isDark ? '#fff' : '#000' }} />
+                <Line type="monotone" dataKey="otdRate" stroke={isDark ? "#ffffff" : "#f59e0b"} strokeWidth={4} dot={{ r: 5, fill: isDark ? "#ffffff" : "#f59e0b" }} name="Combined Score" />
+                <Line type="monotone" dataKey="orders" stroke={isDark ? "#ffffff" : "#3b82f6"} strokeWidth={4} strokeDasharray={isDark ? "5 5" : undefined} dot={{ r: 5, fill: isDark ? "#ffffff" : "#3b82f6" }} name="On-Time Rate" />
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -260,12 +274,15 @@ export default function CooReport({ data: coo, loading }: CooReportProps) {
           <div className="h-[220px] w-full mb-6">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={rev.dailyChart || []} margin={{ top: 20, right: 20, left: -20, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} strokeOpacity={0.1} />
-                <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: "#9ca3af" }} />
-                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: "#9ca3af" }} hide />
-                <Tooltip formatter={(v: any) => fmtAmount(v)} />
-                <Line type="monotone" dataKey="amount" stroke="#22c55e" strokeWidth={5} dot={{ r: 6, fill: "#22c55e", stroke: "#fff", strokeWidth: 2 }} />
-                <Line type="monotone" dataKey="target" stroke="#94a3b8" strokeWidth={2} strokeDasharray="8 8" dot={false} opacity={0.5} />
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={chartGridColor} />
+                <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: chartTextColor }} />
+                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: chartTextColor }} hide />
+                <Tooltip 
+                  formatter={(v: any) => fmtAmount(v)}
+                  contentStyle={{ borderRadius: '16px', border: 'none', background: isDark ? '#1e293b' : '#fff', color: isDark ? '#fff' : '#000' }}
+                />
+                <Line type="monotone" dataKey="amount" stroke={isDark ? "#ffffff" : "#22c55e"} strokeWidth={5} dot={{ r: 6, fill: isDark ? "#ffffff" : "#22c55e", stroke: isDark ? "#1e293b" : "#fff", strokeWidth: 2 }} />
+                <Line type="monotone" dataKey="target" stroke={chartTextColor} strokeWidth={2} strokeDasharray="8 8" dot={false} opacity={0.5} />
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -294,16 +311,18 @@ export default function CooReport({ data: coo, loading }: CooReportProps) {
           <div className="h-[180px] w-full">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart layout="vertical" data={ord.delayAging?.agingChart || []} margin={{ top: 0, right: 30, left: 40, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" horizontal={false} strokeOpacity={0.1} />
+                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={chartGridColor} />
                 <XAxis type="number" hide />
-                <YAxis dataKey="label" type="category" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: "#9ca3af", fontWeight: 700 }} />
+                <YAxis dataKey="label" type="category" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: chartTextColor, fontWeight: 700 }} />
                 <Tooltip 
                   cursor={{ fill: 'transparent' }}
-                  contentStyle={{ borderRadius: '12px', border: 'none', background: '#1e293b', color: '#fff' }}
+                  contentStyle={{ borderRadius: '12px', border: 'none', background: isDark ? '#1e293b' : '#1e293b', color: '#fff' }}
                 />
                 <Bar dataKey="count" radius={[0, 4, 4, 0]} barSize={20}>
                   { (ord.delayAging?.agingChart || []).map((entry: any, index: number) => {
-                    const colors = ["#6366f1", "#eab308", "#f59e0b", "#ef4444"];
+                    const colors = isDark 
+                      ? ["#818cf8", "#fbbf24", "#fb923c", "#f87171"]
+                      : ["#6366f1", "#eab308", "#f59e0b", "#ef4444"];
                     return <Cell key={`cell-${index}`} fill={colors[index]} />;
                   })}
                 </Bar>

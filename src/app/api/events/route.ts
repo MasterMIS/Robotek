@@ -8,6 +8,7 @@ import { partyManagementService } from '@/lib/party-management-sheets';
 import { checklistService } from '@/lib/checklist-sheets';
 
 import { o2dService } from '@/lib/o2d-sheets';
+import { replaceService } from '@/lib/replace-sheets';
 
 // Map module names to their sheet services (all extend BaseSheetsService)
 const SERVICES: Record<string, any> = {
@@ -18,6 +19,7 @@ const SERVICES: Record<string, any> = {
   'party-management': partyManagementService,
   checklists: checklistService,
   o2d: o2dService,
+  replace: replaceService,
 };
 
 /**
