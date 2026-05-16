@@ -106,12 +106,14 @@ function UserSingleCombobox({
           value={open ? q : value}
           placeholder={placeholder}
           onChange={(e) => {
-            setQ(e.target.value);
+            const val = e.target.value;
+            setQ(val);
+            onChange(val);
             setOpen(true);
           }}
           onFocus={() => {
             setOpen(true);
-            setQ("");
+            setQ(value);
           }}
           className="flex-1 bg-transparent outline-none text-sm font-bold text-gray-800 dark:text-white placeholder:text-gray-300"
         />
@@ -312,6 +314,9 @@ export default function ReplacePage() {
 
   const { data: usersData } = useSWR<{ username: string }[]>("/api/users", fetcher);
   const usersList: string[] = useMemo(() => (usersData || []).map((u) => u.username).filter(Boolean), [usersData]);
+
+  const { data: partiesData } = useSWR<{ data: { partyName: string }[] }>("/api/party-management?limit=-1", fetcher);
+  const partiesList: string[] = useMemo(() => (partiesData?.data || []).map((p) => p.partyName).filter(Boolean), [partiesData]);
 
   useEffect(() => {
     fetch("/api/replace/config")
@@ -955,7 +960,12 @@ export default function ReplacePage() {
               <div className="grid grid-cols-2 gap-4">
                 <div className="col-span-2">
                   <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">Party Name *</label>
-                  <input type="text" value={formData.party_name || ""} onChange={e => setFormData({ ...formData, party_name: e.target.value })} className="w-full px-4 py-3 bg-[#FFFBF0] dark:bg-navy-900 border border-orange-100/50 dark:border-navy-800 rounded-xl font-bold text-sm outline-none focus:border-[#003875] dark:focus:border-[#FFD500]" />
+                  <UserSingleCombobox 
+                    value={formData.party_name || ""} 
+                    onChange={(val) => setFormData({ ...formData, party_name: val })} 
+                    users={partiesList} 
+                    placeholder="Search or select party..."
+                  />
                 </div>
                 <div>
                   <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">Receiver Name *</label>
