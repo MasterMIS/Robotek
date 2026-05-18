@@ -140,10 +140,47 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Invalid data format" }, { status: 400 });
     }
 
-    const success = await appendScotData(records.map(r => [
-      r.employeeName, r.employeeNumber, r.toName, r.countryCode, r.toNumber,
-      r.callType, r.duration, r.callDate, r.callTime, r.notes, r.uniqueId, r.audioUrl
-    ]));
+    const success = await appendScotData(records.map(r => {
+      if (Array.isArray(r)) {
+        const employeeName = r[0] !== undefined ? String(r[0]) : "";
+        const employeeNumber = r[1] !== undefined ? String(r[1]) : "";
+        const toName = r[2] !== undefined ? String(r[2]) : "";
+        const countryCode = r[3] !== undefined ? String(r[3]) : "";
+        const toNumber = r[4] !== undefined ? String(r[4]) : "";
+        const callType = r[5] !== undefined ? String(r[5]) : "";
+        const duration = r[6] !== undefined ? String(r[6]) : "";
+        const callDate = r[7] !== undefined ? String(r[7]) : "";
+        const callTime = r[8] !== undefined ? String(r[8]) : "";
+        const notes = r[9] !== undefined ? String(r[9]) : "";
+        const uniqueId = (r[10] !== undefined && String(r[10]).trim()) 
+          ? String(r[10]) 
+          : `scot_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
+        const audioUrl = r[11] !== undefined ? String(r[11]) : "";
+
+        return [
+          employeeName, employeeNumber, toName, countryCode, toNumber,
+          callType, duration, callDate, callTime, notes, uniqueId, audioUrl
+        ];
+      } else {
+        const uniqueId = (r.uniqueId && String(r.uniqueId).trim())
+          ? String(r.uniqueId)
+          : `scot_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
+        return [
+          r.employeeName !== undefined ? String(r.employeeName) : "",
+          r.employeeNumber !== undefined ? String(r.employeeNumber) : "",
+          r.toName !== undefined ? String(r.toName) : "",
+          r.countryCode !== undefined ? String(r.countryCode) : "",
+          r.toNumber !== undefined ? String(r.toNumber) : "",
+          r.callType !== undefined ? String(r.callType) : "",
+          r.duration !== undefined ? String(r.duration) : "",
+          r.callDate !== undefined ? String(r.callDate) : "",
+          r.callTime !== undefined ? String(r.callTime) : "",
+          r.notes !== undefined ? String(r.notes) : "",
+          uniqueId,
+          r.audioUrl !== undefined ? String(r.audioUrl) : ""
+        ];
+      }
+    }));
 
     if (!success) return NextResponse.json({ error: "Failed to import records" }, { status: 500 });
     return NextResponse.json({ message: "Data imported successfully" });
