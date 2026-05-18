@@ -27,6 +27,7 @@ export const navigation = [
   { name: 'Metrix', id: 'metrix', href: '/metrix', icon: ChartBarIcon },
   { name: 'I2R', id: 'i2r', href: '/i2r', icon: ArchiveBoxIcon },
   { name: 'I2R Packing', id: 'i2r-packing', href: '/i2r-packing', icon: ArchiveBoxIcon },
+  { name: 'Item Receive (PACKING)', id: 'item-receive-packing', href: '/item-receive-packing', icon: ArchiveBoxIcon },
   { name: 'Replace', id: 'replace', href: '/replace', icon: ArchiveBoxIcon },
   { name: 'GRN', id: 'grn', href: '/grn', icon: ArrowDownTrayIcon },
   { name: 'IMS', id: 'ims', href: '/ims', icon: InboxIcon },

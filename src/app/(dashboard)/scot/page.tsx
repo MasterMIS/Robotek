@@ -30,6 +30,7 @@ import { useToast } from '@/components/ToastProvider';
 import { motion, AnimatePresence } from 'framer-motion';
 import { PencilSquareIcon, XMarkIcon, ArrowTrendingUpIcon, ArrowTrendingDownIcon } from '@heroicons/react/24/outline';
 import Portal from '@/components/Portal';
+import { generateScotReportPDF } from '@/lib/utils/scotReportPdf';
 
 interface ScotRecord {
   employeeName: string;
@@ -105,6 +106,41 @@ export default function ScotPage() {
   const [users, setUsers] = useState<any[]>([]);
   const [showMissingPartiesModal, setShowMissingPartiesModal] = useState(false);
   const [dateFilters, setDateFilters] = useState<string[]>([]);
+
+  // Weekly Performance Report State & Direct Exporter
+  const [isReportLoading, setIsReportLoading] = useState(false);
+
+  const handleGenerateWeeklyReports = async () => {
+    setIsReportLoading(true);
+    toast.info("Aggregating spreadsheet metrics for last week...");
+    try {
+      const res = await fetch('/api/scot/report');
+      if (res.ok) {
+        const data = await res.json();
+        const coordinators = data.report || [];
+        if (coordinators.length === 0) {
+          toast.error("No active sales coordinator records found for last week.");
+          return;
+        }
+        
+        toast.info(`Generating print-ready PDF reports for ${coordinators.length} Sales Coordinator(s)...`);
+        
+        // Direct download of PDFs
+        for (const coordinator of coordinators) {
+          await generateScotReportPDF(coordinator, data.dateRange);
+        }
+        
+        toast.success(`Successfully exported and downloaded ${coordinators.length} Coordinator PDF report(s)!`);
+      } else {
+        toast.error("Failed to load weekly report data from server");
+      }
+    } catch (err) {
+      console.error("Error generating weekly reports:", err);
+      toast.error("Error connecting to server while generating reports");
+    } finally {
+      setIsReportLoading(false);
+    }
+  };
 
   useEffect(() => {
     fetchScotData();
@@ -692,6 +728,21 @@ export default function ScotPage() {
             >
               <ArrowDownTrayIcon className="w-4 h-4" />
               <span className="hidden sm:inline">Export</span>
+            </button>
+
+            {/* Action: Weekly Performance Report */}
+            <button
+              onClick={handleGenerateWeeklyReports}
+              disabled={isReportLoading}
+              className="flex items-center justify-center gap-2 text-rose-600 dark:text-[#FFD500] px-4 py-1.5 font-black transition-colors hover:bg-gray-100 dark:hover:bg-navy-700 uppercase tracking-widest text-[10px] rounded-full whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Download Sales Coordinator Reports"
+            >
+              {isReportLoading ? (
+                <div className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <DocumentTextIcon className="w-4 h-4" />
+              )}
+              <span>{isReportLoading ? "Generating..." : "Weekly Report"}</span>
             </button>
             
             {/* Action: Import (Only for Feeder) */}

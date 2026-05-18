@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { useSession } from "next-auth/react";
 import { I2RPacking, I2RPackingStepConfig, I2R_PACKING_STEPS } from "@/types/i2r-packing";
+import { ItemReceivePacking } from "@/types/item-receive-packing";
 import useSWR from "swr";
 import { useSSE } from "@/hooks/useSSE";
 import { applyIncrementalUpdate } from "@/lib/utils/swr-sync";
@@ -237,6 +238,16 @@ export default function I2RPackingPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<I2RPacking | null>(null);
+  const [isReceiveModalOpen, setIsReceiveModalOpen] = useState(false);
+  const [receiveFormData, setReceiveFormData] = useState({
+    item_name: "",
+    supplier_name: "",
+    po_no: "",
+    qty: "",
+    payment_terms_in_days: "",
+    payment_completed: "No"
+  });
+  const [receiveBillFile, setReceiveBillFile] = useState<File | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [sortConfig, setSortConfig] = useState<{
     key: keyof I2RPacking;
@@ -287,15 +298,46 @@ export default function I2RPackingPage() {
     revalidateOnMount: true,
   });
 
+  const { data: receiveItemsData, mutate: mutateReceiveItems } = useSWR<ItemReceivePacking[]>("/api/item-receive-packing", fetcher, {
+    refreshInterval: 0,
+    revalidateOnFocus: true,
+    revalidateOnMount: true,
+  });
+
   useSSE({
-    modules: ['i2r-packing'],
+    modules: ['i2r-packing', 'item-receive-packing'],
     onUpdate: (incremental) => {
       const updates = incremental.find(m => m.module === 'i2r-packing');
       if (updates) {
         mutateItems((current) => applyIncrementalUpdate(current, updates.upserts, updates.currentIds), false);
       }
+      const recvUpdates = incremental.find(m => m.module === 'item-receive-packing');
+      if (recvUpdates) {
+        mutateReceiveItems((current) => applyIncrementalUpdate(current, recvUpdates.upserts, recvUpdates.currentIds), false);
+      }
     }
   });
+
+  // Helper to calculate total received and balance for a PO number
+  const getPOStats = (poNum: string, totalQtyStr: string) => {
+    if (!poNum || poNum.trim() === "" || poNum === "—") {
+      return { totalReceived: 0, balance: 0, hasPO: false, totalQty: 0 };
+    }
+    const normalizedPo = poNum.trim().toLowerCase();
+    let totalReceived = 0;
+    if (receiveItemsData && Array.isArray(receiveItemsData)) {
+      receiveItemsData.forEach(it => {
+        if (!it.cancelled && it.po_no && it.po_no.trim().toLowerCase() === normalizedPo) {
+          const qtyVal = parseFloat(it.qty) || 0;
+          totalReceived += qtyVal;
+        }
+      });
+    }
+    const cleanedTotalQtyStr = totalQtyStr ? totalQtyStr.replace(/[^\d.]/g, "") : "";
+    const totalQty = parseFloat(cleanedTotalQtyStr) || 0;
+    const balance = totalQty - totalReceived;
+    return { totalReceived, balance, hasPO: true, totalQty };
+  };
 
   const { data: usersData } = useSWR<{ username: string }[]>("/api/users", fetcher);
   const usersList: string[] = useMemo(() => (usersData || []).map((u) => u.username).filter(Boolean), [usersData]);
@@ -391,7 +433,7 @@ export default function I2RPackingPage() {
 
   const calculatePlannedDate = (base: Date | string, tat: string): string => {
     let date = new Date(base); if (isNaN(date.getTime())) return "";
-    const val = parseFloat(tat); const unit = tat.includes("day") ? "day" : "hr";
+    const val = parseFloat(tat); const unit = tat.toLowerCase().includes("day") ? "day" : "hr";
     let mins = unit === "day" ? val * 10 * 60 : val * 60;
     while (mins > 0) {
       if (date.getDay() === 0) { date.setDate(date.getDate() + 1); date.setHours(9, 30, 0, 0); continue; }
@@ -519,6 +561,78 @@ export default function I2RPackingPage() {
     setTimeout(() => { setIsStatusModalOpen(false); setIsRemoveFollowUpModalOpen(false); mutateItems(); }, 1500);
   };
 
+  const openReceiveModal = (item: I2RPacking) => {
+    const itemName = item.item_name || "";
+    const supplierName = item.vendor_name_3 || item.last_suppliar || "";
+    const poNo = item.po_num_4 || "";
+
+    setReceiveFormData({
+      item_name: itemName,
+      supplier_name: supplierName,
+      po_no: poNo,
+      qty: "",
+      payment_terms_in_days: "",
+      payment_completed: "No"
+    });
+    setReceiveBillFile(null);
+    setIsReceiveModalOpen(true);
+  };
+
+  const handleSaveReceive = async () => {
+    setActionStatus("loading"); setActionMessage("Saving Inward..."); setIsStatusModalOpen(true);
+
+    let billUrl = "";
+    if (receiveBillFile) {
+      setActionMessage("Uploading bill attachment...");
+      const fd = new FormData();
+      fd.append("file", receiveBillFile);
+      try {
+        const res = await fetch("/api/item-receive-packing/upload", { method: "POST", body: fd });
+        const data = await res.json();
+        if (data.fileId) billUrl = `https://drive.google.com/uc?id=${data.fileId}`;
+      } catch (err) {
+        console.error("Upload failed", err);
+      }
+    }
+
+    setActionMessage("Saving inward record...");
+    const now = new Date().toISOString();
+    const payload = {
+      item_name: receiveFormData.item_name,
+      supplier_name: receiveFormData.supplier_name,
+      po_no: receiveFormData.po_no,
+      qty: receiveFormData.qty,
+      attach_bill: billUrl,
+      payment_completed: receiveFormData.payment_completed,
+      payment_terms_in_days: receiveFormData.payment_terms_in_days,
+      created_at: now,
+      updated_at: now
+    };
+
+    try {
+      const res = await fetch("/api/item-receive-packing", { 
+        method: "POST", 
+        headers: { "Content-Type": "application/json" }, 
+        body: JSON.stringify(payload) 
+      });
+      if (res.ok) {
+        setActionStatus("success");
+        setActionMessage("Inward record successfully created!");
+      } else {
+        setActionStatus("error");
+        setActionMessage("Failed to save inward record.");
+      }
+    } catch { 
+      setActionStatus("error"); 
+      setActionMessage("Network error occurred.");
+    }
+    setTimeout(() => { 
+      setIsStatusModalOpen(false); 
+      setIsReceiveModalOpen(false); 
+      setReceiveBillFile(null); 
+    }, 1500);
+  };
+
   const handleExport = () => {
     const headers = [
       "ID", "PPF Num", "Packing Design", "Total Qty", "Last Suppliar", "Item Name", "Required By", "Created At", "Updated At",
@@ -601,9 +715,19 @@ export default function I2RPackingPage() {
         upd.lead_time_3 = bulkLeadTimeInputs[id];
         upd.pi_3 = uploadedUrls[id] || it.pi_3;
       }
-      if (n === 4) { upd.po_num_4 = bulkPOInputs[id]; }
+      if (n === 4) {
+        upd.po_num_4 = bulkPOInputs[id];
+        // Generate Step 6 planned time based on Actual_4 (now) + Lead_Time_3
+        const ltStr = (upd.lead_time_3 || "").trim();
+        const leadTimeTat = ltStr ? (/^\d+(\.\d+)?$/.test(ltStr) ? `${ltStr} Days` : ltStr) : "24 Hrs";
+        upd.planned_6 = calculatePlannedDate(now, leadTimeTat);
+      }
 
-      if (n < 6) upd[`planned_${n + 1}`] = calculatePlannedDate(now, globalConfigs[n].tat || "24 Hrs");
+      if (n < 6) {
+        if (n !== 5) {
+          upd[`planned_${n + 1}`] = calculatePlannedDate(now, globalConfigs[n].tat || "24 Hrs");
+        }
+      }
 
       try { await fetch("/api/i2r-packing", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(upd) }); } catch { errors++; }
     }
@@ -734,6 +858,7 @@ export default function I2RPackingPage() {
                             )}
                             <div className="flex items-center gap-1 px-2 py-1 bg-white dark:bg-navy-800 rounded-full border border-slate-100 dark:border-navy-700 shadow-lg">
                               <button onClick={e => { e.stopPropagation(); setExpandedTiles(p => ({ ...p, [item.id]: !exp })); }} className={`p-1.5 rounded-full transition-all ${exp ? "bg-[#003875] text-[#FFD500]" : "text-[#003875] dark:text-[#FFD500] hover:bg-yellow-50"}`}><ChevronDownIcon className={`w-3.5 h-3.5 stroke-[3] transition-transform ${exp ? "rotate-180" : ""}`} /></button>
+                              <button onClick={e => { e.stopPropagation(); openReceiveModal(item); }} className="p-1.5 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 rounded-full transition-all" title="Inward Item Receive"><PlusIcon className="w-3.5 h-3.5 stroke-[3.5]" /></button>
                               <button onClick={e => { e.stopPropagation(); openEditModal(item); }} className="p-1.5 text-blue-500 hover:bg-blue-50 rounded-full transition-all" title="Edit"><PencilSquareIcon className="w-3.5 h-3.5" /></button>
                               <button onClick={e => { e.stopPropagation(); openRemoveFollowUpModal(item); }} className="p-1.5 text-purple-500 hover:bg-purple-50 rounded-full transition-all" title="Remove Follow Up"><ArrowUturnLeftIcon className="w-3.5 h-3.5" /></button>
                               {item.cancelled ? (
@@ -746,36 +871,57 @@ export default function I2RPackingPage() {
                           </div>
                         </div>
 
-                        <div className="mt-3 border-t border-slate-50 dark:border-navy-700 pt-3">
-                          <div className="grid grid-cols-6 gap-3 items-start">
-                            <div className="space-y-0.5">
-                              <p className="text-[9px] font-black text-emerald-500 uppercase tracking-widest">LAST SUPPLIAR</p>
-                              <p className="text-[12px] font-black text-slate-800 dark:text-white truncate">{item.last_suppliar || "—"}</p>
+                        {(() => {
+                          const stats = getPOStats(item.po_num_4, item.total_qty);
+                          return (
+                            <div className="mt-3 border-t border-slate-50 dark:border-navy-700 pt-3">
+                              <div className={`grid gap-3 items-start ${stats.hasPO ? "grid-cols-9" : "grid-cols-6"}`}>
+                                <div className="space-y-0.5">
+                                  <p className="text-[9px] font-black text-emerald-500 uppercase tracking-widest">LAST SUPPLIAR</p>
+                                  <p className="text-[12px] font-black text-slate-800 dark:text-white truncate">{item.last_suppliar || "—"}</p>
+                                </div>
+                                <div className="space-y-0.5">
+                                  <p className="text-[9px] font-black text-orange-400 uppercase tracking-widest">REQUIRED BY</p>
+                                  <p className="text-[12px] font-black text-slate-800 dark:text-white truncate">{item.required_by || "—"}</p>
+                                </div>
+                                <div className="space-y-0.5">
+                                  <p className="text-[9px] font-black text-blue-500 uppercase tracking-widest">VENDOR (ST3)</p>
+                                  <p className="text-[12px] font-black text-slate-800 dark:text-white truncate">{item.vendor_name_3 || "—"}</p>
+                                </div>
+                                <div className="space-y-0.5">
+                                  <p className="text-[9px] font-black text-purple-500 uppercase tracking-widest">LEAD TIME (ST3)</p>
+                                  <p className="text-[12px] font-black text-slate-800 dark:text-white truncate">{item.lead_time_3 || "—"}</p>
+                                </div>
+                                <div className="space-y-0.5">
+                                  <p className="text-[9px] font-black text-indigo-500 uppercase tracking-widest">PI (ST3)</p>
+                                  {item.pi_3 ? (
+                                    <a href={item.pi_3} target="_blank" className="text-[12px] font-black text-indigo-600 hover:underline flex items-center gap-1"><PhotoIcon className="w-3 h-3" /> VIEW PI</a>
+                                  ) : <p className="text-[12px] font-black text-slate-300 uppercase tracking-tighter">—</p>}
+                                </div>
+                                <div className="space-y-0.5">
+                                  <p className="text-[9px] font-black text-rose-500 uppercase tracking-widest">PO NUM (ST4)</p>
+                                  <p className="text-[12px] font-black text-slate-800 dark:text-white truncate">{item.po_num_4 || "—"}</p>
+                                </div>
+                                {stats.hasPO && (
+                                  <>
+                                    <div className="space-y-0.5">
+                                      <p className="text-[9px] font-black text-purple-500 uppercase tracking-widest">QTY REQUIRED</p>
+                                      <p className="text-[12px] font-black text-purple-600 dark:text-purple-400 truncate">{item.total_qty || "0"}</p>
+                                    </div>
+                                    <div className="space-y-0.5">
+                                      <p className="text-[9px] font-black text-emerald-500 uppercase tracking-widest">TOTAL RECEIVED</p>
+                                      <p className="text-[12px] font-black text-emerald-600 dark:text-emerald-400 truncate">{stats.totalReceived}</p>
+                                    </div>
+                                    <div className="space-y-0.5">
+                                      <p className="text-[9px] font-black text-amber-500 uppercase tracking-widest">BALANCE QTY</p>
+                                      <p className={`text-[12px] font-black truncate ${stats.balance <= 0 ? "text-blue-500" : "text-amber-500"}`}>{stats.balance}</p>
+                                    </div>
+                                  </>
+                                )}
+                              </div>
                             </div>
-                            <div className="space-y-0.5">
-                              <p className="text-[9px] font-black text-orange-400 uppercase tracking-widest">REQUIRED BY</p>
-                              <p className="text-[12px] font-black text-slate-800 dark:text-white truncate">{item.required_by || "—"}</p>
-                            </div>
-                            <div className="space-y-0.5">
-                              <p className="text-[9px] font-black text-blue-500 uppercase tracking-widest">VENDOR (ST3)</p>
-                              <p className="text-[12px] font-black text-slate-800 dark:text-white truncate">{item.vendor_name_3 || "—"}</p>
-                            </div>
-                            <div className="space-y-0.5">
-                              <p className="text-[9px] font-black text-purple-500 uppercase tracking-widest">LEAD TIME (ST3)</p>
-                              <p className="text-[12px] font-black text-slate-800 dark:text-white truncate">{item.lead_time_3 || "—"}</p>
-                            </div>
-                            <div className="space-y-0.5">
-                              <p className="text-[9px] font-black text-indigo-500 uppercase tracking-widest">PI (ST3)</p>
-                              {item.pi_3 ? (
-                                <a href={item.pi_3} target="_blank" className="text-[12px] font-black text-indigo-600 hover:underline flex items-center gap-1"><PhotoIcon className="w-3 h-3" /> VIEW PI</a>
-                              ) : <p className="text-[12px] font-black text-slate-300 uppercase tracking-tighter">—</p>}
-                            </div>
-                            <div className="space-y-0.5">
-                              <p className="text-[9px] font-black text-rose-500 uppercase tracking-widest">PO NUM (ST4)</p>
-                              <p className="text-[12px] font-black text-slate-800 dark:text-white truncate">{item.po_num_4 || "—"}</p>
-                            </div>
-                          </div>
-                        </div>
+                          );
+                        })()}
 
                         {exp && (
                           <div className="mt-3 grid grid-cols-6 gap-2 animate-in slide-in-from-top-2 duration-300">
@@ -826,6 +972,8 @@ export default function I2RPackingPage() {
                       <th className="p-4 whitespace-nowrap min-w-[200px]">ITEM NAME</th>
                       <th className="p-4 whitespace-nowrap min-w-[150px]">DESIGN</th>
                       <th className="p-4 whitespace-nowrap">QTY</th>
+                      <th className="p-4 whitespace-nowrap text-emerald-300">RECEIVED QTY</th>
+                      <th className="p-4 whitespace-nowrap text-amber-300">BALANCE QTY</th>
                       <th className="p-4 whitespace-nowrap min-w-[150px]">LAST SUPPLIAR</th>
                       <th className="p-4 whitespace-nowrap min-w-[120px]">REQUIRED BY</th>
                       <th className="p-4 whitespace-nowrap min-w-[150px] text-blue-300">VENDOR (ST3)</th>
@@ -854,6 +1002,7 @@ export default function I2RPackingPage() {
                           </td>
                           <td className="p-4 sticky left-10 z-10 bg-white dark:bg-navy-900 group-hover:bg-[#FFFBF0] dark:group-hover:bg-navy-800 transition-colors">
                             <div className="flex items-center gap-1.5">
+                              <button onClick={() => openReceiveModal(item)} className="p-1.5 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/40 rounded-lg transition-all" title="Inward Item Receive"><PlusIcon className="w-4 h-4 stroke-[3]" /></button>
                               <button onClick={() => openEditModal(item)} className="p-1.5 text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/40 rounded-lg transition-all" title="Edit"><PencilSquareIcon className="w-4 h-4" /></button>
                               <button onClick={() => openRemoveFollowUpModal(item)} className="p-1.5 text-purple-500 hover:bg-purple-50 dark:hover:bg-purple-900/40 rounded-lg transition-all" title="Remove Follow Up"><ArrowUturnLeftIcon className="w-4 h-4" /></button>
                               {item.cancelled ? (
@@ -879,7 +1028,35 @@ export default function I2RPackingPage() {
                             </div>
                           </td>
                           <td className="p-4 text-slate-500 dark:text-navy-300 uppercase truncate">{item.packing_design || "—"}</td>
-                          <td className="p-4"><span className="px-2.5 py-1 bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 rounded-lg">{item.total_qty || "0"}</span></td>
+                          <td className="p-4">
+                            <span className="px-2.5 py-1 bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 rounded-lg font-black text-xs text-center w-max">{item.total_qty || "0"}</span>
+                          </td>
+                          <td className="p-4">
+                            {(() => {
+                              const stats = getPOStats(item.po_num_4, item.total_qty);
+                              return (
+                                <span className={`px-2.5 py-1 rounded-lg font-black text-xs whitespace-nowrap ${stats.hasPO ? "bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400" : "text-slate-300 dark:text-slate-700"}`}>
+                                  {stats.hasPO ? stats.totalReceived : "—"}
+                                </span>
+                              );
+                            })()}
+                          </td>
+                          <td className="p-4">
+                            {(() => {
+                              const stats = getPOStats(item.po_num_4, item.total_qty);
+                              return (
+                                <span className={`px-2.5 py-1 rounded-lg font-black text-xs whitespace-nowrap ${
+                                  stats.hasPO 
+                                    ? stats.balance <= 0 
+                                      ? "bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400" 
+                                      : "bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400" 
+                                    : "text-slate-300 dark:text-slate-700"
+                                }`}>
+                                  {stats.hasPO ? stats.balance : "—"}
+                                </span>
+                              );
+                            })()}
+                          </td>
                           <td className="p-4 text-emerald-600 dark:text-emerald-400 uppercase truncate">{item.last_suppliar || "—"}</td>
                           <td className="p-4">
                             <div className="flex items-center gap-2 text-slate-600 dark:text-navy-400">
@@ -1010,6 +1187,118 @@ export default function I2RPackingPage() {
               <button onClick={() => setIsModalOpen(false)} className="flex-1 py-3.5 bg-white dark:bg-navy-800 border border-slate-200 dark:border-navy-700 text-slate-500 rounded-xl font-black text-xs uppercase">Cancel</button>
               <button onClick={handleSave} className="flex-1 py-3.5 bg-[#003875] dark:bg-[#FFD500] text-white dark:text-navy-950 rounded-xl font-black text-xs uppercase shadow-lg shadow-blue-500/20 active:scale-95 transition-all">
                 {editingItem ? "Update Packing" : "Create Packing"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Item Receive Inward Modal */}
+      {isReceiveModalOpen && (
+        <div className="fixed inset-0 z-[1200] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-[#001a33]/40 backdrop-blur-sm" onClick={() => setIsReceiveModalOpen(false)} />
+          <div className="relative bg-white dark:bg-navy-900 w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden flex flex-col border border-slate-200 dark:border-white/10 animate-in zoom-in-95 duration-300">
+            <div className="p-6 pb-4 bg-[#FFFBF0] dark:bg-navy-955 border-b border-orange-100/50 dark:border-zinc-800 flex items-start justify-between">
+              <div>
+                <h2 className="text-2xl font-black text-[#003875] dark:text-white uppercase leading-none">Inward Item Receive</h2>
+                <p className="text-[10px] font-black text-emerald-600 dark:text-emerald-400 mt-2 uppercase tracking-widest flex items-center gap-2">
+                  <PlusIcon className="w-3.5 h-3.5" /> Submit to Inward Workflow
+                </p>
+              </div>
+              <button onClick={() => setIsReceiveModalOpen(false)} className="text-slate-300 hover:text-slate-900 transition-colors"><XMarkIcon className="w-6 h-6" /></button>
+            </div>
+            
+            <div className="p-6 pt-6 space-y-4 bg-white dark:bg-navy-900 overflow-y-auto max-h-[60vh] custom-scrollbar">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="col-span-2">
+                  <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">Item Name (Read Only)</label>
+                  <input 
+                    type="text" 
+                    value={receiveFormData.item_name} 
+                    readOnly 
+                    className="w-full px-4 py-3 bg-slate-100 dark:bg-navy-950 border border-slate-200 dark:border-navy-800 rounded-xl font-bold text-sm text-slate-500 dark:text-slate-400 cursor-not-allowed outline-none" 
+                  />
+                </div>
+                
+                <div className="col-span-2">
+                  <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">Supplier Name (Read Only)</label>
+                  <input 
+                    type="text" 
+                    value={receiveFormData.supplier_name} 
+                    readOnly 
+                    className="w-full px-4 py-3 bg-slate-100 dark:bg-navy-950 border border-slate-200 dark:border-navy-800 rounded-xl font-bold text-sm text-slate-500 dark:text-slate-400 cursor-not-allowed outline-none" 
+                  />
+                </div>
+                
+                <div>
+                  <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">
+                    {receiveFormData.po_no ? "PO No. (Read Only)" : "PO No. *"}
+                  </label>
+                  <input 
+                    type="text" 
+                    value={receiveFormData.po_no} 
+                    onChange={e => setReceiveFormData({ ...receiveFormData, po_no: e.target.value })} 
+                    readOnly={!!receiveFormData.po_no}
+                    className={`w-full px-4 py-3 rounded-xl font-bold text-sm outline-none transition-all ${
+                      receiveFormData.po_no 
+                        ? "bg-slate-100 dark:bg-navy-950 border border-slate-200 dark:border-navy-800 text-slate-500 dark:text-slate-400 cursor-not-allowed" 
+                        : "bg-[#FFFBF0] dark:bg-navy-900 border border-orange-100/50 dark:border-navy-800 focus:border-[#003875] dark:focus:border-[#FFD500]"
+                    }`}
+                  />
+                </div>
+                
+                <div>
+                  <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">Qty *</label>
+                  <input 
+                    type="text" 
+                    value={receiveFormData.qty} 
+                    onChange={e => setReceiveFormData({ ...receiveFormData, qty: e.target.value })} 
+                    className="w-full px-4 py-3 bg-[#FFFBF0] dark:bg-navy-900 border border-orange-100/50 dark:border-navy-800 rounded-xl font-bold text-sm outline-none focus:border-[#003875] dark:focus:border-[#FFD500] transition-all shadow-sm" 
+                    placeholder="Enter manual quantity..."
+                  />
+                </div>
+                
+                <div>
+                  <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">Attach Bill</label>
+                  <input 
+                    type="file" 
+                    onChange={e => setReceiveBillFile(e.target.files?.[0] || null)} 
+                    className="w-full px-4 py-2 bg-[#FFFBF0] dark:bg-navy-900 border border-orange-100/50 dark:border-navy-800 rounded-xl font-bold text-[10px] outline-none" 
+                  />
+                </div>
+                
+                <div>
+                  <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">Payment Terms (In Days)</label>
+                  <input 
+                    type="text" 
+                    value={receiveFormData.payment_terms_in_days} 
+                    onChange={e => setReceiveFormData({ ...receiveFormData, payment_terms_in_days: e.target.value })} 
+                    className="w-full px-4 py-3 bg-[#FFFBF0] dark:bg-navy-900 border border-orange-100/50 dark:border-navy-800 rounded-xl font-bold text-sm outline-none focus:border-[#003875] dark:focus:border-[#FFD500]" 
+                  />
+                </div>
+                
+                <div className="col-span-2">
+                  <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">Payment Completed</label>
+                  <div className="flex items-center gap-2 bg-[#FFFBF0] dark:bg-navy-900 p-1.5 border border-orange-100/50 dark:border-navy-800 rounded-xl">
+                    <button
+                      type="button"
+                      onClick={() => setReceiveFormData({ ...receiveFormData, payment_completed: "Yes" })}
+                      className={`flex-1 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all ${receiveFormData.payment_completed === "Yes" ? "bg-[#003875] text-[#FFD500] shadow-md" : "text-slate-400 hover:bg-slate-50"}`}
+                    >Yes</button>
+                    <button
+                      type="button"
+                      onClick={() => setReceiveFormData({ ...receiveFormData, payment_completed: "No" })}
+                      className={`flex-1 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all ${receiveFormData.payment_completed === "No" ? "bg-red-500 text-white shadow-md" : "text-slate-400 hover:bg-red-50"}`}
+                    >No</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <div className="p-6 py-4 bg-[#FFFBF0] dark:bg-navy-950 border-t border-orange-100/50 dark:border-zinc-800 flex gap-4">
+              <button onClick={() => setIsReceiveModalOpen(false)} className="flex-1 py-3.5 bg-white dark:bg-navy-800 border border-slate-200 dark:border-navy-700 text-slate-500 rounded-xl font-black text-xs uppercase">Cancel</button>
+              <button onClick={handleSaveReceive} className="flex-1 py-3.5 bg-[#003875] dark:bg-[#FFD500] text-white dark:text-navy-950 rounded-xl font-black text-xs uppercase shadow-lg transition-all active:scale-95">
+                Submit Inward
               </button>
             </div>
           </div>

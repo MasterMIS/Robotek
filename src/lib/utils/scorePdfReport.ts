@@ -333,7 +333,7 @@ export async function generateUserPDF(
     });
   }
 
-  const pageCount = doc.internal.getNumberOfPages();
+  const pageCount = (doc as any).internal.getNumberOfPages();
   for (let i = 1; i <= pageCount; i++) {
     doc.setPage(i);
     drawHeader(doc, PW, i, pageCount, username, dateRange.from, dateRange.to, logo);

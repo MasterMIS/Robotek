@@ -10,6 +10,7 @@ import { checklistService } from '@/lib/checklist-sheets';
 import { o2dService } from '@/lib/o2d-sheets';
 import { replaceService } from '@/lib/replace-sheets';
 import { i2rPackingService } from '@/lib/i2r-packing-sheets';
+import { itemReceivePackingService } from '@/lib/item-receive-packing-sheets';
 
 // Map module names to their sheet services (all extend BaseSheetsService)
 const SERVICES: Record<string, any> = {
@@ -22,6 +23,7 @@ const SERVICES: Record<string, any> = {
   o2d: o2dService,
   replace: replaceService,
   'i2r-packing': i2rPackingService,
+  'item-receive-packing': itemReceivePackingService,
 };
 
 /**

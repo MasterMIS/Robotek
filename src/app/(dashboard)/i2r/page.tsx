@@ -402,7 +402,7 @@ export default function I2RPage() {
 
   const calculatePlannedDate = (base: Date | string, tat: string): string => {
     let date = new Date(base); if (isNaN(date.getTime())) return "";
-    const val = parseFloat(tat); const unit = tat.includes("day") ? "day" : "hr";
+    const val = parseFloat(tat); const unit = tat.toLowerCase().includes("day") ? "day" : "hr";
     let mins = unit === "day" ? val * 10 * 60 : val * 60;
     while (mins > 0) {
       if (date.getDay() === 0) { date.setDate(date.getDate() + 1); date.setHours(9, 30, 0, 0); continue; }
@@ -493,9 +493,19 @@ export default function I2RPage() {
         upd.sample_qty_5 = bulkSampleQtyInputs[id];
       }
       if (n === 6) upd.po_number_6 = bulkPOInputs[id];
+      if (n === 7) {
+        // Generate Step 8 planned time based on Actual_7 (now) + Lead_time_Acc_to_Vendor_4
+        const ltStr = (upd.lead_time_acc_to_vendor_4 || "").trim();
+        const leadTimeTat = ltStr ? (/^\d+(\.\d+)?$/.test(ltStr) ? `${ltStr} Days` : ltStr) : "24 Hrs";
+        upd.planned_8 = calculatePlannedDate(now, leadTimeTat);
+      }
       if (n === 8) upd.cargo_8 = bulkCargoInputs[id];
       if (n === 9) upd.received_qty_9 = bulkReceivedQtyInputs[id];
-      if (n < 10) upd[`planned_${n+1}`] = calculatePlannedDate(now, globalConfigs[n-1].tat || "24 Hrs");
+      if (n < 10) {
+        if (n !== 7) {
+          upd[`planned_${n+1}`] = calculatePlannedDate(now, globalConfigs[n-1].tat || "24 Hrs");
+        }
+      }
       try { const r = await fetch("/api/i2r", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(upd) }); if (!r.ok) errors++; } catch { errors++; }
     }
     setActionStatus(errors ? "error" : "success"); setActionMessage(errors ? `Failed ${errors} updates` : "All updated!");
