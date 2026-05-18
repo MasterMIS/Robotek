@@ -240,11 +240,12 @@ export async function generateScotReportPDF(salesCoordinatorData: any, dateRange
   
   y += 28;
 
-  // ── Section: Direct Calls Distribution Breakdown (Segmented Progress Card) ──
+  // ── Section: Left (Feeder Call Breakdown) & Right (Weekly Target Summary Table) Side-by-Side Cards ──
   doc.setFontSize(8); 
   doc.setFont("helvetica", "bold"); 
   doc.setTextColor(...NAVY);
-  doc.text("DIRECT FEEDER CALL ANALYSIS (BY TYPE)", M, y);
+  doc.text("DIRECT CALL BREAKDOWN", M, y);
+  doc.text("WEEKLY PERFORMANCE SUMMARY", M + 92, y);
   
   const totalCalls = salesCoordinatorData.totalDirectCalls || 0;
   const incCalls = salesCoordinatorData.directCallsIncoming || 0;
@@ -255,58 +256,124 @@ export async function generateScotReportPDF(salesCoordinatorData: any, dateRange
   const outPct = totalCalls > 0 ? Math.round((outCalls / totalCalls) * 100) : 0;
   const misPct = totalCalls > 0 ? Math.max(0, 100 - incPct - outPct) : 0;
 
+  // Left Card Widget: Call types distribution
   doc.setFillColor(245, 247, 250); 
-  doc.roundedRect(M, y + 2.5, CW, 14, 1.5, 1.5, "F");
+  doc.roundedRect(M, y + 2.5, 88, 24, 1.5, 1.5, "F");
 
-  const barW = CW - 10;
-  const incW = (barW * incPct) / 100;
-  const outW = (barW * outPct) / 100;
-  const misW = (barW * misPct) / 100;
+  const leftBarW = 80;
+  const incW = (leftBarW * incPct) / 100;
+  const outW = (leftBarW * outPct) / 100;
+  const misW = (leftBarW * misPct) / 100;
 
-  // Draw background track
+  // Draw calls progress track background
   doc.setFillColor(230, 235, 242); 
-  doc.roundedRect(M + 5, y + 5.5, barW, 3.5, 0.8, 0.8, "F");
+  doc.roundedRect(M + 4, y + 5.5, leftBarW, 3.0, 0.6, 0.6, "F");
 
-  // Draw colored segments
-  let currentX = M + 5;
+  // Draw calls colored progress segments
+  let leftX = M + 4;
   if (incW > 0) {
     doc.setFillColor(...EMERALD);
-    doc.roundedRect(currentX, y + 5.5, incW, 3.5, 0.5, 0.5, "F");
-    currentX += incW;
+    doc.roundedRect(leftX, y + 5.5, incW, 3.0, 0.4, 0.4, "F");
+    leftX += incW;
   }
   if (outW > 0) {
     doc.setFillColor(...NAVY);
-    doc.roundedRect(currentX, y + 5.5, outW, 3.5, 0.5, 0.5, "F");
-    currentX += outW;
+    doc.roundedRect(leftX, y + 5.5, outW, 3.0, 0.4, 0.4, "F");
+    leftX += outW;
   }
   if (misW > 0) {
     doc.setFillColor(...ROSE);
-    doc.roundedRect(currentX, y + 5.5, misW, 3.5, 0.5, 0.5, "F");
+    doc.roundedRect(leftX, y + 5.5, misW, 3.0, 0.4, 0.4, "F");
   }
 
-  // Draw Legend Circle + Labels
-  doc.setFontSize(6.0);
+  // Draw Left Legend circle indicators (Vertical Stack)
+  doc.setFontSize(5.5);
   doc.setFont("helvetica", "bold");
 
-  // Incoming legend
   doc.setFillColor(...EMERALD);
-  doc.circle(M + 8, y + 12.5, 1.0, "F");
+  doc.circle(M + 6, y + 13.0, 1.0, "F");
   doc.setTextColor(...NAVY);
-  doc.text(`INCOMING: ${incCalls} (${incPct}%)`, M + 11, y + 13.5);
+  doc.text(`INCOMING CALLS: ${incCalls} (${incPct}%)`, M + 9, y + 14.0);
 
-  // Outgoing legend
   doc.setFillColor(...NAVY);
-  doc.circle(M + 68, y + 12.5, 1.0, "F");
+  doc.circle(M + 6, y + 17.5, 1.0, "F");
   doc.setTextColor(...NAVY);
-  doc.text(`OUTGOING: ${outCalls} (${outPct}%)`, M + 71, y + 13.5);
+  doc.text(`OUTGOING CALLS: ${outCalls} (${outPct}%)`, M + 9, y + 18.5);
 
-  // Missed legend
   doc.setFillColor(...ROSE);
-  doc.circle(M + 128, y + 12.5, 1.0, "F");
+  doc.circle(M + 6, y + 22.0, 1.0, "F");
   doc.setTextColor(...NAVY);
-  doc.text(`MISSED: ${misCalls} (${misPct}%)`, M + 131, y + 13.5);
+  doc.text(`MISSED CALLS:     ${misCalls} (${misPct}%)`, M + 9, y + 23.0);
 
-  y += 21;
+  // Right Card Widget: Custom-drawn targets table comparing orders vs follow-ups
+  doc.setFillColor(245, 247, 250); 
+  doc.roundedRect(M + 92, y + 2.5, 90, 24, 1.5, 1.5, "F");
+
+  // Grid Header
+  doc.setFillColor(...NAVY);
+  doc.roundedRect(M + 92, y + 2.5, 90, 5.0, 1.0, 1.0, "F");
+  
+  doc.setTextColor(...WHITE); 
+  doc.setFontSize(5.5); 
+  doc.setFont("helvetica", "bold");
+  doc.text("METRIC", M + 96, y + 6.0);
+  doc.text("PLANNED", M + 128, y + 6.0, { align: "center" });
+  doc.text("ACTUAL", M + 150, y + 6.0, { align: "center" });
+  doc.text("GAP %", M + 172, y + 6.0, { align: "center" });
+
+  // Grid row lines
+  doc.setDrawColor(225, 230, 240); 
+  doc.setLineWidth(0.3);
+  doc.line(M + 92, y + 14.0, M + 182, y + 14.0);
+  doc.line(M + 92, y + 20.5, M + 182, y + 20.5);
+
+  // Weekly Orders Row
+  const ordPlan = salesCoordinatorData.totalWeeklyPlanned || 0;
+  const ordAct = salesCoordinatorData.totalWeeklyActual || 0;
+  const ordGap = ordPlan > 0 ? Math.round(((ordAct - ordPlan) / ordPlan) * 100) : 0;
+
+  doc.setTextColor(...NAVY); 
+  doc.setFontSize(6.0); 
+  doc.setFont("helvetica", "bold");
+  doc.text("Weekly Orders", M + 96, y + 11.5);
+  doc.setFont("helvetica", "normal");
+  doc.text(String(ordPlan), M + 128, y + 11.5, { align: "center" });
+  doc.text(String(ordAct), M + 150, y + 11.5, { align: "center" });
+  
+  if (ordGap < 0) {
+    doc.setTextColor(...ROSE); 
+    doc.setFont("helvetica", "bold");
+    doc.text(`${ordGap}%`, M + 172, y + 11.5, { align: "center" });
+  } else {
+    doc.setTextColor(...EMERALD); 
+    doc.setFont("helvetica", "bold");
+    doc.text(`+${ordGap}%`, M + 172, y + 11.5, { align: "center" });
+  }
+
+  // Weekly Follow-ups Row
+  const fuPlan = salesCoordinatorData.plannedFollowUps || 0;
+  const fuAct = salesCoordinatorData.actualFollowUps || 0;
+  const fuGap = fuPlan > 0 ? Math.round(((fuAct - fuPlan) / fuPlan) * 100) : 0;
+
+  doc.setTextColor(...NAVY); 
+  doc.setFontSize(6.0); 
+  doc.setFont("helvetica", "bold");
+  doc.text("Weekly Follow-ups", M + 96, y + 18.0);
+  doc.setFont("helvetica", "normal");
+  doc.text(String(fuPlan), M + 128, y + 18.0, { align: "center" });
+  doc.text(String(fuAct), M + 150, y + 18.0, { align: "center" });
+
+  if (fuGap < 0) {
+    doc.setTextColor(...ROSE); 
+    doc.setFont("helvetica", "bold");
+    doc.text(`${fuGap}%`, M + 172, y + 18.0, { align: "center" });
+  } else {
+    doc.setTextColor(...EMERALD); 
+    doc.setFont("helvetica", "bold");
+    doc.text(`+${fuGap}%`, M + 172, y + 18.0, { align: "center" });
+  }
+
+  y += 31;
 
   // ── Section: Parties Analysis ──
   doc.setFontSize(8); 
@@ -317,6 +384,8 @@ export async function generateScotReportPDF(salesCoordinatorData: any, dateRange
 
   const partyRows = salesCoordinatorData.parties.map((p: any) => {
     const db = p.dashboard || {};
+    const remMonth = (db.actualMonth || 0) - (db.monthlyPlanned || 0);
+    const remWeek = (db.actualWeek || 0) - (db.weeklyPlanned || 0);
     
     return [
       p.partyName || "—",
@@ -324,8 +393,10 @@ export async function generateScotReportPDF(salesCoordinatorData: any, dateRange
       p.customerType || "—",
       db.monthlyPlanned || "0",
       db.actualMonth || "0",
+      String(remMonth),
       db.weeklyPlanned || "0",
       db.actualWeek || "0",
+      String(remWeek),
       `${p.followUpAttemptsCount || 0} / ${p.isPlanned ? 1 : 0}`,
       p.feederCallAttemptsCount || "0",
       p.latestStatus || "Pending"
@@ -336,28 +407,37 @@ export async function generateScotReportPDF(salesCoordinatorData: any, dateRange
     startY: y,
     margin: { left: M, right: M },
     head: [[
-      "Party Name", "Sales Rep", "Type", "Month Plan", "Month Act", 
-      "Week Plan", "Week Act", "Follow-up Done/Due", "Direct Calls", "Latest Status"
+      "Party Name", "Sales Rep", "Type", 
+      "Month Plan", "Month Act", "Month Rem", 
+      "Week Plan", "Week Act", "Week Rem", 
+      "Follow-up Done/Due", "Direct Calls", "Latest Status"
     ]],
     body: partyRows,
     theme: "striped",
-    headStyles: { fillColor: NAVY, textColor: GOLD, fontSize: 6.0, fontStyle: "bold", halign: "center" },
-    bodyStyles: { fontSize: 6.0, halign: "center", valign: "middle" },
+    headStyles: { fillColor: NAVY, textColor: GOLD, fontSize: 5.5, fontStyle: "bold", halign: "center" },
+    bodyStyles: { fontSize: 5.5, halign: "center", valign: "middle" },
     columnStyles: {
-      0: { halign: "left", fontStyle: "bold", cellWidth: 32 },
-      1: { halign: "left", fontStyle: "normal", cellWidth: 20 },
-      2: { cellWidth: 12 },
-      7: { fontStyle: "bold" },
-      9: { fontStyle: "bold" }
+      0: { halign: "left", fontStyle: "bold", cellWidth: 26 },
+      1: { halign: "left", fontStyle: "normal", cellWidth: 16 },
+      2: { cellWidth: 10 },
+      3: { cellWidth: 10 },
+      4: { cellWidth: 10 },
+      5: { cellWidth: 10, fontStyle: "bold" },
+      6: { cellWidth: 10 },
+      7: { cellWidth: 10 },
+      8: { cellWidth: 10, fontStyle: "bold" },
+      9: { fontStyle: "bold", cellWidth: 18 },
+      10: { cellWidth: 10 },
+      11: { fontStyle: "bold", cellWidth: 16 }
     },
     didParseCell: (d) => {
-      if (d.section === "body" && d.column.index === 9) {
+      if (d.section === "body" && d.column.index === 11) {
         const val = String(d.cell.raw);
         if (val === "Order Won") d.cell.styles.textColor = EMERALD;
         else if (val === "Order Lost") d.cell.styles.textColor = ROSE;
         else if (val === "Not Answered" || val === "Call Later") d.cell.styles.textColor = AMBER;
       }
-      if (d.section === "body" && d.column.index === 7) {
+      if (d.section === "body" && d.column.index === 9) {
         const val = String(d.cell.raw);
         if (val.endsWith("/ 1")) {
           if (val.startsWith("0 /")) {
@@ -369,14 +449,27 @@ export async function generateScotReportPDF(salesCoordinatorData: any, dateRange
           d.cell.styles.textColor = PURPLE;
         }
       }
+      if (d.section === "body" && (d.column.index === 5 || d.column.index === 8)) {
+        const val = Number(d.cell.raw);
+        if (!isNaN(val) && val < 0) {
+          d.cell.styles.textColor = ROSE;
+          d.cell.styles.fontStyle = "bold";
+        } else if (!isNaN(val) && val > 0) {
+          d.cell.styles.textColor = EMERALD;
+          d.cell.styles.fontStyle = "bold";
+        }
+      }
     }
   });
 
   // ════════════════════════════════════════════════════════════════════
   // PAGES 2+ — DIRECT CALLS & FOLLOW-UP HISTORIES
   // ════════════════════════════════════════════════════════════════════
-  doc.addPage();
-  let ty = 28;
+  let ty = (doc as any).lastAutoTable.finalY + 10;
+  if (ty + 35 > PH - 15) {
+    doc.addPage();
+    ty = 28;
+  }
 
   // Direct Call Logs (Feeder) Section
   doc.setFillColor(...NAVY); 
