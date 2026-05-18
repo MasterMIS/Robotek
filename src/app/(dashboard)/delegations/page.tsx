@@ -446,7 +446,7 @@ const fetcher = (url: string) => fetch(url).then((res) => res.json());
       id: "",
       title: "",
       description: "",
-      assigned_by: (userRole?.toUpperCase() === 'USER' || userRole?.toUpperCase() === 'SALES' || userRole?.toUpperCase() === 'CRM') ? currentUser : "",
+      assigned_by: currentUser || "",
       assigned_to: "",
       department: "",
       priority: "Medium",
