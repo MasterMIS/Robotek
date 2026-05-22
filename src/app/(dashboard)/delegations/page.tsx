@@ -1938,9 +1938,9 @@ const fetcher = (url: string) => fetch(url).then((res) => res.json());
                   <div className="relative">
                     <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-2">Assigned By</label>
                     <div 
-                      className={`w-full bg-[#FFFBF0] dark:bg-zinc-900 border border-orange-100 dark:border-zinc-800 rounded-lg shadow-sm ${userRole?.toUpperCase() === 'USER' ? 'cursor-not-allowed opacity-75' : 'cursor-pointer'}`}
+                      className={`w-full bg-[#FFFBF0] dark:bg-zinc-900 border border-orange-100 dark:border-zinc-800 rounded-lg shadow-sm ${isRegularUser ? 'cursor-not-allowed opacity-75' : 'cursor-pointer'}`}
                       onClick={() => {
-                        if (userRole?.toUpperCase() !== 'USER') {
+                        if (!isRegularUser) {
                           setAssignedByOpen(!assignedByOpen)
                           setAssignedToOpen(false)
                           setDepartmentOpen(false)
@@ -1950,12 +1950,12 @@ const fetcher = (url: string) => fetch(url).then((res) => res.json());
                       <div className="px-3 py-1.5 font-bold text-xs text-gray-800 dark:text-zinc-100 flex justify-between items-center group-hover:border-[#FFD500] transition-colors">
                         <div className="flex items-center gap-2">
                           <UserIcon className="w-3.5 h-3.5 text-gray-400" />
-                          <span>{formData.assigned_by || (userRole?.toUpperCase() === 'USER' ? currentUser : "Select User...")}</span>
+                          <span>{formData.assigned_by || (isRegularUser ? currentUser : "Select User...")}</span>
                         </div>
-                        {userRole?.toUpperCase() !== 'USER' && <ChevronDownIcon className="w-3 h-3 text-gray-400" />}
+                        {!isRegularUser && <ChevronDownIcon className="w-3 h-3 text-gray-400" />}
                       </div>
                     </div>
-                    {assignedByOpen && userRole?.toUpperCase() !== 'USER' && (
+                    {assignedByOpen && !isRegularUser && (
                       <div className="absolute z-[10000] w-full mt-1 bg-white dark:bg-zinc-900 border border-orange-100 dark:border-zinc-800 rounded-lg shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
                         <div className="p-2 border-b border-orange-50 dark:border-zinc-800">
                           <input 
@@ -1966,13 +1966,16 @@ const fetcher = (url: string) => fetch(url).then((res) => res.json());
                           />
                         </div>
                         <div className="max-h-40 overflow-y-auto">
-                          {usersList.filter(u => ['ADMIN', 'EA'].includes(u.role_name?.toUpperCase() || '') && u.username.toLowerCase().includes(assignedBySearch.toLowerCase())).map(u => (
+                          {usersList.filter(u => u.username.toLowerCase().includes(assignedBySearch.toLowerCase())).map(u => (
                             <div key={`by-${u.id}`}
-                              className="px-3 py-2 text-xs font-bold text-gray-700 dark:text-gray-300 hover:bg-[#003875]/5 dark:hover:bg-[#FFD500]/10 cursor-pointer"
+                              className="px-3 py-2 text-xs font-bold text-gray-700 dark:text-gray-300 hover:bg-[#003875]/5 dark:hover:bg-[#FFD500]/10 cursor-pointer flex justify-between items-center"
                               onClick={() => { setFormData({ ...formData, assigned_by: u.username }); setAssignedByOpen(false); setAssignedBySearch(""); }}
-                            >{u.username}</div>
+                            >
+                              <span>{u.username}</span>
+                              {u.role_name && <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-gray-100 dark:bg-zinc-800 text-gray-500 uppercase">{u.role_name}</span>}
+                            </div>
                           ))}
-                          {usersList.filter(u => ['ADMIN', 'EA'].includes(u.role_name?.toUpperCase() || '') && u.username.toLowerCase().includes(assignedBySearch.toLowerCase())).length === 0 && (
+                          {usersList.filter(u => u.username.toLowerCase().includes(assignedBySearch.toLowerCase())).length === 0 && (
                             <div className="px-3 py-2 text-[10px] text-gray-400 text-center">No users found</div>
                           )}
                         </div>
@@ -2012,9 +2015,12 @@ const fetcher = (url: string) => fetch(url).then((res) => res.json());
                         <div className="max-h-40 overflow-y-auto">
                           {usersList.filter(u => u.username.toLowerCase().includes(assignedToSearch.toLowerCase())).map(u => (
                             <div key={`to-${u.id}`}
-                              className="px-3 py-2 text-xs font-bold text-gray-700 dark:text-gray-300 hover:bg-[#003875]/5 dark:hover:bg-[#FFD500]/10 cursor-pointer"
+                              className="px-3 py-2 text-xs font-bold text-gray-700 dark:text-gray-300 hover:bg-[#003875]/5 dark:hover:bg-[#FFD500]/10 cursor-pointer flex justify-between items-center"
                               onClick={() => { setFormData({ ...formData, assigned_to: u.username }); setAssignedToOpen(false); setAssignedToSearch(""); }}
-                            >{u.username}</div>
+                            >
+                              <span>{u.username}</span>
+                              {u.role_name && <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-gray-100 dark:bg-zinc-800 text-gray-500 uppercase">{u.role_name}</span>}
+                            </div>
                           ))}
                           {usersList.filter(u => u.username.toLowerCase().includes(assignedToSearch.toLowerCase())).length === 0 && (
                             <div className="px-3 py-2 text-[10px] text-gray-400 text-center">No users found</div>

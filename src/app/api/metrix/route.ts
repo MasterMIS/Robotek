@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { o2dService } from "@/lib/o2d-sheets";
 import { imsService } from "@/lib/ims-sheets";
 import { auth } from "@/auth";
+import { getWorkingHoursGapMs } from "@/lib/workingHours";
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -93,8 +94,27 @@ export async function GET(req: NextRequest) {
       const actual7 = firstItem.actual_7 ? new Date(firstItem.actual_7) : null;
       const planned7 = firstItem.planned_7 ? new Date(firstItem.planned_7) : null;
       
-      const isOTD = actual7 && planned7 && actual7 <= planned7;
-      const isDelayed = (!actual7 && planned7 && new Date() > planned7) || (actual7 && planned7 && actual7 > planned7);
+      let isOTD = false;
+      let isDelayed = false;
+      let targetDateForOTD = createdAt;
+      
+      if (firstItem.status_3 === "No" && firstItem.actual_4) {
+        targetDateForOTD = new Date(firstItem.actual_4);
+      }
+      
+      if (targetDateForOTD) {
+        if (actual7) {
+          const gapMs = getWorkingHoursGapMs(targetDateForOTD, actual7);
+          const gapHours = Math.round(gapMs / (1000 * 60 * 60));
+          isOTD = gapHours <= 9;
+          isDelayed = gapHours > 9;
+        } else {
+          const gapMs = getWorkingHoursGapMs(targetDateForOTD, new Date());
+          const gapHours = Math.round(gapMs / (1000 * 60 * 60));
+          isDelayed = gapHours > 9;
+        }
+      }
+
       const isDispatched = !!firstItem.actual_7 && firstItem.status_7 !== "No";
       
       let currentStep = -1;

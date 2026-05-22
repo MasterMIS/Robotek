@@ -6,6 +6,7 @@ import { getUsers } from "@/lib/google-sheets";
 import { o2dService } from "@/lib/o2d-sheets";
 import { getIMSItems } from "@/lib/ims-sheets";
 import { auth } from "@/auth";
+import { getWorkingHoursGapMs } from "@/lib/workingHours";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -75,11 +76,34 @@ export async function GET(request: Request) {
       const createdAt = new Date(firstItem.created_at);
       const actual7 = firstItem.actual_7 ? new Date(firstItem.actual_7) : null;
       const planned7 = firstItem.planned_7 ? new Date(firstItem.planned_7) : null;
-      const isOTD = actual7 && planned7 && actual7 <= planned7;
-      const isDelayed = (!actual7 && planned7 && new Date() > planned7) || (actual7 && planned7 && actual7 > planned7);
+      let isOTD = false;
+      let isDelayed = false;
+      let targetDateForOTD = createdAt;
+      
+      if (firstItem.status_3 === "No" && firstItem.actual_4) {
+        targetDateForOTD = new Date(firstItem.actual_4);
+      }
+      
+      if (targetDateForOTD) {
+        if (actual7) {
+          const gapMs = getWorkingHoursGapMs(targetDateForOTD, actual7);
+          const gapHours = Math.round(gapMs / (1000 * 60 * 60));
+          isOTD = gapHours <= 9;
+          isDelayed = gapHours > 9;
+        } else {
+          const gapMs = getWorkingHoursGapMs(targetDateForOTD, new Date());
+          const gapHours = Math.round(gapMs / (1000 * 60 * 60));
+          isDelayed = gapHours > 9;
+        }
+      }
+
       const isDispatched = !!firstItem.actual_7 && firstItem.status_7 !== "No";
       const totalAmount = items.reduce((sum: number, i: any) => sum + (parseFloat(i.est_amount) || 0), 0);
-      return { orderNo, party: firstItem.party_name, createdAt, isOTD, isDelayed, isDispatched, totalAmount };
+      
+      const isReconfirmed = firstItem.status_3 === "No";
+      const actual4 = firstItem.actual_4 ? new Date(firstItem.actual_4) : null;
+      
+      return { orderNo, party: firstItem.party_name, createdAt, actual7, targetDateForOTD, isOTD, isDelayed, isDispatched, totalAmount, isReconfirmed, actual4 };
     });
 
     const totalUsers = (allUsers as any[]).filter((u: any) => u.status !== "Inactive").length;
@@ -189,6 +213,51 @@ export async function GET(request: Request) {
       else if (diffDays >= 1) delayAging.d1to3.push(entry);
       else delayAging.sameDay.push(entry);
     });
+
+    // Gap Analysis (Last 10 days)
+    const last10DaysStats: Record<string, { totalGapMs: number; count: number; dateStr: string; orders: any[] }> = {};
+    for (let i = 0; i < 10; i++) {
+      const d = new Date(now);
+      d.setDate(d.getDate() - i);
+      const dStr = d.toISOString().split("T")[0];
+      last10DaysStats[dStr] = { totalGapMs: 0, count: 0, dateStr: dStr, orders: [] };
+    }
+
+    allOrders.forEach((o: any) => {
+      if (o.isDispatched && o.actual7 && o.targetDateForOTD) {
+        const dispatchDateStr = normalizeDate(o.actual7.toISOString());
+        if (last10DaysStats[dispatchDateStr]) {
+          const gapMs = getWorkingHoursGapMs(o.targetDateForOTD, o.actual7);
+          const gapHours = Math.round(gapMs / (1000 * 60 * 60));
+          last10DaysStats[dispatchDateStr].totalGapMs += gapMs;
+          last10DaysStats[dispatchDateStr].count += 1;
+          last10DaysStats[dispatchDateStr].orders.push({
+             orderNo: o.orderNo,
+             party: o.party,
+             gapHours,
+             createdAt: o.createdAt ? o.createdAt.toISOString() : null,
+             dispatchDate: o.actual7 ? o.actual7.toISOString() : null,
+             isReconfirmed: o.isReconfirmed,
+             actual4: o.actual4 ? o.actual4.toISOString() : null
+          });
+        }
+      }
+    });
+
+    const gapAnalysis = Object.values(last10DaysStats)
+      .sort((a, b) => b.dateStr.localeCompare(a.dateStr))
+      .map(stat => {
+         stat.orders.sort((a, b) => b.gapHours - a.gapHours);
+         const totalHours = Math.round(stat.totalGapMs / (1000 * 60 * 60));
+         const avgHours = stat.count > 0 ? Math.round(totalHours / stat.count) : 0;
+         return {
+            date: stat.dateStr,
+            totalHours,
+            avgHours,
+            count: stat.count,
+            orders: stat.orders
+         };
+      });
 
     // Revenue Target (auto: max monthly revenue from last 12 months)
     const last12MonthsStart = new Date(now);
@@ -408,6 +477,7 @@ export async function GET(request: Request) {
           ],
         },
         topDelayedOrders: delayAging.gt7.slice(0, 5),
+        gapAnalysis,
       },
       revenue: {
         mtdActual: mtdRevenue,

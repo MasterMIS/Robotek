@@ -14,12 +14,14 @@ import {
   InboxIcon,
   ArchiveBoxIcon,
   ArrowDownTrayIcon,
+  CurrencyDollarIcon,
 } from "@heroicons/react/24/outline";
 
 export const navigation = [
   { name: 'Dashboard', id: 'dashboard', href: '/', icon: Squares2X2Icon },
   { name: 'EA-MD Hub', id: 'ea-md-hub', href: '/ea-md-hub', icon: BriefcaseIcon },
   { name: 'Users', id: 'users', href: '/users', icon: UsersIcon },
+  { name: 'Sales', id: 'sales', href: '/sales', icon: CurrencyDollarIcon },
   { name: 'Delegations', id: 'delegations', href: '/delegations', icon: DocumentTextIcon },
   { name: 'Checklists', id: 'checklists', href: '/checklists', icon: ClipboardDocumentListIcon },
   { name: 'Help Tickets', id: 'tickets', href: '/tickets', icon: TicketIcon },

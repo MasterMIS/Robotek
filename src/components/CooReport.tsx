@@ -40,6 +40,7 @@ interface CooReportProps {
 export default function CooReport({ data: coo, loading }: CooReportProps) {
   const { resolvedTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
+  const [selectedGapTile, setSelectedGapTile] = useState<any | null>(null);
 
   useEffect(() => {
     setMounted(true);
@@ -161,6 +162,71 @@ export default function CooReport({ data: coo, loading }: CooReportProps) {
           </motion.div>
         ))}
       </div>
+
+      {/* DISPATCH GAP ANALYSIS */}
+      {ord.gapAnalysis && ord.gapAnalysis.length > 0 && (
+        <div className="grid grid-cols-2 md:grid-cols-5 lg:grid-cols-10 gap-3">
+          {[...ord.gapAnalysis].reverse().map((gap: any, i: number) => {
+            let label = gap.date;
+            try {
+              const dateObj = new Date(gap.date);
+              const today = new Date();
+              const yesterday = new Date();
+              yesterday.setDate(today.getDate() - 1);
+              
+              if (gap.date === today.toISOString().split('T')[0]) {
+                label = "Today";
+              } else if (gap.date === yesterday.toISOString().split('T')[0]) {
+                label = "Yesterday";
+              } else {
+                label = dateObj.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+              }
+            } catch (e) {}
+
+            const tileColors = [
+              "from-slate-400 to-slate-500",
+              "from-cyan-400 to-cyan-500",
+              "from-sky-400 to-sky-500",
+              "from-blue-400 to-blue-500",
+              "from-indigo-400 to-indigo-500",
+              "from-violet-400 to-violet-500",
+              "from-purple-400 to-purple-500",
+              "from-fuchsia-400 to-fuchsia-500",
+              "from-pink-400 to-pink-500",
+              "from-rose-500 to-red-500" // Today
+            ];
+
+            const formatTime = (h: number, spanClass: string) => {
+              if (h >= 24) {
+                const d = Math.floor(h / 24);
+                const rh = h % 24;
+                return rh > 0 
+                  ? <>{d}<span className={spanClass}>d</span> {rh}<span className={spanClass}>h</span></>
+                  : <>{d}<span className={spanClass}>d</span></>;
+              }
+              return <>{h}<span className={spanClass}>h</span></>;
+            };
+
+            return (
+              <motion.div 
+                initial={{ opacity: 0, scale: 0.95 }} 
+                animate={{ opacity: 1, scale: 1 }} 
+                transition={{ delay: i * 0.05 }}
+                key={i} 
+                onClick={() => setSelectedGapTile(gap)}
+                className={`bg-gradient-to-br ${tileColors[i] || "from-gray-400 to-gray-500"} rounded-2xl p-3 shadow-xl hover:shadow-2xl hover:scale-[1.02] cursor-pointer transition-all text-center flex flex-col justify-center text-white ring-1 ring-white/20`}
+              >
+                <p className="text-[11px] font-black uppercase tracking-widest mb-1 text-white/90">{label}</p>
+                <p className="text-3xl lg:text-4xl font-black tracking-tighter drop-shadow-md">{formatTime(gap.avgHours, "text-sm lg:text-lg opacity-80")}</p>
+                <div className="mt-2 pt-2 border-t border-white/20 flex flex-col gap-1">
+                  <span className="text-[10px] font-black uppercase tracking-wider text-white/90">{gap.count} Orders</span>
+                  <span className="text-[10px] font-black uppercase text-white drop-shadow-sm">{formatTime(gap.totalHours, "opacity-80")} total</span>
+                </div>
+              </motion.div>
+            );
+          })}
+        </div>
+      )}
 
       {/* SECOND ROW: ALERTS + VELOCITY + PERF TREND */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -688,6 +754,104 @@ export default function CooReport({ data: coo, loading }: CooReportProps) {
           </div>
           <p className="text-[10px] font-black text-gray-300 uppercase tracking-widest">Designed for Sahil Sir · Refresh: 300s</p>
       </div>
+
+      {/* GAP DETAILS MODAL */}
+      {selectedGapTile && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setSelectedGapTile(null)}></div>
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-white dark:bg-navy-900 w-full max-w-3xl max-h-[85vh] rounded-[2rem] shadow-2xl relative z-10 flex flex-col overflow-hidden border border-gray-100 dark:border-white/10"
+          >
+             {/* Header */}
+             <div className="p-6 bg-gray-50 dark:bg-white/5 border-b border-gray-100 dark:border-white/5 flex items-center justify-between">
+                <div>
+                   <h3 className="text-xl font-black text-gray-900 dark:text-white uppercase tracking-tight">
+                     Dispatch Gap Details
+                   </h3>
+                   <p className="text-[11px] font-bold text-gray-400 mt-1 uppercase tracking-widest">
+                     Date: {selectedGapTile.date ? new Date(selectedGapTile.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' }) : ''} · {selectedGapTile.count} Orders · {selectedGapTile.totalHours} Working Hours Total Gap
+                   </p>
+                </div>
+                <button 
+                  onClick={() => setSelectedGapTile(null)}
+                  className="p-2 bg-gray-200 dark:bg-white/10 hover:bg-gray-300 dark:hover:bg-white/20 rounded-full transition-colors"
+                >
+                  <svg className="w-5 h-5 text-gray-500 dark:text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+             </div>
+             
+             {/* Body */}
+             <div className="flex-1 overflow-y-auto p-6 custom-scrollbar bg-white dark:bg-navy-900">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="text-[10px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-100 dark:border-white/5">
+                       <th className="pb-3 pl-2 w-32">Order No</th>
+                       <th className="pb-3 w-1/3">Party Name</th>
+                       <th className="pb-3 w-1/3">Timeline</th>
+                       <th className="pb-3 text-right pr-2">Gap (Hours)</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50 dark:divide-white/5">
+                     {selectedGapTile.orders?.map((o: any, idx: number) => {
+                       const formatTimeStr = (h: number) => {
+                         if (h >= 24) {
+                           const d = Math.floor(h / 24);
+                           const rh = h % 24;
+                           return rh > 0 ? `${d}d ${rh}h` : `${d}d`;
+                         }
+                         return `${h}h`;
+                       };
+                       const formatShortDate = (dStr: string) => {
+                          if (!dStr) return "N/A";
+                          try {
+                             const isMidnightUTC = dStr.endsWith('T00:00:00.000Z');
+                             const isMidnightIST = dStr.endsWith('T18:30:00.000Z');
+                             const options: Intl.DateTimeFormatOptions = { 
+                               day: '2-digit', 
+                               month: 'short', 
+                               year: '2-digit'
+                             };
+                             if (!isMidnightUTC && !isMidnightIST) {
+                               options.hour = '2-digit';
+                               options.minute = '2-digit';
+                             }
+                             return new Date(dStr).toLocaleDateString('en-GB', options);
+                          } catch (e) {
+                             return dStr;
+                          }
+                       };
+                       return (
+                         <tr key={idx} className="hover:bg-gray-50 dark:hover:bg-white/5 transition-colors group">
+                           <td className="py-4 pl-2 font-black text-sm text-gray-800 dark:text-white align-top">{o.orderNo}</td>
+                           <td className="py-4 text-xs font-bold text-gray-600 dark:text-gray-300 uppercase align-top">{o.party}</td>
+                           <td className="py-4 text-[10px] text-gray-500 uppercase tracking-wider align-top flex flex-col gap-1">
+                             <div className="flex gap-2"><span className="w-20 font-black text-gray-400">Created:</span> <span className="font-bold">{formatShortDate(o.createdAt)}</span></div>
+                             {o.isReconfirmed && <div className="flex gap-2"><span className="w-20 font-black text-amber-500">Reconfirmed:</span> <span className="font-bold text-gray-700 dark:text-gray-300">{formatShortDate(o.actual4)}</span></div>}
+                             <div className="flex gap-2"><span className="w-20 font-black text-indigo-500">Dispatched:</span> <span className="font-bold text-gray-700 dark:text-gray-300">{formatShortDate(o.dispatchDate)}</span></div>
+                           </td>
+                           <td className="py-4 text-right pr-2 align-top">
+                             <span className="text-sm font-black text-red-500 bg-red-50 dark:bg-red-500/10 px-3 py-1 rounded-full border border-red-100 dark:border-red-500/20">
+                                {formatTimeStr(o.gapHours)}
+                             </span>
+                           </td>
+                         </tr>
+                       );
+                     })}
+                     {(!selectedGapTile.orders || selectedGapTile.orders.length === 0) && (
+                        <tr>
+                          <td colSpan={4} className="py-8 text-center text-xs font-black text-gray-400 uppercase tracking-widest">
+                            No orders dispatched on this date
+                          </td>
+                        </tr>
+                     )}
+                  </tbody>
+                </table>
+             </div>
+          </motion.div>
+        </div>
+      )}
 
       <style jsx global>{`
         .custom-scrollbar::-webkit-scrollbar {
