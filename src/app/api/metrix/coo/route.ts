@@ -71,7 +71,9 @@ export async function GET(request: Request) {
       groupedByOrder[orderNo].push(item);
     });
 
-    const allOrders = Object.entries(groupedByOrder).map(([orderNo, items]) => {
+    const allOrders = Object.entries(groupedByOrder)
+      .filter(([_, items]) => items[0].status_3 !== "No")
+      .map(([orderNo, items]) => {
       const firstItem = items[0];
       const createdAt = new Date(firstItem.created_at);
       const actual7 = firstItem.actual_7 ? new Date(firstItem.actual_7) : null;
@@ -80,27 +82,21 @@ export async function GET(request: Request) {
       let isDelayed = false;
       let targetDateForOTD = createdAt;
       
-      if (firstItem.status_3 === "No" && firstItem.actual_4) {
-        targetDateForOTD = new Date(firstItem.actual_4);
-      }
-      
       if (targetDateForOTD) {
         if (actual7) {
           const gapMs = getWorkingHoursGapMs(targetDateForOTD, actual7);
-          const gapHours = Math.round(gapMs / (1000 * 60 * 60));
-          isOTD = gapHours <= 9;
-          isDelayed = gapHours > 9;
+          isOTD = gapMs <= 9 * 60 * 60 * 1000;
+          isDelayed = gapMs > 9 * 60 * 60 * 1000;
         } else {
           const gapMs = getWorkingHoursGapMs(targetDateForOTD, new Date());
-          const gapHours = Math.round(gapMs / (1000 * 60 * 60));
-          isDelayed = gapHours > 9;
+          isDelayed = gapMs > 9 * 60 * 60 * 1000;
         }
       }
 
       const isDispatched = !!firstItem.actual_7 && firstItem.status_7 !== "No";
       const totalAmount = items.reduce((sum: number, i: any) => sum + (parseFloat(i.est_amount) || 0), 0);
       
-      const isReconfirmed = firstItem.status_3 === "No";
+      const isReconfirmed = false;
       const actual4 = firstItem.actual_4 ? new Date(firstItem.actual_4) : null;
       
       return { orderNo, party: firstItem.party_name, createdAt, actual7, targetDateForOTD, isOTD, isDelayed, isDispatched, totalAmount, isReconfirmed, actual4 };
@@ -147,8 +143,8 @@ export async function GET(request: Request) {
     const absentCount = Math.max(0, totalUsers - presentCount - onLeaveCount);
 
     // ── 2. DELEGATION PIPELINE ──
-    // Use filter params if provided, otherwise default to current month
-    const mtdStart = startDateParam || new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0];
+    // Use filter params if provided, otherwise default to all time ('1970-01-01')
+    const mtdStart = startDateParam || "1970-01-01";
     const mtdEnd = endDateParam || todayStr;
     const mtdDelegations = allDelegations.filter(d => {
       const created = normalizeDate(d.created_at);
@@ -447,6 +443,9 @@ export async function GET(request: Request) {
         avgCheckIn: avgCheckInStr,
         lateArrivals,
         presentPct: totalUsers > 0 ? Math.round((presentCount / totalUsers) * 100) : 0,
+        presentList: Array.from(checkedInUserIds).map(id => ({ id, name: (allUsers as any[]).find((u: any) => String(u.id) === String(id))?.username || id })),
+        onLeaveList: onLeaveToday.map((l: any) => ({ id: l.id, name: (allUsers as any[]).find((u: any) => String(u.id) === String(l.userId))?.username || l.userId, type: l.leaveType })),
+        absentList: (allUsers as any[]).filter((u: any) => u.status !== "Inactive" && !checkedInUserIds.has(String(u.id)) && !onLeaveUserIds.has(String(u.id))).map((u: any) => ({ id: u.id, name: u.username }))
       },
       delegations: {
         total,
@@ -456,6 +455,9 @@ export async function GET(request: Request) {
         pending,
         criticalTasks,
         zeroTaskEmployees,
+        overdueList: overdue.map((d: any) => ({ id: d.id, title: d.title, assignedTo: d.assigned_to, due: normalizeDate(d.due_date) })),
+        pendingList: allDelegations.filter((d: any) => d.status === "Pending").map((d: any) => ({ id: d.id, title: d.title, assignedTo: d.assigned_to, due: normalizeDate(d.due_date) })),
+        needRevisionList: allDelegations.filter((d: any) => d.status === "Need Revision").map((d: any) => ({ id: d.id, title: d.title, assignedTo: d.assigned_to, due: normalizeDate(d.due_date) }))
       },
       orders: {
         todayRevenue,
@@ -475,6 +477,12 @@ export async function GET(request: Request) {
             { label: "4-7 Days", count: delayAging.d4to7.length },
             { label: ">7 Days", count: delayAging.gt7.length },
           ],
+          undispatchedList: undispatched.map((o: any) => ({
+            id: o.orderNo,
+            party: o.party,
+            amount: o.totalAmount,
+            date: o.createdAt.toISOString().split('T')[0]
+          }))
         },
         topDelayedOrders: delayAging.gt7.slice(0, 5),
         gapAnalysis,
@@ -512,6 +520,8 @@ export async function GET(request: Request) {
         lowStockCount: lowStock.length,
         inventoryByCategory,
         lowStockItems,
+        outOfStockList: outOfStock.map((i: any) => ({ sku: i.item_name, category: i.category, stockLeft: parseFloat(i.stock_qty) || 0 })),
+        lowStockList: lowStock.map((i: any) => ({ sku: i.item_name, category: i.category, stockLeft: parseFloat(i.stock_qty) || 0 }))
       },
       scorecard,
     });

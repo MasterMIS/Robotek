@@ -88,7 +88,9 @@ export async function GET(req: NextRequest) {
       groupedByOrder[orderNo].push(item);
     });
 
-    const orders = Object.entries(groupedByOrder).map(([orderNo, items]) => {
+    const orders = Object.entries(groupedByOrder)
+      .filter(([_, items]) => items[0].status_3 !== "No")
+      .map(([orderNo, items]) => {
       const firstItem = items[0];
       const createdAt = new Date(firstItem.created_at);
       const actual7 = firstItem.actual_7 ? new Date(firstItem.actual_7) : null;
@@ -98,20 +100,14 @@ export async function GET(req: NextRequest) {
       let isDelayed = false;
       let targetDateForOTD = createdAt;
       
-      if (firstItem.status_3 === "No" && firstItem.actual_4) {
-        targetDateForOTD = new Date(firstItem.actual_4);
-      }
-      
       if (targetDateForOTD) {
         if (actual7) {
           const gapMs = getWorkingHoursGapMs(targetDateForOTD, actual7);
-          const gapHours = Math.round(gapMs / (1000 * 60 * 60));
-          isOTD = gapHours <= 9;
-          isDelayed = gapHours > 9;
+          isOTD = gapMs <= 9 * 60 * 60 * 1000;
+          isDelayed = gapMs > 9 * 60 * 60 * 1000;
         } else {
           const gapMs = getWorkingHoursGapMs(targetDateForOTD, new Date());
-          const gapHours = Math.round(gapMs / (1000 * 60 * 60));
-          isDelayed = gapHours > 9;
+          isDelayed = gapMs > 9 * 60 * 60 * 1000;
         }
       }
 
@@ -177,33 +173,8 @@ export async function GET(req: NextRequest) {
       else if (diffDays <= 365) trendGrouping = 'month';
       else trendGrouping = 'year';
     } else {
-      const now = new Date();
-      let start = new Date(now);
-      start.setHours(0, 0, 0, 0);
-      let end = new Date(now);
-      end.setHours(23, 59, 59, 999);
-
-      if (granularity === 'day') {
-        // Today
-        trendGrouping = 'day';
-      } else if (granularity === 'week') {
-        const day = start.getDay();
-        const diff = start.getDate() - day; // Sunday
-        start.setDate(diff);
-        trendGrouping = 'week';
-      } else if (granularity === 'month') {
-        start.setDate(1);
-        trendGrouping = 'month';
-      } else if (granularity === 'quarter') {
-        const q = Math.floor(start.getMonth() / 3);
-        start.setMonth(q * 3, 1);
-        trendGrouping = 'quarter';
-      } else if (granularity === 'year') {
-        start.setMonth(0, 1);
-        trendGrouping = 'year';
-      }
-
-      filteredOrders = orders.filter(o => o.createdAt >= start && o.createdAt <= end);
+      trendGrouping = granularity;
+      filteredOrders = orders;
     }
 
     // Determine endDate for lookback
@@ -243,6 +214,13 @@ export async function GET(req: NextRequest) {
       .sort((a, b) => a.key.localeCompare(b.key))
       .slice(-15);
 
+    const mapBasicOrder = (o: any) => ({
+      id: o.orderNo,
+      party: o.party,
+      amount: o.totalAmount,
+      date: o.createdAt.toISOString().split('T')[0]
+    });
+
     // 5. Basic Stats
     const stats = {
       total: filteredOrders.length,
@@ -254,7 +232,11 @@ export async function GET(req: NextRequest) {
       otdRate: filteredOrders.filter(o => o.isDispatched).length > 0 
         ? Math.round((filteredOrders.filter(o => o.isOTD).length / filteredOrders.filter(o => o.isDispatched).length) * 100) 
         : 0,
-      totalAmount: filteredOrders.reduce((sum, o) => sum + o.totalAmount, 0)
+      totalAmount: filteredOrders.reduce((sum, o) => sum + o.totalAmount, 0),
+      ordersList: filteredOrders.map(mapBasicOrder),
+      pendingList: filteredOrders.filter(o => !o.isDispatched && o.currentStep !== -1).map(mapBasicOrder),
+      otdList: filteredOrders.filter(o => o.isOTD).map(mapBasicOrder),
+      delayedList: filteredOrders.filter(o => o.isDelayed).map(mapBasicOrder)
     };
 
     // 6. Party Analysis (Deep)

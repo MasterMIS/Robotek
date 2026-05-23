@@ -5,6 +5,7 @@ import useSWR from "swr";
 import { motion, AnimatePresence } from "framer-motion";
 import { useTheme } from "next-themes";
 import CooReport from "@/components/CooReport";
+import DrillDownModal, { DrillDownColumn } from "@/components/DrillDownModal";
 import {
   ChartBarIcon,
   ShoppingBagIcon,
@@ -64,8 +65,11 @@ const STEP_ICONS = [
 
 // --- Helper Components ---
 
-const CompactTile = ({ label, value, icon: Icon, color }: any) => (
-  <div className="bg-white dark:bg-navy-800 p-4 rounded-2xl border border-gray-200 dark:border-white/5 shadow-xl ring-1 ring-black/5 flex items-center gap-3">
+const CompactTile = ({ label, value, icon: Icon, color, onClick, isClickable }: any) => (
+  <div 
+    onClick={isClickable ? onClick : undefined}
+    className={`bg-white dark:bg-navy-800 p-4 rounded-2xl border border-gray-200 dark:border-white/5 shadow-xl ring-1 ring-black/5 flex items-center gap-3 transition-all ${isClickable ? 'cursor-pointer hover:shadow-2xl hover:scale-[1.02] hover:border-gray-300 dark:hover:border-white/10' : ''}`}
+  >
     <div className={`p-3 rounded-xl ${color} text-white shadow-lg`}>
       <Icon className="w-5 h-5" />
     </div>
@@ -112,6 +116,9 @@ export default function MetrixPage() {
   const [activeTab, setActiveTab] = useState("overview");
   const [drillDownParty, setDrillDownParty] = useState<any>(null);
   const [drillDownCategory, setDrillDownCategory] = useState<any>(null);
+  const [drillDownModal, setDrillDownModal] = useState<{ isOpen: boolean, title: string, columns: DrillDownColumn[], data: any[] }>({
+    isOpen: false, title: "", columns: [], data: []
+  });
   const [forecastType, setForecastType] = useState("category");
   const [forecastTarget, setForecastTarget] = useState("");
   const [granularity, setGranularity] = useState("month");
@@ -296,11 +303,31 @@ export default function MetrixPage() {
                 <div className="lg:col-span-5 flex flex-col gap-4">
                   {/* Tiles */}
                   <div className="grid grid-cols-2 gap-3 h-fit">
-                    <CompactTile label="Orders" value={data.stats.total} icon={ShoppingBagIcon} color="bg-blue-600" />
+                    <CompactTile label="Orders" value={data.stats.total} icon={ShoppingBagIcon} color="bg-blue-600" 
+                      isClickable onClick={() => setDrillDownModal({
+                        isOpen: true, title: "Total Orders", data: data.stats.ordersList || [],
+                        columns: [{ key: 'id', label: 'Order No' }, { key: 'party', label: 'Party' }, { key: 'date', label: 'Date' }, { key: 'amount', label: 'Amount', render: (item: any) => `₹${item.amount.toLocaleString()}` }]
+                      })} 
+                    />
                     <CompactTile label="Revenue" value={`${(data.stats.totalAmount / 100000).toFixed(1)}L`} icon={CurrencyDollarIcon} color="bg-[#003875]" />
-                    <CompactTile label="OTD Count" value={data.stats.otdCount} icon={CheckBadgeIcon} color="bg-emerald-600" />
-                    <CompactTile label="Delayed" value={data.stats.delayedCount} icon={ExclamationCircleIcon} color="bg-rose-600" />
-                    <CompactTile label="Pending" value={data.stats.pending} icon={ArrowPathIcon} color="bg-amber-600" />
+                    <CompactTile label="OTD Count" value={data.stats.otdCount} icon={CheckBadgeIcon} color="bg-emerald-600" 
+                      isClickable onClick={() => setDrillDownModal({
+                        isOpen: true, title: "On-Time Delivered (OTD)", data: data.stats.otdList || [],
+                        columns: [{ key: 'id', label: 'Order No' }, { key: 'party', label: 'Party' }, { key: 'date', label: 'Date' }, { key: 'amount', label: 'Amount', render: (item: any) => `₹${item.amount.toLocaleString()}` }]
+                      })} 
+                    />
+                    <CompactTile label="Delayed" value={data.stats.delayedCount} icon={ExclamationCircleIcon} color="bg-rose-600" 
+                      isClickable onClick={() => setDrillDownModal({
+                        isOpen: true, title: "Delayed Orders", data: data.stats.delayedList || [],
+                        columns: [{ key: 'id', label: 'Order No' }, { key: 'party', label: 'Party' }, { key: 'date', label: 'Date' }, { key: 'amount', label: 'Amount', render: (item: any) => `₹${item.amount.toLocaleString()}` }]
+                      })} 
+                    />
+                    <CompactTile label="Pending" value={data.stats.pending} icon={ArrowPathIcon} color="bg-amber-600" 
+                      isClickable onClick={() => setDrillDownModal({
+                        isOpen: true, title: "Pending Orders", data: data.stats.pendingList || [],
+                        columns: [{ key: 'id', label: 'Order No' }, { key: 'party', label: 'Party' }, { key: 'date', label: 'Date' }, { key: 'amount', label: 'Amount', render: (item: any) => `₹${item.amount.toLocaleString()}` }]
+                      })} 
+                    />
                     <CompactTile label="OTD %" value={`${data.stats.otdRate}%`} icon={ChartBarIcon} color="bg-indigo-600" />
                   </div>
 
@@ -934,6 +961,15 @@ export default function MetrixPage() {
             </motion.div>
           )}
         </AnimatePresence>
+
+        {/* Generic Drill Down Modal */}
+        <DrillDownModal 
+          isOpen={drillDownModal.isOpen} 
+          onClose={() => setDrillDownModal(prev => ({ ...prev, isOpen: false }))} 
+          title={drillDownModal.title} 
+          columns={drillDownModal.columns} 
+          data={drillDownModal.data} 
+        />
 
         <style jsx global>{`
         .custom-scrollbar::-webkit-scrollbar { width: 3px; }

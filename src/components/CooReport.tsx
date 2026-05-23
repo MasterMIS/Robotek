@@ -31,6 +31,7 @@ import {
   UserGroupIcon,
   ClipboardDocumentCheckIcon,
 } from "@heroicons/react/24/outline";
+import DrillDownModal, { DrillDownColumn } from "./DrillDownModal";
 
 interface CooReportProps {
   data: any;
@@ -41,6 +42,9 @@ export default function CooReport({ data: coo, loading }: CooReportProps) {
   const { resolvedTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
   const [selectedGapTile, setSelectedGapTile] = useState<any | null>(null);
+  const [drillDownModal, setDrillDownModal] = useState<{ isOpen: boolean, title: string, columns: DrillDownColumn[], data: any[] }>({
+    isOpen: false, title: "", columns: [], data: []
+  });
 
   useEffect(() => {
     setMounted(true);
@@ -140,16 +144,17 @@ export default function CooReport({ data: coo, loading }: CooReportProps) {
           { label: "Today's Revenue", value: fmtAmount(ord.todayRevenue || 0), sub: `MTD: ${fmtAmount(rev.mtdActual || 0)}`, icon: CurrencyDollarIcon, color: "text-blue-500", border: "border-t-blue-500" },
           { label: "Orders (MTD)", value: ord.mtdOrders?.toLocaleString() || 0, sub: `${ord.mtdDispatched || 0} Dispatched`, icon: ShoppingBagIcon, color: "text-emerald-500", border: "border-t-emerald-500" },
           { label: "OTD % (On-Time)", value: `${ord.otdRate || 0}%`, sub: `Critical Target: 85%`, icon: ClockIcon, color: ord.otdRate >= 85 ? "text-emerald-500" : "text-red-500", border: ord.otdRate >= 85 ? "border-t-emerald-500" : "border-t-red-500" },
-          { label: "Delayed Orders", value: ord.delayAging?.total || 0, sub: `${fmtAmount(ord.delayAging?.gt7?.revenueAtRisk || 0)} at risk`, icon: ExclamationTriangleIcon, color: "text-amber-500", border: "border-t-amber-500" },
+          { label: "Delayed Orders", value: ord.delayAging?.total || 0, sub: `${fmtAmount(ord.delayAging?.gt7?.revenueAtRisk || 0)} at risk`, icon: ExclamationTriangleIcon, color: "text-amber-500", border: "border-t-amber-500", onClick: () => setDrillDownModal({ isOpen: true, title: "Delayed Orders", data: ord.delayAging?.undispatchedList || [], columns: [{ key: 'id', label: 'Order No' }, { key: 'party', label: 'Party' }, { key: 'date', label: 'Date' }, { key: 'amount', label: 'Amount', render: (item: any) => `₹${item.amount.toLocaleString()}` }] }) },
           { label: "Team Perf Score", value: `${scorecard[0]?.onTimePct || 0}%`, sub: "Avg: 68% this week", icon: ClipboardDocumentCheckIcon, color: "text-violet-500", border: "border-t-violet-500" },
-          { label: "Team Present", value: `${att.present || 0}/${att.total || 0}`, sub: `${att.absent || 0} Absent · ${att.onLeave || 0} Leave`, icon: UsersIcon, color: "text-indigo-500", border: "border-t-indigo-500" },
+          { label: "Team Present", value: `${att.present || 0}/${att.total || 0}`, sub: `${att.absent || 0} Absent · ${att.onLeave || 0} Leave`, icon: UsersIcon, color: "text-indigo-500", border: "border-t-indigo-500", onClick: () => setDrillDownModal({ isOpen: true, title: "Team Attendance", data: [...(att.presentList || []).map((x: any) => ({ ...x, status: 'Present' })), ...(att.absentList || []).map((x: any) => ({ ...x, status: 'Absent' })), ...(att.onLeaveList || []).map((x: any) => ({ ...x, status: `On Leave (${x.type})` }))], columns: [{ key: 'id', label: 'Employee ID' }, { key: 'name', label: 'Name' }, { key: 'status', label: 'Status' }] }) },
         ].map((kpi, i) => (
           <motion.div 
             initial={{ opacity: 0, y: 20 }} 
             animate={{ opacity: 1, y: 0 }} 
             transition={{ delay: i * 0.05 }}
             key={i} 
-            className={`bg-white dark:bg-navy-800 border border-gray-100 dark:border-white/5 border-t-4 ${kpi.border} rounded-2xl p-5 shadow-xl hover:shadow-2xl transition-all group`}
+            onClick={kpi.onClick}
+            className={`bg-white dark:bg-navy-800 border border-gray-100 dark:border-white/5 border-t-4 ${kpi.border} rounded-2xl p-5 shadow-xl hover:shadow-2xl transition-all group ${kpi.onClick ? 'cursor-pointer hover:scale-[1.02]' : ''}`}
           >
             <div className="flex items-center justify-between mb-3">
               <p className="text-[9px] text-gray-400 font-black uppercase tracking-[0.15em]">{kpi.label}</p>
@@ -243,7 +248,10 @@ export default function CooReport({ data: coo, loading }: CooReportProps) {
           </div>
           <div className="space-y-3 overflow-y-auto max-h-[400px] pr-2 custom-scrollbar">
             {(ord.delayAging?.gt7?.count || 0) > 0 && (
-              <div className="bg-red-50 dark:bg-red-500/10 border border-red-100 dark:border-red-500/20 rounded-2xl p-4">
+              <div 
+                className="bg-red-50 dark:bg-red-500/10 border border-red-100 dark:border-red-500/20 rounded-2xl p-4 cursor-pointer hover:bg-red-100 dark:hover:bg-red-500/20 transition-colors"
+                onClick={() => setDrillDownModal({ isOpen: true, title: "Critical Delayed Orders (>7 Days)", data: (ord.delayAging?.undispatchedList || []).filter((o: any) => { const diff = (new Date().getTime() - new Date(o.date).getTime())/(1000*3600*24); return diff > 7; }), columns: [{ key: 'id', label: 'Order No' }, { key: 'party', label: 'Party' }, { key: 'date', label: 'Date' }, { key: 'amount', label: 'Amount', render: (item: any) => `₹${item.amount.toLocaleString()}` }] })}
+              >
                 <p className="text-[10px] font-black text-red-500 uppercase tracking-widest">Critical · Orders</p>
                 <p className="text-sm font-black text-gray-800 dark:text-white mt-1">{ord.delayAging.gt7.count} orders delayed &gt;7 days</p>
                 <p className="text-[10px] font-bold text-gray-400 mt-1">{fmtAmount(ord.delayAging.gt7.revenueAtRisk)} at risk · Escalate immediately</p>
@@ -257,7 +265,10 @@ export default function CooReport({ data: coo, loading }: CooReportProps) {
               </div>
             )}
             {(del.overdue || 0) > 0 && (
-              <div className="bg-orange-50 dark:bg-orange-500/10 border border-orange-100 dark:border-orange-500/20 rounded-2xl p-4">
+              <div 
+                className="bg-orange-50 dark:bg-orange-500/10 border border-orange-100 dark:border-orange-500/20 rounded-2xl p-4 cursor-pointer hover:bg-orange-100 dark:hover:bg-orange-500/20 transition-colors"
+                onClick={() => setDrillDownModal({ isOpen: true, title: "Overdue Tasks", data: del.overdueList || [], columns: [{ key: 'id', label: 'Task ID' }, { key: 'title', label: 'Title' }, { key: 'assignedTo', label: 'Assigned To' }, { key: 'due', label: 'Due Date' }] })}
+              >
                 <p className="text-[10px] font-black text-orange-500 uppercase tracking-widest">Warning · Delegations</p>
                 <p className="text-sm font-black text-gray-800 dark:text-white mt-1">{del.overdue} tasks overdue</p>
                 <p className="text-[10px] font-bold text-gray-400 mt-1">{del.needRevision || 0} need revision · {del.pending || 0} pending</p>
@@ -503,11 +514,11 @@ export default function CooReport({ data: coo, loading }: CooReportProps) {
           <div className="grid grid-cols-4 gap-4 mb-8">
             {[
               { label: "Completed", value: del.completed || 0, color: "text-emerald-500", bg: "bg-emerald-500/10 border-emerald-500/20" },
-              { label: "Overdue", value: del.overdue || 0, color: "text-red-500", bg: "bg-red-500/10 border-red-500/20", icon: true },
-              { label: "Need Revision", value: del.needRevision || 0, color: "text-amber-500", bg: "bg-amber-500/10 border-amber-500/20" },
-              { label: "Delayed", value: del.overdue || 0, color: "text-blue-500", bg: "bg-blue-500/10 border-blue-500/20" },
+              { label: "Overdue", value: del.overdue || 0, color: "text-red-500", bg: "bg-red-500/10 border-red-500/20 hover:bg-red-500/20 cursor-pointer", icon: true, onClick: () => setDrillDownModal({ isOpen: true, title: "Overdue Tasks", data: del.overdueList || [], columns: [{ key: 'id', label: 'Task ID' }, { key: 'title', label: 'Title' }, { key: 'assignedTo', label: 'Assigned To' }, { key: 'due', label: 'Due Date' }] }) },
+              { label: "Need Revision", value: del.needRevision || 0, color: "text-amber-500", bg: "bg-amber-500/10 border-amber-500/20 hover:bg-amber-500/20 cursor-pointer", onClick: () => setDrillDownModal({ isOpen: true, title: "Needs Revision", data: del.needRevisionList || [], columns: [{ key: 'id', label: 'Task ID' }, { key: 'title', label: 'Title' }, { key: 'assignedTo', label: 'Assigned To' }, { key: 'due', label: 'Due Date' }] }) },
+              { label: "Pending", value: del.pending || 0, color: "text-blue-500", bg: "bg-blue-500/10 border-blue-500/20 hover:bg-blue-500/20 cursor-pointer", onClick: () => setDrillDownModal({ isOpen: true, title: "Pending Tasks", data: del.pendingList || [], columns: [{ key: 'id', label: 'Task ID' }, { key: 'title', label: 'Title' }, { key: 'assignedTo', label: 'Assigned To' }, { key: 'due', label: 'Due Date' }] }) },
             ].map((s, i) => (
-              <div key={i} className={`${s.bg} border rounded-2xl p-5 text-center`}>
+              <div key={i} className={`${s.bg} border rounded-2xl p-5 text-center transition-colors`} onClick={s.onClick}>
                 <p className={`text-2xl font-black ${s.color} tracking-tighter`}>{s.value}{s.icon && <span className="w-2 h-2 bg-red-500 rounded-full inline-block ml-1 animate-pulse align-top" />}</p>
                 <p className="text-[9px] font-black text-gray-500 dark:text-gray-400 uppercase mt-1 tracking-widest">{s.label}</p>
               </div>
@@ -547,12 +558,18 @@ export default function CooReport({ data: coo, loading }: CooReportProps) {
                 <p className="text-[10px] font-black text-gray-400 uppercase mt-2 tracking-widest">Total SKUs</p>
                 <p className="text-[9px] font-bold text-emerald-500 mt-1 uppercase">↑ 12 new this month</p>
              </div>
-             <div className="bg-red-50 dark:bg-red-500/5 rounded-2xl p-6 text-center border border-red-100 dark:border-red-500/20">
+             <div 
+               className="bg-red-50 dark:bg-red-500/5 rounded-2xl p-6 text-center border border-red-100 dark:border-red-500/20 cursor-pointer hover:bg-red-100 dark:hover:bg-red-500/10 transition-colors"
+               onClick={() => setDrillDownModal({ isOpen: true, title: "Out of Stock Items", data: inv.outOfStockList || [], columns: [{ key: 'sku', label: 'SKU' }, { key: 'category', label: 'Category' }, { key: 'stockLeft', label: 'Stock Left' }] })}
+             >
                 <p className="text-3xl font-black text-red-500 tracking-tighter">{inv.outOfStockCount || 0}</p>
                 <p className="text-[10px] font-black text-red-500 uppercase mt-2 tracking-widest">Out of Stock</p>
                 <p className="text-[9px] font-bold text-red-400 mt-1 uppercase">Reorder NOW</p>
              </div>
-             <div className="bg-amber-50 dark:bg-amber-500/5 rounded-2xl p-6 text-center border border-amber-100 dark:border-amber-500/20">
+             <div 
+               className="bg-amber-50 dark:bg-amber-500/5 rounded-2xl p-6 text-center border border-amber-100 dark:border-amber-500/20 cursor-pointer hover:bg-amber-100 dark:hover:bg-amber-500/10 transition-colors"
+               onClick={() => setDrillDownModal({ isOpen: true, title: "Low Stock Items", data: inv.lowStockList || [], columns: [{ key: 'sku', label: 'SKU' }, { key: 'category', label: 'Category' }, { key: 'stockLeft', label: 'Stock Left' }] })}
+             >
                 <p className="text-3xl font-black text-amber-500 tracking-tighter">{inv.lowStockCount || 0}</p>
                 <p className="text-[10px] font-black text-amber-500 uppercase mt-2 tracking-widest">Low Stock</p>
                 <p className="text-[9px] font-bold text-amber-400 mt-1 uppercase">Reorder needed</p>
@@ -852,6 +869,15 @@ export default function CooReport({ data: coo, loading }: CooReportProps) {
           </motion.div>
         </div>
       )}
+
+      {/* Generic Drill Down Modal */}
+      <DrillDownModal 
+        isOpen={drillDownModal.isOpen} 
+        onClose={() => setDrillDownModal(prev => ({ ...prev, isOpen: false }))} 
+        title={drillDownModal.title} 
+        columns={drillDownModal.columns} 
+        data={drillDownModal.data} 
+      />
 
       <style jsx global>{`
         .custom-scrollbar::-webkit-scrollbar {
