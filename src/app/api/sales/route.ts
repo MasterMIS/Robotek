@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSalesLeads, addSalesLead } from "@/lib/sales-sheets";
 import { auth } from "@/auth";
+import { calculatePlannedTimeIST } from "@/lib/workingHours";
 
 export async function GET() {
   try {
@@ -32,6 +33,12 @@ export async function POST(request: Request) {
     // Default status to Lead Generated
     if (!body.status) {
       body.status = "Lead Generated";
+    }
+
+    // Auto generate planned time based on 1 day TAT (9 working hours)
+    if (!body.planned_time) {
+      const nowUTC = new Date();
+      body.planned_time = calculatePlannedTimeIST(nowUTC, 9).toISOString();
     }
 
     const success = await addSalesLead(body);

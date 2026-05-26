@@ -57,3 +57,50 @@ export function getWorkingHoursGapMs(start: Date, end: Date): number {
   
   return totalMs;
 }
+
+/**
+ * Calculates the planned time by adding working hours to a base date.
+ * Skips Sundays and only counts hours between 9:30 AM and 6:30 PM IST.
+ */
+export function calculatePlannedTimeIST(baseDateUTC: Date, workingHoursToAdd: number): Date {
+  // Convert UTC to IST so we can use standard Date UTC methods to manipulate "local" time easily
+  let dateIST = new Date(baseDateUTC.getTime() + 5.5 * 60 * 60 * 1000);
+  
+  let minsToAdd = workingHoursToAdd * 60;
+  let safety = 0;
+  
+  while (minsToAdd > 0 && safety < 10000) {
+    safety++;
+    if (dateIST.getUTCDay() === 0) { // Sunday
+      dateIST.setUTCDate(dateIST.getUTCDate() + 1);
+      dateIST.setUTCHours(9, 30, 0, 0);
+      continue;
+    }
+    
+    let curHour = dateIST.getUTCHours() + dateIST.getUTCMinutes() / 60;
+    
+    if (curHour >= 18.5) { // 6:30 PM IST
+      dateIST.setUTCDate(dateIST.getUTCDate() + 1);
+      dateIST.setUTCHours(9, 30, 0, 0);
+      continue;
+    }
+    
+    if (curHour < 9.5) { // 9:30 AM IST
+      dateIST.setUTCHours(9, 30, 0, 0);
+      curHour = 9.5;
+    }
+    
+    let availMins = (18.5 - curHour) * 60;
+    if (minsToAdd <= availMins) {
+      dateIST.setUTCMinutes(dateIST.getUTCMinutes() + minsToAdd);
+      minsToAdd = 0;
+    } else {
+      minsToAdd -= availMins;
+      dateIST.setUTCDate(dateIST.getUTCDate() + 1);
+      dateIST.setUTCHours(9, 30, 0, 0);
+    }
+  }
+  
+  // Convert back to UTC
+  return new Date(dateIST.getTime() - 5.5 * 60 * 60 * 1000);
+}

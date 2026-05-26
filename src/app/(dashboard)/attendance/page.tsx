@@ -21,7 +21,8 @@ import {
     ArrowPathIcon,
     ArrowRightCircleIcon,
     PencilSquareIcon,
-    TrashIcon
+    TrashIcon,
+    ArrowDownTrayIcon
 } from '@heroicons/react/24/outline';
 
 interface Leave {
@@ -495,6 +496,71 @@ export default function AttendancePage() {
             return `${yyyy}-${mm}-${dd}`;
         }
         return dStr.split('T')[0];
+    };
+
+    const handleExportCSV = () => {
+        if (!masterData) return;
+
+        const year = currentDate.getFullYear();
+        const month = currentDate.getMonth();
+        const daysInMonth = new Date(year, month + 1, 0).getDate();
+        const todayStr = getIstDateString();
+
+        const headers = ['Employee Name', 'Employee ID', ...Array.from({ length: daysInMonth }, (_, i) => String(i + 1))];
+        const rows: string[][] = [headers];
+
+        masterData.users
+            .filter(u => user?.role?.toLowerCase() === 'admin' || String(u.id) === String(user.id))
+            .filter(u => (u.full_name || u.username)?.toLowerCase().includes(masterSearch.toLowerCase()) || String(u.id).toLowerCase().includes(masterSearch.toLowerCase()))
+            .forEach(u => {
+                const monthAtt = masterData.attendance.filter(a => String(a.userId) === String(u.id)) || [];
+                const uLeaves = masterData.leaves?.filter((l:any) => String(l.userId) === String(u.id) && l.status === 'Approved') || [];
+                
+                const rowData = [u.full_name || u.username, String(u.id)];
+
+                for (let d = 1; d <= daysInMonth; d++) {
+                    const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+                    const isSunday = new Date(year, month, d).getDay() === 0;
+
+                    const record = monthAtt.find(h => normalizeDateSheet(h.date) === dateStr);
+                    const leave = uLeaves.find((l:any) => {
+                        const start = normalizeDateSheet(l.startDate);
+                        const end = normalizeDateSheet(l.endDate);
+                        return dateStr >= start && dateStr <= end;
+                    });
+
+                    let cellValue = '-';
+                    if (isSunday) {
+                        cellValue = 'SUN';
+                    } else if (leave) {
+                        cellValue = 'L';
+                    } else if (record?.inTime) {
+                        let hours = 0;
+                        if (record.outTime) {
+                            hours = (new Date(record.outTime).getTime() - new Date(record.inTime).getTime()) / 3600000;
+                        }
+                        if (record.outTime && hours <= 4) {
+                            cellValue = reportViewMode === 'TIME' ? `${formatTimeIST(record.inTime)} - ${formatTimeIST(record.outTime)}` : 'HD';
+                        } else {
+                            cellValue = reportViewMode === 'TIME' ? `${formatTimeIST(record.inTime)} - ${record.outTime ? formatTimeIST(record.outTime) : 'N/A'}` : 'P';
+                        }
+                    } else if (dateStr < todayStr) {
+                        cellValue = 'A';
+                    }
+                    rowData.push(cellValue);
+                }
+                rows.push(rowData);
+            });
+
+        const csvContent = rows.map(r => r.map(c => `"${c}"`).join(',')).join('\n');
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', `Attendance_Report_${currentDate.toLocaleString('default', { month: 'short', year: 'numeric' })}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
     };
 
     const renderCalendar = () => {
@@ -1218,6 +1284,14 @@ export default function AttendancePage() {
                                 </span>
                                 <button onClick={() => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() + 1)))} className="p-1 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-full transition"><ChevronRightIcon className="w-4 h-4 text-[#FFD500]" /></button>
                             </div>
+
+                            <button
+                                onClick={handleExportCSV}
+                                className="flex items-center gap-2 bg-[#003875] dark:bg-[#FFD500] text-white dark:text-black px-4 py-2 rounded-full font-black text-[10px] uppercase tracking-widest shadow-lg shadow-[#003875]/20 hover:-translate-y-0.5 transition-all active:scale-95"
+                            >
+                                <ArrowDownTrayIcon className="w-4 h-4" />
+                                Export CSV
+                            </button>
                         </div>
                     </div>
 

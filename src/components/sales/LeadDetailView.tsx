@@ -80,10 +80,17 @@ export default function LeadDetailView({ lead, initialTab, onClose, onUpdate }: 
     e.preventDefault();
     setIsSubmitting(true);
     try {
+      const payload = { ...formData };
+      
+      // Auto-set actual time when filling the Transfer entry
+      if (activeTab === 'transfer') {
+        payload.actual_time = new Date().toISOString();
+      }
+
       const res = await fetch(`/api/sales/${lead.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData)
+        body: JSON.stringify(payload)
       });
       if (res.ok) {
         onUpdate();
@@ -137,14 +144,7 @@ export default function LeadDetailView({ lead, initialTab, onClose, onUpdate }: 
         return (
           <form onSubmit={handleLeadSubmit} className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-[#FFD500] uppercase tracking-widest block">Planned Time</label>
-                <input type="datetime-local" name="planned_time" value={formData.planned_time || ""} onChange={handleLeadChange} className="w-full bg-[#FFFBF0] dark:bg-zinc-900 px-3 py-2 rounded-lg border border-orange-100 dark:border-zinc-800 focus:border-[#FFD500] focus:bg-white dark:focus:bg-zinc-900 outline-none font-black text-sm text-gray-900 dark:text-white transition-all shadow-sm" />
-              </div>
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-[#FFD500] uppercase tracking-widest block">Actual Time</label>
-                <input type="datetime-local" name="actual_time" value={formData.actual_time || ""} onChange={handleLeadChange} className="w-full bg-[#FFFBF0] dark:bg-zinc-900 px-3 py-2 rounded-lg border border-orange-100 dark:border-zinc-800 focus:border-[#FFD500] focus:bg-white dark:focus:bg-zinc-900 outline-none font-black text-sm text-gray-900 dark:text-white transition-all shadow-sm" />
-              </div>
+
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-[#FFD500] uppercase tracking-widest block">Status</label>
                 <select name="status" value={formData.status || ""} onChange={handleLeadChange} className="w-full bg-[#FFFBF0] dark:bg-zinc-900 px-3 py-2 rounded-lg border border-orange-100 dark:border-zinc-800 focus:border-[#FFD500] focus:bg-white dark:focus:bg-zinc-900 outline-none font-black text-sm text-gray-900 dark:text-white transition-all shadow-sm">

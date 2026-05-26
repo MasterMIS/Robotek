@@ -341,13 +341,31 @@ export default function ReplacePage() {
 
   const getActiveStep = (item: Replace): number => {
     if (item.cancelled) return -1;
+    
+    let hasAnyPlanned = false;
     for (let i = 1; i <= 9; i++) {
-      const act = (item as any)[`actual_${i}`];
-      const pl = (item as any)[`planned_${i}`];
-      // A step is active if it has a planned date but no actual date
-      if ((!act || act.trim() === "") && (pl && pl.trim() !== "")) return i;
+      if ((item as any)[`planned_${i}`]?.trim()) {
+        hasAnyPlanned = true;
+        break;
+      }
     }
-    // Fallback: first empty actual (for backward compatibility if planned is missing)
+
+    if (hasAnyPlanned) {
+      for (let i = 1; i <= 9; i++) {
+        const act = (item as any)[`actual_${i}`];
+        const pl = (item as any)[`planned_${i}`];
+        if ((!act || act.trim() === "") && (pl && pl.trim() !== "")) return i;
+      }
+      
+      if ((item as any)[`actual_9`]?.trim()) return 0;
+
+      let highestActual = 0;
+      for (let i = 1; i <= 9; i++) {
+        if ((item as any)[`actual_${i}`]?.trim()) highestActual = i;
+      }
+      return highestActual < 9 ? highestActual + 1 : 0;
+    }
+
     for (let i = 1; i <= 9; i++) {
       const act = (item as any)[`actual_${i}`];
       if (!act || act.trim() === "") return i;
@@ -456,7 +474,11 @@ export default function ReplacePage() {
     const payload = { ...formData, parcel_photo: parcelPhotoUrl, updated_at: now };
     if (!editingItem) { 
       payload.created_at = now; 
-      payload.planned_1 = calculatePlannedDate(now, globalConfigs[0].tat); 
+      if (formData.send_kundli === "No") {
+        payload.planned_2 = calculatePlannedDate(now, globalConfigs[1]?.tat || "24 Hrs");
+      } else {
+        payload.planned_1 = calculatePlannedDate(now, globalConfigs[0]?.tat || "24 Hrs"); 
+      }
     }
     try {
       const res = await fetch("/api/replace", { method: editingItem ? "PUT" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });

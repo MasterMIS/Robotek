@@ -867,7 +867,7 @@ export default function O2DPage() {
     let totalMinutesToConsume = unit.includes("day") ? val * 10 * 60 : val * 60;
 
     const WORK_START_HOUR = 9.5; // 9:30 AM
-    const WORK_END_HOUR = 19.5; // 7:30 PM
+    const WORK_END_HOUR = 18.5; // 6:30 PM
     const MINS_PER_WORK_DAY = (WORK_END_HOUR - WORK_START_HOUR) * 60;
 
     while (totalMinutesToConsume > 0) {
@@ -897,7 +897,7 @@ export default function O2DPage() {
 
       // 3. Calculate available minutes in the current window
       const endOfToday = new Date(date);
-      endOfToday.setHours(19, 30, 0, 0);
+      endOfToday.setHours(18, 30, 0, 0);
       const availableMinutesToday =
         (endOfToday.getTime() - date.getTime()) / (1000 * 60);
 

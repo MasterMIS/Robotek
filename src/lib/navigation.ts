@@ -15,6 +15,7 @@ import {
   ArchiveBoxIcon,
   ArrowDownTrayIcon,
   CurrencyDollarIcon,
+  MapPinIcon
 } from "@heroicons/react/24/outline";
 
 export const navigation = [
@@ -35,6 +36,7 @@ export const navigation = [
   { name: 'IMS', id: 'ims', href: '/ims', icon: InboxIcon },
   { name: 'Party Management', id: 'party-management', href: '/party-management', icon: UserGroupIcon },
   { name: 'Attendance', id: 'attendance', href: '/attendance', icon: ClipboardDocumentListIcon },
+  { name: 'Field Driver', id: 'field-driver', href: '/field-driver', icon: MapPinIcon },
   { name: 'Score', id: 'score', href: '/score', icon: ChartBarIcon },
   { name: 'Chat', id: 'chat', href: '/chat', icon: ChatBubbleLeftRightIcon },
   { name: 'Scheduler', id: 'scheduler', href: '/scheduler', icon: CalendarIcon },
