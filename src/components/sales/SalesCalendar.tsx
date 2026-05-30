@@ -11,13 +11,27 @@ interface SalesCalendarProps {
 export default function SalesCalendar({ followUps, selectedDate, onSelectDate }: SalesCalendarProps) {
   const [currentMonth, setCurrentMonth] = useState(new Date());
 
+  const toLocalDateString = (d: Date) => {
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  };
+
   const highlightedDates = useMemo(() => {
-    const dates = new Set<string>();
+    // Get the most recent follow-up for each lead to only count their latest scheduled date
+    const latestFollowUpsByLead = new Map<string, FollowUp>();
     followUps.forEach(fu => {
+      const existing = latestFollowUpsByLead.get(fu.lead_id);
+      if (!existing || new Date(fu.timestamp).getTime() > new Date(existing.timestamp).getTime()) {
+        latestFollowUpsByLead.set(fu.lead_id, fu);
+      }
+    });
+
+    const dates = new Map<string, number>();
+    latestFollowUpsByLead.forEach(fu => {
       if (fu.next_follow_up_date) {
         const d = new Date(fu.next_follow_up_date);
         if (!isNaN(d.getTime())) {
-          dates.add(d.toISOString().split('T')[0]);
+          const dateStr = toLocalDateString(d);
+          dates.set(dateStr, (dates.get(dateStr) || 0) + 1);
         }
       }
     });
@@ -36,37 +50,45 @@ export default function SalesCalendar({ followUps, selectedDate, onSelectDate }:
   }
 
   for (let i = 1; i <= daysInMonth; i++) {
-    const dateStr = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), i, 12).toISOString().split('T')[0];
-    const isHighlighted = highlightedDates.has(dateStr);
-    const isSelected = selectedDate ? selectedDate.toISOString().split('T')[0] === dateStr : false;
+    const d = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), i);
+    const dateStr = toLocalDateString(d);
+    const count = highlightedDates.get(dateStr) || 0;
+    const isHighlighted = count > 0;
+    const isSelected = selectedDate ? toLocalDateString(selectedDate) === dateStr : false;
 
     days.push(
-      <button
-        key={i}
-        onClick={() => {
-          if (isSelected) {
-            onSelectDate(null); // toggle off
-          } else {
-            onSelectDate(new Date(currentMonth.getFullYear(), currentMonth.getMonth(), i));
-          }
-        }}
-        className={`h-8 w-8 rounded-full flex items-center justify-center text-[10px] font-bold transition-all ${
-          isSelected
-            ? 'bg-[#003875] dark:bg-[#FFD500] text-white dark:text-black shadow-md'
-            : isHighlighted
-            ? 'bg-orange-100 text-orange-600 dark:bg-yellow-500/20 dark:text-yellow-400 border border-orange-200 dark:border-yellow-500/50 hover:bg-orange-200'
-            : 'text-gray-600 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-zinc-800'
-        }`}
-      >
-        {i}
-      </button>
+      <div key={i} className="relative w-8 h-8 flex items-center justify-center">
+        <button
+          onClick={() => {
+            if (isSelected) {
+              onSelectDate(null); // toggle off
+            } else {
+              onSelectDate(new Date(currentMonth.getFullYear(), currentMonth.getMonth(), i));
+            }
+          }}
+          className={`h-8 w-8 rounded-full flex items-center justify-center text-[10px] font-bold transition-all ${
+            isSelected
+              ? 'bg-[#003875] dark:bg-[#FFD500] text-white dark:text-black shadow-md'
+              : isHighlighted
+              ? 'bg-orange-100 text-orange-600 dark:bg-yellow-500/20 dark:text-yellow-400 border border-orange-200 dark:border-yellow-500/50 hover:bg-orange-200'
+              : 'text-gray-600 dark:text-slate-300 hover:bg-gray-200 dark:hover:bg-zinc-700'
+          }`}
+        >
+          {i}
+        </button>
+        {isHighlighted && (
+          <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[7px] font-black w-3.5 h-3.5 flex items-center justify-center rounded-full shadow-sm">
+            {count > 9 ? '9+' : count}
+          </span>
+        )}
+      </div>
     );
   }
 
   const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
   return (
-    <div className="bg-[#FFFBF0] dark:bg-navy-900 rounded-2xl p-4 shadow-sm border border-orange-100/50 dark:border-white/10">
+    <div className="bg-[#FFFBF0] dark:bg-navy-900 rounded-2xl p-4 shadow-[inset_0_4px_12px_rgba(0,0,0,0.08)] dark:shadow-[inset_0_4px_12px_rgba(0,0,0,0.5)] border border-orange-200/60 dark:border-white/10">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-[12px] font-black text-gray-900 dark:text-white uppercase tracking-widest">
           {monthNames[currentMonth.getMonth()]} {currentMonth.getFullYear()}

@@ -34,6 +34,10 @@ export async function PUT(
       screenshotUrl = updatedItems[0]?.order_screenshot || "";
     }
 
+    if (!updatedItems || updatedItems.length === 0) {
+      return NextResponse.json({ error: "Cannot update order with empty items array. Use DELETE endpoint instead." }, { status: 400 });
+    }
+
     // Server-side safeguard: if multiple items are sent for one order, merge them
     if (updatedItems.length > 1 && updatedItems.every(it => !it.item_name?.includes(" | "))) {
       const first = updatedItems[0];

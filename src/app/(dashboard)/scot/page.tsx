@@ -357,6 +357,8 @@ export default function ScotPage() {
       return matchesUser && matchesSearch;
     } else {
       const r = record as CallRecord;
+      const matchesUser = isAdmin || String(r.salesCoordinator || "").toLowerCase().trim() === currentUsername.toLowerCase().trim();
+      
       const matchesSearch = 
         String(r.partyName || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
         String(r.concernPerson || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -389,7 +391,7 @@ export default function ScotPage() {
         }
       }
 
-      return matchesSearch && matchesDate;
+      return matchesUser && matchesSearch && matchesDate;
     }
   });
 

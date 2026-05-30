@@ -145,13 +145,13 @@ class SalesService extends BaseSheetsService<SalesLead> {
 class FollowUpService extends BaseSheetsService<FollowUp> {
   protected spreadsheetId = GOOGLE_SHEET_ID;
   protected sheetName = FOLLOW_UP_SHEET_NAME;
-  protected range = "A:K"; // Timestamp to Dealing with + Lead ID
+  protected range = "A:Z"; // Increased to include lead_id in column L
   protected idColumnIndex = 1; // Follow Up Id
 
   private readonly CANONICAL_HEADERS = [
     "Timestamp", "Follow Up Id", "Lead ID", "Next Follow Up Date", 
     "Status", "Lead Time", "Remark", "Billing Date", "Billing Amount", 
-    "SS Name", "Dealing with" // Assuming "Lead ID" needs to be stored to link back to the sales lead
+    "SS Name", "dealing with (ss name or direct robotek)"
   ].map(h => h.toLowerCase());
 
   mapRowToItem(row: any[]): FollowUp {
@@ -167,7 +167,7 @@ class FollowUpService extends BaseSheetsService<FollowUp> {
       billing_date: get("billing date"),
       billing_amount: get("billing amount"),
       ss_name: get("ss name"),
-      dealing_with: get("dealing with"),
+      dealing_with: get("dealing with (ss name or direct robotek)"),
     };
   }
 
@@ -189,7 +189,7 @@ class FollowUpService extends BaseSheetsService<FollowUp> {
     set("billing date", item.billing_date);
     set("billing amount", item.billing_amount);
     set("ss name", item.ss_name);
-    set("dealing with", item.dealing_with);
+    set("dealing with (ss name or direct robotek)", item.dealing_with);
 
     return row;
   }

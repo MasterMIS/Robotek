@@ -1,14 +1,26 @@
 import { useState, useEffect } from "react";
 import { SalesLead, FollowUp } from "@/types/sales";
-import { 
-  ArrowLeftIcon, 
-  TruckIcon, 
-  ShieldCheckIcon, 
-  GlobeAltIcon, 
+import {
+  ArrowLeftIcon,
+  TruckIcon,
+  ShieldCheckIcon,
+  GlobeAltIcon,
   ChatBubbleLeftRightIcon,
   PhoneIcon,
-  MapPinIcon
+  MapPinIcon,
+  CubeIcon,
+  CurrencyRupeeIcon,
+  ChartBarIcon,
+  TagIcon,
+  UserIcon,
+  CalendarIcon,
+  DocumentTextIcon,
+  SparklesIcon,
+  XMarkIcon
 } from "@heroicons/react/24/outline";
+import ActionStatusModal from "@/components/ActionStatusModal";
+import EventTimeline from "@/components/sales/EventTimeline";
+import Portal from "@/components/Portal";
 
 interface LeadDetailViewProps {
   lead: SalesLead;
@@ -18,10 +30,25 @@ interface LeadDetailViewProps {
 }
 
 export default function LeadDetailView({ lead, initialTab, onClose, onUpdate }: LeadDetailViewProps) {
+  const isTransferStage = !lead.qualified_status && (!lead.status || lead.status === 'Lead Generated');
+  const isQualifyStage = (!lead.qualified_status || lead.qualified_status === 'Not Qualified') && lead.status && lead.status !== 'Lead Generated';
+  const isFollowUpStage = lead.qualified_status === 'Qualified';
+
+  const canAccessTransfer = isTransferStage;
+  const canAccessQualify = isQualifyStage;
+  const canAccessFollowUp = isFollowUpStage;
+
   const [activeTab, setActiveTab] = useState(initialTab);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [statusModal, setStatusModal] = useState<{
+    isOpen: boolean;
+    status: 'loading' | 'success' | 'error';
+    message: string;
+  }>({ isOpen: false, status: 'loading', message: '' });
+  const [users, setUsers] = useState<any[]>([]);
   const [formData, setFormData] = useState<Partial<SalesLead>>({});
-  
+
   // Follow Up State
   const [followUps, setFollowUps] = useState<FollowUp[]>([]);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
@@ -33,11 +60,27 @@ export default function LeadDetailView({ lead, initialTab, onClose, onUpdate }: 
     billing_date: "",
     billing_amount: "",
     ss_name: "",
+    dealing_with: "",
   });
 
   useEffect(() => {
     setActiveTab(initialTab);
   }, [initialTab]);
+
+  useEffect(() => {
+    const fetchUsers = async () => {
+      try {
+        const res = await fetch("/api/users");
+        if (res.ok) {
+          const data = await res.json();
+          setUsers(data);
+        }
+      } catch (e) {
+        console.error("Failed to fetch users", e);
+      }
+    };
+    fetchUsers();
+  }, []);
 
   useEffect(() => {
     if (lead) {
@@ -73,15 +116,57 @@ export default function LeadDetailView({ lead, initialTab, onClose, onUpdate }: 
 
   const handleLeadChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    setFormData(prev => {
+      const newData = { ...prev, [name]: value };
+      if (name === 'qualified_status' && activeTab === 'qualify') {
+        const now = new Date();
+        const offset = now.getTimezoneOffset() * 60000;
+        const localISOTime = (new Date(now.getTime() - offset)).toISOString().slice(0, 16);
+        newData.qualified_timestamp = localISOTime;
+      }
+      return newData;
+    });
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files || e.target.files.length === 0) return;
+    const file = e.target.files[0];
+    setIsUploading(true);
+
+    try {
+      const uploadData = new FormData();
+      uploadData.append("file", file);
+      uploadData.append("folderId", "1rvnNJSOsWO0jJS3yzU4fFvZWK1OWb_wB");
+
+      const res = await fetch("/api/sales/upload", {
+        method: "POST",
+        body: uploadData,
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.fileId) {
+          const fileLink = `https://drive.google.com/file/d/${data.fileId}/view`;
+          setFormData(prev => ({ ...prev, document_link: fileLink }));
+        }
+      } else {
+        alert("Failed to upload document");
+      }
+    } catch (error) {
+      console.error(error);
+      alert("Error uploading document");
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   const handleLeadSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
+    setStatusModal({ isOpen: true, status: 'loading', message: 'Saving Updates...' });
     try {
       const payload = { ...formData };
-      
+
       // Auto-set actual time when filling the Transfer entry
       if (activeTab === 'transfer') {
         payload.actual_time = new Date().toISOString();
@@ -93,13 +178,17 @@ export default function LeadDetailView({ lead, initialTab, onClose, onUpdate }: 
         body: JSON.stringify(payload)
       });
       if (res.ok) {
-        onUpdate();
+        setStatusModal({ isOpen: true, status: 'success', message: 'Lead updated successfully!' });
+        setTimeout(() => {
+          onUpdate();
+          setStatusModal(prev => ({ ...prev, isOpen: false }));
+        }, 1500);
       } else {
-        alert("Failed to update lead");
+        setStatusModal({ isOpen: true, status: 'error', message: 'Failed to update lead' });
       }
     } catch (error) {
       console.error(error);
-      alert("Error updating lead");
+      setStatusModal({ isOpen: true, status: 'error', message: 'Error updating lead' });
     } finally {
       setIsSubmitting(false);
     }
@@ -113,26 +202,44 @@ export default function LeadDetailView({ lead, initialTab, onClose, onUpdate }: 
   const handleFollowUpSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
+    setStatusModal({ isOpen: true, status: 'loading', message: 'Logging Follow Up...' });
     try {
-      const payload = { ...followUpFormData, lead_id: lead.id };
+      let calculatedNextDate = followUpFormData.next_follow_up_date;
+      if (followUpFormData.lead_time) {
+        const days = parseInt(followUpFormData.lead_time) || 0;
+        const nextDate = new Date();
+        nextDate.setDate(nextDate.getDate() + days);
+        calculatedNextDate = nextDate.toISOString();
+      }
+
+      const payload = { 
+        ...followUpFormData, 
+        lead_id: lead.id,
+        next_follow_up_date: calculatedNextDate
+      };
+      
       const res = await fetch("/api/sales/follow-up", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
       });
       if (res.ok) {
-        setFollowUpFormData({
-          next_follow_up_date: "", status: "", lead_time: "",
-          remark: "", billing_date: "", billing_amount: "", ss_name: "",
-        });
-        fetchFollowUps();
-        onUpdate(); // refresh pipeline data
+        setStatusModal({ isOpen: true, status: 'success', message: 'Follow up added successfully!' });
+        setTimeout(() => {
+          setFollowUpFormData({
+            next_follow_up_date: "", status: "", lead_time: "",
+            remark: "", billing_date: "", billing_amount: "", ss_name: "", dealing_with: ""
+          });
+          fetchFollowUps();
+          onUpdate(); // refresh pipeline data
+          setStatusModal(prev => ({ ...prev, isOpen: false }));
+        }, 1500);
       } else {
-        alert("Failed to add follow up");
+        setStatusModal({ isOpen: true, status: 'error', message: 'Failed to add follow up' });
       }
     } catch (error) {
       console.error(error);
-      alert("Error submitting follow up");
+      setStatusModal({ isOpen: true, status: 'error', message: 'Error submitting follow up' });
     } finally {
       setIsSubmitting(false);
     }
@@ -142,233 +249,316 @@ export default function LeadDetailView({ lead, initialTab, onClose, onUpdate }: 
     switch (activeTab) {
       case 'transfer':
         return (
-          <form onSubmit={handleLeadSubmit} className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <form onSubmit={handleLeadSubmit} className="space-y-3 animate-in fade-in slide-in-from-bottom-2 duration-300">
+            <div className="grid grid-cols-1 gap-3">
 
-              <div className="space-y-2">
+              <div className="space-y-1.5">
                 <label className="text-[10px] font-black text-[#FFD500] uppercase tracking-widest block">Status</label>
-                <select name="status" value={formData.status || ""} onChange={handleLeadChange} className="w-full bg-[#FFFBF0] dark:bg-zinc-900 px-3 py-2 rounded-lg border border-orange-100 dark:border-zinc-800 focus:border-[#FFD500] focus:bg-white dark:focus:bg-zinc-900 outline-none font-black text-sm text-gray-900 dark:text-white transition-all shadow-sm">
+                <select name="status" value={formData.status || ""} onChange={handleLeadChange} className="w-full bg-[#FFFBF0] dark:bg-zinc-900 px-2.5 py-1.5 rounded-lg border border-orange-100 dark:border-zinc-800 focus:border-[#FFD500] focus:bg-white dark:focus:bg-zinc-900 outline-none font-black text-sm text-gray-900 dark:text-white transition-all shadow-sm">
                   <option value="">Select Status...</option>
-                  <option value="Lead Generated">Lead Generated</option>
-                  <option value="Transferring Process">Transferring Process</option>
-                  <option value="Qualifying Process">Qualifying Process</option>
-                  <option value="Qualified">Qualified</option>
-                  <option value="Lost">Lost</option>
-                  <option value="Arrange Meeting">Arrange Meeting</option>
-                  <option value="Demonstration">Demonstration</option>
-                  <option value="Transferred to SS">Transferred to SS</option>
-                  <option value="Negotiation">Negotiation</option>
-                  <option value="1st billing">1st billing</option>
-                  <option value="2nd Billing">2nd Billing</option>
-                  <option value="3rd Billing">3rd Billing</option>
-                  <option value="Potential Lead but not Interesting">Potential Lead but not Interesting</option>
-                  <option value="Deal in Reserved Area">Deal in Reserved Area</option>
-                  <option value="Existing Customer">Existing Customer</option>
-                  <option value="Not Qualified Lead">Not Qualified Lead</option>
+                  <option value="In Process">In Process</option>
+                  <option value="Transfer to SS">Transfer to SS</option>
+                  <option value="Other">Other</option>
                 </select>
               </div>
-              <div className="space-y-2">
+              <div className="space-y-1.5">
                 <label className="text-[10px] font-black text-[#FFD500] uppercase tracking-widest block">SC Remark</label>
-                <input name="sc_remark" value={formData.sc_remark || ""} onChange={handleLeadChange} className="w-full bg-[#FFFBF0] dark:bg-zinc-900 px-3 py-2 rounded-lg border border-orange-100 dark:border-zinc-800 focus:border-[#FFD500] outline-none font-black text-sm text-gray-900 dark:text-white transition-all" />
+                <input name="sc_remark" value={formData.sc_remark || ""} onChange={handleLeadChange} className="w-full bg-[#FFFBF0] dark:bg-zinc-900 px-2.5 py-1.5 rounded-lg border border-orange-100 dark:border-zinc-800 focus:border-[#FFD500] outline-none font-black text-sm text-gray-900 dark:text-white transition-all" />
               </div>
-              <div className="space-y-2">
+              <div className="space-y-1.5">
                 <label className="text-[10px] font-black text-[#FFD500] uppercase tracking-widest block">SS Remark</label>
-                <input name="ss_remark" value={formData.ss_remark || ""} onChange={handleLeadChange} className="w-full bg-[#FFFBF0] dark:bg-zinc-900 px-3 py-2 rounded-lg border border-orange-100 dark:border-zinc-800 focus:border-[#FFD500] outline-none font-black text-sm text-gray-900 dark:text-white transition-all" />
+                <input name="ss_remark" value={formData.ss_remark || ""} onChange={handleLeadChange} className="w-full bg-[#FFFBF0] dark:bg-zinc-900 px-2.5 py-1.5 rounded-lg border border-orange-100 dark:border-zinc-800 focus:border-[#FFD500] outline-none font-black text-sm text-gray-900 dark:text-white transition-all" />
               </div>
-              <div className="space-y-2">
+              <div className="space-y-1.5">
                 <label className="text-[10px] font-black text-[#FFD500] uppercase tracking-widest block">Party Remark</label>
-                <input name="party_remark" value={formData.party_remark || ""} onChange={handleLeadChange} className="w-full bg-[#FFFBF0] dark:bg-zinc-900 px-3 py-2 rounded-lg border border-orange-100 dark:border-zinc-800 focus:border-[#FFD500] outline-none font-black text-sm text-gray-900 dark:text-white transition-all" />
+                <input name="party_remark" value={formData.party_remark || ""} onChange={handleLeadChange} className="w-full bg-[#FFFBF0] dark:bg-zinc-900 px-2.5 py-1.5 rounded-lg border border-orange-100 dark:border-zinc-800 focus:border-[#FFD500] outline-none font-black text-sm text-gray-900 dark:text-white transition-all" />
               </div>
             </div>
-            <button type="submit" disabled={isSubmitting} className="w-full px-4 py-3 bg-[#003875] hover:bg-[#002855] text-white rounded-xl text-[12px] font-black uppercase tracking-widest transition-all shadow-md mt-6 disabled:opacity-50">
+            <button type="submit" disabled={isSubmitting} className="w-full px-3 py-2 bg-[#003875] hover:bg-[#002855] text-white rounded-xl text-[11px] font-black uppercase tracking-widest transition-all shadow-md mt-4 disabled:opacity-50">
               {isSubmitting ? "Saving..." : "Save Transfer Updates"}
             </button>
           </form>
         );
       case 'qualify':
         return (
-          <form onSubmit={handleLeadSubmit} className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
+          <form onSubmit={handleLeadSubmit} className="space-y-3 animate-in fade-in slide-in-from-bottom-2 duration-300">
+            <div className="grid grid-cols-1 gap-3">
+              <div className="space-y-1.5">
                 <label className="text-[10px] font-black text-[#FFD500] uppercase tracking-widest block">Qualification Status</label>
-                <select name="qualified_status" value={formData.qualified_status || ""} onChange={handleLeadChange} className="w-full bg-[#FFFBF0] dark:bg-zinc-900 px-3 py-2 rounded-lg border border-orange-100 dark:border-zinc-800 focus:border-[#FFD500] outline-none font-black text-sm text-gray-900 dark:text-white transition-all">
+                <select name="qualified_status" value={formData.qualified_status || ""} onChange={handleLeadChange} className="w-full bg-[#FFFBF0] dark:bg-zinc-900 px-2.5 py-1.5 rounded-lg border border-orange-100 dark:border-zinc-800 focus:border-[#FFD500] outline-none font-black text-sm text-gray-900 dark:text-white transition-all">
                   <option value="">Select Status...</option>
                   <option value="Qualified">Qualified</option>
                   <option value="Not Qualified">Not Qualified</option>
-                  <option value="Pending">Pending</option>
                 </select>
               </div>
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-[#FFD500] uppercase tracking-widest block">Qualification Timestamp</label>
-                <input type="datetime-local" name="qualified_timestamp" value={formData.qualified_timestamp || ""} onChange={handleLeadChange} className="w-full bg-[#FFFBF0] dark:bg-zinc-900 px-3 py-2 rounded-lg border border-orange-100 dark:border-zinc-800 focus:border-[#FFD500] outline-none font-black text-sm text-gray-900 dark:text-white transition-all" />
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black text-[#FFD500] uppercase tracking-widest block">Qualification Timestamp (Auto)</label>
+                <input type="datetime-local" readOnly name="qualified_timestamp" value={formData.qualified_timestamp || ""} className="w-full bg-gray-100 dark:bg-zinc-800 px-2.5 py-1.5 rounded-lg border border-gray-200 dark:border-zinc-700 outline-none font-black text-sm text-gray-500 dark:text-gray-400 cursor-not-allowed transition-all" />
               </div>
-              <div className="space-y-2">
+              <div className="space-y-1.5">
                 <label className="text-[10px] font-black text-[#FFD500] uppercase tracking-widest block">Document Link</label>
-                <input name="document_link" value={formData.document_link || ""} onChange={handleLeadChange} className="w-full bg-[#FFFBF0] dark:bg-zinc-900 px-3 py-2 rounded-lg border border-orange-100 dark:border-zinc-800 focus:border-[#FFD500] outline-none font-black text-sm text-gray-900 dark:text-white transition-all" placeholder="https://" />
+                <div className="flex gap-2">
+                  {formData.document_link ? (
+                    <div className="flex-1 flex gap-2">
+                      <input readOnly value={formData.document_link} className="w-full bg-gray-100 dark:bg-zinc-800 px-2.5 py-1.5 rounded-lg border border-gray-200 dark:border-zinc-700 outline-none font-black text-sm text-gray-500 dark:text-gray-400 cursor-not-allowed" />
+                      <button type="button" onClick={() => setFormData(prev => ({ ...prev, document_link: "" }))} className="px-3 py-1.5 bg-red-100 hover:bg-red-200 text-red-700 rounded-lg text-xs font-bold transition-colors">Clear</button>
+                    </div>
+                  ) : (
+                    <input type="file" onChange={handleFileUpload} disabled={isUploading} className="w-full bg-[#FFFBF0] dark:bg-zinc-900 px-2.5 py-1.5 rounded-lg border border-orange-100 dark:border-zinc-800 focus:border-[#FFD500] outline-none font-black text-sm text-gray-900 dark:text-white transition-all file:mr-4 file:py-1 file:px-3 file:rounded-full file:border-0 file:text-xs file:font-black file:bg-[#003875] file:text-white hover:file:bg-[#002855] cursor-pointer" />
+                  )}
+                </div>
+                {isUploading && <p className="text-[10px] text-blue-500 font-bold mt-1">Uploading document...</p>}
               </div>
-              <div className="space-y-2">
+              <div className="space-y-1.5">
                 <label className="text-[10px] font-black text-[#FFD500] uppercase tracking-widest block">Remark</label>
-                <input name="remark" value={formData.remark || ""} onChange={handleLeadChange} className="w-full bg-[#FFFBF0] dark:bg-zinc-900 px-3 py-2 rounded-lg border border-orange-100 dark:border-zinc-800 focus:border-[#FFD500] outline-none font-black text-sm text-gray-900 dark:text-white transition-all" placeholder="Add remark" />
+                <input name="remark" value={formData.remark || ""} onChange={handleLeadChange} className="w-full bg-[#FFFBF0] dark:bg-zinc-900 px-2.5 py-1.5 rounded-lg border border-orange-100 dark:border-zinc-800 focus:border-[#FFD500] outline-none font-black text-sm text-gray-900 dark:text-white transition-all" placeholder="Add remark" />
               </div>
             </div>
-            <button type="submit" disabled={isSubmitting} className="w-full px-4 py-3 bg-[#003875] hover:bg-[#002855] text-white rounded-xl text-[12px] font-black uppercase tracking-widest transition-all shadow-md mt-6 disabled:opacity-50">
+            <button type="submit" disabled={isSubmitting} className="w-full px-3 py-2 bg-[#003875] hover:bg-[#002855] text-white rounded-xl text-[11px] font-black uppercase tracking-widest transition-all shadow-md mt-4 disabled:opacity-50">
               {isSubmitting ? "Saving..." : "Save Qualification Updates"}
             </button>
           </form>
         );
       case 'global':
         return (
-          <form onSubmit={handleLeadSubmit} className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
+          <form onSubmit={handleLeadSubmit} className="space-y-3 animate-in fade-in slide-in-from-bottom-2 duration-300">
+            <div className="grid grid-cols-1 gap-3">
+              <div className="space-y-1.5">
                 <label className="text-[10px] font-black text-[#FFD500] uppercase tracking-widest block">Sales Coordinator Name</label>
-                <input name="sales_coordinator_name" value={formData.sales_coordinator_name || ""} onChange={handleLeadChange} className="w-full bg-[#FFFBF0] dark:bg-zinc-900 px-3 py-2 rounded-lg border border-orange-100 dark:border-zinc-800 focus:border-[#FFD500] outline-none font-black text-sm text-gray-900 dark:text-white transition-all" placeholder="Coordinator Name" />
-              </div>
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-[#FFD500] uppercase tracking-widest block">Lead Priority Type</label>
-                <select name="lead_priority_type" value={formData.lead_priority_type || ""} onChange={handleLeadChange} className="w-full bg-[#FFFBF0] dark:bg-zinc-900 px-3 py-2 rounded-lg border border-orange-100 dark:border-zinc-800 focus:border-[#FFD500] outline-none font-black text-sm text-gray-900 dark:text-white transition-all">
-                  <option value="">Select Priority...</option>
-                  <option value="High">High</option>
-                  <option value="Medium">Medium</option>
-                  <option value="Low">Low</option>
+                <select name="sales_coordinator_name" value={formData.sales_coordinator_name || ""} onChange={handleLeadChange} className="w-full bg-[#FFFBF0] dark:bg-zinc-900 px-2.5 py-1.5 rounded-lg border border-orange-100 dark:border-zinc-800 focus:border-[#FFD500] outline-none font-black text-sm text-gray-900 dark:text-white transition-all">
+                  <option value="">Select Coordinator...</option>
+                  <option value="Self">Self</option>
+                  {users.map(u => (
+                    <option key={u.id || u.username} value={u.username}>{u.username}</option>
+                  ))}
                 </select>
               </div>
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black text-[#FFD500] uppercase tracking-widest block">Lead Priority Type</label>
+                <div className="flex gap-2">
+                  {['High', 'Medium', 'Low'].map(priority => (
+                    <button
+                      key={priority}
+                      type="button"
+                      onClick={() => setFormData(prev => ({ ...prev, lead_priority_type: priority }))}
+                      className={`flex-1 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${formData.lead_priority_type === priority
+                        ? (priority === 'High' ? 'bg-red-500 text-white shadow-md' : priority === 'Medium' ? 'bg-orange-500 text-white shadow-md' : 'bg-green-500 text-white shadow-md')
+                        : 'bg-gray-100 dark:bg-zinc-800 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-zinc-700'
+                        }`}
+                    >
+                      {priority}
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
-            <button type="submit" disabled={isSubmitting} className="w-full px-4 py-3 bg-[#003875] hover:bg-[#002855] text-white rounded-xl text-[12px] font-black uppercase tracking-widest transition-all shadow-md mt-6 disabled:opacity-50">
+            <button type="submit" disabled={isSubmitting} className="w-full px-3 py-2 bg-[#003875] hover:bg-[#002855] text-white rounded-xl text-[11px] font-black uppercase tracking-widest transition-all shadow-md mt-4 disabled:opacity-50">
               {isSubmitting ? "Saving..." : "Save Global Fields"}
             </button>
           </form>
         );
       case 'followup':
         return (
-          <form onSubmit={handleFollowUpSubmit} className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-[#FFD500] uppercase tracking-widest block">Next Follow Up Date</label>
-                <input type="datetime-local" required name="next_follow_up_date" value={followUpFormData.next_follow_up_date} onChange={handleFollowUpChange} className="w-full bg-[#FFFBF0] dark:bg-zinc-900 px-3 py-2 rounded-lg border border-orange-100 dark:border-zinc-800 focus:border-[#FFD500] outline-none font-black text-sm text-gray-900 dark:text-white transition-all" />
+          <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
+            <form onSubmit={handleFollowUpSubmit} className="space-y-3">
+              <div className="grid grid-cols-1 gap-3">
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black text-[#FFD500] uppercase tracking-widest block">Lead Time (Days)</label>
+                  <input type="number" required name="lead_time" value={followUpFormData.lead_time} onChange={handleFollowUpChange} className="w-full bg-[#FFFBF0] dark:bg-zinc-900 px-2.5 py-1.5 rounded-lg border border-orange-100 dark:border-zinc-800 focus:border-[#FFD500] outline-none font-black text-sm text-gray-900 dark:text-white transition-all" placeholder="Enter days for next follow up" min="0" />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black text-[#FFD500] uppercase tracking-widest block">Status Update</label>
+                  <select name="status" required value={followUpFormData.status} onChange={handleFollowUpChange} className="w-full bg-[#FFFBF0] dark:bg-zinc-900 px-2.5 py-1.5 rounded-lg border border-orange-100 dark:border-zinc-800 focus:border-[#FFD500] outline-none font-black text-sm text-gray-900 dark:text-white transition-all">
+                    <option value="">Select Status...</option>
+                    <option value="Qualified">Qualified</option>
+                    <option value="Lost">Lost</option>
+                    <option value="Arrange Meeting">Arrange Meeting</option>
+                    <option value="Demonstration">Demonstration</option>
+                    <option value="Transferred to SS">Transferred to SS</option>
+                    <option value="Negotiation">Negotiation</option>
+                    <option value="1st billing">1st billing</option>
+                    <option value="2nd Billing">2nd Billing</option>
+                    <option value="3rd Billing">3rd Billing</option>
+                    <option value="Potential Lead but not Interesting">Potential Lead but not Interesting</option>
+                    <option value="Deal in Reserved Area">Deal in Reserved Area</option>
+                    <option value="Existing Customer">Existing Customer</option>
+                    <option value="Not Qualified Lead">Not Qualified Lead</option>
+                  </select>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black text-[#FFD500] uppercase tracking-widest block">Remark</label>
+                  <textarea rows={2} required name="remark" value={followUpFormData.remark} onChange={handleFollowUpChange} className="w-full bg-[#FFFBF0] dark:bg-zinc-900 px-2.5 py-1.5 rounded-lg border border-orange-100 dark:border-zinc-800 focus:border-[#FFD500] outline-none font-black text-sm text-gray-900 dark:text-white transition-all resize-none" placeholder="Enter follow-up details..." />
+                </div>
+                
+                {(followUpFormData.status.toLowerCase().includes('billing')) && (
+                  <>
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-black text-[#FFD500] uppercase tracking-widest block">Billing Date</label>
+                      <input type="date" required name="billing_date" value={followUpFormData.billing_date} onChange={handleFollowUpChange} className="w-full bg-[#FFFBF0] dark:bg-zinc-900 px-2.5 py-1.5 rounded-lg border border-orange-100 dark:border-zinc-800 focus:border-[#FFD500] outline-none font-black text-sm text-gray-900 dark:text-white transition-all" />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-black text-[#FFD500] uppercase tracking-widest block">Billing Amount</label>
+                      <input required name="billing_amount" value={followUpFormData.billing_amount} onChange={handleFollowUpChange} className="w-full bg-[#FFFBF0] dark:bg-zinc-900 px-2.5 py-1.5 rounded-lg border border-orange-100 dark:border-zinc-800 focus:border-[#FFD500] outline-none font-black text-sm text-gray-900 dark:text-white transition-all" placeholder="Amount" />
+                    </div>
+                  </>
+                )}
+
+                {followUpFormData.status === 'Transferred to SS' && (
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black text-[#FFD500] uppercase tracking-widest block">SS Name</label>
+                    <input required name="ss_name" value={followUpFormData.ss_name} onChange={handleFollowUpChange} className="w-full bg-[#FFFBF0] dark:bg-zinc-900 px-2.5 py-1.5 rounded-lg border border-orange-100 dark:border-zinc-800 focus:border-[#FFD500] outline-none font-black text-sm text-gray-900 dark:text-white transition-all" placeholder="SS Name" />
+                  </div>
+                )}
+
+                {followUpFormData.status === 'Existing Customer' && (
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black text-[#FFD500] uppercase tracking-widest block">Dealing With</label>
+                    <input required name="dealing_with" value={followUpFormData.dealing_with} onChange={handleFollowUpChange} className="w-full bg-[#FFFBF0] dark:bg-zinc-900 px-2.5 py-1.5 rounded-lg border border-orange-100 dark:border-zinc-800 focus:border-[#FFD500] outline-none font-black text-sm text-gray-900 dark:text-white transition-all" placeholder="SS Name or Direct Robotek" />
+                  </div>
+                )}
               </div>
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-[#FFD500] uppercase tracking-widest block">Status Update</label>
-                <select name="status" required value={followUpFormData.status} onChange={handleFollowUpChange} className="w-full bg-[#FFFBF0] dark:bg-zinc-900 px-3 py-2 rounded-lg border border-orange-100 dark:border-zinc-800 focus:border-[#FFD500] outline-none font-black text-sm text-gray-900 dark:text-white transition-all">
-                  <option value="">Select Status...</option>
-                  <option value="Qualified">Qualified</option>
-                  <option value="Lost">Lost</option>
-                  <option value="Arrange Meeting">Arrange Meeting</option>
-                  <option value="Demonstration">Demonstration</option>
-                  <option value="Transferred to SS">Transferred to SS</option>
-                  <option value="Negotiation">Negotiation</option>
-                  <option value="1st billing">1st billing</option>
-                  <option value="2nd Billing">2nd Billing</option>
-                  <option value="3rd Billing">3rd Billing</option>
-                  <option value="Potential Lead but not Interesting">Potential Lead but not Interesting</option>
-                  <option value="Deal in Reserved Area">Deal in Reserved Area</option>
-                  <option value="Existing Customer">Existing Customer</option>
-                  <option value="Not Qualified Lead">Not Qualified Lead</option>
-                </select>
-              </div>
-              <div className="space-y-2 md:col-span-2">
-                <label className="text-[10px] font-black text-[#FFD500] uppercase tracking-widest block">Remark</label>
-                <textarea rows={2} required name="remark" value={followUpFormData.remark} onChange={handleFollowUpChange} className="w-full bg-[#FFFBF0] dark:bg-zinc-900 px-3 py-2 rounded-lg border border-orange-100 dark:border-zinc-800 focus:border-[#FFD500] outline-none font-black text-sm text-gray-900 dark:text-white transition-all" placeholder="Enter follow-up details..." />
-              </div>
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-[#FFD500] uppercase tracking-widest block">Billing Date</label>
-                <input type="date" name="billing_date" value={followUpFormData.billing_date} onChange={handleFollowUpChange} className="w-full bg-[#FFFBF0] dark:bg-zinc-900 px-3 py-2 rounded-lg border border-orange-100 dark:border-zinc-800 focus:border-[#FFD500] outline-none font-black text-sm text-gray-900 dark:text-white transition-all" />
-              </div>
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-[#FFD500] uppercase tracking-widest block">Billing Amount</label>
-                <input name="billing_amount" value={followUpFormData.billing_amount} onChange={handleFollowUpChange} className="w-full bg-[#FFFBF0] dark:bg-zinc-900 px-3 py-2 rounded-lg border border-orange-100 dark:border-zinc-800 focus:border-[#FFD500] outline-none font-black text-sm text-gray-900 dark:text-white transition-all" placeholder="Amount" />
-              </div>
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-[#FFD500] uppercase tracking-widest block">Lead Time</label>
-                <input name="lead_time" value={followUpFormData.lead_time} onChange={handleFollowUpChange} className="w-full bg-[#FFFBF0] dark:bg-zinc-900 px-3 py-2 rounded-lg border border-orange-100 dark:border-zinc-800 focus:border-[#FFD500] outline-none font-black text-sm text-gray-900 dark:text-white transition-all" placeholder="Lead Time" />
-              </div>
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-[#FFD500] uppercase tracking-widest block">SS Name</label>
-                <input name="ss_name" value={followUpFormData.ss_name} onChange={handleFollowUpChange} className="w-full bg-[#FFFBF0] dark:bg-zinc-900 px-3 py-2 rounded-lg border border-orange-100 dark:border-zinc-800 focus:border-[#FFD500] outline-none font-black text-sm text-gray-900 dark:text-white transition-all" placeholder="SS Name" />
-              </div>
-            </div>
-            <button type="submit" disabled={isSubmitting} className="w-full px-4 py-3 bg-[#FFD500] hover:bg-[#e6c000] text-black rounded-xl text-[12px] font-black uppercase tracking-widest transition-all shadow-md mt-6 disabled:opacity-50">
-              {isSubmitting ? "Logging..." : "Log Follow Up"}
-            </button>
-          </form>
+              <button type="submit" disabled={isSubmitting} className="w-full px-3 py-2 bg-[#FFD500] hover:bg-[#e6c000] text-black rounded-xl text-[11px] font-black uppercase tracking-widest transition-all shadow-md mt-4 disabled:opacity-50">
+                {isSubmitting ? "Logging..." : "Log Follow Up"}
+              </button>
+            </form>
+
+          </div>
         );
+      default:
+        return null;
     }
   };
 
   return (
-    <div className="h-full flex flex-col space-y-4 animate-in fade-in slide-in-from-right-4 duration-500">
-      <div className="flex items-center gap-4 shrink-0 px-2">
-        <button onClick={onClose} className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-navy-800 border border-gray-200 dark:border-white/10 rounded-full hover:bg-gray-50 dark:hover:bg-navy-700 transition-colors shadow-sm text-[#003875] dark:text-[#FFD500] font-black uppercase text-[10px] tracking-widest">
-          <ArrowLeftIcon className="w-4 h-4" /> Back to Pipeline
-        </button>
-        <div className="h-4 w-px bg-gray-300 dark:bg-white/20" />
-        <h2 className="text-xl font-black text-gray-900 dark:text-white tracking-tight">Lead Workspace</h2>
-      </div>
-
-      <div className="flex-1 overflow-hidden flex flex-col gap-6">
-        {/* Action Hub */}
-        <div className="w-full flex flex-col gap-4 overflow-y-auto custom-scrollbar pr-2 pb-4 max-w-4xl mx-auto">
+    <Portal>
+      <div className="fixed inset-0 z-[99999] flex justify-end overflow-hidden">
+        <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm animate-in fade-in" onClick={onClose} />
+        
+        <div className="relative w-full md:w-1/2 bg-gray-50 dark:bg-navy-900 shadow-[-20px_0_50px_-12px_rgba(0,0,0,0.3)] flex flex-col animate-in slide-in-from-right duration-500 border-l border-gray-200 dark:border-navy-700">
           
-          {/* Profile Header */}
-          <div className="bg-gradient-to-br from-[#003875] to-[#001f42] dark:from-navy-900 dark:to-black rounded-3xl p-6 shadow-xl border border-[#003875]/20 dark:border-white/10 relative overflow-hidden">
-            <div className="absolute top-0 right-0 p-6 opacity-10">
-              <GlobeAltIcon className="w-32 h-32 text-white" />
+          {/* Header */}
+          <div className="bg-[#003875] dark:bg-[#002855] py-4 px-5 flex items-start justify-between text-white shrink-0 shadow-md">
+            <div className="flex flex-col">
+               <h2 className="text-lg font-black tracking-tight leading-snug break-words uppercase flex items-center gap-2">
+                 <GlobeAltIcon className="w-5 h-5 text-[#FFD500]" /> Lead Actions
+               </h2>
+               <span className="text-[10px] text-blue-200 font-bold tracking-widest uppercase mt-1">{lead.name || 'Unnamed'} ({lead.id})</span>
             </div>
-            <div className="relative z-10 flex justify-between items-start">
-              <div>
-                <span className="bg-white/20 text-white px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-widest backdrop-blur-sm border border-white/10 mb-3 inline-block">
-                  {lead.id}
-                </span>
-                <h1 className="text-2xl md:text-3xl font-black text-white leading-tight mb-1">{lead.name || "Unnamed Contact"}</h1>
-                <p className="text-blue-200 font-bold text-sm">{lead.company_name || lead.enquiry_for || "No Company Specified"}</p>
-              </div>
-              <div className="text-right flex flex-col items-end gap-2">
-                <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest shadow-sm ${
-                  lead.lead_priority_type?.toLowerCase() === 'high' ? 'bg-red-500 text-white' :
-                  lead.lead_priority_type?.toLowerCase() === 'medium' ? 'bg-orange-500 text-white' :
-                  'bg-green-500 text-white'
-                }`}>
-                  {lead.lead_priority_type || 'Low'} Priority
-                </span>
-                <span className="text-[#FFD500] font-black text-[10px] uppercase tracking-widest bg-black/20 px-2 py-1 rounded backdrop-blur-sm border border-white/5 mt-1">
-                  {lead.status || 'Lead Generated'}
-                </span>
-              </div>
-            </div>
-            
-            <div className="relative z-10 flex flex-wrap gap-4 mt-6 pt-4 border-t border-white/10">
-              <div className="flex items-center gap-1.5 text-blue-100 text-xs font-bold">
-                <PhoneIcon className="w-4 h-4 text-[#FFD500]" /> {lead.phone_number || "No Phone"}
-              </div>
-              <div className="flex items-center gap-1.5 text-blue-100 text-xs font-bold">
-                <MapPinIcon className="w-4 h-4 text-[#FFD500]" /> {lead.area || "Area Unknown"}, {lead.state_and_ut || "State Unknown"}
-              </div>
-            </div>
+            <button onClick={onClose} className="p-1.5 hover:bg-white/10 rounded-xl transition-all shrink-0 ml-2">
+              <XMarkIcon className="w-6 h-6" />
+            </button>
           </div>
 
-          {/* Action Tabs */}
-          <div className="bg-white dark:bg-navy-800 rounded-3xl p-6 shadow-sm border border-gray-100 dark:border-white/10">
-            <div className="flex gap-2 p-1 bg-gray-50 dark:bg-black/20 rounded-2xl mb-6 overflow-x-auto no-scrollbar">
-              <button onClick={() => setActiveTab('transfer')} className={`flex items-center gap-2 flex-1 justify-center py-3 px-4 rounded-xl font-black uppercase tracking-widest text-[10px] transition-all whitespace-nowrap ${activeTab === 'transfer' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400 shadow-sm border border-blue-200 dark:border-blue-800/50' : 'text-gray-500 hover:bg-gray-200/50 dark:hover:bg-white/5'}`}>
-                <TruckIcon className="w-4 h-4" /> Transfer
-              </button>
-              <button onClick={() => setActiveTab('qualify')} className={`flex items-center gap-2 flex-1 justify-center py-3 px-4 rounded-xl font-black uppercase tracking-widest text-[10px] transition-all whitespace-nowrap ${activeTab === 'qualify' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-400 shadow-sm border border-purple-200 dark:border-purple-800/50' : 'text-gray-500 hover:bg-gray-200/50 dark:hover:bg-white/5'}`}>
-                <ShieldCheckIcon className="w-4 h-4" /> Qualify
-              </button>
-              <button onClick={() => setActiveTab('global')} className={`flex items-center gap-2 flex-1 justify-center py-3 px-4 rounded-xl font-black uppercase tracking-widest text-[10px] transition-all whitespace-nowrap ${activeTab === 'global' ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-400 shadow-sm border border-orange-200 dark:border-orange-800/50' : 'text-gray-500 hover:bg-gray-200/50 dark:hover:bg-white/5'}`}>
-                <GlobeAltIcon className="w-4 h-4" /> Global
-              </button>
-              <button onClick={() => setActiveTab('followup')} className={`flex items-center gap-2 flex-1 justify-center py-3 px-4 rounded-xl font-black uppercase tracking-widest text-[10px] transition-all whitespace-nowrap ${activeTab === 'followup' ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400 shadow-sm border border-green-200 dark:border-green-800/50' : 'text-gray-500 hover:bg-gray-200/50 dark:hover:bg-white/5'}`}>
-                <ChatBubbleLeftRightIcon className="w-4 h-4" /> Follow Up
-              </button>
+          <div className="flex-1 overflow-y-auto p-4 custom-scrollbar flex flex-col gap-6">
+
+            {/* Action Tabs */}
+            <div className="w-full flex flex-col gap-4">
+              <div className="bg-white dark:bg-navy-800 rounded-3xl p-5 shadow-sm border border-gray-100 dark:border-white/10">
+                <div className="flex gap-2 p-1 bg-gray-50 dark:bg-black/20 rounded-2xl mb-4 overflow-x-auto no-scrollbar">
+                  {canAccessTransfer && (
+                    <button
+                      onClick={() => setActiveTab('transfer')}
+                      className={`flex items-center gap-2 flex-1 justify-center py-2 px-3 rounded-xl font-black uppercase tracking-widest text-[10px] transition-all whitespace-nowrap ${activeTab === 'transfer' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400 shadow-sm border border-blue-200 dark:border-blue-800/50' : 'text-gray-500 hover:bg-gray-200/50 dark:hover:bg-white/5'}`}
+                    >
+                      <TruckIcon className="w-4 h-4" /> Transfer
+                    </button>
+                  )}
+                  {canAccessQualify && (
+                    <button
+                      onClick={() => setActiveTab('qualify')}
+                      className={`flex items-center gap-2 flex-1 justify-center py-2 px-3 rounded-xl font-black uppercase tracking-widest text-[10px] transition-all whitespace-nowrap ${activeTab === 'qualify' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-400 shadow-sm border border-purple-200 dark:border-purple-800/50' : 'text-gray-500 hover:bg-gray-200/50 dark:hover:bg-white/5'}`}
+                    >
+                      <ShieldCheckIcon className="w-4 h-4" /> Qualify
+                    </button>
+                  )}
+                  <button
+                    onClick={() => setActiveTab('global')}
+                    className={`flex items-center gap-2 flex-1 justify-center py-2 px-3 rounded-xl font-black uppercase tracking-widest text-[10px] transition-all whitespace-nowrap ${activeTab === 'global' ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-400 shadow-sm border border-orange-200 dark:border-orange-800/50' : 'text-gray-500 hover:bg-gray-200/50 dark:hover:bg-white/5'}`}
+                  >
+                    <GlobeAltIcon className="w-4 h-4" /> Global
+                  </button>
+                  {canAccessFollowUp && (
+                    <button
+                      onClick={() => setActiveTab('followup')}
+                      className={`flex items-center gap-2 flex-1 justify-center py-2 px-3 rounded-xl font-black uppercase tracking-widest text-[10px] transition-all whitespace-nowrap ${activeTab === 'followup' ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400 shadow-sm border border-green-200 dark:border-green-800/50' : 'text-gray-500 hover:bg-gray-200/50 dark:hover:bg-white/5'}`}
+                    >
+                      <ChatBubbleLeftRightIcon className="w-4 h-4" /> Follow Up
+                    </button>
+                  )}
+                </div>
+
+                <div>
+                  {renderTabContent()}
+                </div>
+              </div>
             </div>
-            
-            <div className="min-h-[300px]">
-              {renderTabContent()}
+
+          {/* Full-width Follow Up History */}
+          {activeTab === 'followup' && followUps.length > 0 && (
+            <div className="w-full pt-4 border-t border-gray-100 dark:border-white/10 animate-in fade-in slide-in-from-bottom-2 duration-500">
+              <h3 className="text-[12px] font-black text-gray-900 dark:text-white uppercase tracking-widest mb-6 flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-[#003875] dark:bg-[#FFD500]" />
+                Follow Up History
+              </h3>
+              <div className="flex gap-4 overflow-x-auto pb-4 custom-scrollbar">
+                {[...followUps].sort((a, b) => new Date(b.timestamp || 0).getTime() - new Date(a.timestamp || 0).getTime()).map((event, idx) => {
+                  const count = followUps.length - idx;
+                  const v = count % 100;
+                  const suffix = ["th", "st", "nd", "rd"][(v - 20) % 10] || ["th", "st", "nd", "rd"][v] || "th";
+                  
+                  return (
+                  <div key={event.id || idx} className="relative flex flex-col w-[260px] flex-shrink-0">
+                    <div className="flex items-center mb-4 relative z-10">
+                      <div className={`w-8 h-8 rounded-full border-2 bg-white dark:bg-navy-900 flex items-center justify-center shrink-0 ${idx === 0 ? 'border-[#FFD500] text-yellow-600 dark:text-[#FFD500] shadow-sm shadow-[#FFD500]/20' : 'border-orange-200 dark:border-zinc-700 text-gray-400'}`}>
+                        <span className="text-[10px] font-black uppercase tracking-widest">{count}{suffix}</span>
+                      </div>
+                      {idx !== followUps.length - 1 ? (
+                        <div className="flex-1 h-0.5 bg-orange-100 dark:bg-zinc-800" />
+                      ) : (
+                        <div className="flex-1 h-0.5 bg-transparent" />
+                      )}
+                    </div>
+                    <div className="bg-[#FFFBF0] dark:bg-navy-900 p-4 rounded-2xl shadow-sm border border-orange-100/50 dark:border-white/5 h-full">
+                      <div className="flex justify-between items-start mb-2">
+                        <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest ${event.status?.toLowerCase().includes('billing')
+                          ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                          : event.status?.toLowerCase().includes('lost') || event.status?.toLowerCase().includes('not')
+                            ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+                            : 'bg-[#003875]/10 text-[#003875] dark:bg-[#FFD500]/10 dark:text-[#FFD500]'
+                          }`}>
+                          {event.status || 'Status Not Provided'}
+                        </span>
+                        {idx === 0 && <span className="text-[8px] font-black text-[#FFD500] uppercase tracking-widest bg-[#FFD500]/10 px-1.5 rounded">Latest</span>}
+                      </div>
+                      <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-3">
+                        {event.timestamp ? new Date(event.timestamp).toLocaleString("en-GB", { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true }) : "—"}
+                      </p>
+                      <p className="text-[11px] font-medium text-gray-800 dark:text-gray-200 my-3 bg-white dark:bg-zinc-800/50 p-3 rounded-xl border border-gray-100 dark:border-white/5">
+                        {event.remark || <span className="text-gray-400 italic">No remark.</span>}
+                      </p>
+                      <div className="flex flex-col gap-1.5 mt-3 pt-3 border-t border-orange-50 dark:border-white/5">
+                        <span className="text-[9px] font-black uppercase tracking-widest text-gray-500">By: {event.dealing_with || event.ss_name || 'Unknown'}</span>
+                        {event.next_follow_up_date && (
+                          <span className="text-[9px] font-black uppercase tracking-widest text-gray-500">Next: {new Date(event.next_follow_up_date).toLocaleString("en-GB", { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: true })}</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ); })}
+              </div>
             </div>
+          )}
+
+            {/* Action Status Modal overlay should have a higher z-index */}
+            <ActionStatusModal
+              isOpen={statusModal.isOpen}
+              status={statusModal.status}
+              message={statusModal.message}
+              onClose={() => setStatusModal(prev => ({ ...prev, isOpen: false }))}
+            />
           </div>
         </div>
       </div>
-    </div>
+    </Portal>
   );
 }

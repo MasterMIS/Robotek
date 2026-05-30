@@ -31,7 +31,7 @@ export default function AccessGuard({ children }: { children: React.ReactNode })
     }
 
     // Skip check for login, Dashboard (root), chat, grn, scheduler, and field-driver
-    if (pathname === "/login" || pathname === "/" || pathname.startsWith("/chat") || pathname.startsWith("/grn") || pathname.startsWith("/scheduler") || pathname.startsWith("/field-driver")) {
+    if (pathname === "/login" || pathname === "/" || pathname.startsWith("/chat") || pathname.startsWith("/grn") || pathname.startsWith("/scheduler") || pathname.startsWith("/field-driver") || pathname.startsWith("/inventory/stationary")) {
       setIsAuthorized(true);
       return;
     }

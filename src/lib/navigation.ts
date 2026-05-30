@@ -41,4 +41,5 @@ export const navigation = [
   { name: 'Chat', id: 'chat', href: '/chat', icon: ChatBubbleLeftRightIcon },
   { name: 'Scheduler', id: 'scheduler', href: '/scheduler', icon: CalendarIcon },
   { name: 'Scot', id: 'scot', href: '/scot', icon: PhoneIcon },
+  { name: 'Stationary', id: 'stationary', href: '/inventory/stationary', icon: ClipboardDocumentListIcon },
 ];

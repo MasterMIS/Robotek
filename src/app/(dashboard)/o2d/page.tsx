@@ -1209,7 +1209,7 @@ export default function O2DPage() {
 
     try {
       if (editingOrderNo) {
-        let baseRecord = { ...groupedOrders[editingOrderNo][0] };
+        let baseRecord = { ...(masterOrderMap[editingOrderNo] || groupedOrders[editingOrderNo])[0] };
 
         // Cascading logic
         let currentBase = baseRecord.created_at || now;
@@ -1947,10 +1947,7 @@ export default function O2DPage() {
     const timestamp = new Date().toISOString();
     const currentO2Ds = allO2DsRaw;
 
-    // Prepare optimistic update
-    const updatedO2Ds = allO2DsRaw.map((o2d: any) => {
-      if (o2d.order_no !== selectedOrderNo) return o2d;
-
+    const orderItems = selectedOrder.map((o2d: any) => {
       const updated = { ...o2d };
       const stepIdx = currentStepToUpdate;
 
@@ -2036,7 +2033,6 @@ export default function O2DPage() {
         }
       }
 
-      const orderItems = updatedO2Ds.filter((o) => o.order_no === selectedOrderNo);
       const mergedOrder = mergeExpandedItems(orderItems);
 
       // If we uploaded a file, attach its ID to the merged record
@@ -2066,7 +2062,7 @@ export default function O2DPage() {
       globalMutate("/api/o2d/summary", undefined, { revalidate: true });
 
       // MANUAL CACHE UPDATE: Ensure the detail panel shows the updated step immediately
-      const stepItems = updatedO2Ds.filter((o: any) => o.order_no === selectedOrderNo).map(expandO2DItem).flat();
+      const stepItems = orderItems.map(expandO2DItem).flat();
       if (stepItems.length > 0) {
         setMasterOrderMap(prev => ({
           ...prev,

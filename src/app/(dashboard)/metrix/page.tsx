@@ -66,7 +66,7 @@ const STEP_ICONS = [
 // --- Helper Components ---
 
 const CompactTile = ({ label, value, icon: Icon, color, onClick, isClickable }: any) => (
-  <div 
+  <div
     onClick={isClickable ? onClick : undefined}
     className={`bg-white dark:bg-navy-800 p-4 rounded-2xl border border-gray-200 dark:border-white/5 shadow-xl ring-1 ring-black/5 flex items-center gap-3 transition-all ${isClickable ? 'cursor-pointer hover:shadow-2xl hover:scale-[1.02] hover:border-gray-300 dark:hover:border-white/10' : ''}`}
   >
@@ -148,6 +148,13 @@ export default function MetrixPage() {
     { keepPreviousData: true, refreshInterval: 300000 }
   );
 
+  const { data: funnelData, isLoading: funnelLoading } = useSWR(
+    activeTab === "sales-funnel"
+      ? `/api/metrix/sales-funnel?startDate=${dateRange.startDate}&endDate=${dateRange.endDate}&granularity=${granularity}`
+      : null,
+    fetcher,
+    { keepPreviousData: true }
+  );
 
   const [roadmapSearchQuery, setRoadmapSearchQuery] = useState("");
   const [extraRoadmapOrders, setExtraRoadmapOrders] = useState<any[]>([]);
@@ -187,10 +194,10 @@ export default function MetrixPage() {
 
   if (!data && isLoading) return (
     <div className="flex flex-col items-center justify-center min-h-[80vh] bg-[#fcfaf4] dark:bg-navy-950">
-      <motion.div 
-        animate={{ rotate: 360 }} 
-        transition={{ repeat: Infinity, duration: 1, ease: "linear" }} 
-        className="w-12 h-12 border-4 border-gray-100 border-t-[#003875] dark:border-t-[#FFD500] rounded-full mb-6 shadow-sm" 
+      <motion.div
+        animate={{ rotate: 360 }}
+        transition={{ repeat: Infinity, duration: 1, ease: "linear" }}
+        className="w-12 h-12 border-4 border-gray-100 border-t-[#003875] dark:border-t-[#FFD500] rounded-full mb-6 shadow-sm"
       />
       <div className="text-center">
         <p className="text-[10px] font-black text-gray-900 dark:text-white uppercase tracking-[0.3em] animate-pulse">Syncing Metrix Intelligence</p>
@@ -204,7 +211,7 @@ export default function MetrixPage() {
       <div className="w-full space-y-3">
 
         {/* Header */}
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-white dark:bg-navy-800 p-3 rounded-2xl border border-gray-100 dark:border-white/5 relative">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 relative mb-2">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-[#003875] dark:bg-[#FFD500] rounded-xl relative">
               <ChartBarIcon className="w-5 h-5 text-white dark:text-[#003875]" />
@@ -221,25 +228,26 @@ export default function MetrixPage() {
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="flex items-center gap-1 bg-gray-50 dark:bg-navy-900 p-1 rounded-xl">
+          <div className="flex flex-col gap-3 lg:items-end">
+            <div className="flex items-center gap-1 bg-gray-50 dark:bg-navy-900 p-1 rounded-xl w-fit">
               {([
                 { key: "overview", label: "Overview" },
                 { key: "roadmap", label: "Roadmap" },
                 { key: "parties", label: "Parties" },
                 { key: "categories", label: "Categories" },
+                { key: "sales-funnel", label: "Sales Funnel" },
                 { key: "forecast", label: "⚡ COO Report" },
               ]).map(({ key, label }) => (
                 <button
                   key={key}
                   onClick={() => { setActiveTab(key); setDrillDownParty(null); setDrillDownCategory(null); }}
                   className={`px-4 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${activeTab === key
-                      ? key === "forecast"
-                        ? 'bg-[#003875] text-white shadow-sm'
-                        : 'bg-white dark:bg-navy-800 text-[#003875] dark:text-[#FFD500] shadow-sm'
-                      : key === "forecast"
-                        ? 'text-[#003875] dark:text-amber-400 hover:text-[#003875]'
-                        : 'text-gray-400 hover:text-gray-600'
+                    ? key === "forecast"
+                      ? 'bg-[#003875] text-white shadow-sm'
+                      : 'bg-white dark:bg-navy-800 text-[#003875] dark:text-[#FFD500] shadow-sm'
+                    : key === "forecast"
+                      ? 'text-[#003875] dark:text-amber-400 hover:text-[#003875]'
+                      : 'text-gray-400 hover:text-gray-600'
                     }`}
                 >
                   {label}
@@ -248,7 +256,8 @@ export default function MetrixPage() {
 
             </div>
 
-            <div className="flex items-center gap-1 bg-gray-50 dark:bg-navy-900 p-1 rounded-xl border border-gray-100 dark:border-white/5">
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex items-center gap-1 bg-gray-50 dark:bg-navy-900 p-1 rounded-xl border border-gray-100 dark:border-white/5">
               {[
                 { id: 'day', label: 'Day', color: 'text-rose-500 bg-rose-50 dark:bg-rose-500/10' },
                 { id: 'week', label: 'Week', color: 'text-amber-500 bg-amber-50 dark:bg-amber-500/10' },
@@ -260,8 +269,8 @@ export default function MetrixPage() {
                   key={g.id}
                   onClick={() => setGranularity(g.id)}
                   className={`px-3 py-1 rounded-lg text-[8px] font-black uppercase tracking-widest transition-all ${granularity === g.id
-                      ? `${g.color} shadow-sm ring-1 ring-black/5`
-                      : 'text-gray-400 hover:text-gray-600'
+                    ? `${g.color} shadow-sm ring-1 ring-black/5`
+                    : 'text-gray-400 hover:text-gray-600'
                     }`}
                 >
                   {g.label}
@@ -292,6 +301,7 @@ export default function MetrixPage() {
             </div>
           </div>
         </div>
+        </div>
 
         <AnimatePresence mode="wait">
           {activeTab === "overview" && (
@@ -303,30 +313,30 @@ export default function MetrixPage() {
                 <div className="lg:col-span-5 flex flex-col gap-4">
                   {/* Tiles */}
                   <div className="grid grid-cols-2 gap-3 h-fit">
-                    <CompactTile label="Orders" value={data.stats.total} icon={ShoppingBagIcon} color="bg-blue-600" 
+                    <CompactTile label="Orders" value={data.stats.total} icon={ShoppingBagIcon} color="bg-blue-600"
                       isClickable onClick={() => setDrillDownModal({
                         isOpen: true, title: "Total Orders", data: data.stats.ordersList || [],
                         columns: [{ key: 'id', label: 'Order No' }, { key: 'party', label: 'Party' }, { key: 'date', label: 'Date' }, { key: 'amount', label: 'Amount', render: (item: any) => `₹${item.amount.toLocaleString()}` }]
-                      })} 
+                      })}
                     />
                     <CompactTile label="Revenue" value={`${(data.stats.totalAmount / 100000).toFixed(1)}L`} icon={CurrencyDollarIcon} color="bg-[#003875]" />
-                    <CompactTile label="OTD Count" value={data.stats.otdCount} icon={CheckBadgeIcon} color="bg-emerald-600" 
+                    <CompactTile label="OTD Count" value={data.stats.otdCount} icon={CheckBadgeIcon} color="bg-emerald-600"
                       isClickable onClick={() => setDrillDownModal({
                         isOpen: true, title: "On-Time Delivered (OTD)", data: data.stats.otdList || [],
                         columns: [{ key: 'id', label: 'Order No' }, { key: 'party', label: 'Party' }, { key: 'date', label: 'Date' }, { key: 'amount', label: 'Amount', render: (item: any) => `₹${item.amount.toLocaleString()}` }]
-                      })} 
+                      })}
                     />
-                    <CompactTile label="Delayed" value={data.stats.delayedCount} icon={ExclamationCircleIcon} color="bg-rose-600" 
+                    <CompactTile label="Delayed" value={data.stats.delayedCount} icon={ExclamationCircleIcon} color="bg-rose-600"
                       isClickable onClick={() => setDrillDownModal({
                         isOpen: true, title: "Delayed Orders", data: data.stats.delayedList || [],
                         columns: [{ key: 'id', label: 'Order No' }, { key: 'party', label: 'Party' }, { key: 'date', label: 'Date' }, { key: 'amount', label: 'Amount', render: (item: any) => `₹${item.amount.toLocaleString()}` }]
-                      })} 
+                      })}
                     />
-                    <CompactTile label="Pending" value={data.stats.pending} icon={ArrowPathIcon} color="bg-amber-600" 
+                    <CompactTile label="Pending" value={data.stats.pending} icon={ArrowPathIcon} color="bg-amber-600"
                       isClickable onClick={() => setDrillDownModal({
                         isOpen: true, title: "Pending Orders", data: data.stats.pendingList || [],
                         columns: [{ key: 'id', label: 'Order No' }, { key: 'party', label: 'Party' }, { key: 'date', label: 'Date' }, { key: 'amount', label: 'Amount', render: (item: any) => `₹${item.amount.toLocaleString()}` }]
-                      })} 
+                      })}
                     />
                     <CompactTile label="OTD %" value={`${data.stats.otdRate}%`} icon={ChartBarIcon} color="bg-indigo-600" />
                   </div>
@@ -473,6 +483,261 @@ export default function MetrixPage() {
                   </div>
                 </div>
               </div>
+            </motion.div>
+          )}
+
+          {activeTab === "sales-funnel" && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
+              {!funnelData && funnelLoading ? (
+                <div className="flex flex-col items-center justify-center p-20 bg-white dark:bg-navy-800 rounded-3xl border border-gray-100 dark:border-white/5 shadow-xl">
+                  <div className="w-8 h-8 border-4 border-gray-200 dark:border-gray-700 border-t-[#003875] dark:border-t-[#FFD500] rounded-full animate-spin mb-4" />
+                  <p className="text-gray-400 font-bold uppercase tracking-widest text-[10px]">Analyzing Funnel...</p>
+                </div>
+              ) : funnelData ? (
+                <>
+                  {/* Top Metrics */}
+                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                    <CompactTile label="Total Leads" value={funnelData.summary.totalLeads} icon={UserGroupIcon} color="bg-blue-500" />
+                    <CompactTile label="Pipeline Potential" value={`₹${(funnelData.summary.pipelineValue / 100000).toFixed(1)}L`} icon={CurrencyDollarIcon} color="bg-purple-500" />
+                    <CompactTile label="Closed Won" value={`₹${(funnelData.summary.wonValue / 100000).toFixed(1)}L`} icon={CheckBadgeIcon} color="bg-emerald-500" />
+                    <CompactTile label="Win Rate" value={`${funnelData.summary.winRate}%`} icon={ArrowTrendingUpIcon} color="bg-[#003875]" />
+                  </div>
+
+                  {/* Funnel & Velocity Chart Row */}
+                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+                    
+                    {/* Funnel Visualization */}
+                    <div className="lg:col-span-5 bg-white dark:bg-navy-800 p-6 rounded-[2rem] border border-gray-100 dark:border-white/5 shadow-2xl ring-1 ring-black/5 flex flex-col">
+                      <h3 className="text-[11px] font-black text-gray-900 dark:text-white uppercase tracking-[0.2em] mb-6 border-b pb-4 border-gray-50 dark:border-white/5">Conversion Funnel</h3>
+                      <div className="flex-1 flex flex-col justify-center items-center w-full px-2 lg:px-8 py-4 min-h-[300px]">
+                        <div style={{ filter: 'drop-shadow(0 15px 20px rgba(0,0,0,0.15))' }} className="w-full flex flex-col">
+                          {funnelData.funnelStages.map((stage: any, i: number) => {
+                            const numStages = funnelData.funnelStages.length;
+                            const step = 70 / numStages; // 100 down to 30
+                            const topWidth = 100 - (i * step);
+                            const bottomWidth = 100 - ((i + 1) * step);
+                            
+                            const colors = [
+                              "from-blue-500 to-cyan-400", 
+                              "from-purple-500 to-fuchsia-400", 
+                              "from-orange-500 to-amber-400", 
+                              "from-emerald-500 to-teal-400"
+                            ];
+                            
+                            return (
+                              <motion.div 
+                                key={i}
+                                initial={{ opacity: 0, y: -20 }} 
+                                animate={{ opacity: 1, y: 0 }} 
+                                transition={{ duration: 0.5, delay: i * 0.15, type: 'spring' }}
+                                className={`relative flex flex-col items-center justify-center w-full h-24 mb-1 bg-gradient-to-r ${colors[i % colors.length]} hover:brightness-110 transition-all cursor-pointer group`}
+                                style={{
+                                  clipPath: `polygon(${(100 - topWidth)/2}% 0%, ${100 - (100 - topWidth)/2}% 0%, ${100 - (100 - bottomWidth)/2}% 100%, ${(100 - bottomWidth)/2}% 100%)`
+                                }}
+                              >
+                                {/* Glass Overlay for 3D effect */}
+                                <div className="absolute inset-0 bg-gradient-to-b from-white/30 to-transparent pointer-events-none mix-blend-overlay" />
+                                
+                                <div className="z-10 flex flex-col items-center justify-center text-white text-center transform group-hover:scale-110 transition-transform">
+                                  <span className="text-[10px] lg:text-xs font-black uppercase tracking-widest drop-shadow-md">{stage.stage}</span>
+                                  <div className="flex items-baseline gap-2 mt-1">
+                                    <span className="text-xl lg:text-2xl font-black drop-shadow-lg leading-none">{stage.count}</span>
+                                    <span className="text-[9px] font-bold opacity-80">₹{(stage.value / 100000).toFixed(1)}L</span>
+                                  </div>
+                                  <span className="text-[9px] font-bold mt-1 bg-black/20 px-2 py-0.5 rounded-full">{stage.conversionRate}% Conversion</span>
+                                </div>
+                              </motion.div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Lead Velocity */}
+                    <div className="lg:col-span-7 bg-white dark:bg-navy-800 p-6 rounded-[2rem] border border-gray-100 dark:border-white/5 shadow-2xl ring-1 ring-black/5">
+                      <div className="flex items-center justify-between mb-6 border-b pb-4 border-gray-50 dark:border-white/5">
+                        <h3 className="text-[11px] font-black text-gray-900 dark:text-white uppercase tracking-[0.2em]">Lead Velocity</h3>
+                        <div className="flex items-center gap-3">
+                          <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-blue-500"/><span className="text-[8px] font-black uppercase text-gray-400">Generated</span></div>
+                          <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-emerald-500"/><span className="text-[8px] font-black uppercase text-gray-400">Won</span></div>
+                        </div>
+                      </div>
+                      <div className="h-[250px]">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <AreaChart data={funnelData.trendData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                            <defs>
+                              <linearGradient id="colorGen" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
+                                <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                              </linearGradient>
+                              <linearGradient id="colorWon" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
+                                <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                              </linearGradient>
+                            </defs>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={chartGridColor} />
+                            <XAxis dataKey="displayDate" axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 900, fill: chartTextColor }} angle={-45} textAnchor="end" height={50} />
+                            <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 900, fill: chartTextColor }} />
+                            <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', backgroundColor: isDark ? '#1e293b' : '#fff', color: isDark ? '#fff' : '#000' }} />
+                            <Area type="monotone" dataKey="generated" stroke="#3b82f6" strokeWidth={3} fillOpacity={1} fill="url(#colorGen)" />
+                            <Area type="monotone" dataKey="won" stroke="#10b981" strokeWidth={3} fillOpacity={1} fill="url(#colorWon)" />
+                          </AreaChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Sources and Team Row */}
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    {/* Top Sources */}
+                    <div className="bg-white dark:bg-navy-800 p-6 rounded-[2rem] border border-gray-100 dark:border-white/5 shadow-2xl ring-1 ring-black/5">
+                      <h3 className="text-[11px] font-black text-gray-900 dark:text-white uppercase tracking-[0.2em] mb-4">Top Sources</h3>
+                      <div className="overflow-x-auto custom-scrollbar">
+                        <table className="w-full text-left min-w-[400px]">
+                          <thead className="text-[9px] font-black uppercase text-gray-400 border-b border-gray-50 dark:border-white/5">
+                            <tr><th className="py-3 px-2">Source</th><th className="py-3 px-2 text-right">Leads</th><th className="py-3 px-2 text-right">Won</th><th className="py-3 px-2 text-right">Win Rate</th><th className="py-3 px-2 text-right">Value</th></tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-50 dark:divide-white/5">
+                            {funnelData.sourceStats.slice(0, 10).map((s: any, i: number) => (
+                              <tr key={i} className="hover:bg-gray-50 dark:hover:bg-white/5 transition-colors">
+                                <td className="py-3 px-2 text-[10px] font-black text-gray-900 dark:text-white uppercase max-w-[150px] truncate" title={s.source}>{s.source}</td>
+                                <td className="py-3 px-2 text-[10px] font-black text-[#003875] dark:text-[#FFD500] text-right">{s.count}</td>
+                                <td className="py-3 px-2 text-[10px] font-black text-emerald-600 text-right">{s.wonCount}</td>
+                                <td className="py-3 px-2 text-[10px] font-bold text-gray-500 text-right">{s.conversionRate}%</td>
+                                <td className="py-3 px-2 text-[10px] font-bold text-gray-900 dark:text-white text-right">{(s.amount / 1000).toFixed(1)}k</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+
+                    {/* Team Performance */}
+                    <div className="bg-white dark:bg-navy-800 p-6 rounded-[2rem] border border-gray-100 dark:border-white/5 shadow-2xl ring-1 ring-black/5">
+                      <h3 className="text-[11px] font-black text-gray-900 dark:text-white uppercase tracking-[0.2em] mb-4">Team Performance</h3>
+                      <div className="overflow-x-auto custom-scrollbar">
+                        <table className="w-full text-left min-w-[400px]">
+                          <thead className="text-[9px] font-black uppercase text-gray-400 border-b border-gray-50 dark:border-white/5">
+                            <tr><th className="py-3 px-2">Sales Person</th><th className="py-3 px-2 text-right">Assigned</th><th className="py-3 px-2 text-right">Won</th><th className="py-3 px-2 text-right">Win Rate</th><th className="py-3 px-2 text-right">Pipeline</th></tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-50 dark:divide-white/5">
+                            {funnelData.teamStats.map((t: any, i: number) => (
+                              <tr key={i} className="hover:bg-gray-50 dark:hover:bg-white/5 transition-colors">
+                                <td className="py-3 px-2 text-[10px] font-black text-gray-900 dark:text-white uppercase max-w-[150px] truncate" title={t.salesperson}>{t.salesperson}</td>
+                                <td className="py-3 px-2 text-[10px] font-black text-[#003875] dark:text-[#FFD500] text-right">{t.count}</td>
+                                <td className="py-3 px-2 text-[10px] font-black text-emerald-600 text-right">{t.wonCount}</td>
+                                <td className="py-3 px-2 text-[10px] font-bold text-gray-500 text-right">{t.conversionRate}%</td>
+                                <td className="py-3 px-2 text-[10px] font-bold text-gray-900 dark:text-white text-right">{(t.amount / 100000).toFixed(2)}L</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Deep Dive Analytics */}
+                  <div className="bg-white dark:bg-navy-800 p-6 rounded-[2rem] border border-gray-100 dark:border-white/5 shadow-2xl ring-1 ring-black/5 mt-4">
+                    <div className="flex items-center gap-2 mb-6 border-b pb-4 border-gray-50 dark:border-white/5">
+                      <MagnifyingGlassIcon className="w-5 h-5 text-[#003875] dark:text-[#FFD500]" />
+                      <h3 className="text-[11px] font-black text-gray-900 dark:text-white uppercase tracking-[0.2em]">Deep Dive Analytics</h3>
+                    </div>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+                      
+                      {/* Qualification */}
+                      <div className="flex flex-col items-center">
+                        <h4 className="text-[9px] font-black uppercase text-gray-400 mb-2">Qualification</h4>
+                        <div className="h-[150px] w-full">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <PieChart>
+                              <Pie data={funnelData.deepDive.qualification} cx="50%" cy="50%" innerRadius={40} outerRadius={60} dataKey="value" stroke="none">
+                                {funnelData.deepDive.qualification.map((entry: any, index: number) => (
+                                  <Cell key={`cell-${index}`} fill={["#10B981", "#EF4444", "#F59E0B", "#8B5CF6"][index % 4]} />
+                                ))}
+                              </Pie>
+                              <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', fontSize: '10px', fontWeight: 'bold' }} />
+                            </PieChart>
+                          </ResponsiveContainer>
+                        </div>
+                        <div className="flex flex-wrap gap-2 justify-center mt-2">
+                          {funnelData.deepDive.qualification.map((entry: any, index: number) => (
+                            <div key={index} className="flex items-center gap-1">
+                              <div className="w-2 h-2 rounded-full" style={{ backgroundColor: ["#10B981", "#EF4444", "#F59E0B", "#8B5CF6"][index % 4] }}></div>
+                              <span className="text-[9px] font-bold text-gray-600 dark:text-gray-300">{entry.name} ({entry.value})</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Priority */}
+                      <div className="flex flex-col items-center">
+                        <h4 className="text-[9px] font-black uppercase text-gray-400 mb-2">Lead Priority</h4>
+                        <div className="h-[150px] w-full">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <PieChart>
+                              <Pie data={funnelData.deepDive.priority} cx="50%" cy="50%" innerRadius={40} outerRadius={60} dataKey="value" stroke="none">
+                                {funnelData.deepDive.priority.map((entry: any, index: number) => (
+                                  <Cell key={`cell-${index}`} fill={["#EF4444", "#F59E0B", "#3B82F6", "#9CA3AF"][index % 4]} />
+                                ))}
+                              </Pie>
+                              <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', fontSize: '10px', fontWeight: 'bold' }} />
+                            </PieChart>
+                          </ResponsiveContainer>
+                        </div>
+                        <div className="flex flex-wrap gap-2 justify-center mt-2">
+                          {funnelData.deepDive.priority.map((entry: any, index: number) => (
+                            <div key={index} className="flex items-center gap-1">
+                              <div className="w-2 h-2 rounded-full" style={{ backgroundColor: ["#EF4444", "#F59E0B", "#3B82F6", "#9CA3AF"][index % 4] }}></div>
+                              <span className="text-[9px] font-bold text-gray-600 dark:text-gray-300">{entry.name} ({entry.value})</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Process Stage */}
+                      <div className="flex flex-col items-center col-span-1 md:col-span-2 xl:col-span-1 border-t md:border-t-0 md:border-l border-gray-50 dark:border-white/5 pt-4 md:pt-0 md:pl-4">
+                        <h4 className="text-[9px] font-black uppercase text-gray-400 mb-2">Process Stages</h4>
+                        <div className="h-[180px] w-full">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={funnelData.deepDive.process.slice(0, 5)} layout="vertical" margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
+                              <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={chartGridColor} />
+                              <XAxis type="number" hide />
+                              <YAxis dataKey="name" type="category" width={80} tick={{ fontSize: 9, fontWeight: 900, fill: chartTextColor }} axisLine={false} tickLine={false} />
+                              <Tooltip cursor={{ fill: 'transparent' }} contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', fontSize: '10px', fontWeight: 'bold' }} />
+                              <Bar dataKey="value" fill="#003875" radius={[0, 4, 4, 0]}>
+                                {funnelData.deepDive.process.slice(0, 5).map((entry: any, index: number) => (
+                                  <Cell key={`cell-${index}`} fill={isDark ? '#FFD500' : '#003875'} />
+                                ))}
+                                <LabelList dataKey="value" position="right" style={{ fontSize: 9, fontWeight: 'bold', fill: chartTextColor }} />
+                              </Bar>
+                            </BarChart>
+                          </ResponsiveContainer>
+                        </div>
+                      </div>
+
+                      {/* Follow Up Stats */}
+                      <div className="flex flex-col items-center col-span-1 md:col-span-2 xl:col-span-1 border-t xl:border-t-0 xl:border-l border-gray-50 dark:border-white/5 pt-4 xl:pt-0 xl:pl-4">
+                        <h4 className="text-[9px] font-black uppercase text-gray-400 mb-2">Follow-Up Outcomes</h4>
+                        <div className="h-[180px] w-full">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={funnelData.deepDive.followUp.slice(0, 5)} layout="vertical" margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
+                              <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={chartGridColor} />
+                              <XAxis type="number" hide />
+                              <YAxis dataKey="name" type="category" width={80} tick={{ fontSize: 9, fontWeight: 900, fill: chartTextColor }} axisLine={false} tickLine={false} />
+                              <Tooltip cursor={{ fill: 'transparent' }} contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', fontSize: '10px', fontWeight: 'bold' }} />
+                              <Bar dataKey="value" fill="#10B981" radius={[0, 4, 4, 0]}>
+                                <LabelList dataKey="value" position="right" style={{ fontSize: 9, fontWeight: 'bold', fill: chartTextColor }} />
+                              </Bar>
+                            </BarChart>
+                          </ResponsiveContainer>
+                        </div>
+                      </div>
+
+                    </div>
+                  </div>
+                </>
+              ) : null}
             </motion.div>
           )}
 
@@ -820,79 +1085,79 @@ export default function MetrixPage() {
 
           {activeTab === "roadmap" && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="bg-white dark:bg-navy-800 p-6 rounded-[2.5rem] border border-gray-100 dark:border-white/5 shadow-2xl ring-1 ring-black/5 mt-2">
-             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 border-b border-gray-50 dark:border-white/5 pb-4">
-               <div className="flex items-center gap-4">
-                 <div><h3 className="text-xl font-black text-gray-900 dark:text-white uppercase tracking-tighter">Execution Roadmap</h3><p className="text-[8px] font-black text-gray-400 uppercase tracking-[0.2em] mt-0.5">Real-time Logistics Lifecycle</p></div>
-                 <div className="h-10 w-px bg-gray-100 dark:bg-white/10 hidden md:block" />
-                 <div className="flex flex-col">
-                   <p className="text-[10px] font-black text-gray-400 uppercase leading-none">{targetDate === new Date().toISOString().split('T')[0] ? "Today's Orders" : "Filtered Orders"}</p>
-                   <p className="text-xl font-black text-[#003875] dark:text-[#FFD500] leading-none mt-1">{data.todayCount || 0}</p>
-                 </div>
-               </div>
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 border-b border-gray-50 dark:border-white/5 pb-4">
+                <div className="flex items-center gap-4">
+                  <div><h3 className="text-xl font-black text-gray-900 dark:text-white uppercase tracking-tighter">Execution Roadmap</h3><p className="text-[8px] font-black text-gray-400 uppercase tracking-[0.2em] mt-0.5">Real-time Logistics Lifecycle</p></div>
+                  <div className="h-10 w-px bg-gray-100 dark:bg-white/10 hidden md:block" />
+                  <div className="flex flex-col">
+                    <p className="text-[10px] font-black text-gray-400 uppercase leading-none">{targetDate === new Date().toISOString().split('T')[0] ? "Today's Orders" : "Filtered Orders"}</p>
+                    <p className="text-xl font-black text-[#003875] dark:text-[#FFD500] leading-none mt-1">{data.todayCount || 0}</p>
+                  </div>
+                </div>
 
                 <div className="flex flex-wrap items-center gap-2">
-                 <div className="flex items-center gap-2 bg-gray-50 dark:bg-navy-900 px-3 py-1.5 rounded-xl ring-1 ring-black/5">
+                  <div className="flex items-center gap-2 bg-gray-50 dark:bg-navy-900 px-3 py-1.5 rounded-xl ring-1 ring-black/5">
                     <MagnifyingGlassIcon className="w-4 h-4 text-gray-400" />
-                    <input 
+                    <input
                       list="roadmap-orders"
-                      type="text" 
-                      placeholder="FIND ANY ORDER..." 
+                      type="text"
+                      placeholder="FIND ANY ORDER..."
                       value={roadmapSearchQuery}
                       onChange={(e) => {
                         setRoadmapSearchQuery(e.target.value);
                         // Trigger API search for specific order if length > 2
                         if (e.target.value.length > 2) {
-                           fetch(`/api/metrix?targetDate=${targetDate}&search=${e.target.value}`)
-                             .then(res => res.json())
-                             .then(newData => {
-                                if (newData.roadmap && newData.roadmap.length > 0) {
-                                  const found = newData.roadmap[0];
-                                  setExtraRoadmapOrders((prev: any[]) => {
-                                    if (prev.some(o => o.orderNo === found.orderNo)) return prev;
-                                    return [found, ...prev];
-                                  });
-                                }
-                             });
+                          fetch(`/api/metrix?targetDate=${targetDate}&search=${e.target.value}`)
+                            .then(res => res.json())
+                            .then(newData => {
+                              if (newData.roadmap && newData.roadmap.length > 0) {
+                                const found = newData.roadmap[0];
+                                setExtraRoadmapOrders((prev: any[]) => {
+                                  if (prev.some(o => o.orderNo === found.orderNo)) return prev;
+                                  return [found, ...prev];
+                                });
+                              }
+                            });
                         }
                       }}
                       className="bg-transparent border-none text-[10px] font-black text-[#003875] dark:text-[#FFD500] outline-none w-[180px] placeholder:text-gray-300"
                     />
                     <datalist id="roadmap-orders">
-                       {data.searchableOrders?.map((o: any) => (
-                         <option key={o.orderNo} value={o.orderNo}>{o.party}</option>
-                       ))}
+                      {data.searchableOrders?.map((o: any) => (
+                        <option key={o.orderNo} value={o.orderNo}>{o.party}</option>
+                      ))}
                     </datalist>
-                 </div>
-                 <div className="flex items-center gap-2 bg-gray-50 dark:bg-navy-900 px-3 py-1.5 rounded-xl ring-1 ring-black/5">
-                   <CalendarIcon className="w-3.5 h-3.5 text-gray-400" /><input type="date" value={targetDate} onChange={(e) => setTargetDate(e.target.value)} className="bg-transparent border-none text-[9px] font-black text-[#003875] dark:text-[#FFD500] outline-none" />
-                 </div>
-               </div>
-             </div>
+                  </div>
+                  <div className="flex items-center gap-2 bg-gray-50 dark:bg-navy-900 px-3 py-1.5 rounded-xl ring-1 ring-black/5">
+                    <CalendarIcon className="w-3.5 h-3.5 text-gray-400" /><input type="date" value={targetDate} onChange={(e) => setTargetDate(e.target.value)} className="bg-transparent border-none text-[9px] font-black text-[#003875] dark:text-[#FFD500] outline-none" />
+                  </div>
+                </div>
+              </div>
 
-             <div className="space-y-4">
+              <div className="space-y-4">
                 {[...extraRoadmapOrders, ...(data.roadmap || [])]
                   .filter((o, idx, self) => self.findIndex(t => t.orderNo === o.orderNo) === idx) // Unique
-                  .filter(o => 
-                    o.orderNo?.toString().toLowerCase().includes(roadmapSearchQuery.toLowerCase()) || 
+                  .filter(o =>
+                    o.orderNo?.toString().toLowerCase().includes(roadmapSearchQuery.toLowerCase()) ||
                     o.party?.toLowerCase().includes(roadmapSearchQuery.toLowerCase())
                   )
                   .map((order: any, idx: number) => {
-                     const orderColor = colors[idx % colors.length];
-                     return (
-                  <div key={idx} className="relative group border-b border-gray-50 dark:border-white/5 pb-4 last:border-0">
-                     <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 p-5 rounded-[2rem] hover:bg-gray-50 dark:hover:bg-white/5 transition-all shadow-sm ring-1 ring-black/5" style={{ borderLeft: `4px solid ${orderColor}` }}>
-                        
-                        {/* Left Info & Items */}
-                        <div className="lg:col-span-3 border-r border-gray-50 dark:border-white/5 pr-4">
-                           <div className="flex items-center gap-3 mb-4">
-                             <div className="w-12 h-12 rounded-xl flex items-center justify-center text-white font-black text-lg shadow-md" style={{ backgroundColor: orderColor }}>{idx + 1}</div>
-                             <div>
-                               <h4 className="text-base font-black text-gray-900 dark:text-white uppercase">#{order.orderNo}</h4>
-                               <p className="text-[11px] font-black text-gray-400 uppercase">{order.party}</p>
-                             </div>
-                           </div>
-                           
-                           <div className="p-4 rounded-2xl border transition-colors bg-white dark:bg-white/10" style={{ borderColor: `${orderColor}20` }}>
+                    const orderColor = colors[idx % colors.length];
+                    return (
+                      <div key={idx} className="relative group border-b border-gray-50 dark:border-white/5 pb-4 last:border-0">
+                        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 p-5 rounded-[2rem] hover:bg-gray-50 dark:hover:bg-white/5 transition-all shadow-sm ring-1 ring-black/5" style={{ borderLeft: `4px solid ${orderColor}` }}>
+
+                          {/* Left Info & Items */}
+                          <div className="lg:col-span-3 border-r border-gray-50 dark:border-white/5 pr-4">
+                            <div className="flex items-center gap-3 mb-4">
+                              <div className="w-12 h-12 rounded-xl flex items-center justify-center text-white font-black text-lg shadow-md" style={{ backgroundColor: orderColor }}>{idx + 1}</div>
+                              <div>
+                                <h4 className="text-base font-black text-gray-900 dark:text-white uppercase">#{order.orderNo}</h4>
+                                <p className="text-[11px] font-black text-gray-400 uppercase">{order.party}</p>
+                              </div>
+                            </div>
+
+                            <div className="p-4 rounded-2xl border transition-colors bg-white dark:bg-white/10" style={{ borderColor: `${orderColor}20` }}>
                               <p className="text-[10px] font-black uppercase mb-3 tracking-widest" style={{ color: orderColor }}>Order Payload</p>
                               <div className="space-y-2 max-h-[200px] overflow-y-auto no-scrollbar">
                                 {order.items.map((it: any, iIdx: number) => (
@@ -902,22 +1167,22 @@ export default function MetrixPage() {
                                   </div>
                                 ))}
                               </div>
-                           </div>
-                        </div>
+                            </div>
+                          </div>
 
-                        {/* Right Roadmap Timeline */}
-                        <div className="lg:col-span-9 flex flex-col justify-center min-h-[170px] overflow-x-auto custom-scrollbar pb-2">
-                           <div className="relative flex items-center justify-between px-8 w-full min-w-[1000px]">
+                          {/* Right Roadmap Timeline */}
+                          <div className="lg:col-span-9 flex flex-col justify-center min-h-[170px] overflow-x-auto custom-scrollbar pb-2">
+                            <div className="relative flex items-center justify-between px-8 w-full min-w-[1000px]">
                               {/* Background Connector Line */}
                               <div className="absolute top-[45px] left-12 right-12 h-1 bg-gray-100 dark:bg-white/5 rounded-full" />
-                              
+
                               {/* Progressive Progress Line (Completed Steps) */}
-                              <div 
-                                className="absolute top-[45px] left-12 h-1 rounded-full transition-all duration-1000" 
-                                style={{ 
+                              <div
+                                className="absolute top-[45px] left-12 h-1 rounded-full transition-all duration-1000"
+                                style={{
                                   backgroundColor: orderColor,
                                   width: `${(order.steps.findIndex((s: any) => s.step === order.currentStep) / (order.steps.length - 1)) * 92}%`,
-                                }} 
+                                }}
                               />
 
                               {order.steps.map((step: any, sIdx: number) => {
@@ -925,50 +1190,50 @@ export default function MetrixPage() {
                                 const isCurrent = order.currentStep === step.step;
                                 const isPending = !isCompleted && !isCurrent;
                                 const StepIcon = STEP_ICONS[sIdx];
-                                
+
                                 return (
                                   <div key={sIdx} className="flex flex-col items-center relative z-10 min-w-[85px]">
-                                     {/* Icon Stage Above */}
-                                     <div className={`mb-4 transition-all duration-500 ${isCurrent ? 'scale-125' : isPending ? 'opacity-50' : 'opacity-100'}`}>
-                                        <div className={`p-2.5 rounded-full ${isCompleted ? 'bg-emerald-50 dark:bg-emerald-500/10' : isCurrent ? 'bg-white dark:bg-navy-900 shadow-xl ring-2' : 'bg-gray-50 dark:bg-white/5'}`} style={isCurrent ? { borderColor: orderColor } : {}}>
-                                           <StepIcon className={`w-6 h-6 ${isCompleted ? 'text-emerald-500' : isCurrent ? '' : 'text-gray-400 dark:text-gray-500'}`} style={isCurrent ? { color: orderColor } : {}} />
-                                        </div>
-                                     </div>
+                                    {/* Icon Stage Above */}
+                                    <div className={`mb-4 transition-all duration-500 ${isCurrent ? 'scale-125' : isPending ? 'opacity-50' : 'opacity-100'}`}>
+                                      <div className={`p-2.5 rounded-full ${isCompleted ? 'bg-emerald-50 dark:bg-emerald-500/10' : isCurrent ? 'bg-white dark:bg-navy-900 shadow-xl ring-2' : 'bg-gray-50 dark:bg-white/5'}`} style={isCurrent ? { borderColor: orderColor } : {}}>
+                                        <StepIcon className={`w-6 h-6 ${isCompleted ? 'text-emerald-500' : isCurrent ? '' : 'text-gray-400 dark:text-gray-500'}`} style={isCurrent ? { color: orderColor } : {}} />
+                                      </div>
+                                    </div>
 
-                                     {/* Numbered Progress Circle */}
-                                     <div 
-                                       className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black border transition-all duration-500 ${isCompleted ? 'bg-emerald-500 border-emerald-500 text-white' : isCurrent ? 'text-white shadow-md' : 'bg-white dark:bg-navy-900 border-gray-200 text-gray-300'}`}
-                                       style={isCurrent ? { backgroundColor: orderColor, borderColor: orderColor } : {}}
-                                     >
-                                       {sIdx + 1}
-                                     </div>
+                                    {/* Numbered Progress Circle */}
+                                    <div
+                                      className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black border transition-all duration-500 ${isCompleted ? 'bg-emerald-500 border-emerald-500 text-white' : isCurrent ? 'text-white shadow-md' : 'bg-white dark:bg-navy-900 border-gray-200 text-gray-300'}`}
+                                      style={isCurrent ? { backgroundColor: orderColor, borderColor: orderColor } : {}}
+                                    >
+                                      {sIdx + 1}
+                                    </div>
 
-                                     {/* Label & Time Below */}
-                                     <div className="absolute -bottom-12 text-center w-28">
-                                       <p className={`text-[9px] font-black uppercase leading-tight tracking-tighter ${isCompleted || isCurrent ? 'text-gray-900 dark:text-white' : 'text-gray-400'}`}>{step.name}</p>
-                                       <p className={`text-[8px] font-bold mt-1 uppercase ${isCompleted ? 'text-emerald-500' : 'text-gray-400'}`}>{step.actual ? new Date(step.actual).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'}</p>
-                                     </div>
+                                    {/* Label & Time Below */}
+                                    <div className="absolute -bottom-12 text-center w-28">
+                                      <p className={`text-[9px] font-black uppercase leading-tight tracking-tighter ${isCompleted || isCurrent ? 'text-gray-900 dark:text-white' : 'text-gray-400'}`}>{step.name}</p>
+                                      <p className={`text-[8px] font-bold mt-1 uppercase ${isCompleted ? 'text-emerald-500' : 'text-gray-400'}`}>{step.actual ? new Date(step.actual).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'}</p>
+                                    </div>
                                   </div>
                                 );
                               })}
-                           </div>
+                            </div>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
               </div>
             </motion.div>
           )}
         </AnimatePresence>
 
         {/* Generic Drill Down Modal */}
-        <DrillDownModal 
-          isOpen={drillDownModal.isOpen} 
-          onClose={() => setDrillDownModal(prev => ({ ...prev, isOpen: false }))} 
-          title={drillDownModal.title} 
-          columns={drillDownModal.columns} 
-          data={drillDownModal.data} 
+        <DrillDownModal
+          isOpen={drillDownModal.isOpen}
+          onClose={() => setDrillDownModal(prev => ({ ...prev, isOpen: false }))}
+          title={drillDownModal.title}
+          columns={drillDownModal.columns}
+          data={drillDownModal.data}
         />
 
         <style jsx global>{`

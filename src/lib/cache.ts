@@ -1,3 +1,4 @@
+// Force Turbopack rebuild (v3)
 type CacheEntry<T> = {
   data: T;
   timestamp: number;
