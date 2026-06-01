@@ -15,7 +15,8 @@ import {
   ArchiveBoxIcon,
   ArrowDownTrayIcon,
   CurrencyDollarIcon,
-  MapPinIcon
+  MapPinIcon,
+  ComputerDesktopIcon
 } from "@heroicons/react/24/outline";
 
 export const navigation = [
@@ -42,4 +43,5 @@ export const navigation = [
   { name: 'Scheduler', id: 'scheduler', href: '/scheduler', icon: CalendarIcon },
   { name: 'Scot', id: 'scot', href: '/scot', icon: PhoneIcon },
   { name: 'Stationary', id: 'stationary', href: '/inventory/stationary', icon: ClipboardDocumentListIcon },
+  { name: 'Asset Management', id: 'asset-management', href: '/asset-management', icon: ComputerDesktopIcon },
 ];
