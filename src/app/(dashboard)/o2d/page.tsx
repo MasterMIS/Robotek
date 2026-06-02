@@ -1779,9 +1779,9 @@ export default function O2DPage() {
   };
 
   const handleExport = async () => {
-    if (exportSelectedSteps.length === 0) {
+    if (!exportIncludeDetails && exportSelectedSteps.length === 0) {
       setActionStatus("error");
-      setActionMessage("Please select at least one step to export");
+      setActionMessage("Please select at least one step or order details to export");
       setIsStatusModalOpen(true);
       setTimeout(() => setIsStatusModalOpen(false), 2000);
       return;

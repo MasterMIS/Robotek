@@ -44,4 +44,5 @@ export const navigation = [
   { name: 'Scot', id: 'scot', href: '/scot', icon: PhoneIcon },
   { name: 'Stationary', id: 'stationary', href: '/inventory/stationary', icon: ClipboardDocumentListIcon },
   { name: 'Asset Management', id: 'asset-management', href: '/asset-management', icon: ComputerDesktopIcon },
+  { name: 'HRMS', id: 'hrms', href: '/hrms', icon: UserGroupIcon },
 ];

@@ -12,6 +12,7 @@ function generateCSV(data: any[], selectedSteps: number[], includeDetails: boole
     "Order No",
     "Party Name",
     "Item Name",
+    "Item Specification",
     "Item Qty",
     "Est Amount",
     "Created At",
@@ -30,6 +31,26 @@ function generateCSV(data: any[], selectedSteps: number[], includeDetails: boole
       headers.push(`${stepName} (Status)`);
       headers.push(`${stepName} (Actual)`);
       headers.push(`${stepName} (Planned)`);
+      
+      if (stepIdx === 1) {
+        headers.push(`${stepName} (Final Amount)`);
+        headers.push(`${stepName} (SO Number)`);
+        headers.push(`${stepName} (Merge Order With)`);
+        headers.push(`${stepName} (Upload SO)`);
+      } else if (stepIdx === 5) {
+        headers.push(`${stepName} (Num of Parcel)`);
+        headers.push(`${stepName} (Upload PI)`);
+        headers.push(`${stepName} (Actual Date of Order Packed)`);
+      } else if (stepIdx === 7) {
+        headers.push(`${stepName} (Voucher Num)`);
+      } else if (stepIdx === 8) {
+        headers.push(`${stepName} (Order Details Checked)`);
+        headers.push(`${stepName} (Voucher Num 51)`);
+        headers.push(`${stepName} (T Amt)`);
+      } else if (stepIdx === 9) {
+        headers.push(`${stepName} (Attach Bilty)`);
+        headers.push(`${stepName} (Num of Parcel)`);
+      }
     });
 
   const csvRows = [headers.join(",")];
@@ -40,8 +61,9 @@ function generateCSV(data: any[], selectedSteps: number[], includeDetails: boole
     if (includeDetails) {
       row = [
         item.order_no,
-        `"${item.party_name.replace(/"/g, '""')}"`,
-        `"${item.item_name.replace(/"/g, '""')}"`,
+        `"${(item.party_name || "").replace(/"/g, '""')}"`,
+        `"${(item.item_name || "").replace(/"/g, '""')}"`,
+        `"${(item.item_specification || "").replace(/"/g, '""')}"`,
         item.item_qty,
         item.est_amount,
         (() => {
@@ -68,6 +90,26 @@ function generateCSV(data: any[], selectedSteps: number[], includeDetails: boole
         row.push(status);
         row.push(`"${actual}"`);
         row.push(`"${planned}"`);
+        
+        if (stepIdx === 1) {
+          row.push(`"${((item as any).final_amount_1 || "").toString().replace(/"/g, '""')}"`);
+          row.push(`"${((item as any).so_number_1 || "").toString().replace(/"/g, '""')}"`);
+          row.push(`"${((item as any).merge_order_with_1 || "").toString().replace(/"/g, '""')}"`);
+          row.push(`"${((item as any).upload_so_1 || "").toString().replace(/"/g, '""')}"`);
+        } else if (stepIdx === 5) {
+          row.push(`"${((item as any).num_of_parcel_5 || "").toString().replace(/"/g, '""')}"`);
+          row.push(`"${((item as any).upload_pi_5 || "").toString().replace(/"/g, '""')}"`);
+          row.push(`"${((item as any).actual_date_of_order_packed_5 || "").toString().replace(/"/g, '""')}"`);
+        } else if (stepIdx === 7) {
+          row.push(`"${((item as any).voucher_num_7 || "").toString().replace(/"/g, '""')}"`);
+        } else if (stepIdx === 8) {
+          row.push(`"${((item as any).order_details_checked_8 || "").toString().replace(/"/g, '""')}"`);
+          row.push(`"${((item as any).voucher_num_51_8 || "").toString().replace(/"/g, '""')}"`);
+          row.push(`"${((item as any).t_amt_8 || "").toString().replace(/"/g, '""')}"`);
+        } else if (stepIdx === 9) {
+          row.push(`"${((item as any).attach_bilty_9 || "").toString().replace(/"/g, '""')}"`);
+          row.push(`"${((item as any).num_of_parcel_9 || "").toString().replace(/"/g, '""')}"`);
+        }
       });
 
     csvRows.push(row.join(","));
