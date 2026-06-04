@@ -140,14 +140,14 @@ export default function Dashboard() {
                 { label: 'User', key: 'userName', render: (row: any) => (
                     <div className="flex items-center gap-2">
                         <div className="w-6 h-6 rounded-md bg-[#003875]/10 dark:bg-[#FFD500]/10 flex items-center justify-center text-[10px] font-black">{row.userName.charAt(0)}</div>
-                        <span className="truncate max-w-[80px]">{row.userName}</span>
+                        <span className="text-xs font-bold leading-tight break-words">{row.userName}</span>
                     </div>
                 )},
                 { label: 'In', key: 'inTime', className: 'text-center', render: (row: any) => (
-                    <span className="text-emerald-500">{row.inTime ? new Date(row.inTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '—'}</span>
+                    <span className="text-emerald-500 text-xs font-bold">{row.inTime ? new Date(row.inTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '—'}</span>
                 )},
                 { label: 'Out', key: 'outTime', className: 'text-center', render: (row: any) => (
-                    <span className="text-rose-500">{row.outTime ? new Date(row.outTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '—'}</span>
+                    <span className="text-rose-500 text-xs font-bold">{row.outTime ? new Date(row.outTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '—'}</span>
                 )}
             ]}
         />
@@ -160,12 +160,12 @@ export default function Dashboard() {
             columns={[
                 { label: 'Topic/ID', key: 'id', render: (row: any) => (
                     <div className="flex flex-col">
-                        <span className="truncate max-w-[120px] block font-black text-gray-900 dark:text-white uppercase leading-tight">{row.title}</span>
-                        <span className="text-[7px] text-gray-400 font-mono italic">{row.id}</span>
+                        <span className="block font-black text-gray-900 dark:text-white uppercase leading-tight text-[11px] break-words">{row.title}</span>
+                        <span className="text-[9px] text-gray-400 font-mono italic mt-0.5">{row.id}</span>
                     </div>
                 )},
                 { label: 'Status', key: 'status', className: 'text-right', render: (row: any) => (
-                    <span className={`px-2 py-0.5 rounded-full text-[8px] uppercase font-black ${
+                    <span className={`px-2 py-0.5 rounded-full text-[9px] uppercase font-black ${
                         row.status === 'Open' ? 'bg-[#003875]/10 text-[#003875]' : 'bg-amber-500/10 text-amber-500'
                     }`}>{row.status}</span>
                 )}
@@ -176,16 +176,16 @@ export default function Dashboard() {
             title="Team Absence Power"
             icon={UserMinusIcon}
             data={data?.recentLeaves || []}
-            linkHref="/leave"
+            linkHref="/attendance?tab=LEAVE"
             columns={[
                 { label: 'User/Reason', key: 'userName', render: (row: any) => (
                     <div className="flex flex-col">
-                        <span className="truncate max-w-[100px] text-gray-900 dark:text-white font-black uppercase text-[9px]">{isAdmin ? row.userName : row.reason}</span>
-                        <span className="text-[7px] text-gray-400 font-bold uppercase tracking-widest">{new Date(row.startDate).toLocaleDateString()}</span>
+                        <span className="text-gray-900 dark:text-white font-black uppercase text-[11px] leading-tight break-words">{isAdmin ? row.userName : row.reason}</span>
+                        <span className="text-[9px] text-gray-400 font-bold uppercase tracking-widest mt-0.5">{new Date(row.startDate).toLocaleDateString()}</span>
                     </div>
                 )},
                 { label: 'Status', key: 'status', className: 'text-right', render: (row: any) => (
-                    <span className={`px-2 py-0.5 rounded-full text-[8px] uppercase ${
+                    <span className={`px-2 py-0.5 rounded-full text-[9px] uppercase ${
                         row.status === 'Approved' ? 'bg-emerald-500/10 text-emerald-500 font-black' : 
                         row.status === 'Pending' ? 'bg-amber-500/10 text-amber-500 font-black' : 'bg-rose-500/10 text-rose-500 font-black'
                     }`}>{row.status}</span>

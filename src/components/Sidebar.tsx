@@ -23,6 +23,11 @@ export default function Sidebar({ mobileOpen, setMobileOpen }: SidebarProps) {
   const [ticketsOpenCount, setTicketsOpenCount] = useState(0);
   const [o2dPendingCount, setO2dPendingCount] = useState(0);
   const [chatUnreadCount, setChatUnreadCount] = useState(0);
+  
+  const [recruitmentPendingCount, setRecruitmentPendingCount] = useState(0);
+  const [candidatePendingCount, setCandidatePendingCount] = useState(0);
+  const [salesPendingCount, setSalesPendingCount] = useState(0);
+  const [onboardPendingCount, setOnboardPendingCount] = useState(0);
 
   useEffect(() => {
     if (!session?.user) return;
@@ -43,12 +48,13 @@ export default function Sidebar({ mobileOpen, setMobileOpen }: SidebarProps) {
           return null;
         };
 
-        const [delData, checkData, tickData, o2dSummary, chatData] = await Promise.all([
+        const [delData, checkData, tickData, o2dSummary, chatData, hrmsSummary] = await Promise.all([
           safeFetch('/api/delegations'),
           safeFetch('/api/checklists'),
           safeFetch('/api/tickets'),
           safeFetch('/api/o2d/summary'),   // lightweight — just aggregate counts, not all rows
-          safeFetch('/api/chat/users')
+          safeFetch('/api/chat/users'),
+          safeFetch('/api/hrms/summary')
         ]);
         
         // Filter for USER role
@@ -103,6 +109,17 @@ export default function Sidebar({ mobileOpen, setMobileOpen }: SidebarProps) {
         const totalUnreadChat = Array.isArray(chatData) ? chatData.reduce((acc, user) => acc + (user.unreadCount || 0), 0) : 0;
         setChatUnreadCount(totalUnreadChat);
 
+        // HRMS Logic
+        if (hrmsSummary) {
+          const isAdminRole = userRole?.toUpperCase() === 'ADMIN' || userRole?.toUpperCase() === 'EA';
+          const u = currentUser.toLowerCase();
+          
+          setRecruitmentPendingCount(isAdminRole ? hrmsSummary.recruitment?.totalPending || 0 : hrmsSummary.recruitment?.assignedPending?.[u] || 0);
+          setCandidatePendingCount(isAdminRole ? hrmsSummary.candidate?.totalPending || 0 : hrmsSummary.candidate?.assignedPending?.[u] || 0);
+          setSalesPendingCount(isAdminRole ? hrmsSummary.sales?.totalPending || 0 : hrmsSummary.sales?.assignedPending?.[u] || 0);
+          setOnboardPendingCount(isAdminRole ? hrmsSummary.onboard?.totalPending || 0 : hrmsSummary.onboard?.assignedPending?.[u] || 0);
+        }
+
       } catch (err) {
         console.error("Failed to fetch sidebar counts:", err);
       }
@@ -149,7 +166,7 @@ export default function Sidebar({ mobileOpen, setMobileOpen }: SidebarProps) {
         flex flex-col group overflow-hidden peer
       `}>
 
-        <div className="flex items-center justify-between p-5 md:p-0 md:pt-6 md:pb-2 md:pl-5">
+        <div className="flex items-center justify-between p-5 md:p-0 md:pt-3 md:pb-2 md:pl-5">
           <Link href="/" className="flex items-center gap-4 group/logo active:scale-95 transition-transform">
             <div className="w-10 h-10 min-w-[40px] rounded-xl overflow-hidden shadow-lg transform group-hover/logo:-rotate-6 transition-transform duration-500 ring-1 ring-black/5 dark:ring-white/10">
               <img src="/logo_compact.png" alt="Logo" className="w-full h-full object-cover" />
@@ -169,57 +186,99 @@ export default function Sidebar({ mobileOpen, setMobileOpen }: SidebarProps) {
           )}
         </div>
         
-        <nav className="flex-1 px-3 md:px-2 pt-3 md:pt-1 pb-3 space-y-0.5 overflow-y-auto overflow-x-hidden [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-          {filteredNavigation.map((item) => {
-            const isActive = pathname === item.href || (item.href !== '/' && (pathname + '/').startsWith(item.href + '/'));
-            return (
-              <Link
-                key={item.name}
-                href={item.href}
-                onClick={() => setMobileOpen?.(false)}
-                className={`
-                  flex items-center gap-3 px-3 md:px-3 py-1.5 rounded-xl transition-all group/item font-bold overflow-hidden
-                  ${isActive 
-                    ? 'bg-[#003875] text-white shadow-md md:translate-x-1' 
-                    : 'text-gray-500 dark:text-slate-400 border-l-4 border-transparent hover:text-[#003875] dark:hover:text-sky-400 hover:bg-[#003875]/8 dark:hover:bg-white/5 active:scale-95 hover:translate-x-1'}
-                `}
-              >
-                <div className="flex items-center justify-center w-6 min-w-[24px]">
-                  <item.icon className={`w-6 h-6 transition-all font-bold ${isActive ? 'text-white' : 'group-hover/item:text-[#003875] dark:group-hover/item:text-sky-400 group-hover/item:scale-110'}`} />
+        <nav className="flex-1 px-3 md:px-2 pt-3 md:pt-1 pb-3 overflow-y-auto overflow-x-hidden [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+          {(() => {
+            const sections: { name: string; items: typeof filteredNavigation }[] = [];
+            filteredNavigation.forEach(item => {
+              const sectionName = (item as any).section || 'Other';
+              let section = sections.find(s => s.name === sectionName);
+              if (!section) {
+                section = { name: sectionName, items: [] };
+                sections.push(section);
+              }
+              section.items.push(item);
+            });
+
+            return sections.map((section, sIdx) => (
+              <div key={section.name} className={sIdx > 0 ? "mt-2 pt-2 border-t border-slate-100 dark:border-navy-800" : ""}>
+                <div className={`px-5 pb-1.5 transition-all duration-300 overflow-hidden whitespace-nowrap flex items-center ${mobileOpen ? 'opacity-100 max-w-full' : 'opacity-0 max-w-0 md:group-hover:opacity-100 md:group-hover:max-w-full'}`}>
+                  <span className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-400 dark:text-slate-500">{section.name}</span>
                 </div>
-                <span className={`flex-1 text-sm tracking-wide transition-all duration-300 whitespace-nowrap ${mobileOpen ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-4 md:group-hover:opacity-100 md:group-hover:translate-x-0'}`}>
-                  {item.name}
-                </span>
-                
-                {/* Pending Counts Badge */}
-                {item.id === 'delegations' && delegationsPendingCount > 0 && (
-                  <span className={`transition-all duration-300 ${mobileOpen ? 'opacity-100' : 'opacity-0 md:group-hover:opacity-100'} bg-[#CE2029] text-white text-xs font-black px-2.5 py-0.5 rounded-full shadow-sm`}>
-                    {delegationsPendingCount}
-                  </span>
-                )}
-                {item.id === 'checklists' && checklistsPendingCount > 0 && (
-                  <span className={`transition-all duration-300 ${mobileOpen ? 'opacity-100' : 'opacity-0 md:group-hover:opacity-100'} bg-[#CE2029] text-white text-xs font-black px-2.5 py-0.5 rounded-full shadow-sm`}>
-                    {checklistsPendingCount}
-                  </span>
-                )}
-                {item.id === 'tickets' && ticketsOpenCount > 0 && (
-                  <span className={`transition-all duration-300 ${mobileOpen ? 'opacity-100' : 'opacity-0 md:group-hover:opacity-100'} bg-[#CE2029] text-white text-xs font-black px-2.5 py-0.5 rounded-full shadow-sm`}>
-                    {ticketsOpenCount}
-                  </span>
-                )}
-                {item.id === 'o2d' && o2dPendingCount > 0 && (
-                  <span className={`transition-all duration-300 ${mobileOpen ? 'opacity-100' : 'opacity-0 md:group-hover:opacity-100'} bg-[#CE2029] text-white text-xs font-black px-2.5 py-0.5 rounded-full shadow-sm`}>
-                    {o2dPendingCount}
-                  </span>
-                )}
-                {item.id === 'chat' && chatUnreadCount > 0 && (
-                  <span className={`transition-all duration-300 ${mobileOpen ? 'opacity-100' : 'opacity-0 md:group-hover:opacity-100'} bg-[#CE2029] text-white text-xs font-black px-2.5 py-0.5 rounded-full shadow-sm`}>
-                    {chatUnreadCount}
-                  </span>
-                )}
-              </Link>
-            );
-          })}
+                <div className="space-y-0.5">
+                  {section.items.map((item) => {
+                    const isActive = pathname === item.href || (item.href !== '/' && (pathname + '/').startsWith(item.href + '/'));
+                    return (
+                      <Link
+                        key={item.name}
+                        href={item.href}
+                        onClick={() => setMobileOpen?.(false)}
+                        className={`
+                          flex items-center gap-3 px-3 py-1.5 mx-1 rounded-xl transition-all group/item font-bold overflow-hidden
+                          ${isActive 
+                            ? 'bg-[#003875] text-[#FFD500] shadow-md' 
+                            : 'text-slate-600 dark:text-slate-400 hover:text-[#003875] dark:hover:text-[#FFD500] hover:bg-[#003875]/5 dark:hover:bg-white/5 active:scale-95'}
+                        `}
+                      >
+                        <div className="flex items-center justify-center w-6 min-w-[24px]">
+                          <item.icon className={`w-[22px] h-[22px] transition-all font-bold ${isActive ? 'text-[#FFD500] stroke-[2.5]' : 'text-slate-500 dark:text-slate-400 group-hover/item:text-[#003875] dark:group-hover/item:text-[#FFD500] group-hover/item:scale-110'}`} />
+                        </div>
+                        <span className={`flex-1 text-[13px] tracking-wide transition-all duration-300 whitespace-nowrap ${mobileOpen ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-4 md:group-hover:opacity-100 md:group-hover:translate-x-0'}`}>
+                          {item.name}
+                        </span>
+                        
+                        {/* Pending Counts Badge */}
+                        {item.id === 'delegations' && delegationsPendingCount > 0 && (
+                          <span className={`transition-all duration-300 ${mobileOpen ? 'opacity-100' : 'opacity-0 md:group-hover:opacity-100'} bg-[#CE2029] text-white text-xs font-black px-2.5 py-0.5 rounded-full shadow-sm`}>
+                            {delegationsPendingCount}
+                          </span>
+                        )}
+                        {item.id === 'checklists' && checklistsPendingCount > 0 && (
+                          <span className={`transition-all duration-300 ${mobileOpen ? 'opacity-100' : 'opacity-0 md:group-hover:opacity-100'} bg-[#CE2029] text-white text-xs font-black px-2.5 py-0.5 rounded-full shadow-sm`}>
+                            {checklistsPendingCount}
+                          </span>
+                        )}
+                        {item.id === 'tickets' && ticketsOpenCount > 0 && (
+                          <span className={`transition-all duration-300 ${mobileOpen ? 'opacity-100' : 'opacity-0 md:group-hover:opacity-100'} bg-[#CE2029] text-white text-xs font-black px-2.5 py-0.5 rounded-full shadow-sm`}>
+                            {ticketsOpenCount}
+                          </span>
+                        )}
+                        {item.id === 'o2d' && o2dPendingCount > 0 && (
+                          <span className={`transition-all duration-300 ${mobileOpen ? 'opacity-100' : 'opacity-0 md:group-hover:opacity-100'} bg-[#CE2029] text-white text-xs font-black px-2.5 py-0.5 rounded-full shadow-sm`}>
+                            {o2dPendingCount}
+                          </span>
+                        )}
+                        {item.id === 'chat' && chatUnreadCount > 0 && (
+                          <span className={`transition-all duration-300 ${mobileOpen ? 'opacity-100' : 'opacity-0 md:group-hover:opacity-100'} bg-[#CE2029] text-white text-xs font-black px-2.5 py-0.5 rounded-full shadow-sm`}>
+                            {chatUnreadCount}
+                          </span>
+                        )}
+                        {item.href === '/hrms/recruitment' && recruitmentPendingCount > 0 && (
+                          <span className={`transition-all duration-300 ${mobileOpen ? 'opacity-100' : 'opacity-0 md:group-hover:opacity-100'} bg-[#CE2029] text-white text-xs font-black px-2.5 py-0.5 rounded-full shadow-sm`}>
+                            {recruitmentPendingCount}
+                          </span>
+                        )}
+                        {item.href === '/hrms/candidate' && candidatePendingCount > 0 && (
+                          <span className={`transition-all duration-300 ${mobileOpen ? 'opacity-100' : 'opacity-0 md:group-hover:opacity-100'} bg-[#CE2029] text-white text-xs font-black px-2.5 py-0.5 rounded-full shadow-sm`}>
+                            {candidatePendingCount}
+                          </span>
+                        )}
+                        {item.href === '/hrms/sales' && salesPendingCount > 0 && (
+                          <span className={`transition-all duration-300 ${mobileOpen ? 'opacity-100' : 'opacity-0 md:group-hover:opacity-100'} bg-[#CE2029] text-white text-xs font-black px-2.5 py-0.5 rounded-full shadow-sm`}>
+                            {salesPendingCount}
+                          </span>
+                        )}
+                        {item.href === '/hrms/onboard' && onboardPendingCount > 0 && (
+                          <span className={`transition-all duration-300 ${mobileOpen ? 'opacity-100' : 'opacity-0 md:group-hover:opacity-100'} bg-[#CE2029] text-white text-xs font-black px-2.5 py-0.5 rounded-full shadow-sm`}>
+                            {onboardPendingCount}
+                          </span>
+                        )}
+                      </Link>
+                    );
+                  })}
+                </div>
+              </div>
+            ));
+          })()}
         </nav>
 
         {/* Mobile User Profile Section */}

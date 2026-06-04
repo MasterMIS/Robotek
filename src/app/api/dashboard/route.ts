@@ -32,18 +32,31 @@ function parseDate(dateStr: string | undefined): Date | null {
 
 function normalizeDateStr(dStr: string | undefined): string {
     if (!dStr) return '';
-    const trimmed = dStr.trim();
+    const trimmed = dStr.trim().split('T')[0];
+    
     if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(trimmed)) {
-        const [dd, mm, yyyy] = trimmed.split('/');
+        const [p1, p2, yyyy] = trimmed.split('/');
+        let mm = p1, dd = p2;
+        if (parseInt(p1) > 12) {
+            dd = p1;
+            mm = p2;
+        }
         return `${yyyy}-${mm.padStart(2, '0')}-${dd.padStart(2, '0')}`;
     }
+    
     if (trimmed.includes('/')) {
         const parts = trimmed.split('/');
         if (parts[2]?.length === 4) {
-           return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+           const p1 = parts[0], p2 = parts[1], yyyy = parts[2];
+           let mm = p1, dd = p2;
+           if (parseInt(p1) > 12) {
+               dd = p1;
+               mm = p2;
+           }
+           return `${yyyy}-${mm.padStart(2, '0')}-${dd.padStart(2, '0')}`;
         }
     }
-    return trimmed.split('T')[0];
+    return trimmed;
 }
 
 function calculateMetrics(tasks: any[], from: Date, to: Date) {
@@ -280,7 +293,11 @@ export async function GET(req: NextRequest) {
       partyBirthdays: partyBirthdays.map((p: any) => ({ partyName: p.partyName, partyType: p.partyType })),
       partyAnniversaries: partyAnniversaries.map((p: any) => ({ partyName: p.partyName, partyType: p.partyType })),
       openTickets: (isAdmin ? openTickets : openTickets.filter((t: any) => t.raised_by === username || t.solver_person === username)).slice(0, 15),
-      recentLeaves: (isAdmin ? leaves : leaves.filter((l: any) => l.userName === username)).slice(0, 5),
+      recentLeaves: (isAdmin ? leaves : leaves.filter((l: any) => l.userName === username)).slice(0, 5).map((l: any) => ({
+        ...l,
+        startDate: normalizeDateStr(l.startDate),
+        endDate: normalizeDateStr(l.endDate)
+      })),
       upcomingMeetings,
       teamMembers: users.map((u: any) => ({ username: u.username, image_url: u.image_url })),
       score: companyMetrics,

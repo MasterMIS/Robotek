@@ -10,14 +10,187 @@ import { getFieldsForModule, getStepCount, getModuleName } from "@/lib/hrms-fiel
 import {
   PlusIcon, PencilSquareIcon, TrashIcon, XMarkIcon, MagnifyingGlassIcon,
   ChevronLeftIcon, ChevronRightIcon, ChevronDownIcon, ClockIcon, CheckCircleIcon,
-  ArrowPathIcon, DocumentTextIcon, UserIcon, CalendarIcon, BriefcaseIcon, NoSymbolIcon
+  ArrowPathIcon, DocumentTextIcon, UserIcon, CalendarIcon, BriefcaseIcon, NoSymbolIcon, ArrowUturnLeftIcon, ExclamationCircleIcon,
+  Cog8ToothIcon, QuestionMarkCircleIcon, ArrowDownTrayIcon, Cog6ToothIcon, CubeIcon, PhoneIcon,
+  GlobeAltIcon, HashtagIcon, BanknotesIcon, MapPinIcon, ClipboardDocumentCheckIcon, SparklesIcon, ShareIcon, FingerPrintIcon
 } from "@heroicons/react/24/outline";
 import ActionStatusModal from "@/components/ActionStatusModal";
 import ConfirmModal from "@/components/ConfirmModal";
-
 import { useParams } from "next/navigation";
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
+
+function UserSingleCombobox({
+  value,
+  onChange,
+  users,
+  placeholder = "Select user...",
+}: {
+  value: string;
+  onChange: (val: string) => void;
+  users: string[];
+  placeholder?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState("");
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const filtered = users.filter((u) => u.toLowerCase().includes(q.toLowerCase()));
+
+  return (
+    <div ref={ref} className="relative w-full">
+      <div
+        className="min-h-[46px] px-4 py-2 border border-orange-100/50 dark:border-navy-800 rounded-xl flex items-center bg-[#FFFBF0] dark:bg-navy-900 cursor-text transition-all"
+        onClick={() => setOpen(true)}
+      >
+        <input
+          type="text"
+          value={open ? q : value}
+          placeholder={placeholder}
+          onChange={(e) => {
+            const val = e.target.value;
+            setQ(val);
+            onChange(val);
+            setOpen(true);
+          }}
+          onFocus={() => {
+            setOpen(true);
+            setQ(value);
+          }}
+          className="flex-1 bg-transparent outline-none text-sm font-bold text-gray-800 dark:text-white placeholder:text-gray-300"
+        />
+        <ChevronDownIcon className={`w-4 h-4 text-slate-300 transition-transform ${open ? "rotate-180" : ""}`} />
+      </div>
+      {open && (
+        <ul className="absolute z-[10001] mt-1 w-full max-h-48 overflow-y-auto rounded-xl border border-slate-100 dark:border-navy-700 bg-white dark:bg-navy-900 shadow-2xl p-2">
+          {filtered.length === 0 ? (
+            <li className="px-4 py-2 text-xs text-slate-400 italic">No users found</li>
+          ) : (
+            filtered.map((u) => (
+              <li
+                key={u}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  onChange(u);
+                  setOpen(false);
+                  setQ("");
+                }}
+                className="px-4 py-2 text-[12px] font-black cursor-pointer hover:bg-slate-50 dark:hover:bg-navy-800 text-[#003875] dark:text-[#FFD500] rounded-lg transition-all"
+              >
+                {u}
+              </li>
+            ))
+          )}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function UserMultiCombobox({
+  value,
+  onChange,
+  users,
+  isSimple = false,
+}: {
+  value: string;
+  onChange: (val: string) => void;
+  users: string[];
+  isSimple?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState("");
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const selected = useMemo(
+    () => (value ? value.split(",").map((s) => s.trim()).filter(Boolean) : []),
+    [value]
+  );
+
+  const toggle = (user: string) => {
+    if (selected.includes(user)) {
+      onChange(selected.filter((u) => u !== user).join(", "));
+    } else {
+      onChange([...selected, user].join(", "));
+    }
+    setQ("");
+  };
+
+  const filtered = users.filter(
+    (u) => u.toLowerCase().includes(q.toLowerCase()) && !selected.includes(u)
+  );
+  const listToShow = q ? filtered : users.filter((u) => !selected.includes(u));
+
+  return (
+    <div ref={ref} className="relative w-full">
+      <div
+        className={`min-h-[40px] px-3 py-1.5 border border-slate-200 dark:border-navy-700 rounded-xl flex flex-wrap gap-1.5 items-center cursor-text transition-all ${isSimple ? 'bg-slate-50 dark:bg-navy-900/50' : 'bg-white dark:bg-navy-900 shadow-sm'}`}
+        onClick={() => setOpen(true)}
+      >
+        {selected.map((u) => (
+          <span
+            key={u}
+            className="inline-flex items-center gap-1.5 px-2.5 py-0.5 bg-[#003875] text-[#FFD500] rounded-md text-[10px] font-black"
+          >
+            {u}
+            <button
+              type="button"
+              onMouseDown={(e) => {
+                e.preventDefault();
+                toggle(u);
+              }}
+            >
+              <XMarkIcon className="w-3 h-3 stroke-[3]" />
+            </button>
+          </span>
+        ))}
+        <input
+          type="text"
+          value={q}
+          onChange={(e) => {
+            setQ(e.target.value);
+            setOpen(true);
+          }}
+          onFocus={() => setOpen(true)}
+          className="flex-1 min-w-[80px] bg-transparent outline-none text-[12px] font-bold text-gray-700 dark:text-white placeholder:text-gray-300 dark:placeholder:text-navy-600"
+        />
+        <ChevronDownIcon className="w-4 h-4 text-slate-300 ml-auto" />
+      </div>
+      {open && listToShow.length > 0 && (
+        <ul className="absolute z-[10001] mt-1 w-full max-h-48 overflow-y-auto rounded-xl border border-slate-100 dark:border-navy-700 bg-white dark:bg-navy-900 shadow-2xl p-2">
+          {listToShow.map((u) => (
+            <li
+              key={u}
+              onMouseDown={(e) => {
+                e.preventDefault();
+                toggle(u);
+              }}
+              className="px-4 py-2 text-[12px] font-black cursor-pointer hover:bg-slate-50 dark:hover:bg-navy-800 text-[#003875] dark:text-[#FFD500] rounded-lg transition-all"
+            >
+              {u}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
 
 export default function HRMSModulePage({ params }: { params: Promise<{ module: string }> }) {
   const resolvedParams = React.use(params);
@@ -38,10 +211,12 @@ export default function HRMSModulePage({ params }: { params: Promise<{ module: s
   // UI State
   const [searchTerm, setSearchTerm] = useState("");
   const [viewMode, setViewMode] = useState<"active" | "cancelled">("active");
+  const [layoutMode, setLayoutMode] = useState<"smart" | "standard">("smart");
   const [selectedStepFilter, setSelectedStepFilter] = useState<number | "all" | "completed">("all");
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
   const [expandedTiles, setExpandedTiles] = useState<Record<string, boolean>>({});
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   // Modals
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -53,7 +228,29 @@ export default function HRMSModulePage({ params }: { params: Promise<{ module: s
   const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+  const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
+  const [configFormData, setConfigFormData] = useState<HrmsStepConfig[]>([]);
   const [now, setNow] = useState(new Date());
+  const [usersList, setUsersList] = useState<any[]>([]);
+
+  const [cancelTargetId, setCancelTargetId] = useState<string | null>(null);
+  const [restoreTargetId, setRestoreTargetId] = useState<string | null>(null);
+  const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
+  const [bulkRemarkInputs, setBulkRemarkInputs] = useState<Record<string, string>>({});
+  const [bulkToggles, setBulkToggles] = useState<Record<string, boolean>>({});
+  const [bulkSocialMedia, setBulkSocialMedia] = useState<Record<string, string[]>>({});
+
+  const [isRemoveFollowUpModalOpen, setIsRemoveFollowUpModalOpen] = useState(false);
+  const [targetItemForRemoveFollowUp, setTargetItemForRemoveFollowUp] = useState<AnyHrmsRecord | null>(null);
+  const [removeFollowUpStep, setRemoveFollowUpStep] = useState(1);
+  const [removeFollowUpType, setRemoveFollowUpType] = useState<'particular' | 'onwards'>('particular');
+
+  useEffect(() => {
+    fetch('/api/users')
+      .then(r => r.json())
+      .then(data => { if (Array.isArray(data)) setUsersList(data); })
+      .catch(() => { });
+  }, []);
 
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 1000);
@@ -79,12 +276,12 @@ export default function HRMSModulePage({ params }: { params: Promise<{ module: s
         if (Array.isArray(data)) {
           const merged = Array.from({ length: stepCount }).map((_, idx) => {
             const found = data[idx];
-            return { step_name: found?.step_name || `Step ${idx+1}`, tat: found?.tat || "24 Hrs", responsible_person: found?.responsible_person || "" };
+            return { step_name: found?.step_name || `Step ${idx + 1}`, tat: found?.tat || "24 Hrs", responsible_person: found?.responsible_person || "" };
           });
           setGlobalConfigs(merged);
         }
       })
-      .catch(() => {});
+      .catch(() => { });
   }, [module, stepCount]);
 
   useEffect(() => {
@@ -119,18 +316,32 @@ export default function HRMSModulePage({ params }: { params: Promise<{ module: s
 
   const calculatePlannedDate = (base: Date | string, tat: string): string => {
     let date = new Date(base); if (isNaN(date.getTime())) return "";
-    const val = parseFloat(tat); const unit = tat.toLowerCase().includes("day") ? "day" : "hr";
-    let mins = unit === "day" ? val * 10 * 60 : val * 60;
-    while (mins > 0) {
-      if (date.getDay() === 0) { date.setDate(date.getDate() + 1); date.setHours(9, 30, 0, 0); continue; }
+    const val = parseFloat(tat); 
+    const isDay = tat.toLowerCase().includes("day");
+
+    if (isDay) {
+      let daysToAdd = Math.ceil(val);
+      while (daysToAdd > 0) {
+        date.setDate(date.getDate() + 1);
+        if (date.getDay() !== 0) daysToAdd--; // Skip Sundays
+      }
       const cur = date.getHours() + date.getMinutes() / 60;
-      if (cur >= 19.5) { date.setDate(date.getDate() + 1); date.setHours(9, 30, 0, 0); continue; }
       if (cur < 9.5) date.setHours(9, 30, 0, 0);
-      const avail = (19.5 - (date.getHours() + date.getMinutes() / 60)) * 60;
-      if (mins <= avail) { date.setMinutes(date.getMinutes() + mins); mins = 0; }
-      else { mins -= avail; date.setDate(date.getDate() + 1); date.setHours(9, 30, 0, 0); }
+      else if (cur > 18.5) date.setHours(18, 30, 0, 0);
+      return date.toISOString();
+    } else {
+      let mins = val * 60;
+      while (mins > 0) {
+        if (date.getDay() === 0) { date.setDate(date.getDate() + 1); date.setHours(9, 30, 0, 0); continue; }
+        const cur = date.getHours() + date.getMinutes() / 60;
+        if (cur >= 18.5) { date.setDate(date.getDate() + 1); date.setHours(9, 30, 0, 0); continue; }
+        if (cur < 9.5) date.setHours(9, 30, 0, 0);
+        const avail = (18.5 - (date.getHours() + date.getMinutes() / 60)) * 60;
+        if (mins <= avail) { date.setMinutes(date.getMinutes() + mins); mins = 0; }
+        else { mins -= avail; date.setDate(date.getDate() + 1); date.setHours(9, 30, 0, 0); }
+      }
+      return date.toISOString();
     }
-    return date.toISOString();
   };
 
   const filteredItems = useMemo(() => {
@@ -139,7 +350,7 @@ export default function HRMSModulePage({ params }: { params: Promise<{ module: s
       const q = searchTerm.toLowerCase();
       list = list.filter(it => {
         const n1 = module === 'recruitment' ? (it as any).post_for_recruitment : (it as any).candidate_name;
-        return (n1 || "").toLowerCase().includes(q);
+        return (n1 || "").toLowerCase().includes(q) || (it.id || "").toLowerCase().includes(q);
       });
     }
     if (viewMode === "active") list = list.filter(it => !(it.cancelled || "").trim());
@@ -149,13 +360,36 @@ export default function HRMSModulePage({ params }: { params: Promise<{ module: s
       if (selectedStepFilter === "completed") list = list.filter(it => getActiveStep(it) === 0);
       else list = list.filter(it => getActiveStep(it) === selectedStepFilter);
     }
+    
+    // RBAC Filter: Non-admins only see records where they are responsible for the active pending step
+    if (!isAdmin && currentUser) {
+      list = list.filter(it => {
+        const step = getActiveStep(it);
+        if (step <= 0) return false; // Hide completed or cancelled items
+        const config = globalConfigs[step - 1];
+        if (!config || !config.responsible_person) return false;
+        return config.responsible_person.toLowerCase().includes(currentUser.toLowerCase());
+      });
+    }
+    
     return list;
-  }, [items, searchTerm, viewMode, selectedStepFilter, module]);
+  }, [items, searchTerm, viewMode, selectedStepFilter, module, isAdmin, currentUser, globalConfigs]);
+
+  const stepCounts = useMemo(() => {
+    const counts: Record<string, number> = { all: 0, completed: 0 };
+    for (let i = 1; i <= stepCount; i++) counts[i] = 0;
+    items.forEach(it => {
+      if (it.cancelled) return; counts.all++;
+      const s = getActiveStep(it);
+      if (s === 0) counts.completed++; else if (s > 0) counts[s]++;
+    });
+    return counts;
+  }, [items, stepCount]);
 
   const sortedItems = [...filteredItems].sort((a, b) => {
-    const d1 = new Date(a.created_at || 0).getTime();
-    const d2 = new Date(b.created_at || 0).getTime();
-    return d2 - d1;
+    const numA = parseInt(a.id.replace(/\D/g, "")) || 0;
+    const numB = parseInt(b.id.replace(/\D/g, "")) || 0;
+    return numB - numA;
   });
 
   const totalPages = Math.ceil(sortedItems.length / itemsPerPage);
@@ -184,14 +418,19 @@ export default function HRMSModulePage({ params }: { params: Promise<{ module: s
     }
 
     try {
-      const res = await fetch(`/api/hrms/${module}`, { 
-        method: editingItem ? "PUT" : "POST", 
-        headers: { "Content-Type": "application/json" }, 
-        body: JSON.stringify(payload) 
+      const res = await fetch(`/api/hrms/${module}`, {
+        method: editingItem ? "PUT" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
       });
       if (res.ok) setActionStatus("success"); else setActionStatus("error");
     } catch { setActionStatus("error"); }
     setTimeout(() => { setIsStatusModalOpen(false); setIsModalOpen(false); mutateItems(); setUploadFile(null); }, 1500);
+  };
+
+  const handleDeleteClick = (id: string) => {
+    setPendingDeleteId(id);
+    setIsConfirmOpen(true);
   };
 
   const handleDelete = async () => {
@@ -202,6 +441,160 @@ export default function HRMSModulePage({ params }: { params: Promise<{ module: s
       if (res.ok) setActionStatus("success"); else setActionStatus("error");
     } catch { setActionStatus("error"); }
     setTimeout(() => { setIsStatusModalOpen(false); mutateItems(); }, 1500);
+  };
+
+  const handleCancelConfirm = async () => {
+    if (!cancelTargetId) return;
+    const item = items.find(r => r.id === cancelTargetId); if (!item) return;
+    setCancelTargetId(null); setActionStatus("loading"); setActionMessage("Cancelling..."); setIsStatusModalOpen(true);
+    const currentNow = new Date().toISOString();
+    try {
+      const res = await fetch(`/api/hrms/${module}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...item, cancelled: currentNow }) });
+      if (res.ok) setActionStatus("success"); else setActionStatus("error");
+    } catch { setActionStatus("error"); }
+    setTimeout(() => { setIsStatusModalOpen(false); mutateItems(); }, 1500);
+  };
+
+  const handleRestoreConfirm = async () => {
+    if (!restoreTargetId) return;
+    const item = items.find(r => r.id === restoreTargetId); if (!item) return;
+    setRestoreTargetId(null); setActionStatus("loading"); setActionMessage("Restoring..."); setIsStatusModalOpen(true);
+    try {
+      const res = await fetch(`/api/hrms/${module}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...item, cancelled: "" }) });
+      if (res.ok) setActionStatus("success"); else setActionStatus("error");
+    } catch { setActionStatus("error"); }
+    setTimeout(() => { setIsStatusModalOpen(false); mutateItems(); }, 1500);
+  };
+  
+  const openRemoveFollowUpModal = (item: AnyHrmsRecord) => {
+    setTargetItemForRemoveFollowUp(item);
+    setRemoveFollowUpStep(getActiveStep(item) || stepCount);
+    setRemoveFollowUpType('particular');
+    setIsRemoveFollowUpModalOpen(true);
+  };
+
+  const handleRemoveFollowUp = async () => {
+    if (!targetItemForRemoveFollowUp) return;
+    setActionStatus("loading"); setActionMessage("Removing Follow Up..."); setIsStatusModalOpen(true);
+    
+    const upd = { ...targetItemForRemoveFollowUp } as any;
+    const startStep = removeFollowUpStep;
+
+    if (removeFollowUpType === 'particular') {
+      upd[`actual_${startStep}`] = "";
+      upd[`status_${startStep}`] = "";
+      upd[`remark_${startStep}`] = "";
+      if (module === 'recruitment' && startStep === 1) upd.social_medias_1 = "";
+    } else {
+      for (let s = startStep; s <= stepCount; s++) {
+        upd[`actual_${s}`] = "";
+        upd[`status_${s}`] = "";
+        upd[`remark_${s}`] = "";
+        if (s > startStep) upd[`planned_${s}`] = "";
+        if (module === 'recruitment' && s === 1) upd.social_medias_1 = "";
+      }
+    }
+    
+    try {
+      const res = await fetch(`/api/hrms/${module}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(upd) });
+      if (res.ok) setActionStatus("success"); else setActionStatus("error");
+    } catch { setActionStatus("error"); }
+    setTimeout(() => { setIsStatusModalOpen(false); setIsRemoveFollowUpModalOpen(false); mutateItems(); }, 1500);
+  };
+
+  const handleSaveConfig = async () => {
+    setActionStatus("loading"); setActionMessage("Saving Configuration..."); setIsStatusModalOpen(true);
+    try {
+      const res = await fetch(`/api/hrms/${module}/config`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(configFormData)
+      });
+      if (res.ok) {
+        setActionStatus("success");
+        setGlobalConfigs(configFormData);
+      } else setActionStatus("error");
+    } catch { setActionStatus("error"); }
+    setTimeout(() => { setIsStatusModalOpen(false); setIsConfigModalOpen(false); }, 1500);
+  };
+
+  const handleExport = () => {
+    const stepCols = Array.from({ length: stepCount }).flatMap((_, i) => [`ST${i+1} Planned`, `ST${i+1} Actual`, `ST${i+1} Status`, `ST${i+1} Remark`]);
+    const headers = ["ID", ...formFields.map(f => f.label), "Created At", "Cancelled", ...stepCols];
+    
+    const fmtCsvDt = (iso: any) => {
+      if (!iso) return "";
+      const d = new Date(iso);
+      if (isNaN(d.getTime())) return iso;
+      return `${String(d.getDate()).padStart(2, '0')}-${String(d.getMonth() + 1).padStart(2, '0')}-${d.getFullYear()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+    };
+
+    const rows = sortedItems.map(i => {
+      const row = [
+        i.id,
+        ...formFields.map(f => (i as any)[f.name] || ""),
+        fmtCsvDt(i.created_at),
+        fmtCsvDt(i.cancelled),
+        ...Array.from({ length: stepCount }).flatMap((_, idx) => {
+          const n = idx + 1;
+          return [fmtCsvDt((i as any)[`planned_${n}`]), fmtCsvDt((i as any)[`actual_${n}`]), (i as any)[`status_${n}`], (i as any)[`remark_${n}`]];
+        })
+      ];
+      return row.map(v => `"${String(v ?? "").replace(/"/g, '""')}"`).join(",");
+    });
+
+    const csvContent = "\uFEFF" + [headers.join(","), ...rows].join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${module}_full_report_${new Date().toISOString().split('T')[0]}.csv`;
+    link.click();
+  };
+
+  const openBulkModal = () => {
+    const rmks: Record<string, string> = {};
+    const ts: Record<string, boolean> = {};
+    const sm: Record<string, string[]> = {};
+    selectedIds.forEach(id => {
+      rmks[id] = "";
+      ts[id] = true;
+      sm[id] = [];
+    });
+    setBulkRemarkInputs(rmks);
+    setBulkToggles(ts);
+    setBulkSocialMedia(sm);
+    setIsBulkModalOpen(true);
+  };
+
+  const handleBulkStepSave = async () => {
+    const toProc = Array.from(selectedIds).filter(id => bulkToggles[id]);
+    if (!toProc.length) return;
+    setActionStatus("loading"); setActionMessage("Processing updates..."); setIsStatusModalOpen(true); setIsBulkModalOpen(false);
+    const currentNow = new Date().toISOString(); let errors = 0;
+    
+    for (const id of toProc) {
+      const it = items.find(r => r.id === id); if (!it) continue;
+      const n = getActiveStep(it); if (n <= 0) continue;
+      
+      const upd = { ...it } as any; 
+      upd[`actual_${n}`] = currentNow; 
+      upd[`status_${n}`] = "Done";
+      if (bulkRemarkInputs[id]) {
+        upd[`remark_${n}`] = bulkRemarkInputs[id];
+      }
+      
+      if (module === 'recruitment' && n === 1) {
+        upd.social_medias_1 = JSON.stringify(bulkSocialMedia[id] || []);
+      }
+
+      if (n < stepCount) {
+        upd[`planned_${n+1}`] = calculatePlannedDate(currentNow, globalConfigs[n]?.tat || "24 Hrs");
+      }
+
+      try { await fetch(`/api/hrms/${module}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(upd) }); } catch { errors++; }
+    }
+    setActionStatus(errors ? "error" : "success"); setActionMessage(errors ? `Finished with ${errors} errors` : "All updated!");
+    setTimeout(() => { setIsStatusModalOpen(false); setSelectedIds(new Set()); mutateItems(); }, 2000);
   };
 
   const getDelayInfo = (pl: string, act: string | null) => {
@@ -215,174 +608,659 @@ export default function HRMSModulePage({ params }: { params: Promise<{ module: s
     return { text: `${diffHrs}h ${diffMins}m Late`, color: "text-red-500" };
   };
 
+  const fmtDt = (iso: string) => iso ? new Date(iso).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "—";
+  const fmtTm = (iso: string) => iso ? new Date(iso).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true }) : "";
+
   return (
-    <div className="flex gap-4 h-full p-2">
-      {/* Sidebar Filters */}
-      <div className="w-60 flex flex-col shrink-0 h-full overflow-y-auto custom-scrollbar border-r border-slate-100 dark:border-navy-800 pr-3">
-        <p className="text-[10px] font-black text-slate-400 dark:text-navy-500 uppercase tracking-[0.3em] mb-1.5 px-2">FILTERS</p>
-        <div className="space-y-1.5 pb-10">
-          <button onClick={() => setSelectedStepFilter("all")} className={`w-full flex items-center justify-start gap-3 px-5 py-2.5 rounded-full transition-all border-b-4 ${selectedStepFilter === "all" ? "bg-[#e6dcc5] dark:bg-[#cbbca0]/20 border-[#cbbca0] text-[#003875] dark:text-[#FFD500] shadow-md" : "bg-white dark:bg-navy-900 border-slate-100 dark:border-navy-800 text-slate-500"}`}>
-            <span className="font-black text-[11px] uppercase tracking-widest text-left">ALL RECORDS</span>
+    <div className="flex flex-col h-[calc(100vh-100px)] overflow-hidden">
+      {/* ─── Header ─── */}
+      <div className="flex items-center justify-between px-2 py-0.5 shrink-0">
+        <div>
+          <h1 className="text-xl font-black text-[#003875] dark:text-white tracking-tight">{moduleName} Dashboard</h1>
+          <p className="text-[10px] font-bold text-gray-400 dark:text-slate-400 uppercase tracking-widest">HUMAN RESOURCE MANAGEMENT SYSTEM</p>
+        </div>
+
+        <div className="flex items-center gap-1 rounded-full border-2 border-[#003875] dark:border-[#FFD500] bg-white dark:bg-navy-900 shadow-xl p-0.5">
+          <button onClick={handleExport} className="flex items-center gap-2 px-4 py-1 font-black uppercase tracking-widest text-[10px] text-[#003875] dark:text-[#FFD500] hover:bg-slate-50 dark:hover:bg-navy-800 transition-all rounded-full">
+            <ArrowDownTrayIcon className="w-3.5 h-3.5" /> <span>EXPORT</span>
           </button>
-          <button onClick={() => setSelectedStepFilter("completed")} className={`w-full flex items-center justify-start gap-3 px-5 py-2.5 rounded-full transition-all border-b-4 ${selectedStepFilter === "completed" ? "bg-emerald-500 border-emerald-700 text-white shadow-md" : "bg-white dark:bg-navy-900 border-slate-100 dark:border-navy-800 text-slate-500"}`}>
-            <span className="font-black text-[11px] uppercase tracking-widest text-left">COMPLETED</span>
+          <button onClick={() => { setConfigFormData(JSON.parse(JSON.stringify(globalConfigs))); setIsConfigModalOpen(true); }} className="flex items-center gap-2 px-4 py-1 font-black uppercase tracking-widest text-[10px] text-[#003875] dark:text-[#FFD500] hover:bg-slate-50 dark:hover:bg-navy-800 transition-all rounded-full">
+            <Cog6ToothIcon className="w-3.5 h-3.5" /> <span>CONFIG</span>
           </button>
-          {Array.from({length: stepCount}).map((_, i) => (
-            <button key={i} onClick={() => setSelectedStepFilter(i+1)} className={`w-full flex items-center justify-start gap-3 px-3 py-2.5 rounded-xl transition-all border ${selectedStepFilter === i+1 ? "bg-[#e6dcc5] dark:bg-[#cbbca0]/20 border-[#cbbca0] shadow-md" : "bg-white dark:bg-navy-900 border-slate-50 text-slate-500"}`}>
-              <span className="text-[10px] font-black uppercase tracking-tight text-left">Step {i+1} — {globalConfigs[i]?.step_name || `Step ${i+1}`}</span>
-            </button>
-          ))}
+          <button onClick={() => { setEditingItem(null); setFormData({}); setUploadFile(null); setIsModalOpen(true); }} className="px-3 py-1 text-[#003875] dark:text-[#FFD500] hover:bg-slate-50 dark:hover:bg-navy-800 transition-all rounded-full">
+            <PlusIcon className="w-4 h-4 stroke-[2.5]" />
+          </button>
+          <div className="w-[1px] h-5 bg-slate-200 dark:bg-navy-700 mx-1" />
+          <button onClick={() => setViewMode(viewMode==='cancelled'?'active':'cancelled')} className={`flex items-center gap-2 px-4 py-1 font-black uppercase tracking-widest text-[10px] transition-all rounded-full ${viewMode==='cancelled'?'bg-red-500 text-white shadow-md':'text-[#003875] dark:text-[#FFD500] hover:bg-slate-50 dark:hover:bg-navy-800'}`}>
+            <NoSymbolIcon className="w-3.5 h-3.5" /> <span>CANCELLED ({items.filter(i => !!(i.cancelled || "").trim()).length})</span>
+          </button>
+        </div>
+
+        <div className="flex items-center gap-0.5 bg-slate-100 dark:bg-navy-900 rounded-full p-0.5 border border-slate-200 dark:border-navy-800 shadow-inner">
+          <button onClick={() => setLayoutMode("standard")} className={`px-4 py-1 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${layoutMode === "standard" ? "bg-white dark:bg-navy-800 text-[#003875] dark:text-[#FFD500] shadow-md" : "text-gray-400 dark:text-navy-600"}`}>STANDARD</button>
+          <button onClick={() => setLayoutMode("smart")} className={`px-4 py-1 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${layoutMode === "smart" ? "bg-white dark:bg-navy-800 text-[#003875] dark:text-[#FFD500] shadow-md" : "text-gray-400 dark:text-navy-600"}`}>SMART VIEW</button>
         </div>
       </div>
 
-      {/* Main Content */}
-      <div className="flex-1 flex flex-col min-w-0 h-full">
-        <div className="flex items-center gap-3 mb-3 shrink-0">
-          <div className="relative group flex-1 max-w-xs">
-            <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-300" />
-            <input type="text" placeholder={`Search ${moduleName}...`} value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full pl-9 pr-3 py-1.5 bg-white dark:bg-navy-900 border border-slate-200 dark:border-navy-800 rounded-xl text-[12px] font-bold text-gray-700 dark:text-white outline-none focus:border-[#003875]" />
+      <div className="flex gap-4 flex-1 overflow-hidden mt-1 px-1">
+        {/* Sidebar */}
+        <div className="w-64 flex flex-col shrink-0 h-full overflow-y-auto custom-scrollbar border-r border-slate-100 dark:border-navy-800 pr-3 py-0.5">
+          <p className="text-[11px] font-black text-slate-400 dark:text-navy-500 uppercase tracking-[0.3em] mb-2 px-2 mt-1">FILTERS</p>
+          <div className="space-y-1.5 pb-10">
+            <button onClick={() => setSelectedStepFilter("all")} className={`w-full flex items-center justify-start gap-3 px-5 py-3 rounded-full transition-all border-b-4 ${selectedStepFilter === "all" ? "bg-[#e6dcc5] dark:bg-[#cbbca0]/20 border-[#cbbca0] text-[#003875] dark:text-[#FFD500] shadow-md" : "bg-white dark:bg-navy-900 border-slate-100 dark:border-navy-800 text-slate-500 dark:text-navy-400"}`}>
+              <span className="font-black text-xs uppercase tracking-widest text-left">ALL RECORDS</span>
+            </button>
+            <button onClick={() => setSelectedStepFilter("completed")} className={`w-full flex items-center justify-start gap-3 px-5 py-3 rounded-full transition-all border-b-4 ${selectedStepFilter === "completed" ? "bg-emerald-500 border-emerald-700 text-white shadow-md" : "bg-white dark:bg-navy-900 border-slate-100 dark:border-navy-800 text-slate-500 dark:text-navy-400"}`}>
+              <span className="font-black text-xs uppercase tracking-widest text-left">COMPLETED</span>
+              {stepCounts.completed > 0 && <span className="w-5 h-5 ml-auto flex items-center justify-center rounded-full text-[11px] font-black bg-white text-emerald-500">{stepCounts.completed}</span>}
+            </button>
+            {Array.from({ length: stepCount }).map((_, i) => {
+              const getStepIcon = (name: string) => {
+                const n = (name || "").toLowerCase();
+                if (n.includes("call") || n.includes("connect")) return <PhoneIcon className="w-4 h-4" />;
+                if (n.includes("post") || n.includes("social")) return <ShareIcon className="w-4 h-4" />;
+                if (n.includes("resume") || n.includes("form") || n.includes("cv")) return <DocumentTextIcon className="w-4 h-4" />;
+                if (n.includes("interview") || n.includes("filter") || n.includes("check")) return <MagnifyingGlassIcon className="w-4 h-4" />;
+                if (n.includes("done") || n.includes("confirm") || n.includes("join")) return <CheckCircleIcon className="w-4 h-4" />;
+                return <ClipboardDocumentCheckIcon className="w-4 h-4" />;
+              };
+              
+              return (
+                <button key={i} onClick={() => setSelectedStepFilter(i+1)} className={`w-full flex items-center justify-start gap-3 px-3 py-3 rounded-xl transition-all border border-slate-50 dark:border-navy-800 bg-white dark:bg-navy-900 ${selectedStepFilter === i+1 ? "bg-[#e6dcc5] dark:bg-[#cbbca0]/20 border-[#cbbca0] shadow-md" : "text-slate-500 dark:text-navy-400"}`}>
+                  <div className={`p-2 rounded-lg shrink-0 ${selectedStepFilter === i+1 ? 'bg-[#003875] text-[#FFD500]' : 'bg-slate-50 dark:bg-navy-800 text-slate-400'}`}>
+                    {getStepIcon(globalConfigs[i]?.step_name)}
+                  </div>
+                  <span className="text-[11px] font-black uppercase tracking-tight text-left leading-tight">Step {i+1} — {globalConfigs[i]?.step_name}</span>
+                  {stepCounts[i+1] > 0 && <span className="w-5 h-5 ml-auto shrink-0 flex items-center justify-center rounded-full text-[11px] font-black bg-blue-500 text-white">{stepCounts[i+1]}</span>}
+                </button>
+              );
+            })}
           </div>
-          <button onClick={() => { setEditingItem(null); setFormData({}); setUploadFile(null); setIsModalOpen(true); }} className="flex items-center gap-2 px-4 py-1.5 bg-[#003875] text-[#FFD500] hover:bg-[#002855] transition-all rounded-full font-black text-[10px] tracking-widest uppercase">
-            <PlusIcon className="w-4 h-4 stroke-[2.5]" /> ADD NEW
-          </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto custom-scrollbar pr-2 space-y-3 pb-20">
-          {isLoading ? (
-            <div className="flex flex-col items-center justify-center p-10 animate-pulse text-slate-200"><ArrowPathIcon className="w-8 h-8 animate-spin mb-4" /><p className="text-[10px] font-black uppercase">LOADING...</p></div>
-          ) : paginatedItems.length === 0 ? (
-            <div className="flex flex-col items-center justify-center p-10 text-slate-200"><DocumentTextIcon className="w-12 h-12 mb-4" /><p className="text-[10px] font-black uppercase">NO DATA</p></div>
-          ) : (
-            paginatedItems.map(item => {
-              const step = getActiveStep(item); const exp = expandedTiles[item.id];
-              const title = module === 'recruitment' ? (item as any).post_for_recruitment : (item as any).candidate_name;
-              const subTitle = module === 'recruitment' ? `Loc: ${(item as any).for_which_location}` : `Phone: ${(item as any).whatsapp_number}`;
-              return (
-                <div key={item.id} className="bg-white dark:bg-navy-800 rounded-2xl border border-slate-100 dark:border-navy-700 shadow-sm p-3">
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-start gap-3">
-                      <div>
-                        <h3 className="text-base font-black text-[#003875] dark:text-white tracking-tight uppercase leading-none">{title || "—"}</h3>
-                        <p className="text-[11px] font-bold text-slate-500 dark:text-slate-400 mt-1 uppercase">{subTitle}</p>
+        {/* Content */}
+        <div className="flex-1 flex flex-col min-w-0 h-full py-0.5">
+          <div className="flex items-center gap-3 mb-3 shrink-0 px-1">
+            <div className="relative group flex-1 max-w-xs">
+              <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-300 dark:text-navy-600" />
+              <input type="text" placeholder={`Search ${moduleName}...`} value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full pl-9 pr-3 py-1.5 bg-white dark:bg-navy-900 border border-slate-200 dark:border-navy-800 rounded-xl text-[12px] font-bold text-gray-700 dark:text-white outline-none focus:border-[#003875] dark:focus:border-[#FFD500]" />
+            </div>
+
+            <div className="ml-auto flex items-center gap-3">
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">PAGE <span className="text-[#003875] dark:text-[#FFD500]">{currentPage}</span> OF {totalPages||1}</p>
+              <div className="flex items-center gap-1">
+                <button onClick={() => setCurrentPage(Math.max(1, currentPage-1))} className="p-1 text-slate-300 hover:text-slate-800 transition-colors"><ChevronLeftIcon className="w-3.5 h-3.5" /></button>
+                <button onClick={() => setCurrentPage(Math.min(totalPages, currentPage+1))} className="p-1 text-slate-300 hover:text-slate-800 transition-colors"><ChevronRightIcon className="w-3.5 h-3.5" /></button>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex-1 overflow-y-auto custom-scrollbar pr-2 space-y-3 pb-20 py-0.5">
+            {isLoading ? (
+              <div className="flex flex-col items-center justify-center p-10 animate-pulse text-slate-200"><ArrowPathIcon className="w-8 h-8 animate-spin mb-4" /><p className="text-[10px] font-black uppercase">SYNCHRONIZING...</p></div>
+            ) : paginatedItems.length === 0 ? (
+              <div className="flex flex-col items-center justify-center p-10 text-slate-100"><MagnifyingGlassIcon className="w-12 h-12 mb-4" /><p className="text-[10px] font-black uppercase">NO DATA FOUND</p></div>
+            ) : layoutMode === "smart" ? (
+              paginatedItems.map(item => {
+                const sel = selectedIds.has(item.id); const step = getActiveStep(item); const exp = expandedTiles[item.id];
+                const title = module === 'recruitment' ? (item as any).post_for_recruitment : (item as any).candidate_name;
+                const subTitle = module === 'recruitment' ? `Loc: ${(item as any).for_which_location}` : `Phone: ${(item as any).whatsapp_number}`;
+
+                return (
+                  <div key={item.id} className="px-1">
+                    <div onClick={() => { const n = new Set(selectedIds); if (n.has(item.id)) n.delete(item.id); else n.add(item.id); setSelectedIds(n); }} className={`bg-white dark:bg-navy-800 rounded-2xl border transition-all cursor-pointer overflow-hidden ${sel ? "border-[#003875] dark:border-[#FFD500] border-2 shadow-lg" : "border-slate-100 dark:border-navy-700 shadow-sm"}`}>
+                      <div className="p-3">
+                        <div className="flex items-start justify-between mb-2">
+                          <div className="flex items-start gap-3">
+                            <input type="checkbox" checked={sel} readOnly className="w-4 h-4 mt-1 rounded border-slate-300 text-[#003875] dark:text-[#FFD500]" />
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <span className="px-2 py-0.5 bg-blue-50 dark:bg-blue-900/20 text-[#003875] dark:text-blue-400 rounded text-[10px] font-black uppercase tracking-widest border border-blue-100 dark:border-blue-900/50">ID: {item.id}</span>
+                                <h3 className="text-base font-black text-slate-800 dark:text-white tracking-tight uppercase leading-none">{title || "—"}</h3>
+                              </div>
+                              <div className="flex flex-wrap items-center gap-4 mt-1.5">
+                                <span className="flex items-center gap-1.5 text-[10px] font-black text-blue-500 uppercase"><UserIcon className="w-3.5 h-3.5" /> {subTitle}</span>
+                                <span className="flex items-center gap-1.5 text-[10px] font-black text-slate-400 uppercase"><CalendarIcon className="w-3.5 h-3.5" /> {fmtDt(item.created_at)}</span>
+                              </div>
+                            </div>
+                          </div>
+                          
+                          <div className="flex items-center gap-2">
+                            {step > 0 && (
+                              <div className="flex items-center bg-white dark:bg-navy-800 border border-[#FFD500] rounded-full shadow-sm overflow-hidden divide-x divide-[#FFD500]/30 mr-1">
+                                <div className="flex flex-col items-center justify-center px-3 py-1.5 min-w-[120px]">
+                                  <p className="text-[9px] font-black text-[#003875] dark:text-[#FFD500] uppercase tracking-tighter leading-none whitespace-nowrap">{fmtDt((item as any)[`planned_${step}`])} {fmtTm((item as any)[`planned_${step}`])}</p>
+                                  <p className={`text-[8px] font-black uppercase tracking-widest mt-0.5 ${getDelayInfo((item as any)[`planned_${step}`], null)?.color}`}>{getDelayInfo((item as any)[`planned_${step}`], null)?.text}</p>
+                                </div>
+                                <div className="flex items-center gap-1.5 px-4 py-1.5 bg-[#FFD500]/5 dark:bg-[#FFD500]/10">
+                                  <ClockIcon className="w-3.5 h-3.5 text-[#FFD500] stroke-[3]" />
+                                  <span className="text-[11px] font-black text-[#003875] dark:text-[#FFD500] uppercase tracking-widest whitespace-nowrap">STEP {step} PENDING</span>
+                                </div>
+                              </div>
+                            )}
+                            {item.cancelled && (
+                              <span className="flex items-center gap-1.5 px-3 py-1 bg-red-50 dark:bg-red-900/10 text-[10px] font-black text-red-600 dark:text-red-400 uppercase tracking-widest rounded-full border border-red-200 dark:border-red-900/30 mr-1">
+                                <NoSymbolIcon className="w-3.5 h-3.5" /> CANCELLED ON: {fmtDt(item.cancelled)} {fmtTm(item.cancelled)}
+                              </span>
+                            )}
+                            <div className="flex items-center gap-1 px-2 py-1 bg-white dark:bg-navy-800 rounded-full border border-slate-100 dark:border-navy-700 shadow-lg">
+                              <button onClick={e => { e.stopPropagation(); setExpandedTiles(p => ({ ...p, [item.id]: !exp })); }} className={`p-1.5 rounded-full transition-all ${exp ? "bg-[#003875] text-[#FFD500]" : "text-[#003875] dark:text-[#FFD500] hover:bg-yellow-50"}`}><ChevronDownIcon className={`w-3.5 h-3.5 stroke-[3] transition-transform ${exp ? "rotate-180" : ""}`} /></button>
+                              <button onClick={e => { e.stopPropagation(); setEditingItem(item); setFormData({ ...item }); setUploadFile(null); setIsModalOpen(true); }} className="p-1.5 text-blue-500 hover:bg-blue-50 rounded-full transition-all" title="Edit"><PencilSquareIcon className="w-3.5 h-3.5" /></button>
+                              {(!item.cancelled && Array.from({length: stepCount}).some((_, i) => (item as any)[`actual_${i+1}`]?.trim())) && (
+                                <button onClick={e => { e.stopPropagation(); openRemoveFollowUpModal(item); }} className="p-1.5 text-orange-500 hover:bg-orange-50 rounded-full transition-all" title="Remove Follow-up"><ArrowUturnLeftIcon className="w-3.5 h-3.5" /></button>
+                              )}
+                              {item.cancelled ? (
+                                <button onClick={e => { e.stopPropagation(); setRestoreTargetId(item.id); setIsConfirmOpen(true); }} className="p-1.5 text-emerald-500 hover:bg-emerald-50 rounded-full transition-all" title="Restore Process"><ArrowPathIcon className="w-3.5 h-3.5" /></button>
+                              ) : (
+                                <button onClick={e => { e.stopPropagation(); setCancelTargetId(item.id); setIsConfirmOpen(true); }} className="p-1.5 text-orange-500 hover:bg-orange-50 rounded-full transition-all" title="Cancel Process"><NoSymbolIcon className="w-3.5 h-3.5" /></button>
+                              )}
+                              <button onClick={e => { e.stopPropagation(); handleDeleteClick(item.id); }} className="p-1.5 text-red-500 hover:bg-red-50 rounded-full transition-all" title="Delete"><TrashIcon className="w-3.5 h-3.5" /></button>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="mt-3 border-t border-slate-50 dark:border-navy-700 pt-3">
+                          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3 items-start">
+                            {formFields.filter(f => f.type !== "file").map((f, i) => {
+                              const getFieldIcon = (name: string) => {
+                                const n = name.toLowerCase();
+                                if (n.includes("date") || n.includes("time") || n.includes("age") || n.includes("notice") || n.includes("period") || n.includes("lead")) return <CalendarIcon className="w-3 h-3 inline-block mr-1 -mt-0.5" />;
+                                if (n.includes("name") || n.includes("by") || n.includes("male") || n.includes("reference")) return <UserIcon className="w-3 h-3 inline-block mr-1 -mt-0.5" />;
+                                if (n.includes("location") || n.includes("office")) return <MapPinIcon className="w-3 h-3 inline-block mr-1 -mt-0.5" />;
+                                if (n.includes("ctc") || n.includes("salary") || n.includes("price")) return <BanknotesIcon className="w-3 h-3 inline-block mr-1 -mt-0.5" />;
+                                if (n.includes("post") || n.includes("experience") || n.includes("work")) return <BriefcaseIcon className="w-3 h-3 inline-block mr-1 -mt-0.5" />;
+                                if (n.includes("skill") || n.includes("qualification")) return <SparklesIcon className="w-3 h-3 inline-block mr-1 -mt-0.5" />;
+                                if (n.includes("social") || n.includes("share")) return <ShareIcon className="w-3 h-3 inline-block mr-1 -mt-0.5" />;
+                                return <HashtagIcon className="w-3 h-3 inline-block mr-1 -mt-0.5" />;
+                              };
+                              const shortLabel = (l: string) => {
+                                const map: Record<string, string> = {
+                                  "NO. OF POST FOR RECRUITMENT": "NO. OF POSTS",
+                                  "EXPERIENCE NEEDED FOR THE ROLE": "EXPERIENCE",
+                                  "WORK AND RESPONSIBILITIES": "RESPONSIBILITIES",
+                                  "POST FOR RECRUITMENT": "POST",
+                                  "FOR WHICH LOCATION": "LOCATION",
+                                  "REQUIREMENT BY": "REQ. BY",
+                                  "MALE /FEMALE": "GENDER",
+                                  "SKILLS REQUIRED": "SKILLS",
+                                  "WHICH PLATFORM": "PLATFORM",
+                                  "PLAN TO CLOSE": "TAT (DAYS)",
+                                  "NOTICE PERIOD (IN DAYS)": "NOTICE PERIOD",
+                                  "SHARE TWO PROFESSIONAL REFERENCES": "REFERENCES",
+                                  "CURRENT LIVING LOCATION": "LIVING LOCATION",
+                                  "GTK OFFICE COMFORTABLE": "GTK OFFICE",
+                                  "LEAD TIME FOR EMP. JOINING (STEP 7)": "LEAD TIME",
+                                  "LEAD TIME": "LEAD TIME"
+                                };
+                                return map[l.toUpperCase()] || l;
+                              };
+
+                              return (
+                                <div key={f.name} className="space-y-0.5">
+                                  <p className={`text-[9px] font-black uppercase tracking-widest truncate ${i%3===0 ? 'text-emerald-500' : i%3===1 ? 'text-blue-500' : 'text-purple-500'}`} title={f.label}>
+                                    {getFieldIcon(f.name)}
+                                    {shortLabel(f.label)}
+                                  </p>
+                                  <p className="text-[12px] font-black text-slate-800 dark:text-white truncate">{(item as any)[f.name] || "—"}</p>
+                                </div>
+                              );
+                            })}
+                            {(item as any).upload_updated_cv && (
+                              <div className="space-y-0.5">
+                                <p className="text-[9px] font-black uppercase tracking-widest text-orange-500 truncate" title="Document">
+                                  <DocumentTextIcon className="w-3 h-3 inline-block mr-1 -mt-0.5" />
+                                  DOCUMENT
+                                </p>
+                                <a href={(item as any).upload_updated_cv} target="_blank" rel="noreferrer" className="text-[12px] font-black text-blue-500 hover:underline truncate inline-block">View File</a>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {exp && (
+                          <div className="mt-3 flex overflow-x-auto items-stretch gap-2 animate-in slide-in-from-top-2 duration-300 pb-2 custom-scrollbar">
+                            
+                            {/* Step Tiles */}
+                            {Array.from({ length: stepCount }, (_, i) => {
+                              const n = i + 1; const act = (item as any)[`actual_${n}`]; const pl = (item as any)[`planned_${n}`]; 
+                              const done = !!act; const isPending = !done && n === getActiveStep(item);
+                              let statusClasses = "bg-white dark:bg-navy-900 border-slate-200 dark:border-navy-700 text-slate-400";
+                              if (done) statusClasses = "bg-emerald-50/50 dark:bg-emerald-900/10 border-emerald-500 text-emerald-700 dark:text-emerald-400 shadow-sm";
+                              else if (isPending) statusClasses = "bg-orange-50 dark:bg-orange-900/10 border-orange-400 text-orange-700 dark:text-orange-400 shadow-sm";
+                              return (
+                                <div key={n} className={`flex-none w-64 p-3 rounded-xl border transition-all flex flex-col justify-between ${statusClasses}`}>
+                                  <div>
+                                    <div className="flex items-center justify-between mb-1">
+                                      <p className={`text-[10px] font-black uppercase tracking-widest ${done ? "text-emerald-600" : isPending ? "text-orange-600" : "text-slate-400"}`}>STEP {n}</p>
+                                      {done ? <CheckCircleIcon className="w-3.5 h-3.5 text-emerald-600" /> : isPending ? <ClockIcon className="w-3.5 h-3.5 text-orange-500 animate-pulse" /> : null}
+                                    </div>
+                                    <p className={`text-[11px] font-black leading-snug line-clamp-2 ${done ? "text-emerald-900 dark:text-emerald-200" : isPending ? "text-orange-900 dark:text-orange-200" : "text-slate-600"}`}>{globalConfigs[i]?.step_name}</p>
+                                  </div>
+                                  <div className={`mt-3 space-y-1.5 pt-2 border-t ${done ? "border-emerald-100 dark:border-emerald-900/50" : "border-slate-100 dark:border-navy-800"}`}>
+                                    <div className="flex justify-between items-center text-[9px] font-black uppercase tracking-widest">
+                                      <span className="opacity-50">PLANNED</span>
+                                      <span>{pl ? (new Date(pl).toLocaleDateString('en-GB') + ' ' + new Date(pl).toLocaleTimeString('en-US', {hour:'2-digit',minute:'2-digit'})) : "—"}</span>
+                                    </div>
+                                    <div className="flex justify-between items-center text-[9px] font-black uppercase tracking-widest">
+                                      <span className="opacity-50">ACTUAL</span>
+                                      <span className={done ? "text-emerald-700 dark:text-emerald-400" : "opacity-30"}>{act ? (new Date(act).toLocaleDateString('en-GB') + ' ' + new Date(act).toLocaleTimeString('en-US', {hour:'2-digit',minute:'2-digit'})) : "—"}</span>
+                                    </div>
+                                    {((item as any)[`status_${n}`] || (item as any)[`remark_${n}`]) && (
+                                      <div className={`mt-1.5 pt-1.5 border-t space-y-1 ${done ? "border-emerald-100 dark:border-emerald-900/50" : "border-slate-100 dark:border-navy-800"}`}>
+                                        {(item as any)[`status_${n}`] && (
+                                          <div className="flex justify-between items-center text-[9px] font-black uppercase tracking-widest">
+                                            <span className="opacity-50">STATUS</span>
+                                            <span className="truncate max-w-[120px]" title={(item as any)[`status_${n}`]}>{(item as any)[`status_${n}`]}</span>
+                                          </div>
+                                        )}
+                                        {(item as any)[`remark_${n}`] && (
+                                          <div className="flex justify-between items-start text-[9px] font-black uppercase tracking-widest">
+                                            <span className="opacity-50 mr-2 mt-0.5">REMARK</span>
+                                            <span className="text-right line-clamp-2 max-w-[140px]" title={(item as any)[`remark_${n}`]}>{(item as any)[`remark_${n}`]}</span>
+                                          </div>
+                                        )}
+                                      </div>
+                                    )}
+                                    {module === 'recruitment' && n === 1 && (item as any).social_medias_1 && (
+                                      <div className="flex flex-wrap gap-1 mt-1.5 pt-1.5 border-t border-slate-100 dark:border-navy-800">
+                                        {(() => {
+                                          try {
+                                            const arr = JSON.parse((item as any).social_medias_1);
+                                            if (Array.isArray(arr) && arr.length > 0) {
+                                              return arr.map((sm, idx) => (
+                                                 <span key={idx} className="px-1.5 py-0.5 bg-[#003875] text-[#FFD500] text-[8px] font-black uppercase rounded shadow-sm">{sm}</span>
+                                              ));
+                                            }
+                                          } catch (e) {}
+                                          return null;
+                                        })()}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      {step > 0 && (
-                        <div className="flex flex-col items-end mr-2">
-                          <p className="text-[9px] font-black text-[#003875] dark:text-[#FFD500] uppercase tracking-tighter">STEP {step} PENDING</p>
-                          <p className={`text-[8px] font-black uppercase tracking-widest mt-0.5 ${getDelayInfo((item as any)[`planned_${step}`], null)?.color}`}>{getDelayInfo((item as any)[`planned_${step}`], null)?.text}</p>
-                        </div>
-                      )}
-                      <button onClick={() => setExpandedTiles(p => ({ ...p, [item.id]: !exp }))} className="p-1.5 text-slate-400 hover:text-slate-800 rounded-full transition-all"><ChevronDownIcon className={`w-4 h-4 stroke-[2.5] transition-transform ${exp ? "rotate-180" : ""}`} /></button>
-                      <button onClick={() => { setEditingItem(item); setFormData({...item}); setUploadFile(null); setIsModalOpen(true); }} className="p-1.5 text-blue-500 hover:bg-blue-50 rounded-full transition-all"><PencilSquareIcon className="w-4 h-4" /></button>
-                      <button onClick={() => { setPendingDeleteId(item.id); setIsConfirmOpen(true); }} className="p-1.5 text-red-500 hover:bg-red-50 rounded-full transition-all"><TrashIcon className="w-4 h-4" /></button>
-                    </div>
                   </div>
-                  
-                  {exp && (
-                    <div className="mt-4 pt-4 border-t border-slate-100 dark:border-navy-700 grid grid-cols-2 md:grid-cols-4 gap-4">
-                      {formFields.filter(f => f.type !== "textarea" && f.type !== "file").map(f => (
-                        <div key={f.name}>
-                          <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{f.label}</p>
-                          <p className="text-[12px] font-bold text-slate-800 dark:text-white truncate">{(item as any)[f.name] || "—"}</p>
-                        </div>
-                      ))}
-                      {(item as any).upload_updated_cv && (
-                        <div>
-                          <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Document</p>
-                          <a href={(item as any).upload_updated_cv} target="_blank" rel="noreferrer" className="text-[12px] font-bold text-blue-500 hover:underline">View CV</a>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              );
-            })
-          )}
+                );
+              })
+            ) : (
+              <div className="overflow-x-auto rounded-xl border border-slate-100 dark:border-navy-800 bg-white dark:bg-navy-800 shadow-sm custom-scrollbar">
+                <table className="w-full text-left border-collapse text-[11px]">
+                  <thead>
+                    <tr className="bg-[#003875] dark:bg-navy-950 text-white font-black uppercase tracking-widest">
+                      <th className="p-3 sticky left-0 z-10 bg-[#003875]"><input type="checkbox" checked={selectedIds.size === paginatedItems.length && paginatedItems.length > 0} onChange={() => { if (selectedIds.size === paginatedItems.length) setSelectedIds(new Set()); else setSelectedIds(new Set(paginatedItems.map(i => i.id))); }} className="rounded border-white/20 bg-transparent text-[#FFD500]" /></th>
+                      <th className="p-3 whitespace-nowrap sticky left-10 z-10 bg-[#003875]">ACTIONS</th>
+                      <th className="p-3 whitespace-nowrap sticky left-24 z-10 bg-[#003875]">ID</th>
+                      {formFields.map(f => <th key={f.name} className="p-3 whitespace-nowrap">{f.label}</th>)}
+                      <th className="p-3 whitespace-nowrap border-l border-white/10">CREATED AT</th>
+                      {Array.from({ length: stepCount }).map((_, i) => <th key={i} className="p-3 whitespace-nowrap border-l border-white/10 min-w-[200px]">STEP {i+1} — {globalConfigs[i]?.step_name?.toUpperCase() || ''}</th>)}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-navy-700">
+                    {paginatedItems.map(item => {
+                      const sel = selectedIds.has(item.id);
+                      return (
+                        <tr key={item.id} className="hover:bg-slate-50/50 dark:hover:bg-navy-900/30 transition-all font-bold">
+                          <td className="p-3 sticky left-0 z-10 bg-white dark:bg-navy-800"><input type="checkbox" checked={sel} onChange={() => { const n = new Set(selectedIds); if (n.has(item.id)) n.delete(item.id); else n.add(item.id); setSelectedIds(n); }} className="rounded border-slate-300 text-[#003875] dark:text-[#FFD500]" /></td>
+                          <td className="p-3 sticky left-10 z-10 bg-white dark:bg-navy-800">
+                            <div className="flex items-center gap-1">
+                              <button onClick={e => { e.stopPropagation(); setEditingItem(item); setFormData({ ...item }); setUploadFile(null); setIsModalOpen(true); }} className="p-1 text-blue-500 hover:bg-blue-50 rounded" title="Edit"><PencilSquareIcon className="w-3.5 h-3.5" /></button>
+                              {item.cancelled ? (
+                                <button onClick={() => setRestoreTargetId(item.id)} className="p-1 text-emerald-500 hover:bg-emerald-50 rounded" title="Restore"><ArrowPathIcon className="w-3.5 h-3.5" /></button>
+                              ) : (
+                                <>
+                                  <button onClick={() => setCancelTargetId(item.id)} className="p-1 text-orange-500 hover:bg-orange-50 rounded" title="Cancel"><NoSymbolIcon className="w-3.5 h-3.5" /></button>
+                                  {Array.from({length: stepCount}).some((_, i) => (item as any)[`actual_${i+1}`]?.trim()) && (
+                                    <button onClick={e => { e.stopPropagation(); openRemoveFollowUpModal(item); }} className="p-1 text-orange-500 hover:bg-orange-50 rounded" title="Remove Follow-up"><ArrowUturnLeftIcon className="w-3.5 h-3.5" /></button>
+                                  )}
+                                </>
+                              )}
+                              <button onClick={() => handleDeleteClick(item.id)} className="p-1 text-red-500 hover:bg-red-50 rounded" title="Delete"><TrashIcon className="w-3.5 h-3.5" /></button>
+                            </div>
+                          </td>
+                          <td className="p-3 sticky left-24 z-10 bg-white dark:bg-navy-800">
+                            <div className="flex flex-col">
+                              <span className="px-2 py-0.5 bg-blue-50 dark:bg-blue-900/20 text-[#003875] dark:text-blue-400 rounded border border-blue-100 dark:border-blue-900/50 whitespace-nowrap">{item.id.slice(0, 8).toUpperCase()}</span>
+                              {item.cancelled && <span className="text-[8px] text-red-500 font-black mt-0.5 uppercase" title={`${fmtDt(item.cancelled)} ${fmtTm(item.cancelled)}`}>CANCELLED</span>}
+                            </div>
+                          </td>
+                          {formFields.map(f => (
+                            <td key={f.name} className="p-3 max-w-[200px] truncate" title={(item as any)[f.name]}>
+                              {(item as any)[f.name] || "—"}
+                            </td>
+                          ))}
+                          <td className="p-3 border-l border-slate-100 dark:border-navy-700 whitespace-nowrap text-slate-500">{new Date(item.created_at).toLocaleDateString('en-GB')} {new Date(item.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</td>
+                          {Array.from({ length: stepCount }).map((_, i) => {
+                            const n = i + 1; const act = (item as any)[`actual_${n}`]; const pl = (item as any)[`planned_${n}`]; 
+                            const done = !!act; const isPending = !done && n === getActiveStep(item);
+                            return (
+                              <td key={i} className={`p-3 border-l ${done ? "bg-emerald-50/30 text-emerald-700" : isPending ? "bg-orange-50/30 text-orange-700" : "border-slate-100 dark:border-navy-700"}`}>
+                                <div className="space-y-0.5 w-32">
+                                  <div className="flex justify-between items-center text-[9px] font-black uppercase"><span className="opacity-50">Pl</span><span>{pl ? (new Date(pl).toLocaleDateString('en-GB') + ' ' + new Date(pl).toLocaleTimeString('en-US', {hour:'2-digit',minute:'2-digit'})) : "—"}</span></div>
+                                  <div className="flex justify-between items-center text-[9px] font-black uppercase"><span className="opacity-50">Ac</span><span className={done ? "text-emerald-600" : "opacity-30"}>{act ? (new Date(act).toLocaleDateString('en-GB') + ' ' + new Date(act).toLocaleTimeString('en-US', {hour:'2-digit',minute:'2-digit'})) : "—"}</span></div>
+                                </div>
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
-      {/* Modal Form */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-          <div className="bg-white dark:bg-navy-900 rounded-3xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden border border-slate-100 dark:border-navy-800">
-            <div className="flex items-center justify-between p-6 border-b border-slate-100 dark:border-navy-800 bg-slate-50 dark:bg-navy-800/50">
-              <h2 className="text-xl font-black text-[#003875] dark:text-white tracking-tight uppercase">{editingItem ? "Edit" : "New"} {moduleName}</h2>
-              <button onClick={() => setIsModalOpen(false)} className="p-2 text-slate-400 hover:bg-slate-200 dark:hover:bg-navy-700 rounded-full transition-all"><XMarkIcon className="w-5 h-5 stroke-[3]" /></button>
-            </div>
-            <form onSubmit={handleSave} className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {formFields.map(f => (
-                  <div key={f.name} className={f.type === "textarea" ? "col-span-1 md:col-span-2" : ""}>
-                    <label className="block text-[10px] font-black text-[#003875] dark:text-[#FFD500] uppercase tracking-widest mb-1.5">{f.label}</label>
-                    {f.type === "textarea" ? (
-                      <textarea value={formData[f.name] || ""} onChange={e => setFormData({...formData, [f.name]: e.target.value})} className="w-full px-4 py-3 bg-slate-50 dark:bg-navy-800 border border-slate-200 dark:border-navy-700 rounded-xl text-sm font-bold text-gray-800 dark:text-white outline-none focus:border-[#003875]" rows={3} />
-                    ) : f.type === "select" ? (
-                      <select value={formData[f.name] || ""} onChange={e => setFormData({...formData, [f.name]: e.target.value})} className="w-full px-4 py-3 bg-slate-50 dark:bg-navy-800 border border-slate-200 dark:border-navy-700 rounded-xl text-sm font-bold text-gray-800 dark:text-white outline-none focus:border-[#003875]">
-                        <option value="">Select...</option>
-                        {f.options?.map(o => <option key={o} value={o}>{o}</option>)}
-                      </select>
-                    ) : f.type === "file" ? (
-                      <input type="file" onChange={e => setUploadFile(e.target.files?.[0] || null)} className="w-full px-4 py-2.5 bg-slate-50 dark:bg-navy-800 border border-slate-200 dark:border-navy-700 rounded-xl text-sm font-bold text-gray-800 dark:text-white file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-[#003875] file:text-[#FFD500] hover:file:bg-[#002855]" />
-                    ) : (
-                      <input type={f.type} value={formData[f.name] || ""} onChange={e => setFormData({...formData, [f.name]: e.target.value})} className="w-full px-4 py-3 bg-slate-50 dark:bg-navy-800 border border-slate-200 dark:border-navy-700 rounded-xl text-sm font-bold text-gray-800 dark:text-white outline-none focus:border-[#003875]" />
-                    )}
-                  </div>
-                ))}
-              </div>
+      {/* Floating Bulk Bar */}
+      {selectedIds.size > 0 && (
+        <div className="fixed bottom-10 left-1/2 -translate-x-1/2 bg-[#FEFBF0] dark:bg-navy-800 px-1.5 py-1.5 rounded-full shadow-2xl flex items-center gap-4 border border-[#e6dcc5] dark:border-navy-700 z-[100] animate-in slide-in-from-bottom-12">
+          <div className="flex items-center gap-2.5 pl-3">
+            <div className="w-8 h-8 bg-[#FFD500] text-[#003875] rounded-full flex items-center justify-center font-black text-sm">{selectedIds.size}</div>
+            <p className="text-[10px] font-black uppercase tracking-widest text-[#003875] dark:text-[#FFD500]">SELECTED</p>
+          </div>
+          <button onClick={openBulkModal} className="flex items-center gap-2 bg-[#FFD500] text-[#003875] px-6 py-2.5 rounded-full font-black text-[10px] uppercase tracking-widest hover:scale-[1.03] transition-all shadow-md">
+            <SparklesIcon className="w-3.5 h-3.5" /> BULK PROCESS
+          </button>
+          <button onClick={() => setSelectedIds(new Set())} className="pr-5 text-slate-400 hover:text-[#003875] text-[9px] font-black uppercase transition-colors">CLEAR</button>
+        </div>
+      )}
 
-              {editingItem && (
-                <div className="mt-8 border-t border-slate-100 dark:border-navy-700 pt-6">
-                  <h3 className="text-sm font-black text-[#003875] dark:text-white uppercase tracking-widest mb-4">Step Management</h3>
-                  <div className="space-y-4">
-                    {Array.from({length: stepCount}).map((_, i) => {
-                      const st = i + 1;
-                      return (
-                        <div key={st} className="flex flex-col md:flex-row gap-4 p-4 border border-slate-100 dark:border-navy-700 rounded-xl bg-slate-50 dark:bg-navy-800">
-                          <div className="flex-1">
-                            <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">Step {st} — {globalConfigs[i]?.step_name}</p>
-                            <div className="grid grid-cols-2 gap-2">
-                              <div>
-                                <label className="text-[9px] text-slate-400 font-bold">Planned</label>
-                                <input type="datetime-local" value={formData[`planned_${st}`] ? new Date(new Date(formData[`planned_${st}`]).getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16) : ""} onChange={e => setFormData({...formData, [`planned_${st}`]: e.target.value ? new Date(e.target.value).toISOString() : ""})} className="w-full px-2 py-1 text-xs rounded border border-slate-200 dark:bg-navy-900" />
+      {/* Bulk Processor Modal */}
+      {isBulkModalOpen && (
+        <div className="fixed inset-0 z-[1200] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-[#001a33]/60 backdrop-blur-md" onClick={() => setIsBulkModalOpen(false)} />
+          <div className="relative bg-[#FEFBF0] dark:bg-navy-800 w-full max-w-4xl rounded-[3.5rem] shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="px-10 pt-6 pb-3 flex items-start justify-between border-b border-slate-100 dark:border-navy-700">
+              <div><h2 className="text-[26px] font-black italic uppercase tracking-tighter text-[#003875] dark:text-white leading-none">Bulk Processor</h2><p className="text-[10px] font-black uppercase mt-1 text-slate-400">Processing {Array.from(selectedIds).length} items</p></div>
+              <button onClick={() => setIsBulkModalOpen(false)} className="p-2 hover:bg-slate-100 rounded-full text-slate-400"><XMarkIcon className="w-6 h-6" /></button>
+            </div>
+            <div className="flex-1 overflow-y-auto px-10 pb-24 pt-4 space-y-3 custom-scrollbar">
+              {Array.from(selectedIds).map(id => {
+                const item = items.find(r => r.id === id); if (!item) return null;
+                const step = getActiveStep(item); const t = bulkToggles[id] ?? true;
+                const title = module === 'recruitment' ? (item as any).post_for_recruitment : (item as any).candidate_name;
+                return (
+                  <div key={id} className={`p-5 bg-white dark:bg-navy-900 rounded-3xl border transition-all ${t ? "border-[#003875]/20 dark:border-[#FFD500]/20 shadow-sm" : "opacity-40"}`}>
+                    <div className="grid grid-cols-[1.5fr_2fr_auto] items-center gap-8">
+                      <div><span className="px-2 py-0.5 bg-blue-50 dark:bg-blue-900/20 text-[#003875] dark:text-blue-400 rounded text-[9px] font-black uppercase">{item.id}</span><h3 className="text-[13px] font-black uppercase text-[#003875] dark:text-white mt-1 line-clamp-1">{title || "—"}</h3></div>
+                      <div>
+                        {t && (
+                          <div className="space-y-1">
+                            {step > 0 ? (
+                              <div className="space-y-3">
+                                <p className="text-[10px] font-black text-emerald-600 bg-emerald-50 px-2 py-1 rounded w-max uppercase truncate max-w-full" title={`Marking Step ${step} Done — ${globalConfigs[step - 1]?.step_name}`}>
+                                  Marking Step {step} Done — {globalConfigs[step - 1]?.step_name}
+                                </p>
+                                
+                                {module === 'recruitment' && step === 1 && (
+                                  <div className="bg-slate-50 dark:bg-navy-900 p-3 rounded-xl border border-slate-100 dark:border-navy-800 space-y-2">
+                                    <p className="text-[9px] font-black uppercase text-slate-400">Social Media Platforms Posted</p>
+                                    <div className="flex flex-wrap gap-2">
+                                      {["LinkedIn", "Facebook", "Instagram", "Naukri", "Indeed", "Twitter"].map(platform => {
+                                        const isSelected = (bulkSocialMedia[id] || []).includes(platform);
+                                        return (
+                                          <label key={platform} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border cursor-pointer transition-all ${isSelected ? "bg-[#003875] text-[#FFD500] border-[#003875] shadow-sm" : "bg-white text-slate-500 border-slate-200 hover:bg-slate-50"}`}>
+                                            <input type="checkbox" className="hidden" checked={isSelected} onChange={(e) => {
+                                              setBulkSocialMedia(prev => {
+                                                const current = prev[id] || [];
+                                                if (e.target.checked) return { ...prev, [id]: [...current, platform] };
+                                                return { ...prev, [id]: current.filter(p => p !== platform) };
+                                              });
+                                            }} />
+                                            <span className="text-[9px] font-black uppercase tracking-widest">{platform}</span>
+                                          </label>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+                                )}
+
+                                <input type="text" placeholder="Add remark (optional)" value={bulkRemarkInputs[id] || ""} onChange={e => setBulkRemarkInputs({...bulkRemarkInputs, [id]: e.target.value})} className="w-full px-4 py-2 bg-slate-50 dark:bg-navy-900 border border-slate-100 dark:border-navy-800 rounded-xl font-bold text-xs outline-none focus:border-[#003875]" />
                               </div>
-                              <div>
-                                <label className="text-[9px] text-slate-400 font-bold">Actual</label>
-                                <input type="datetime-local" value={formData[`actual_${st}`] ? new Date(new Date(formData[`actual_${st}`]).getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16) : ""} onChange={e => setFormData({...formData, [`actual_${st}`]: e.target.value ? new Date(e.target.value).toISOString() : ""})} className="w-full px-2 py-1 text-xs rounded border border-slate-200 dark:bg-navy-900" />
-                              </div>
-                            </div>
+                            ) : (
+                              <p className="text-[10px] font-black text-slate-300 uppercase italic">Completed</p>
+                            )}
                           </div>
-                          <div className="flex-1 flex gap-2 items-end">
-                            {st > 1 || module !== 'recruitment' ? (
-                              <div className="flex-1">
-                                <label className="text-[9px] text-slate-400 font-bold">Status</label>
-                                <select value={formData[`status_${st}`] || ""} onChange={e => setFormData({...formData, [`status_${st}`]: e.target.value})} className="w-full px-2 py-1.5 text-xs rounded border border-slate-200 dark:bg-navy-900">
-                                  <option value="">Pending</option><option value="Done">Done</option><option value="Hold">Hold</option>
-                                </select>
-                              </div>
-                            ) : null}
-                            <div className="flex-[2]">
-                              <label className="text-[9px] text-slate-400 font-bold">Remark</label>
-                              <input type="text" value={formData[`remark_${st}`] || ""} onChange={e => setFormData({...formData, [`remark_${st}`]: e.target.value})} className="w-full px-2 py-1.5 text-xs rounded border border-slate-200 dark:bg-navy-900" placeholder="Step remark..." />
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
+                        )}
+                      </div>
+                      <button onClick={() => setBulkToggles(p => ({...p, [id]: !t}))} className={`w-10 h-5 rounded-full relative p-0.5 transition-all ${t ? "bg-[#003875] dark:bg-[#FFD500]" : "bg-slate-200"}`}><div className={`w-4 h-4 bg-white rounded-full transition-all ${t ? "translate-x-5" : "translate-x-0"}`} /></button>
+                    </div>
                   </div>
-                </div>
-              )}
-            </form>
-            <div className="p-6 border-t border-slate-100 dark:border-navy-800 bg-slate-50 dark:bg-navy-800/50 flex justify-end gap-3">
-              <button type="button" onClick={() => setIsModalOpen(false)} className="px-6 py-3 rounded-full text-sm font-black text-slate-500 hover:bg-slate-200 transition-all uppercase tracking-widest">Cancel</button>
-              <button type="submit" onClick={handleSave} className="px-8 py-3 rounded-full bg-[#003875] hover:bg-[#002855] text-[#FFD500] text-sm font-black transition-all shadow-xl uppercase tracking-widest">Save Record</button>
+                );
+              })}
+            </div>
+            <div className="absolute bottom-0 left-0 right-0 py-3.5 px-10 bg-[#FEFBF0] dark:bg-navy-800 border-t border-slate-100 dark:border-navy-700 flex items-center justify-between">
+              <button onClick={() => setIsBulkModalOpen(false)} className="px-6 py-3 text-[11px] font-black uppercase text-slate-400">Cancel</button>
+              <button onClick={handleBulkStepSave} className="bg-[#003875] dark:bg-[#FFD500] text-[#FFD500] dark:text-navy-950 px-10 py-3.5 rounded-2xl font-black text-xs uppercase shadow-lg hover:scale-[1.02] transition-all">Execute Bulk Update</button>
             </div>
           </div>
         </div>
       )}
 
+      {/* Edit/Create Modal */}
+      {isModalOpen && (
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setIsModalOpen(false)} />
+          <div className="relative bg-[#FFFBF0] dark:bg-navy-900 w-full max-w-4xl rounded-3xl shadow-2xl flex flex-col max-h-[90vh] animate-in fade-in zoom-in-95 duration-300 border border-orange-100/50 dark:border-navy-700 overflow-hidden">
+            {/* Header */}
+            <div className="p-5 border-b border-orange-100/50 dark:border-navy-800 flex justify-between items-center bg-[#003875] dark:bg-navy-900 text-white">
+              <div>
+                <h2 className="text-lg font-black tracking-tight flex items-center gap-2 uppercase">
+                  <UserIcon className="w-5 h-5 text-[#FFD500]" /> {editingItem ? "Edit" : "New"} {moduleName}
+                </h2>
+                <div className="flex items-center gap-2 mt-0.5">
+                  <p className="text-[#FFD500] dark:text-slate-400 font-bold text-[8px] uppercase tracking-widest">HRMS Configuration</p>
+                  {editingItem && (
+                    <span className="px-2 py-0.5 bg-white/10 text-[8px] font-black text-[#FFD500] rounded border border-white/20">
+                      ID: {editingItem.id}
+                    </span>
+                  )}
+                </div>
+              </div>
+              <button onClick={() => setIsModalOpen(false)} className="p-1.5 hover:bg-white/10 rounded-lg transition-colors">
+                <XMarkIcon className="w-6 h-6" />
+              </button>
+            </div>
+            <form onSubmit={handleSave} className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar bg-white dark:bg-navy-800/50">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {formFields.map(f => (
+                  <div key={f.name} className={f.type === "textarea" && f.name !== "skills_required" && f.name !== "work_and_responsibilities" ? "col-span-1 md:col-span-2" : ""}>
+                    <label className="flex items-center gap-1.5 text-[10px] font-black text-[#003875] dark:text-[#FFD500] uppercase tracking-widest mb-1.5 px-1">
+                      <QuestionMarkCircleIcon className="w-3.5 h-3.5 text-[#003875]/40 dark:text-orange-100/30" />
+                      {f.label}
+                    </label>
+                    {f.name === "male_female" || f.name === "urgency" || f.name === "gtk_office_comfortable" ? (
+                      <div className="flex bg-[#FFFBF0] dark:bg-navy-900 rounded-xl border border-orange-100 dark:border-navy-700 p-1 shadow-sm">
+                        {f.options?.map(opt => (
+                          <button type="button" key={opt} onClick={() => setFormData({ ...formData, [f.name]: opt })} className={`flex-1 text-[11px] font-black py-2 rounded-lg transition-all ${formData[f.name] === opt ? "bg-[#003875] text-[#FFD500] shadow-md" : "text-gray-500 hover:bg-white dark:hover:bg-navy-800"}`}>{opt}</button>
+                        ))}
+                      </div>
+                    ) : f.name === "requirement_by" ? (
+                      <UserSingleCombobox value={formData[f.name] || ""} onChange={val => setFormData({ ...formData, [f.name]: val })} users={usersList.map(u => u.username || u.name).filter(Boolean)} placeholder="Select User..." />
+                    ) : f.type === "textarea" ? (
+                      <textarea value={formData[f.name] || ""} onChange={e => setFormData({ ...formData, [f.name]: e.target.value })} className="w-full bg-[#FFFBF0] dark:bg-navy-900 px-3 py-2.5 rounded-xl border border-orange-100 dark:border-navy-700 focus:border-[#FFD500] focus:bg-white dark:focus:bg-navy-900 outline-none font-bold text-xs text-gray-800 dark:text-zinc-100 transition-all shadow-sm resize-none min-h-[80px]" rows={3} />
+                    ) : f.type === "select" ? (
+                      <select value={formData[f.name] || ""} onChange={e => setFormData({ ...formData, [f.name]: e.target.value })} className="w-full bg-[#FFFBF0] dark:bg-navy-900 px-3 py-2.5 rounded-xl border border-orange-100 dark:border-navy-700 focus:border-[#FFD500] focus:bg-white dark:focus:bg-navy-900 outline-none font-black text-xs text-gray-900 dark:text-white transition-all shadow-sm">
+                        <option value="">Select...</option>
+                        {f.options?.map(o => <option key={o} value={o}>{o}</option>)}
+                      </select>
+                    ) : f.type === "file" ? (
+                      <input type="file" onChange={e => setUploadFile(e.target.files?.[0] || null)} className="w-full px-4 py-2.5 bg-[#FFFBF0] dark:bg-navy-900 border border-orange-100 dark:border-navy-700 rounded-xl text-xs font-bold text-gray-800 dark:text-white file:mr-4 file:py-1 file:px-3 file:rounded-full file:border-0 file:text-[10px] file:font-black file:bg-[#003875] file:text-[#FFD500] hover:file:bg-[#002855] transition-all shadow-sm" />
+                    ) : (
+                      <input type={f.type} value={formData[f.name] || ""} onChange={e => setFormData({ ...formData, [f.name]: e.target.value })} className="w-full bg-[#FFFBF0] dark:bg-navy-900 px-3 py-2.5 rounded-xl border border-orange-100 dark:border-navy-700 focus:border-[#FFD500] focus:bg-white dark:focus:bg-navy-900 outline-none font-black text-xs text-gray-900 dark:text-white transition-all shadow-sm" />
+                    )}
+                  </div>
+                ))}
+              </div>
+
+
+            </form>
+            <div className="p-6 border-t border-orange-100 dark:border-navy-800 bg-[#FFFBF0] dark:bg-navy-900 flex justify-end gap-3 z-10">
+              <button type="button" onClick={() => setIsModalOpen(false)} className="px-6 py-2.5 rounded-full text-[11px] font-black text-gray-500 hover:bg-gray-200 dark:hover:bg-navy-700 transition-all uppercase tracking-widest">Cancel</button>
+              <button type="submit" onClick={handleSave} className="px-8 py-2.5 rounded-full bg-[#003875] hover:bg-[#002855] text-[#FFD500] text-[11px] font-black transition-all shadow-md uppercase tracking-widest hover:shadow-lg hover:-translate-y-0.5 active:translate-y-0">Save Record</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Config Modal */}
+      {isConfigModalOpen && (
+        <div className="fixed inset-0 z-[1200] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-[#001a33]/60 backdrop-blur-md" onClick={() => setIsConfigModalOpen(false)} />
+          <div className="relative bg-[#FEFBF0] dark:bg-navy-800 w-full max-w-4xl rounded-[3.5rem] shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="px-10 pt-6 pb-3 flex items-start justify-between border-b border-slate-100 dark:border-navy-700">
+              <div><h2 className="text-[26px] font-black italic uppercase tracking-tighter text-[#003875] dark:text-white leading-none">Configuration Setup</h2><p className="text-[10px] font-black uppercase mt-1 text-[#FFD500] tracking-widest">Edit TAT and Responsible Persons</p></div>
+              <button onClick={() => setIsConfigModalOpen(false)} className="p-2 hover:bg-slate-100 rounded-full text-slate-400"><XMarkIcon className="w-6 h-6" /></button>
+            </div>
+            <div className="flex-1 overflow-y-auto px-10 pb-24 space-y-3 custom-scrollbar mt-4">
+              {configFormData.map((cfg, i) => (
+                <div key={i} className="p-5 bg-white dark:bg-navy-900 rounded-3xl border border-slate-100 dark:border-navy-700 shadow-sm transition-all group">
+                  <div className="grid grid-cols-[1fr_200px_350px] items-center gap-8">
+                    <div className="space-y-0.5"><p className="text-[9px] font-black uppercase text-slate-400 tracking-widest">Step {i + 1}</p><h3 className="text-[13px] font-black uppercase text-[#003875] dark:text-white leading-tight">{cfg.step_name}</h3></div>
+                    <div className="flex flex-col gap-1.5">
+                      <div className="flex items-center gap-1.5 text-slate-400 dark:text-navy-600">
+                        <ClockIcon className="w-3 h-3" />
+                        <p className="text-[9px] font-black uppercase tracking-widest">TAT</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="bg-slate-100 dark:bg-navy-900 p-0.5 rounded-full flex items-center border border-slate-200 dark:border-navy-800">
+                          <button
+                            onClick={() => { const n = [...configFormData]; n[i].tat = n[i].tat.replace("Days", "Hrs"); setConfigFormData(n); }}
+                            className={`px-3 py-1 rounded-full text-[8px] font-black uppercase transition-all ${cfg.tat.includes("Hrs") ? "bg-[#FFD500] text-[#003875] shadow-md" : "text-slate-400 dark:text-navy-600"}`}
+                          >HRS</button>
+                          <button
+                            onClick={() => { const n = [...configFormData]; n[i].tat = n[i].tat.replace("Hrs", "Days"); setConfigFormData(n); }}
+                            className={`px-3 py-1 rounded-full text-[8px] font-black uppercase transition-all ${cfg.tat.includes("Days") ? "bg-[#FFD500] text-[#003875] shadow-md" : "text-slate-400"}`}
+                          >DAYS</button>
+                        </div>
+                        <input
+                          type="text"
+                          value={parseFloat(cfg.tat) || 0}
+                          onChange={e => {
+                            const n = [...configFormData];
+                            const unit = cfg.tat.includes("Days") ? "Days" : "Hrs";
+                            n[i].tat = `${e.target.value} ${unit}`;
+                            setConfigFormData(n);
+                          }}
+                          className="w-12 h-8 bg-slate-50 dark:bg-navy-800 border-none rounded-lg text-center font-black text-xs text-[#003875] dark:text-[#FFD500] outline-none"
+                        />
+                      </div>
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <div className="flex items-center gap-1.5 text-slate-400 dark:text-navy-600">
+                        <UserIcon className="w-3 h-3" />
+                        <p className="text-[9px] font-black uppercase tracking-widest">Responsible Person</p>
+                      </div>
+                      <UserMultiCombobox value={cfg.responsible_person} isSimple onChange={val => { const n = [...configFormData]; n[i].responsible_person = val; setConfigFormData(n); }} users={usersList.map(u => u.username || u.name).filter(Boolean)} />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="absolute bottom-0 left-0 right-0 py-3.5 px-10 bg-[#FEFBF0] dark:bg-navy-800 border-t border-slate-100 dark:border-navy-700 flex items-center justify-between">
+              <button onClick={() => setIsConfigModalOpen(false)} className="px-6 py-3 text-[11px] font-black uppercase text-slate-400">Cancel</button>
+              <button onClick={handleSaveConfig} className="bg-[#003875] dark:bg-[#FFD500] text-[#FFD500] dark:text-navy-950 px-10 py-3.5 rounded-2xl font-black text-xs uppercase shadow-lg">Save Setup</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Remove Follow Up Modal */}
+      {isRemoveFollowUpModalOpen && (
+        <div className="fixed inset-0 z-[1300] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-[#001a33]/60 backdrop-blur-md" onClick={() => setIsRemoveFollowUpModalOpen(false)} />
+          <div className="relative bg-white dark:bg-navy-800 w-full max-w-md rounded-3xl shadow-2xl overflow-hidden flex flex-col p-8 animate-in zoom-in-95 duration-300">
+            <div className="flex items-start justify-between mb-6">
+              <div>
+                <h2 className="text-xl font-black text-[#003875] dark:text-white uppercase leading-none">Remove Follow Up</h2>
+                <p className="text-[10px] font-black text-purple-600 dark:text-purple-400 mt-2 uppercase">ID: {targetItemForRemoveFollowUp?.id}</p>
+              </div>
+              <button onClick={() => setIsRemoveFollowUpModalOpen(false)} className="text-slate-300 dark:text-navy-700 hover:text-slate-900 dark:hover:text-white transition-colors"><XMarkIcon className="w-6 h-6" /></button>
+            </div>
+
+            <div className="space-y-6">
+              <div>
+                <label className="text-[11px] font-black text-slate-800 dark:text-white/80 uppercase block mb-3">Select Step to Reset</label>
+                <div className="grid grid-cols-5 gap-2">
+                  {Array.from({ length: stepCount }, (_, i) => i + 1).map(s => (
+                    <button
+                      key={s}
+                      onClick={() => setRemoveFollowUpStep(s)}
+                      className={`py-2 rounded-xl text-[10px] font-black transition-all border-2 ${
+                        removeFollowUpStep === s 
+                          ? "bg-purple-500 border-purple-500 text-white shadow-lg scale-110 z-10" 
+                          : "bg-slate-50 dark:bg-navy-900 border-slate-100 dark:border-navy-700 text-slate-400 dark:text-navy-600 hover:border-purple-200 dark:hover:border-purple-900"
+                      }`}
+                    >
+                      ST {s}
+                    </button>
+                  ))}
+                </div>
+                <p className="mt-2 text-[10px] font-bold text-slate-400 dark:text-navy-600 italic line-clamp-1">
+                  {globalConfigs[removeFollowUpStep-1]?.step_name}
+                </p>
+              </div>
+
+              <div className="space-y-3">
+                <label className="text-[11px] font-black text-slate-800 dark:text-white/80 uppercase block">Removal Logic</label>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setRemoveFollowUpType('particular')}
+                    className={`flex-1 py-4 px-4 rounded-2xl border-2 text-left transition-all ${
+                      removeFollowUpType === 'particular'
+                        ? "border-purple-500 bg-purple-50 dark:bg-purple-900/10"
+                        : "border-slate-100 dark:border-navy-700 bg-white dark:bg-navy-900"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 mb-1">
+                      <div className={`w-3 h-3 rounded-full border-2 ${removeFollowUpType === 'particular' ? "border-purple-500 bg-purple-500" : "border-slate-300 dark:border-navy-700"}`} />
+                      <span className={`text-[11px] font-black uppercase ${removeFollowUpType === 'particular' ? "text-purple-600 dark:text-purple-400" : "text-slate-500 dark:text-navy-400"}`}>Particular Step</span>
+                    </div>
+                    <p className="text-[9px] font-bold text-slate-400 dark:text-navy-600 leading-tight">Only reset the selected step. Keeps planned time.</p>
+                  </button>
+                  <button
+                    onClick={() => setRemoveFollowUpType('onwards')}
+                    className={`flex-1 py-4 px-4 rounded-2xl border-2 text-left transition-all ${
+                      removeFollowUpType === 'onwards'
+                        ? "border-purple-500 bg-purple-50 dark:bg-purple-900/10"
+                        : "border-slate-100 dark:border-navy-700 bg-white dark:bg-navy-900"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 mb-1">
+                      <div className={`w-3 h-3 rounded-full border-2 ${removeFollowUpType === 'onwards' ? "border-purple-500 bg-purple-500" : "border-slate-300 dark:border-navy-700"}`} />
+                      <span className={`text-[11px] font-black uppercase ${removeFollowUpType === 'onwards' ? "text-purple-600 dark:text-purple-400" : "text-slate-500 dark:text-navy-400"}`}>Step Onwards</span>
+                    </div>
+                    <p className="text-[9px] font-bold text-slate-400 dark:text-navy-600 leading-tight">Reset selected step & remove all future steps.</p>
+                  </button>
+                </div>
+              </div>
+
+              <div className="p-4 bg-orange-50 dark:bg-orange-900/10 rounded-2xl border border-orange-100 dark:border-orange-900/20 flex gap-3">
+                <ExclamationCircleIcon className="w-5 h-5 text-orange-500 shrink-0" />
+                <p className="text-[10px] font-bold text-orange-700 dark:text-orange-400 leading-relaxed">
+                  This action will clear "Actual" dates and statuses for selected steps. Planned time for Step {removeFollowUpStep} will be preserved.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex gap-4 mt-8">
+              <button onClick={() => setIsRemoveFollowUpModalOpen(false)} className="flex-1 py-3.5 bg-white dark:bg-navy-800 border border-slate-200 dark:border-navy-700 text-slate-500 dark:text-navy-400 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-slate-50 dark:hover:bg-navy-700 transition-all">Cancel</button>
+              <button onClick={handleRemoveFollowUp} className="flex-1 py-3.5 bg-purple-600 dark:bg-purple-500 text-white rounded-xl font-black text-xs uppercase tracking-widest hover:bg-purple-700 dark:hover:bg-purple-400 transition-all shadow-lg active:scale-95">Reset Step</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirm Modals */}
+      <ConfirmModal isOpen={isConfirmOpen} title={restoreTargetId ? "Restore Record?" : cancelTargetId ? "Cancel Record?" : "Delete Record?"} message={restoreTargetId ? "This will move the record back to active state." : cancelTargetId ? "This will cancel the record. Do you want to proceed?" : "This action cannot be undone. Do you want to proceed?"} onConfirm={restoreTargetId ? handleRestoreConfirm : cancelTargetId ? handleCancelConfirm : handleDelete} onClose={() => { setIsConfirmOpen(false); setCancelTargetId(null); setRestoreTargetId(null); setPendingDeleteId(null); }} confirmLabel={restoreTargetId ? "Restore" : cancelTargetId ? "Cancel Record" : "Delete"} cancelLabel="Cancel" type={restoreTargetId ? "info" : "danger"} />
+      
       <ActionStatusModal isOpen={isStatusModalOpen} status={actionStatus} message={actionMessage} />
-      <ConfirmModal isOpen={isConfirmOpen} title="Delete Record?" message="This action cannot be undone. Do you want to proceed?" onConfirm={handleDelete} onClose={() => setIsConfirmOpen(false)} confirmLabel="Delete" cancelLabel="Cancel" type="danger" />
     </div>
   );
 }

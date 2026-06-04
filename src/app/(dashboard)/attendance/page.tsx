@@ -152,6 +152,13 @@ export default function AttendancePage() {
     useEffect(() => {
         const init = async () => {
             try {
+                // Read tab query param
+                const searchParams = new URLSearchParams(window.location.search);
+                const tabParam = searchParams.get('tab');
+                if (tabParam === 'LEAVE' || tabParam === 'ATTENDANCE_MASTER' || tabParam === 'REPORT') {
+                    setActiveTab(tabParam);
+                }
+
                 const authRes = await fetch('/api/auth/session');
                 const session = await authRes.json();
                 
