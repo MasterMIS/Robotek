@@ -3,7 +3,7 @@ import { HrmsModuleType } from "@/types/hrms";
 export interface FormField {
   name: string;
   label: string;
-  type: "text" | "number" | "date" | "select" | "file" | "textarea";
+  type: "text" | "number" | "date" | "select" | "file" | "textarea" | "radio";
   options?: string[]; // for select
 }
 
@@ -25,7 +25,7 @@ export const RECRUITMENT_FIELDS: FormField[] = [
 export const CANDIDATE_BASE_FIELDS: FormField[] = [
   { name: "candidate_name", label: "Candidate Name", type: "text" },
   { name: "date_of_birth", label: "Date Of Birth", type: "date" },
-  { name: "applied_for", label: "Applied For", type: "text" },
+  { name: "applied_for", label: "Applied For", type: "select", options: ["Accountant", "Admin", "Driver", "E-Commerce", "Executive Assistant", "Graphic Designer", "Guard", "HR", "Lead Generator", "MIS", "Office Admin", "Office Boy", "Process Coordinator", "Purchase Manager", "Sales & Marketing Executive", "UVX Designer", "Other"] },
   { name: "total_experience", label: "Total Experience", type: "text" },
   { name: "current_ctc", label: "Current CTC", type: "text" },
   { name: "expected_ctc", label: "Expected CTC", type: "text" },
@@ -36,7 +36,7 @@ export const CANDIDATE_BASE_FIELDS: FormField[] = [
   { name: "upload_updated_cv", label: "Upload Updated CV", type: "file" },
   { name: "whatsapp_number", label: "WhatsApp Number", type: "text" },
   { name: "gtk_office_comfortable", label: "GTK Office Comfortable", type: "select", options: ["Yes", "No"] },
-  { name: "slot_booking", label: "Slot Booking", type: "text" },
+  { name: "slot_booking", label: "Slot Booking", type: "radio", options: ["Monday (11 AM to 2 PM)", "Tuesday (11 AM to 2 PM)", "Wednesday (11 AM to 2 PM)", "Thursday (11 AM to 2 PM)", "Friday (11 AM to 2 PM)", "Saturday (11 AM to 2 PM)"] },
   { name: "remark", label: "Remark", type: "textarea" },
 ];
 

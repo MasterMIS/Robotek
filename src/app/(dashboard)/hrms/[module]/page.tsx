@@ -316,7 +316,7 @@ export default function HRMSModulePage({ params }: { params: Promise<{ module: s
 
   const calculatePlannedDate = (base: Date | string, tat: string): string => {
     let date = new Date(base); if (isNaN(date.getTime())) return "";
-    const val = parseFloat(tat); 
+    const val = parseFloat(tat);
     const isDay = tat.toLowerCase().includes("day");
 
     if (isDay) {
@@ -360,7 +360,7 @@ export default function HRMSModulePage({ params }: { params: Promise<{ module: s
       if (selectedStepFilter === "completed") list = list.filter(it => getActiveStep(it) === 0);
       else list = list.filter(it => getActiveStep(it) === selectedStepFilter);
     }
-    
+
     // RBAC Filter: Non-admins only see records where they are responsible for the active pending step
     if (!isAdmin && currentUser) {
       list = list.filter(it => {
@@ -371,7 +371,7 @@ export default function HRMSModulePage({ params }: { params: Promise<{ module: s
         return config.responsible_person.toLowerCase().includes(currentUser.toLowerCase());
       });
     }
-    
+
     return list;
   }, [items, searchTerm, viewMode, selectedStepFilter, module, isAdmin, currentUser, globalConfigs]);
 
@@ -465,7 +465,7 @@ export default function HRMSModulePage({ params }: { params: Promise<{ module: s
     } catch { setActionStatus("error"); }
     setTimeout(() => { setIsStatusModalOpen(false); mutateItems(); }, 1500);
   };
-  
+
   const openRemoveFollowUpModal = (item: AnyHrmsRecord) => {
     setTargetItemForRemoveFollowUp(item);
     setRemoveFollowUpStep(getActiveStep(item) || stepCount);
@@ -476,7 +476,7 @@ export default function HRMSModulePage({ params }: { params: Promise<{ module: s
   const handleRemoveFollowUp = async () => {
     if (!targetItemForRemoveFollowUp) return;
     setActionStatus("loading"); setActionMessage("Removing Follow Up..."); setIsStatusModalOpen(true);
-    
+
     const upd = { ...targetItemForRemoveFollowUp } as any;
     const startStep = removeFollowUpStep;
 
@@ -494,7 +494,7 @@ export default function HRMSModulePage({ params }: { params: Promise<{ module: s
         if (module === 'recruitment' && s === 1) upd.social_medias_1 = "";
       }
     }
-    
+
     try {
       const res = await fetch(`/api/hrms/${module}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(upd) });
       if (res.ok) setActionStatus("success"); else setActionStatus("error");
@@ -518,9 +518,9 @@ export default function HRMSModulePage({ params }: { params: Promise<{ module: s
   };
 
   const handleExport = () => {
-    const stepCols = Array.from({ length: stepCount }).flatMap((_, i) => [`ST${i+1} Planned`, `ST${i+1} Actual`, `ST${i+1} Status`, `ST${i+1} Remark`]);
+    const stepCols = Array.from({ length: stepCount }).flatMap((_, i) => [`ST${i + 1} Planned`, `ST${i + 1} Actual`, `ST${i + 1} Status`, `ST${i + 1} Remark`]);
     const headers = ["ID", ...formFields.map(f => f.label), "Created At", "Cancelled", ...stepCols];
-    
+
     const fmtCsvDt = (iso: any) => {
       if (!iso) return "";
       const d = new Date(iso);
@@ -571,24 +571,24 @@ export default function HRMSModulePage({ params }: { params: Promise<{ module: s
     if (!toProc.length) return;
     setActionStatus("loading"); setActionMessage("Processing updates..."); setIsStatusModalOpen(true); setIsBulkModalOpen(false);
     const currentNow = new Date().toISOString(); let errors = 0;
-    
+
     for (const id of toProc) {
       const it = items.find(r => r.id === id); if (!it) continue;
       const n = getActiveStep(it); if (n <= 0) continue;
-      
-      const upd = { ...it } as any; 
-      upd[`actual_${n}`] = currentNow; 
+
+      const upd = { ...it } as any;
+      upd[`actual_${n}`] = currentNow;
       upd[`status_${n}`] = "Done";
       if (bulkRemarkInputs[id]) {
         upd[`remark_${n}`] = bulkRemarkInputs[id];
       }
-      
+
       if (module === 'recruitment' && n === 1) {
         upd.social_medias_1 = JSON.stringify(bulkSocialMedia[id] || []);
       }
 
       if (n < stepCount) {
-        upd[`planned_${n+1}`] = calculatePlannedDate(currentNow, globalConfigs[n]?.tat || "24 Hrs");
+        upd[`planned_${n + 1}`] = calculatePlannedDate(currentNow, globalConfigs[n]?.tat || "24 Hrs");
       }
 
       try { await fetch(`/api/hrms/${module}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(upd) }); } catch { errors++; }
@@ -631,7 +631,7 @@ export default function HRMSModulePage({ params }: { params: Promise<{ module: s
             <PlusIcon className="w-4 h-4 stroke-[2.5]" />
           </button>
           <div className="w-[1px] h-5 bg-slate-200 dark:bg-navy-700 mx-1" />
-          <button onClick={() => setViewMode(viewMode==='cancelled'?'active':'cancelled')} className={`flex items-center gap-2 px-4 py-1 font-black uppercase tracking-widest text-[10px] transition-all rounded-full ${viewMode==='cancelled'?'bg-red-500 text-white shadow-md':'text-[#003875] dark:text-[#FFD500] hover:bg-slate-50 dark:hover:bg-navy-800'}`}>
+          <button onClick={() => setViewMode(viewMode === 'cancelled' ? 'active' : 'cancelled')} className={`flex items-center gap-2 px-4 py-1 font-black uppercase tracking-widest text-[10px] transition-all rounded-full ${viewMode === 'cancelled' ? 'bg-red-500 text-white shadow-md' : 'text-[#003875] dark:text-[#FFD500] hover:bg-slate-50 dark:hover:bg-navy-800'}`}>
             <NoSymbolIcon className="w-3.5 h-3.5" /> <span>CANCELLED ({items.filter(i => !!(i.cancelled || "").trim()).length})</span>
           </button>
         </div>
@@ -664,14 +664,14 @@ export default function HRMSModulePage({ params }: { params: Promise<{ module: s
                 if (n.includes("done") || n.includes("confirm") || n.includes("join")) return <CheckCircleIcon className="w-4 h-4" />;
                 return <ClipboardDocumentCheckIcon className="w-4 h-4" />;
               };
-              
+
               return (
-                <button key={i} onClick={() => setSelectedStepFilter(i+1)} className={`w-full flex items-center justify-start gap-3 px-3 py-3 rounded-xl transition-all border border-slate-50 dark:border-navy-800 bg-white dark:bg-navy-900 ${selectedStepFilter === i+1 ? "bg-[#e6dcc5] dark:bg-[#cbbca0]/20 border-[#cbbca0] shadow-md" : "text-slate-500 dark:text-navy-400"}`}>
-                  <div className={`p-2 rounded-lg shrink-0 ${selectedStepFilter === i+1 ? 'bg-[#003875] text-[#FFD500]' : 'bg-slate-50 dark:bg-navy-800 text-slate-400'}`}>
+                <button key={i} onClick={() => setSelectedStepFilter(i + 1)} className={`w-full flex items-center justify-start gap-3 px-3 py-3 rounded-xl transition-all border border-slate-50 dark:border-navy-800 bg-white dark:bg-navy-900 ${selectedStepFilter === i + 1 ? "bg-[#e6dcc5] dark:bg-[#cbbca0]/20 border-[#cbbca0] shadow-md" : "text-slate-500 dark:text-navy-400"}`}>
+                  <div className={`p-2 rounded-lg shrink-0 ${selectedStepFilter === i + 1 ? 'bg-[#003875] text-[#FFD500]' : 'bg-slate-50 dark:bg-navy-800 text-slate-400'}`}>
                     {getStepIcon(globalConfigs[i]?.step_name)}
                   </div>
-                  <span className="text-[11px] font-black uppercase tracking-tight text-left leading-tight">Step {i+1} — {globalConfigs[i]?.step_name}</span>
-                  {stepCounts[i+1] > 0 && <span className="w-5 h-5 ml-auto shrink-0 flex items-center justify-center rounded-full text-[11px] font-black bg-blue-500 text-white">{stepCounts[i+1]}</span>}
+                  <span className="text-[11px] font-black uppercase tracking-tight text-left leading-tight">Step {i + 1} — {globalConfigs[i]?.step_name}</span>
+                  {stepCounts[i + 1] > 0 && <span className="w-5 h-5 ml-auto shrink-0 flex items-center justify-center rounded-full text-[11px] font-black bg-blue-500 text-white">{stepCounts[i + 1]}</span>}
                 </button>
               );
             })}
@@ -687,10 +687,10 @@ export default function HRMSModulePage({ params }: { params: Promise<{ module: s
             </div>
 
             <div className="ml-auto flex items-center gap-3">
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">PAGE <span className="text-[#003875] dark:text-[#FFD500]">{currentPage}</span> OF {totalPages||1}</p>
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">PAGE <span className="text-[#003875] dark:text-[#FFD500]">{currentPage}</span> OF {totalPages || 1}</p>
               <div className="flex items-center gap-1">
-                <button onClick={() => setCurrentPage(Math.max(1, currentPage-1))} className="p-1 text-slate-300 hover:text-slate-800 transition-colors"><ChevronLeftIcon className="w-3.5 h-3.5" /></button>
-                <button onClick={() => setCurrentPage(Math.min(totalPages, currentPage+1))} className="p-1 text-slate-300 hover:text-slate-800 transition-colors"><ChevronRightIcon className="w-3.5 h-3.5" /></button>
+                <button onClick={() => setCurrentPage(Math.max(1, currentPage - 1))} className="p-1 text-slate-300 hover:text-slate-800 transition-colors"><ChevronLeftIcon className="w-3.5 h-3.5" /></button>
+                <button onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))} className="p-1 text-slate-300 hover:text-slate-800 transition-colors"><ChevronRightIcon className="w-3.5 h-3.5" /></button>
               </div>
             </div>
           </div>
@@ -724,7 +724,7 @@ export default function HRMSModulePage({ params }: { params: Promise<{ module: s
                               </div>
                             </div>
                           </div>
-                          
+
                           <div className="flex items-center gap-2">
                             {step > 0 && (
                               <div className="flex items-center bg-white dark:bg-navy-800 border border-[#FFD500] rounded-full shadow-sm overflow-hidden divide-x divide-[#FFD500]/30 mr-1">
@@ -746,7 +746,7 @@ export default function HRMSModulePage({ params }: { params: Promise<{ module: s
                             <div className="flex items-center gap-1 px-2 py-1 bg-white dark:bg-navy-800 rounded-full border border-slate-100 dark:border-navy-700 shadow-lg">
                               <button onClick={e => { e.stopPropagation(); setExpandedTiles(p => ({ ...p, [item.id]: !exp })); }} className={`p-1.5 rounded-full transition-all ${exp ? "bg-[#003875] text-[#FFD500]" : "text-[#003875] dark:text-[#FFD500] hover:bg-yellow-50"}`}><ChevronDownIcon className={`w-3.5 h-3.5 stroke-[3] transition-transform ${exp ? "rotate-180" : ""}`} /></button>
                               <button onClick={e => { e.stopPropagation(); setEditingItem(item); setFormData({ ...item }); setUploadFile(null); setIsModalOpen(true); }} className="p-1.5 text-blue-500 hover:bg-blue-50 rounded-full transition-all" title="Edit"><PencilSquareIcon className="w-3.5 h-3.5" /></button>
-                              {(!item.cancelled && Array.from({length: stepCount}).some((_, i) => (item as any)[`actual_${i+1}`]?.trim())) && (
+                              {(!item.cancelled && Array.from({ length: stepCount }).some((_, i) => (item as any)[`actual_${i + 1}`]?.trim())) && (
                                 <button onClick={e => { e.stopPropagation(); openRemoveFollowUpModal(item); }} className="p-1.5 text-orange-500 hover:bg-orange-50 rounded-full transition-all" title="Remove Follow-up"><ArrowUturnLeftIcon className="w-3.5 h-3.5" /></button>
                               )}
                               {item.cancelled ? (
@@ -797,7 +797,7 @@ export default function HRMSModulePage({ params }: { params: Promise<{ module: s
 
                               return (
                                 <div key={f.name} className="space-y-0.5">
-                                  <p className={`text-[9px] font-black uppercase tracking-widest truncate ${i%3===0 ? 'text-emerald-500' : i%3===1 ? 'text-blue-500' : 'text-purple-500'}`} title={f.label}>
+                                  <p className={`text-[9px] font-black uppercase tracking-widest truncate ${i % 3 === 0 ? 'text-emerald-500' : i % 3 === 1 ? 'text-blue-500' : 'text-purple-500'}`} title={f.label}>
                                     {getFieldIcon(f.name)}
                                     {shortLabel(f.label)}
                                   </p>
@@ -819,10 +819,10 @@ export default function HRMSModulePage({ params }: { params: Promise<{ module: s
 
                         {exp && (
                           <div className="mt-3 flex overflow-x-auto items-stretch gap-2 animate-in slide-in-from-top-2 duration-300 pb-2 custom-scrollbar">
-                            
+
                             {/* Step Tiles */}
                             {Array.from({ length: stepCount }, (_, i) => {
-                              const n = i + 1; const act = (item as any)[`actual_${n}`]; const pl = (item as any)[`planned_${n}`]; 
+                              const n = i + 1; const act = (item as any)[`actual_${n}`]; const pl = (item as any)[`planned_${n}`];
                               const done = !!act; const isPending = !done && n === getActiveStep(item);
                               let statusClasses = "bg-white dark:bg-navy-900 border-slate-200 dark:border-navy-700 text-slate-400";
                               if (done) statusClasses = "bg-emerald-50/50 dark:bg-emerald-900/10 border-emerald-500 text-emerald-700 dark:text-emerald-400 shadow-sm";
@@ -839,11 +839,11 @@ export default function HRMSModulePage({ params }: { params: Promise<{ module: s
                                   <div className={`mt-3 space-y-1.5 pt-2 border-t ${done ? "border-emerald-100 dark:border-emerald-900/50" : "border-slate-100 dark:border-navy-800"}`}>
                                     <div className="flex justify-between items-center text-[9px] font-black uppercase tracking-widest">
                                       <span className="opacity-50">PLANNED</span>
-                                      <span>{pl ? (new Date(pl).toLocaleDateString('en-GB') + ' ' + new Date(pl).toLocaleTimeString('en-US', {hour:'2-digit',minute:'2-digit'})) : "—"}</span>
+                                      <span>{pl ? (new Date(pl).toLocaleDateString('en-GB') + ' ' + new Date(pl).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })) : "—"}</span>
                                     </div>
                                     <div className="flex justify-between items-center text-[9px] font-black uppercase tracking-widest">
                                       <span className="opacity-50">ACTUAL</span>
-                                      <span className={done ? "text-emerald-700 dark:text-emerald-400" : "opacity-30"}>{act ? (new Date(act).toLocaleDateString('en-GB') + ' ' + new Date(act).toLocaleTimeString('en-US', {hour:'2-digit',minute:'2-digit'})) : "—"}</span>
+                                      <span className={done ? "text-emerald-700 dark:text-emerald-400" : "opacity-30"}>{act ? (new Date(act).toLocaleDateString('en-GB') + ' ' + new Date(act).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })) : "—"}</span>
                                     </div>
                                     {((item as any)[`status_${n}`] || (item as any)[`remark_${n}`]) && (
                                       <div className={`mt-1.5 pt-1.5 border-t space-y-1 ${done ? "border-emerald-100 dark:border-emerald-900/50" : "border-slate-100 dark:border-navy-800"}`}>
@@ -868,10 +868,10 @@ export default function HRMSModulePage({ params }: { params: Promise<{ module: s
                                             const arr = JSON.parse((item as any).social_medias_1);
                                             if (Array.isArray(arr) && arr.length > 0) {
                                               return arr.map((sm, idx) => (
-                                                 <span key={idx} className="px-1.5 py-0.5 bg-[#003875] text-[#FFD500] text-[8px] font-black uppercase rounded shadow-sm">{sm}</span>
+                                                <span key={idx} className="px-1.5 py-0.5 bg-[#003875] text-[#FFD500] text-[8px] font-black uppercase rounded shadow-sm">{sm}</span>
                                               ));
                                             }
-                                          } catch (e) {}
+                                          } catch (e) { }
                                           return null;
                                         })()}
                                       </div>
@@ -897,7 +897,7 @@ export default function HRMSModulePage({ params }: { params: Promise<{ module: s
                       <th className="p-3 whitespace-nowrap sticky left-24 z-10 bg-[#003875]">ID</th>
                       {formFields.map(f => <th key={f.name} className="p-3 whitespace-nowrap">{f.label}</th>)}
                       <th className="p-3 whitespace-nowrap border-l border-white/10">CREATED AT</th>
-                      {Array.from({ length: stepCount }).map((_, i) => <th key={i} className="p-3 whitespace-nowrap border-l border-white/10 min-w-[200px]">STEP {i+1} — {globalConfigs[i]?.step_name?.toUpperCase() || ''}</th>)}
+                      {Array.from({ length: stepCount }).map((_, i) => <th key={i} className="p-3 whitespace-nowrap border-l border-white/10 min-w-[200px]">STEP {i + 1} — {globalConfigs[i]?.step_name?.toUpperCase() || ''}</th>)}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 dark:divide-navy-700">
@@ -914,7 +914,7 @@ export default function HRMSModulePage({ params }: { params: Promise<{ module: s
                               ) : (
                                 <>
                                   <button onClick={() => setCancelTargetId(item.id)} className="p-1 text-orange-500 hover:bg-orange-50 rounded" title="Cancel"><NoSymbolIcon className="w-3.5 h-3.5" /></button>
-                                  {Array.from({length: stepCount}).some((_, i) => (item as any)[`actual_${i+1}`]?.trim()) && (
+                                  {Array.from({ length: stepCount }).some((_, i) => (item as any)[`actual_${i + 1}`]?.trim()) && (
                                     <button onClick={e => { e.stopPropagation(); openRemoveFollowUpModal(item); }} className="p-1 text-orange-500 hover:bg-orange-50 rounded" title="Remove Follow-up"><ArrowUturnLeftIcon className="w-3.5 h-3.5" /></button>
                                   )}
                                 </>
@@ -935,13 +935,13 @@ export default function HRMSModulePage({ params }: { params: Promise<{ module: s
                           ))}
                           <td className="p-3 border-l border-slate-100 dark:border-navy-700 whitespace-nowrap text-slate-500">{new Date(item.created_at).toLocaleDateString('en-GB')} {new Date(item.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</td>
                           {Array.from({ length: stepCount }).map((_, i) => {
-                            const n = i + 1; const act = (item as any)[`actual_${n}`]; const pl = (item as any)[`planned_${n}`]; 
+                            const n = i + 1; const act = (item as any)[`actual_${n}`]; const pl = (item as any)[`planned_${n}`];
                             const done = !!act; const isPending = !done && n === getActiveStep(item);
                             return (
                               <td key={i} className={`p-3 border-l ${done ? "bg-emerald-50/30 text-emerald-700" : isPending ? "bg-orange-50/30 text-orange-700" : "border-slate-100 dark:border-navy-700"}`}>
                                 <div className="space-y-0.5 w-32">
-                                  <div className="flex justify-between items-center text-[9px] font-black uppercase"><span className="opacity-50">Pl</span><span>{pl ? (new Date(pl).toLocaleDateString('en-GB') + ' ' + new Date(pl).toLocaleTimeString('en-US', {hour:'2-digit',minute:'2-digit'})) : "—"}</span></div>
-                                  <div className="flex justify-between items-center text-[9px] font-black uppercase"><span className="opacity-50">Ac</span><span className={done ? "text-emerald-600" : "opacity-30"}>{act ? (new Date(act).toLocaleDateString('en-GB') + ' ' + new Date(act).toLocaleTimeString('en-US', {hour:'2-digit',minute:'2-digit'})) : "—"}</span></div>
+                                  <div className="flex justify-between items-center text-[9px] font-black uppercase"><span className="opacity-50">Pl</span><span>{pl ? (new Date(pl).toLocaleDateString('en-GB') + ' ' + new Date(pl).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })) : "—"}</span></div>
+                                  <div className="flex justify-between items-center text-[9px] font-black uppercase"><span className="opacity-50">Ac</span><span className={done ? "text-emerald-600" : "opacity-30"}>{act ? (new Date(act).toLocaleDateString('en-GB') + ' ' + new Date(act).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })) : "—"}</span></div>
                                 </div>
                               </td>
                             );
@@ -997,7 +997,7 @@ export default function HRMSModulePage({ params }: { params: Promise<{ module: s
                                 <p className="text-[10px] font-black text-emerald-600 bg-emerald-50 px-2 py-1 rounded w-max uppercase truncate max-w-full" title={`Marking Step ${step} Done — ${globalConfigs[step - 1]?.step_name}`}>
                                   Marking Step {step} Done — {globalConfigs[step - 1]?.step_name}
                                 </p>
-                                
+
                                 {module === 'recruitment' && step === 1 && (
                                   <div className="bg-slate-50 dark:bg-navy-900 p-3 rounded-xl border border-slate-100 dark:border-navy-800 space-y-2">
                                     <p className="text-[9px] font-black uppercase text-slate-400">Social Media Platforms Posted</p>
@@ -1021,7 +1021,7 @@ export default function HRMSModulePage({ params }: { params: Promise<{ module: s
                                   </div>
                                 )}
 
-                                <input type="text" placeholder="Add remark (optional)" value={bulkRemarkInputs[id] || ""} onChange={e => setBulkRemarkInputs({...bulkRemarkInputs, [id]: e.target.value})} className="w-full px-4 py-2 bg-slate-50 dark:bg-navy-900 border border-slate-100 dark:border-navy-800 rounded-xl font-bold text-xs outline-none focus:border-[#003875]" />
+                                <input type="text" placeholder="Add remark (optional)" value={bulkRemarkInputs[id] || ""} onChange={e => setBulkRemarkInputs({ ...bulkRemarkInputs, [id]: e.target.value })} className="w-full px-4 py-2 bg-slate-50 dark:bg-navy-900 border border-slate-100 dark:border-navy-800 rounded-xl font-bold text-xs outline-none focus:border-[#003875]" />
                               </div>
                             ) : (
                               <p className="text-[10px] font-black text-slate-300 uppercase italic">Completed</p>
@@ -1029,7 +1029,7 @@ export default function HRMSModulePage({ params }: { params: Promise<{ module: s
                           </div>
                         )}
                       </div>
-                      <button onClick={() => setBulkToggles(p => ({...p, [id]: !t}))} className={`w-10 h-5 rounded-full relative p-0.5 transition-all ${t ? "bg-[#003875] dark:bg-[#FFD500]" : "bg-slate-200"}`}><div className={`w-4 h-4 bg-white rounded-full transition-all ${t ? "translate-x-5" : "translate-x-0"}`} /></button>
+                      <button onClick={() => setBulkToggles(p => ({ ...p, [id]: !t }))} className={`w-10 h-5 rounded-full relative p-0.5 transition-all ${t ? "bg-[#003875] dark:bg-[#FFD500]" : "bg-slate-200"}`}><div className={`w-4 h-4 bg-white rounded-full transition-all ${t ? "translate-x-5" : "translate-x-0"}`} /></button>
                     </div>
                   </div>
                 );
@@ -1070,30 +1070,63 @@ export default function HRMSModulePage({ params }: { params: Promise<{ module: s
             <form onSubmit={handleSave} className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar bg-white dark:bg-navy-800/50">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {formFields.map(f => (
-                  <div key={f.name} className={f.type === "textarea" && f.name !== "skills_required" && f.name !== "work_and_responsibilities" ? "col-span-1 md:col-span-2" : ""}>
-                    <label className="flex items-center gap-1.5 text-[10px] font-black text-[#003875] dark:text-[#FFD500] uppercase tracking-widest mb-1.5 px-1">
-                      <QuestionMarkCircleIcon className="w-3.5 h-3.5 text-[#003875]/40 dark:text-orange-100/30" />
+                  <div key={f.name} className={`relative mt-2 ${f.type === "textarea" && f.name !== "skills_required" && f.name !== "work_and_responsibilities" ? "col-span-1 md:col-span-2" : ""}`}>
+                    <label className="absolute -top-2.5 left-3 bg-white dark:bg-navy-800 px-1.5 flex items-center gap-1.5 text-[11px] font-black text-[#003875] dark:text-[#FFD500] uppercase tracking-widest z-10">
+                      <QuestionMarkCircleIcon className="w-4 h-4 text-[#003875] dark:text-[#FFD500]" />
                       {f.label}
                     </label>
-                    {f.name === "male_female" || f.name === "urgency" || f.name === "gtk_office_comfortable" ? (
-                      <div className="flex bg-[#FFFBF0] dark:bg-navy-900 rounded-xl border border-orange-100 dark:border-navy-700 p-1 shadow-sm">
+                    {f.name === "male_female" || f.name === "urgency" ? (
+                      <div className="flex bg-[#FFFBF0] dark:bg-navy-900 rounded-xl border border-orange-100 dark:border-navy-700 p-1 shadow-sm pt-2">
                         {f.options?.map(opt => (
                           <button type="button" key={opt} onClick={() => setFormData({ ...formData, [f.name]: opt })} className={`flex-1 text-[11px] font-black py-2 rounded-lg transition-all ${formData[f.name] === opt ? "bg-[#003875] text-[#FFD500] shadow-md" : "text-gray-500 hover:bg-white dark:hover:bg-navy-800"}`}>{opt}</button>
                         ))}
                       </div>
+                    ) : f.name === "gtk_office_comfortable" ? (
+                      <div className="bg-[#FFFBF0] dark:bg-navy-900 rounded-xl border border-orange-100 dark:border-navy-700 p-4 shadow-sm pt-5">
+                        <div className="space-y-1.5">
+                          <p className="text-xs font-semibold text-slate-600 dark:text-navy-300">Are you comfortable working from our GTK Office?</p>
+                          <a href="https://www.google.com/maps/place/Robotek+India/@28.7000325,77.1728141,5818m/data=!3m1!1e3!4m6!3m5!1s0x390d037b67f99bb7:0xb7fe05fbafc41e98!8m2!3d28.6949603!4d77.187099!16s%2Fg%2F11vcw95rvz!5m1!1e1?entry=ttu&g_ep=EgoyMDI2MDYwMS4wIKXMDSoASAFQAw%3D%3D" target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-600 dark:text-blue-400 hover:underline">
+                            <MapPinIcon className="w-3.5 h-3.5" /> View Location on Map
+                          </a>
+                        </div>
+                        <div className="mt-4 flex items-center gap-3">
+                          <span className={`text-xs font-bold ${formData[f.name] !== "Yes" ? "text-slate-900 dark:text-white" : "text-slate-400 dark:text-slate-500"}`}>No</span>
+                          <button
+                            type="button"
+                            onClick={() => setFormData({ ...formData, [f.name]: formData[f.name] === "Yes" ? "No" : "Yes" })}
+                            className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${formData[f.name] === "Yes" ? "bg-blue-600" : "bg-slate-300 dark:bg-navy-600"}`}
+                          >
+                            <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${formData[f.name] === "Yes" ? "translate-x-5" : "translate-x-0"}`} />
+                          </button>
+                          <span className={`text-xs font-bold ${formData[f.name] === "Yes" ? "text-slate-900 dark:text-white" : "text-slate-400 dark:text-slate-500"}`}>Yes</span>
+                        </div>
+                      </div>
+                    ) : f.type === "radio" ? (
+                      <div className="bg-[#FFFBF0] dark:bg-navy-900 rounded-xl border border-orange-100 dark:border-navy-700 p-3 shadow-sm pt-4 space-y-2 max-h-[200px] overflow-y-auto custom-scrollbar">
+                        {f.options?.map(opt => (
+                          <label key={opt} className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${formData[f.name] === opt ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20 shadow-sm" : "border-slate-200 dark:border-navy-700 hover:border-blue-300 dark:hover:border-blue-700"}`}>
+                            <div className={`w-4 h-4 rounded-full border flex items-center justify-center flex-shrink-0 transition-colors ${formData[f.name] === opt ? "border-blue-600 bg-white dark:bg-navy-800" : "border-slate-300 dark:border-navy-600 bg-white dark:bg-navy-900"}`}>
+                              {formData[f.name] === opt && <div className="w-2 h-2 rounded-full bg-blue-600" />}
+                            </div>
+                            <span className="text-xs font-bold text-slate-700 dark:text-slate-300">{opt}</span>
+                          </label>
+                        ))}
+                      </div>
                     ) : f.name === "requirement_by" ? (
-                      <UserSingleCombobox value={formData[f.name] || ""} onChange={val => setFormData({ ...formData, [f.name]: val })} users={usersList.map(u => u.username || u.name).filter(Boolean)} placeholder="Select User..." />
+                      <div className="pt-0">
+                        <UserSingleCombobox value={formData[f.name] || ""} onChange={val => setFormData({ ...formData, [f.name]: val })} users={usersList.map(u => u.username || u.name).filter(Boolean)} placeholder="Select User..." />
+                      </div>
                     ) : f.type === "textarea" ? (
-                      <textarea value={formData[f.name] || ""} onChange={e => setFormData({ ...formData, [f.name]: e.target.value })} className="w-full bg-[#FFFBF0] dark:bg-navy-900 px-3 py-2.5 rounded-xl border border-orange-100 dark:border-navy-700 focus:border-[#FFD500] focus:bg-white dark:focus:bg-navy-900 outline-none font-bold text-xs text-gray-800 dark:text-zinc-100 transition-all shadow-sm resize-none min-h-[80px]" rows={3} />
+                      <textarea value={formData[f.name] || ""} onChange={e => setFormData({ ...formData, [f.name]: e.target.value })} className="w-full bg-[#FFFBF0] dark:bg-navy-900 px-4 py-3 rounded-xl border border-orange-100 dark:border-navy-700 focus:border-[#FFD500] outline-none font-bold text-xs text-gray-800 dark:text-zinc-100 transition-all shadow-sm resize-none min-h-[80px]" rows={3} />
                     ) : f.type === "select" ? (
-                      <select value={formData[f.name] || ""} onChange={e => setFormData({ ...formData, [f.name]: e.target.value })} className="w-full bg-[#FFFBF0] dark:bg-navy-900 px-3 py-2.5 rounded-xl border border-orange-100 dark:border-navy-700 focus:border-[#FFD500] focus:bg-white dark:focus:bg-navy-900 outline-none font-black text-xs text-gray-900 dark:text-white transition-all shadow-sm">
+                      <select value={formData[f.name] || ""} onChange={e => setFormData({ ...formData, [f.name]: e.target.value })} className="w-full bg-[#FFFBF0] dark:bg-navy-900 px-4 py-3 rounded-xl border border-orange-100 dark:border-navy-700 focus:border-[#FFD500] outline-none font-black text-xs text-gray-900 dark:text-white transition-all shadow-sm">
                         <option value="">Select...</option>
                         {f.options?.map(o => <option key={o} value={o}>{o}</option>)}
                       </select>
                     ) : f.type === "file" ? (
                       <input type="file" onChange={e => setUploadFile(e.target.files?.[0] || null)} className="w-full px-4 py-2.5 bg-[#FFFBF0] dark:bg-navy-900 border border-orange-100 dark:border-navy-700 rounded-xl text-xs font-bold text-gray-800 dark:text-white file:mr-4 file:py-1 file:px-3 file:rounded-full file:border-0 file:text-[10px] file:font-black file:bg-[#003875] file:text-[#FFD500] hover:file:bg-[#002855] transition-all shadow-sm" />
                     ) : (
-                      <input type={f.type} value={formData[f.name] || ""} onChange={e => setFormData({ ...formData, [f.name]: e.target.value })} className="w-full bg-[#FFFBF0] dark:bg-navy-900 px-3 py-2.5 rounded-xl border border-orange-100 dark:border-navy-700 focus:border-[#FFD500] focus:bg-white dark:focus:bg-navy-900 outline-none font-black text-xs text-gray-900 dark:text-white transition-all shadow-sm" />
+                      <input type={f.type} value={formData[f.name] || ""} onChange={e => setFormData({ ...formData, [f.name]: e.target.value })} className="w-full bg-[#FFFBF0] dark:bg-navy-900 px-4 py-3 rounded-xl border border-orange-100 dark:border-navy-700 focus:border-[#FFD500] outline-none font-black text-xs text-gray-900 dark:text-white transition-all shadow-sm" />
                     )}
                   </div>
                 ))}
@@ -1192,18 +1225,17 @@ export default function HRMSModulePage({ params }: { params: Promise<{ module: s
                     <button
                       key={s}
                       onClick={() => setRemoveFollowUpStep(s)}
-                      className={`py-2 rounded-xl text-[10px] font-black transition-all border-2 ${
-                        removeFollowUpStep === s 
-                          ? "bg-purple-500 border-purple-500 text-white shadow-lg scale-110 z-10" 
+                      className={`py-2 rounded-xl text-[10px] font-black transition-all border-2 ${removeFollowUpStep === s
+                          ? "bg-purple-500 border-purple-500 text-white shadow-lg scale-110 z-10"
                           : "bg-slate-50 dark:bg-navy-900 border-slate-100 dark:border-navy-700 text-slate-400 dark:text-navy-600 hover:border-purple-200 dark:hover:border-purple-900"
-                      }`}
+                        }`}
                     >
                       ST {s}
                     </button>
                   ))}
                 </div>
                 <p className="mt-2 text-[10px] font-bold text-slate-400 dark:text-navy-600 italic line-clamp-1">
-                  {globalConfigs[removeFollowUpStep-1]?.step_name}
+                  {globalConfigs[removeFollowUpStep - 1]?.step_name}
                 </p>
               </div>
 
@@ -1212,11 +1244,10 @@ export default function HRMSModulePage({ params }: { params: Promise<{ module: s
                 <div className="flex gap-3">
                   <button
                     onClick={() => setRemoveFollowUpType('particular')}
-                    className={`flex-1 py-4 px-4 rounded-2xl border-2 text-left transition-all ${
-                      removeFollowUpType === 'particular'
+                    className={`flex-1 py-4 px-4 rounded-2xl border-2 text-left transition-all ${removeFollowUpType === 'particular'
                         ? "border-purple-500 bg-purple-50 dark:bg-purple-900/10"
                         : "border-slate-100 dark:border-navy-700 bg-white dark:bg-navy-900"
-                    }`}
+                      }`}
                   >
                     <div className="flex items-center gap-2 mb-1">
                       <div className={`w-3 h-3 rounded-full border-2 ${removeFollowUpType === 'particular' ? "border-purple-500 bg-purple-500" : "border-slate-300 dark:border-navy-700"}`} />
@@ -1226,11 +1257,10 @@ export default function HRMSModulePage({ params }: { params: Promise<{ module: s
                   </button>
                   <button
                     onClick={() => setRemoveFollowUpType('onwards')}
-                    className={`flex-1 py-4 px-4 rounded-2xl border-2 text-left transition-all ${
-                      removeFollowUpType === 'onwards'
+                    className={`flex-1 py-4 px-4 rounded-2xl border-2 text-left transition-all ${removeFollowUpType === 'onwards'
                         ? "border-purple-500 bg-purple-50 dark:bg-purple-900/10"
                         : "border-slate-100 dark:border-navy-700 bg-white dark:bg-navy-900"
-                    }`}
+                      }`}
                   >
                     <div className="flex items-center gap-2 mb-1">
                       <div className={`w-3 h-3 rounded-full border-2 ${removeFollowUpType === 'onwards' ? "border-purple-500 bg-purple-500" : "border-slate-300 dark:border-navy-700"}`} />
@@ -1259,7 +1289,7 @@ export default function HRMSModulePage({ params }: { params: Promise<{ module: s
 
       {/* Confirm Modals */}
       <ConfirmModal isOpen={isConfirmOpen} title={restoreTargetId ? "Restore Record?" : cancelTargetId ? "Cancel Record?" : "Delete Record?"} message={restoreTargetId ? "This will move the record back to active state." : cancelTargetId ? "This will cancel the record. Do you want to proceed?" : "This action cannot be undone. Do you want to proceed?"} onConfirm={restoreTargetId ? handleRestoreConfirm : cancelTargetId ? handleCancelConfirm : handleDelete} onClose={() => { setIsConfirmOpen(false); setCancelTargetId(null); setRestoreTargetId(null); setPendingDeleteId(null); }} confirmLabel={restoreTargetId ? "Restore" : cancelTargetId ? "Cancel Record" : "Delete"} cancelLabel="Cancel" type={restoreTargetId ? "info" : "danger"} />
-      
+
       <ActionStatusModal isOpen={isStatusModalOpen} status={actionStatus} message={actionMessage} />
     </div>
   );
