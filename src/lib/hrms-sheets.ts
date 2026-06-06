@@ -531,12 +531,13 @@ export async function addHrmsItem(module: HrmsModuleType, data: Partial<AnyHrmsR
       if (!data.id) {
         const prefixMap = {
           recruitment: "Recut-",
-          candidate: "Cand-",
+          candidate: "CNDID-",
           sales: "Sales-",
           onboard: "Onb-"
         };
         const num = await service.getNextNumericalId();
-        data.id = `${prefixMap[module]}${num}`;
+        const formattedNum = module === "candidate" ? String(num).padStart(3, "0") : num;
+        data.id = `${prefixMap[module]}${formattedNum}`;
       }
       const now = new Date().toISOString();
       data.created_at = now;
