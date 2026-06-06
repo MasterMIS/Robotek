@@ -34,6 +34,7 @@ export default function FieldDriverPage() {
     
     // Live Location
     const [liveLocation, setLiveLocation] = useState<{ lat: number, lng: number } | null>(null);
+    const [liveAddress, setLiveAddress] = useState<string | null>(null);
     const [locationError, setLocationError] = useState<string | null>(null);
 
     // Form Action State
@@ -43,6 +44,7 @@ export default function FieldDriverPage() {
     const videoRef = useRef<HTMLVideoElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const [isCameraActive, setIsCameraActive] = useState(false);
+    const [cameraFacingMode, setCameraFacingMode] = useState<"user" | "environment">("environment");
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     useEffect(() => {
@@ -104,6 +106,27 @@ export default function FieldDriverPage() {
         return () => navigator.geolocation.clearWatch(watchId);
     }, []);
 
+    // Reverse Geocoding
+    useEffect(() => {
+        if (!liveLocation) return;
+        
+        const timeoutId = setTimeout(async () => {
+            try {
+                const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${liveLocation.lat}&lon=${liveLocation.lng}&zoom=18&addressdetails=1`);
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data && data.display_name) {
+                        setLiveAddress(data.display_name);
+                    }
+                }
+            } catch (err) {
+                console.error("Reverse geocoding failed", err);
+            }
+        }, 1500);
+
+        return () => clearTimeout(timeoutId);
+    }, [liveLocation?.lat, liveLocation?.lng]);
+
     // Background Sync to API when CHECKED_IN
     useEffect(() => {
         if (currentStatus !== 'CHECKED_IN' || !user || !liveLocation) return;
@@ -148,7 +171,12 @@ export default function FieldDriverPage() {
     // Camera handling
     useEffect(() => {
         if (isCameraActive) {
-            navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
+            if (videoRef.current && videoRef.current.srcObject) {
+                const stream = videoRef.current.srcObject as MediaStream;
+                stream.getTracks().forEach(track => track.stop());
+            }
+
+            navigator.mediaDevices.getUserMedia({ video: { facingMode: cameraFacingMode } })
                 .then(stream => {
                     if (videoRef.current) {
                         videoRef.current.srcObject = stream;
@@ -171,7 +199,7 @@ export default function FieldDriverPage() {
                 stream.getTracks().forEach(track => track.stop());
             }
         };
-    }, [isCameraActive]);
+    }, [isCameraActive, cameraFacingMode]);
 
     const capturePhoto = () => {
         if (videoRef.current && canvasRef.current) {
@@ -190,8 +218,6 @@ export default function FieldDriverPage() {
     const handleAction = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!showForm) return;
-        if (!odometerReading) { error("Odometer reading is mandatory"); return; }
-        if (!capturedImage) { error("Odometer photo is mandatory"); return; }
         if (!liveLocation) { error("Live location is required. Ensure GPS is enabled."); return; }
 
         setIsSubmitting(true);
@@ -205,6 +231,7 @@ export default function FieldDriverPage() {
                     userName: user.username,
                     latitude: liveLocation.lat,
                     longitude: liveLocation.lng,
+                    address: liveAddress,
                     odometer: odometerReading,
                     photo: capturedImage
                 })
@@ -308,7 +335,6 @@ export default function FieldDriverPage() {
                                     <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Odometer Reading</label>
                                     <input 
                                         type="number" 
-                                        required
                                         value={odometerReading}
                                         onChange={(e) => setOdometerReading(e.target.value)}
                                         className="w-full bg-white dark:bg-slate-900 border border-gray-200 dark:border-white/10 rounded-xl px-4 py-3 text-sm font-black focus:border-[#FFD500] outline-none shadow-inner"
@@ -340,6 +366,14 @@ export default function FieldDriverPage() {
                                             ></button>
                                             <button 
                                                 type="button"
+                                                onClick={() => setCameraFacingMode(prev => prev === "environment" ? "user" : "environment")}
+                                                className="absolute bottom-4 left-4 p-2 bg-black/50 text-white rounded-full border border-white/20 hover:bg-black/70 flex items-center justify-center transition-colors"
+                                                title="Switch Camera"
+                                            >
+                                                <ArrowPathIcon className="w-5 h-5" />
+                                            </button>
+                                            <button 
+                                                type="button"
                                                 onClick={() => setIsCameraActive(false)}
                                                 className="absolute top-2 right-2 px-3 py-1 bg-black/50 text-white text-[10px] font-bold rounded-full"
                                             >Cancel</button>
@@ -367,7 +401,7 @@ export default function FieldDriverPage() {
                                     >Cancel</button>
                                     <button 
                                         type="submit"
-                                        disabled={isSubmitting || !capturedImage || !odometerReading}
+                                        disabled={isSubmitting}
                                         className="flex-[2] py-3 bg-[#003875] dark:bg-[#FFD500] text-white dark:text-black rounded-xl font-black text-xs uppercase tracking-widest shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
                                     >
                                         {isSubmitting ? 'Uploading...' : 'Submit'}
@@ -456,6 +490,13 @@ export default function FieldDriverPage() {
                                                     {liveLocation.lng.toFixed(6)}
                                                 </div>
                                             </div>
+
+                                            {liveAddress && (
+                                                <div className="mt-3 text-[10px] font-bold text-gray-500 dark:text-gray-400 max-w-[280px] text-center leading-relaxed">
+                                                    <MapPinIcon className="w-3 h-3 inline mr-1 text-[#003875] dark:text-[#FFD500]" />
+                                                    {liveAddress}
+                                                </div>
+                                            )}
                                         </div>
 
                                         {currentStatus === 'CHECKED_IN' && (

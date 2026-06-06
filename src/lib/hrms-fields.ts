@@ -30,11 +30,11 @@ export const CANDIDATE_BASE_FIELDS: FormField[] = [
   { name: "current_ctc", label: "Current CTC", type: "text" },
   { name: "expected_ctc", label: "Expected CTC", type: "text" },
   { name: "notice_period_in_days", label: "Notice Period (In days)", type: "number" },
-  { name: "reason_for_quit", label: "Reason for Quit", type: "textarea" },
-  { name: "share_two_professional_references", label: "Share two Professional References", type: "textarea" },
+  { name: "whatsapp_number", label: "WhatsApp Number", type: "text" },
   { name: "current_living_location", label: "Current Living Location", type: "text" },
   { name: "upload_updated_cv", label: "Upload Updated CV", type: "file" },
-  { name: "whatsapp_number", label: "WhatsApp Number", type: "text" },
+  { name: "reason_for_quit", label: "Reason for Quit", type: "textarea" },
+  { name: "share_two_professional_references", label: "Share two Professional References", type: "textarea" },
   { name: "gtk_office_comfortable", label: "GTK Office Comfortable", type: "select", options: ["Yes", "No"] },
   { name: "slot_booking", label: "Slot Booking", type: "radio", options: ["Monday (11 AM to 2 PM)", "Tuesday (11 AM to 2 PM)", "Wednesday (11 AM to 2 PM)", "Thursday (11 AM to 2 PM)", "Friday (11 AM to 2 PM)", "Saturday (11 AM to 2 PM)"] },
   { name: "remark", label: "Remark", type: "textarea" },
@@ -42,7 +42,6 @@ export const CANDIDATE_BASE_FIELDS: FormField[] = [
 
 export const CANDIDATE_FIELDS: FormField[] = [
   ...CANDIDATE_BASE_FIELDS,
-  { name: "lead_time_for_emp_joining_7", label: "Lead Time For Emp. Joining (Step 7)", type: "text" },
 ];
 
 export const SALES_FIELDS: FormField[] = [

@@ -69,10 +69,10 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { action, userId, userName, latitude, longitude, photo, odometer } = body;
+    const { action, userId, userName, latitude, longitude, address, photo, odometer } = body;
     
-    if (!userId || !action || !odometer || !photo) {
-      return NextResponse.json({ error: "Missing required data (odometer and photo are mandatory)" }, { status: 400 });
+    if (!userId || !action) {
+      return NextResponse.json({ error: "Missing required data (userId and action are mandatory)" }, { status: 400 });
     }
 
     let photoUrl = "";
@@ -80,7 +80,7 @@ export async function POST(req: NextRequest) {
       const fileId = await uploadBase64ToDrive(photo, FIELD_DRIVER_FOLDER_ID);
       photoUrl = fileId || "";
     } else {
-      photoUrl = photo;
+      photoUrl = photo || "";
     }
 
     const now = new Date();
@@ -88,7 +88,7 @@ export async function POST(req: NextRequest) {
     const istNow = new Date(now.getTime() + istOffset);
     const dateStr = istNow.toISOString().split('T')[0];
     const timeStr = now.toISOString();
-    const locationStr = `${latitude},${longitude}`;
+    const locationStr = address || `${latitude},${longitude}`;
 
     if (action === 'CHECK_IN') {
       const id = `FD-${Date.now()}`;
@@ -102,7 +102,7 @@ export async function POST(req: NextRequest) {
         status: "IN",
         inLocation: locationStr,
         outLocation: "",
-        odometerIn: String(odometer),
+        odometerIn: String(odometer || ""),
         odometerOut: "",
         odometerPhotoIn: photoUrl,
         odometerPhotoOut: "",
@@ -134,7 +134,7 @@ export async function POST(req: NextRequest) {
         timeStr, 
         "COMPLETED", 
         locationStr, 
-        String(odometer), 
+        String(odometer || ""), 
         photoUrl, 
         totalKm
       );

@@ -190,14 +190,22 @@ export default function AdminTable() {
                                         <div className="font-black text-sm uppercase text-gray-900 dark:text-white">{r.userName}</div>
                                         <div className="text-[10px] font-bold text-gray-400">{r.userId}</div>
                                     </td>
-                                    <td className="p-4 align-top">
-                                        <div className="flex items-center gap-2 mb-1">
-                                            <span className="w-1.5 h-1.5 rounded-full bg-green-500"></span>
-                                            <span className="text-xs font-bold text-gray-600 dark:text-gray-300">In: {formatTime(r.inTime)}</span>
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                            <span className="w-1.5 h-1.5 rounded-full bg-red-500"></span>
-                                            <span className="text-xs font-bold text-gray-600 dark:text-gray-300">Out: {formatTime(r.outTime)}</span>
+                                    <td className="p-4 align-top min-w-[200px]">
+                                        <div className="flex flex-col gap-3">
+                                            <div>
+                                                <div className="flex items-center gap-2 mb-1">
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-green-500"></span>
+                                                    <span className="text-xs font-bold text-gray-600 dark:text-gray-300">In: {formatTime(r.inTime)}</span>
+                                                </div>
+                                                {r.inLocation && <div className="text-[9px] font-medium text-gray-400 pl-3.5 leading-tight">{r.inLocation}</div>}
+                                            </div>
+                                            <div>
+                                                <div className="flex items-center gap-2 mb-1">
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-red-500"></span>
+                                                    <span className="text-xs font-bold text-gray-600 dark:text-gray-300">Out: {formatTime(r.outTime)}</span>
+                                                </div>
+                                                {r.outLocation && <div className="text-[9px] font-medium text-gray-400 pl-3.5 leading-tight">{r.outLocation}</div>}
+                                            </div>
                                         </div>
                                     </td>
                                     <td className="p-4 align-top">

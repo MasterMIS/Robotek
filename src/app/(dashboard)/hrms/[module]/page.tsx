@@ -239,6 +239,7 @@ export default function HRMSModulePage({ params }: { params: Promise<{ module: s
   const [bulkRemarkInputs, setBulkRemarkInputs] = useState<Record<string, string>>({});
   const [bulkToggles, setBulkToggles] = useState<Record<string, boolean>>({});
   const [bulkSocialMedia, setBulkSocialMedia] = useState<Record<string, string[]>>({});
+  const [bulkLeadTimeInputs, setBulkLeadTimeInputs] = useState<Record<string, string>>({});
 
   const [isRemoveFollowUpModalOpen, setIsRemoveFollowUpModalOpen] = useState(false);
   const [targetItemForRemoveFollowUp, setTargetItemForRemoveFollowUp] = useState<AnyHrmsRecord | null>(null);
@@ -555,14 +556,17 @@ export default function HRMSModulePage({ params }: { params: Promise<{ module: s
     const rmks: Record<string, string> = {};
     const ts: Record<string, boolean> = {};
     const sm: Record<string, string[]> = {};
+    const lt: Record<string, string> = {};
     selectedIds.forEach(id => {
       rmks[id] = "";
       ts[id] = true;
       sm[id] = [];
+      lt[id] = "";
     });
     setBulkRemarkInputs(rmks);
     setBulkToggles(ts);
     setBulkSocialMedia(sm);
+    setBulkLeadTimeInputs(lt);
     setIsBulkModalOpen(true);
   };
 
@@ -585,6 +589,10 @@ export default function HRMSModulePage({ params }: { params: Promise<{ module: s
 
       if (module === 'recruitment' && n === 1) {
         upd.social_medias_1 = JSON.stringify(bulkSocialMedia[id] || []);
+      }
+
+      if (module === 'candidate' && n === 7) {
+        upd.lead_time_for_emp_joining_7 = bulkLeadTimeInputs[id] || "";
       }
 
       if (n < stepCount) {
@@ -620,20 +628,28 @@ export default function HRMSModulePage({ params }: { params: Promise<{ module: s
           <p className="text-[10px] font-bold text-gray-400 dark:text-slate-400 uppercase tracking-widest">HUMAN RESOURCE MANAGEMENT SYSTEM</p>
         </div>
 
-        <div className="flex items-center gap-1 rounded-full border-2 border-[#003875] dark:border-[#FFD500] bg-white dark:bg-navy-900 shadow-xl p-0.5">
-          <button onClick={handleExport} className="flex items-center gap-2 px-4 py-1 font-black uppercase tracking-widest text-[10px] text-[#003875] dark:text-[#FFD500] hover:bg-slate-50 dark:hover:bg-navy-800 transition-all rounded-full">
-            <ArrowDownTrayIcon className="w-3.5 h-3.5" /> <span>EXPORT</span>
-          </button>
-          <button onClick={() => { setConfigFormData(JSON.parse(JSON.stringify(globalConfigs))); setIsConfigModalOpen(true); }} className="flex items-center gap-2 px-4 py-1 font-black uppercase tracking-widest text-[10px] text-[#003875] dark:text-[#FFD500] hover:bg-slate-50 dark:hover:bg-navy-800 transition-all rounded-full">
-            <Cog6ToothIcon className="w-3.5 h-3.5" /> <span>CONFIG</span>
-          </button>
-          <button onClick={() => { setEditingItem(null); setFormData({}); setUploadFile(null); setIsModalOpen(true); }} className="px-3 py-1 text-[#003875] dark:text-[#FFD500] hover:bg-slate-50 dark:hover:bg-navy-800 transition-all rounded-full">
-            <PlusIcon className="w-4 h-4 stroke-[2.5]" />
-          </button>
-          <div className="w-[1px] h-5 bg-slate-200 dark:bg-navy-700 mx-1" />
-          <button onClick={() => setViewMode(viewMode === 'cancelled' ? 'active' : 'cancelled')} className={`flex items-center gap-2 px-4 py-1 font-black uppercase tracking-widest text-[10px] transition-all rounded-full ${viewMode === 'cancelled' ? 'bg-red-500 text-white shadow-md' : 'text-[#003875] dark:text-[#FFD500] hover:bg-slate-50 dark:hover:bg-navy-800'}`}>
-            <NoSymbolIcon className="w-3.5 h-3.5" /> <span>CANCELLED ({items.filter(i => !!(i.cancelled || "").trim()).length})</span>
-          </button>
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-1 rounded-full border-2 border-[#003875] dark:border-[#FFD500] bg-white dark:bg-navy-900 shadow-xl p-0.5">
+            <button onClick={handleExport} className="flex items-center gap-2 px-4 py-1 font-black uppercase tracking-widest text-[10px] text-[#003875] dark:text-[#FFD500] hover:bg-slate-50 dark:hover:bg-navy-800 transition-all rounded-full">
+              <ArrowDownTrayIcon className="w-3.5 h-3.5" /> <span>EXPORT</span>
+            </button>
+            <button onClick={() => { setConfigFormData(JSON.parse(JSON.stringify(globalConfigs))); setIsConfigModalOpen(true); }} className="flex items-center gap-2 px-4 py-1 font-black uppercase tracking-widest text-[10px] text-[#003875] dark:text-[#FFD500] hover:bg-slate-50 dark:hover:bg-navy-800 transition-all rounded-full">
+              <Cog6ToothIcon className="w-3.5 h-3.5" /> <span>CONFIG</span>
+            </button>
+            <button onClick={() => { setEditingItem(null); setFormData({}); setUploadFile(null); setIsModalOpen(true); }} className="px-3 py-1 text-[#003875] dark:text-[#FFD500] hover:bg-slate-50 dark:hover:bg-navy-800 transition-all rounded-full">
+              <PlusIcon className="w-4 h-4 stroke-[2.5]" />
+            </button>
+            <div className="w-[1px] h-5 bg-slate-200 dark:bg-navy-700 mx-1" />
+            <button onClick={() => setViewMode(viewMode === 'cancelled' ? 'active' : 'cancelled')} className={`flex items-center gap-2 px-4 py-1 font-black uppercase tracking-widest text-[10px] transition-all rounded-full ${viewMode === 'cancelled' ? 'bg-red-500 text-white shadow-md' : 'text-[#003875] dark:text-[#FFD500] hover:bg-slate-50 dark:hover:bg-navy-800'}`}>
+              <NoSymbolIcon className="w-3.5 h-3.5" /> <span>CANCELLED ({items.filter(i => !!(i.cancelled || "").trim()).length})</span>
+            </button>
+          </div>
+
+          {module === 'candidate' && (
+            <a href="https://script.google.com/macros/s/AKfycbybAD4u_sYiboaNah8WmTmIanTQTZZdnEqoNUmA8KuDsPMSg94St1zKHaarG3IHggX3ow/exec" target="_blank" rel="noreferrer" className="flex items-center gap-2 px-5 py-1.5 font-black uppercase tracking-widest text-[10px] text-[#003875] dark:text-[#FFD500] bg-white dark:bg-navy-900 border-2 border-[#003875] dark:border-[#FFD500] hover:bg-slate-50 dark:hover:bg-navy-800 transition-all rounded-full shadow-md">
+               <DocumentTextIcon className="w-3.5 h-3.5" /> <span>GOOGLE FORM</span>
+            </a>
+          )}
         </div>
 
         <div className="flex items-center gap-0.5 bg-slate-100 dark:bg-navy-900 rounded-full p-0.5 border border-slate-200 dark:border-navy-800 shadow-inner">
@@ -801,7 +817,9 @@ export default function HRMSModulePage({ params }: { params: Promise<{ module: s
                                     {getFieldIcon(f.name)}
                                     {shortLabel(f.label)}
                                   </p>
-                                  <p className="text-[12px] font-black text-slate-800 dark:text-white truncate">{(item as any)[f.name] || "—"}</p>
+                                  <p className="text-[12px] font-black text-slate-800 dark:text-white truncate">
+                                    {f.type === 'date' && (item as any)[f.name] ? new Date((item as any)[f.name]).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' }) : (item as any)[f.name] || "—"}
+                                  </p>
                                 </div>
                               );
                             })}
@@ -930,7 +948,7 @@ export default function HRMSModulePage({ params }: { params: Promise<{ module: s
                           </td>
                           {formFields.map(f => (
                             <td key={f.name} className="p-3 max-w-[200px] truncate" title={(item as any)[f.name]}>
-                              {(item as any)[f.name] || "—"}
+                              {f.type === 'date' && (item as any)[f.name] ? new Date((item as any)[f.name]).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' }) : (item as any)[f.name] || "—"}
                             </td>
                           ))}
                           <td className="p-3 border-l border-slate-100 dark:border-navy-700 whitespace-nowrap text-slate-500">{new Date(item.created_at).toLocaleDateString('en-GB')} {new Date(item.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</td>
@@ -1021,6 +1039,13 @@ export default function HRMSModulePage({ params }: { params: Promise<{ module: s
                                   </div>
                                 )}
 
+                                {module === 'candidate' && step === 7 && (
+                                  <div className="bg-slate-50 dark:bg-navy-900 p-3 rounded-xl border border-slate-100 dark:border-navy-800 space-y-2">
+                                    <p className="text-[9px] font-black uppercase text-slate-400">Lead Time For Emp. Joining (Step 7)</p>
+                                    <input type="text" placeholder="Enter Lead Time" value={bulkLeadTimeInputs[id] || ""} onChange={e => setBulkLeadTimeInputs({ ...bulkLeadTimeInputs, [id]: e.target.value })} className="w-full px-4 py-2 bg-white dark:bg-navy-950 border border-slate-100 dark:border-navy-800 rounded-xl font-bold text-xs outline-none focus:border-[#003875]" />
+                                  </div>
+                                )}
+
                                 <input type="text" placeholder="Add remark (optional)" value={bulkRemarkInputs[id] || ""} onChange={e => setBulkRemarkInputs({ ...bulkRemarkInputs, [id]: e.target.value })} className="w-full px-4 py-2 bg-slate-50 dark:bg-navy-900 border border-slate-100 dark:border-navy-800 rounded-xl font-bold text-xs outline-none focus:border-[#003875]" />
                               </div>
                             ) : (
@@ -1069,67 +1094,70 @@ export default function HRMSModulePage({ params }: { params: Promise<{ module: s
             </div>
             <form onSubmit={handleSave} className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar bg-white dark:bg-navy-800/50">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {formFields.map(f => (
-                  <div key={f.name} className={`relative mt-2 ${f.type === "textarea" && f.name !== "skills_required" && f.name !== "work_and_responsibilities" ? "col-span-1 md:col-span-2" : ""}`}>
-                    <label className="absolute -top-2.5 left-3 bg-white dark:bg-navy-800 px-1.5 flex items-center gap-1.5 text-[11px] font-black text-[#003875] dark:text-[#FFD500] uppercase tracking-widest z-10">
-                      <QuestionMarkCircleIcon className="w-4 h-4 text-[#003875] dark:text-[#FFD500]" />
-                      {f.label}
-                    </label>
-                    {f.name === "male_female" || f.name === "urgency" ? (
-                      <div className="flex bg-[#FFFBF0] dark:bg-navy-900 rounded-xl border border-orange-100 dark:border-navy-700 p-1 shadow-sm pt-2">
-                        {f.options?.map(opt => (
-                          <button type="button" key={opt} onClick={() => setFormData({ ...formData, [f.name]: opt })} className={`flex-1 text-[11px] font-black py-2 rounded-lg transition-all ${formData[f.name] === opt ? "bg-[#003875] text-[#FFD500] shadow-md" : "text-gray-500 hover:bg-white dark:hover:bg-navy-800"}`}>{opt}</button>
-                        ))}
-                      </div>
-                    ) : f.name === "gtk_office_comfortable" ? (
-                      <div className="bg-[#FFFBF0] dark:bg-navy-900 rounded-xl border border-orange-100 dark:border-navy-700 p-4 shadow-sm pt-5">
-                        <div className="space-y-1.5">
-                          <p className="text-xs font-semibold text-slate-600 dark:text-navy-300">Are you comfortable working from our GTK Office?</p>
-                          <a href="https://www.google.com/maps/place/Robotek+India/@28.7000325,77.1728141,5818m/data=!3m1!1e3!4m6!3m5!1s0x390d037b67f99bb7:0xb7fe05fbafc41e98!8m2!3d28.6949603!4d77.187099!16s%2Fg%2F11vcw95rvz!5m1!1e1?entry=ttu&g_ep=EgoyMDI2MDYwMS4wIKXMDSoASAFQAw%3D%3D" target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-600 dark:text-blue-400 hover:underline">
-                            <MapPinIcon className="w-3.5 h-3.5" /> View Location on Map
-                          </a>
+                {formFields.map(f => {
+                  const isFullWidth = (f.type === "textarea" && f.name !== "skills_required" && f.name !== "work_and_responsibilities") || f.name === "slot_booking" || f.name === "gtk_office_comfortable" || f.name.includes("lead_time");
+                  return (
+                    <div key={f.name} className={`relative mt-2 ${isFullWidth ? "col-span-1 md:col-span-2" : ""}`}>
+                      <label className="absolute -top-2.5 left-3 bg-white dark:bg-navy-800 px-1.5 flex items-center gap-1.5 text-[11px] font-black text-[#003875] dark:text-[#FFD500] uppercase tracking-widest z-10">
+                        <QuestionMarkCircleIcon className="w-4 h-4 text-[#003875] dark:text-[#FFD500]" />
+                        {f.label}
+                      </label>
+                      {f.name === "male_female" || f.name === "urgency" ? (
+                        <div className="flex bg-[#FFFBF0] dark:bg-navy-900 rounded-xl border border-orange-100 dark:border-navy-700 p-1 shadow-sm pt-2">
+                          {f.options?.map(opt => (
+                            <button type="button" key={opt} onClick={() => setFormData({ ...formData, [f.name]: opt })} className={`flex-1 text-[11px] font-black py-2 rounded-lg transition-all ${formData[f.name] === opt ? "bg-[#003875] text-[#FFD500] shadow-md" : "text-gray-500 hover:bg-white dark:hover:bg-navy-800"}`}>{opt}</button>
+                          ))}
                         </div>
-                        <div className="mt-4 flex items-center gap-3">
-                          <span className={`text-xs font-bold ${formData[f.name] !== "Yes" ? "text-slate-900 dark:text-white" : "text-slate-400 dark:text-slate-500"}`}>No</span>
-                          <button
-                            type="button"
-                            onClick={() => setFormData({ ...formData, [f.name]: formData[f.name] === "Yes" ? "No" : "Yes" })}
-                            className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${formData[f.name] === "Yes" ? "bg-blue-600" : "bg-slate-300 dark:bg-navy-600"}`}
-                          >
-                            <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${formData[f.name] === "Yes" ? "translate-x-5" : "translate-x-0"}`} />
-                          </button>
-                          <span className={`text-xs font-bold ${formData[f.name] === "Yes" ? "text-slate-900 dark:text-white" : "text-slate-400 dark:text-slate-500"}`}>Yes</span>
+                      ) : f.name === "gtk_office_comfortable" ? (
+                        <div className="bg-[#FFFBF0] dark:bg-navy-900 rounded-xl border border-orange-100 dark:border-navy-700 p-4 shadow-sm pt-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                          <div className="space-y-1.5">
+                            <p className="text-xs font-semibold text-slate-600 dark:text-navy-300">Are you comfortable working from our GTK Office?</p>
+                            <a href="https://www.google.com/maps/place/Robotek+India/@28.7000325,77.1728141,5818m/data=!3m1!1e3!4m6!3m5!1s0x390d037b67f99bb7:0xb7fe05fbafc41e98!8m2!3d28.6949603!4d77.187099!16s%2Fg%2F11vcw95rvz!5m1!1e1?entry=ttu&g_ep=EgoyMDI2MDYwMS4wIKXMDSoASAFQAw%3D%3D" target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-600 dark:text-blue-400 hover:underline">
+                              <MapPinIcon className="w-3.5 h-3.5" /> View Location on Map
+                            </a>
+                          </div>
+                          <div className="flex items-center gap-3 bg-white dark:bg-navy-800 px-4 py-2 rounded-lg border border-slate-100 dark:border-navy-700 shadow-sm">
+                            <span className={`text-xs font-bold ${formData[f.name] !== "Yes" ? "text-slate-900 dark:text-white" : "text-slate-400 dark:text-slate-500"}`}>No</span>
+                            <button
+                              type="button"
+                              onClick={() => setFormData({ ...formData, [f.name]: formData[f.name] === "Yes" ? "No" : "Yes" })}
+                              className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${formData[f.name] === "Yes" ? "bg-blue-600" : "bg-slate-300 dark:bg-navy-600"}`}
+                            >
+                              <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${formData[f.name] === "Yes" ? "translate-x-5" : "translate-x-0"}`} />
+                            </button>
+                            <span className={`text-xs font-bold ${formData[f.name] === "Yes" ? "text-slate-900 dark:text-white" : "text-slate-400 dark:text-slate-500"}`}>Yes</span>
+                          </div>
                         </div>
-                      </div>
-                    ) : f.type === "radio" ? (
-                      <div className="bg-[#FFFBF0] dark:bg-navy-900 rounded-xl border border-orange-100 dark:border-navy-700 p-3 shadow-sm pt-4 space-y-2 max-h-[200px] overflow-y-auto custom-scrollbar">
-                        {f.options?.map(opt => (
-                          <label key={opt} className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${formData[f.name] === opt ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20 shadow-sm" : "border-slate-200 dark:border-navy-700 hover:border-blue-300 dark:hover:border-blue-700"}`}>
-                            <div className={`w-4 h-4 rounded-full border flex items-center justify-center flex-shrink-0 transition-colors ${formData[f.name] === opt ? "border-blue-600 bg-white dark:bg-navy-800" : "border-slate-300 dark:border-navy-600 bg-white dark:bg-navy-900"}`}>
-                              {formData[f.name] === opt && <div className="w-2 h-2 rounded-full bg-blue-600" />}
-                            </div>
-                            <span className="text-xs font-bold text-slate-700 dark:text-slate-300">{opt}</span>
-                          </label>
-                        ))}
-                      </div>
-                    ) : f.name === "requirement_by" ? (
-                      <div className="pt-0">
-                        <UserSingleCombobox value={formData[f.name] || ""} onChange={val => setFormData({ ...formData, [f.name]: val })} users={usersList.map(u => u.username || u.name).filter(Boolean)} placeholder="Select User..." />
-                      </div>
-                    ) : f.type === "textarea" ? (
-                      <textarea value={formData[f.name] || ""} onChange={e => setFormData({ ...formData, [f.name]: e.target.value })} className="w-full bg-[#FFFBF0] dark:bg-navy-900 px-4 py-3 rounded-xl border border-orange-100 dark:border-navy-700 focus:border-[#FFD500] outline-none font-bold text-xs text-gray-800 dark:text-zinc-100 transition-all shadow-sm resize-none min-h-[80px]" rows={3} />
-                    ) : f.type === "select" ? (
-                      <select value={formData[f.name] || ""} onChange={e => setFormData({ ...formData, [f.name]: e.target.value })} className="w-full bg-[#FFFBF0] dark:bg-navy-900 px-4 py-3 rounded-xl border border-orange-100 dark:border-navy-700 focus:border-[#FFD500] outline-none font-black text-xs text-gray-900 dark:text-white transition-all shadow-sm">
-                        <option value="">Select...</option>
-                        {f.options?.map(o => <option key={o} value={o}>{o}</option>)}
-                      </select>
-                    ) : f.type === "file" ? (
-                      <input type="file" onChange={e => setUploadFile(e.target.files?.[0] || null)} className="w-full px-4 py-2.5 bg-[#FFFBF0] dark:bg-navy-900 border border-orange-100 dark:border-navy-700 rounded-xl text-xs font-bold text-gray-800 dark:text-white file:mr-4 file:py-1 file:px-3 file:rounded-full file:border-0 file:text-[10px] file:font-black file:bg-[#003875] file:text-[#FFD500] hover:file:bg-[#002855] transition-all shadow-sm" />
-                    ) : (
-                      <input type={f.type} value={formData[f.name] || ""} onChange={e => setFormData({ ...formData, [f.name]: e.target.value })} className="w-full bg-[#FFFBF0] dark:bg-navy-900 px-4 py-3 rounded-xl border border-orange-100 dark:border-navy-700 focus:border-[#FFD500] outline-none font-black text-xs text-gray-900 dark:text-white transition-all shadow-sm" />
-                    )}
-                  </div>
-                ))}
+                      ) : f.type === "radio" ? (
+                        <div className="bg-[#FFFBF0] dark:bg-navy-900 rounded-xl border border-orange-100 dark:border-navy-700 p-3 shadow-sm pt-4 max-h-[240px] overflow-y-auto custom-scrollbar grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          {f.options?.map(opt => (
+                            <label key={opt} onClick={() => setFormData({ ...formData, [f.name]: opt })} className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${formData[f.name] === opt ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20 shadow-sm" : "border-slate-200 dark:border-navy-700 hover:border-blue-300 dark:hover:border-blue-700"}`}>
+                              <div className={`w-4 h-4 rounded-full border flex items-center justify-center flex-shrink-0 transition-colors ${formData[f.name] === opt ? "border-blue-600 bg-white dark:bg-navy-800" : "border-slate-300 dark:border-navy-600 bg-white dark:bg-navy-900"}`}>
+                                {formData[f.name] === opt && <div className="w-2 h-2 rounded-full bg-blue-600" />}
+                              </div>
+                              <span className="text-xs font-bold text-slate-700 dark:text-slate-300">{opt}</span>
+                            </label>
+                          ))}
+                        </div>
+                      ) : f.name === "requirement_by" ? (
+                        <div className="pt-0">
+                          <UserSingleCombobox value={formData[f.name] || ""} onChange={val => setFormData({ ...formData, [f.name]: val })} users={usersList.map(u => u.username || u.name).filter(Boolean)} placeholder="Select User..." />
+                        </div>
+                      ) : f.type === "textarea" ? (
+                        <textarea value={formData[f.name] || ""} onChange={e => setFormData({ ...formData, [f.name]: e.target.value })} className="w-full bg-[#FFFBF0] dark:bg-navy-900 px-4 py-3 rounded-xl border border-orange-100 dark:border-navy-700 focus:border-[#FFD500] outline-none font-bold text-xs text-gray-800 dark:text-zinc-100 transition-all shadow-sm resize-none min-h-[80px]" rows={3} />
+                      ) : f.type === "select" ? (
+                        <select value={formData[f.name] || ""} onChange={e => setFormData({ ...formData, [f.name]: e.target.value })} className="w-full bg-[#FFFBF0] dark:bg-navy-900 px-4 py-3 rounded-xl border border-orange-100 dark:border-navy-700 focus:border-[#FFD500] outline-none font-black text-xs text-gray-900 dark:text-white transition-all shadow-sm">
+                          <option value="">Select...</option>
+                          {f.options?.map(o => <option key={o} value={o}>{o}</option>)}
+                        </select>
+                      ) : f.type === "file" ? (
+                        <input type="file" onChange={e => setUploadFile(e.target.files?.[0] || null)} className="w-full px-4 py-2.5 bg-[#FFFBF0] dark:bg-navy-900 border border-orange-100 dark:border-navy-700 rounded-xl text-xs font-bold text-gray-800 dark:text-white file:mr-4 file:py-1 file:px-3 file:rounded-full file:border-0 file:text-[10px] file:font-black file:bg-[#003875] file:text-[#FFD500] hover:file:bg-[#002855] transition-all shadow-sm" />
+                      ) : (
+                        <input type={f.type} value={formData[f.name] || ""} onChange={e => setFormData({ ...formData, [f.name]: e.target.value })} className="w-full bg-[#FFFBF0] dark:bg-navy-900 px-4 py-3 rounded-xl border border-orange-100 dark:border-navy-700 focus:border-[#FFD500] outline-none font-black text-xs text-gray-900 dark:text-white transition-all shadow-sm" />
+                      )}
+                    </div>
+                  );
+                })}
               </div>
 
 
