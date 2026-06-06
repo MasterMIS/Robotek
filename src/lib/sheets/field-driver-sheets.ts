@@ -120,25 +120,7 @@ export async function updateFieldDriverCheckOut(
     const rowIndex = rows.findIndex(row => row[0] === id);
     if (rowIndex === -1) return false;
 
-    await sheets.spreadsheets.values.update({
-      spreadsheetId: FIELD_DRIVER_SPREADSHEET_ID,
-      range: `Field Driver!F${rowIndex + 1}:N${rowIndex + 1}`,
-      valueInputOption: "USER_ENTERED",
-      requestBody: {
-        values: [[
-          outTime,
-          status,
-          "", // inLocation (don't overwrite, but wait we need to keep existing? no, this will overwrite)
-          outLocation,
-          "", // odometerIn
-          odometerOut,
-          "", // odometerPhotoIn
-          odometerPhotoOut,
-          totalKm
-        ]],
-      },
-    });
-    
+
     // Better way: get full row first, merge, then update.
     const fullRowRes = await sheets.spreadsheets.values.get({
         spreadsheetId: FIELD_DRIVER_SPREADSHEET_ID,
