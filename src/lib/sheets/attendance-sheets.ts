@@ -27,6 +27,8 @@ export interface AttendanceRecord {
   status: string;
   inPhoto?: string;
   outPhoto?: string;
+  inLocation?: string;
+  outLocation?: string;
 }
 
 export async function getAttendanceRecords(): Promise<AttendanceRecord[]> {
@@ -34,7 +36,7 @@ export async function getAttendanceRecords(): Promise<AttendanceRecord[]> {
     const sheets = await getSheetsClient();
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: ATTENDANCE_SPREADSHEET_ID,
-      range: "Sheet1!A:I",
+      range: "Sheet1!A:K",
     });
 
     const rows = response.data.values;
@@ -50,6 +52,8 @@ export async function getAttendanceRecords(): Promise<AttendanceRecord[]> {
       status: row[6] || "",
       inPhoto: row[7] || "",
       outPhoto: row[8] || "",
+      inLocation: row[9] || "",
+      outLocation: row[10] || "",
     }));
   } catch (error) {
     console.error("Error fetching attendance records:", error);
@@ -62,7 +66,7 @@ export async function addAttendanceRecord(record: AttendanceRecord): Promise<boo
     const sheets = await getSheetsClient();
     await sheets.spreadsheets.values.append({
       spreadsheetId: ATTENDANCE_SPREADSHEET_ID,
-      range: "Sheet1!A:I",
+      range: "Sheet1!A:K",
       valueInputOption: "USER_ENTERED",
       requestBody: {
         values: [[
@@ -75,6 +79,8 @@ export async function addAttendanceRecord(record: AttendanceRecord): Promise<boo
           record.status,
           record.inPhoto,
           record.outPhoto,
+          record.inLocation || "",
+          record.outLocation || "",
         ]],
       },
     });
@@ -85,7 +91,7 @@ export async function addAttendanceRecord(record: AttendanceRecord): Promise<boo
   }
 }
 
-export async function updateAttendanceRecord(id: string, outTime: string, status: string, outPhoto?: string): Promise<boolean> {
+export async function updateAttendanceRecord(id: string, outTime: string, status: string, outPhoto?: string, outLocation?: string): Promise<boolean> {
   try {
     const sheets = await getSheetsClient();
     const response = await sheets.spreadsheets.values.get({
@@ -115,6 +121,17 @@ export async function updateAttendanceRecord(id: string, outTime: string, status
         valueInputOption: "USER_ENTERED",
         requestBody: {
           values: [[outPhoto]],
+        },
+      });
+    }
+
+    if (outLocation) {
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: ATTENDANCE_SPREADSHEET_ID,
+        range: `Sheet1!K${rowIndex + 1}`,
+        valueInputOption: "USER_ENTERED",
+        requestBody: {
+          values: [[outLocation]],
         },
       });
     }

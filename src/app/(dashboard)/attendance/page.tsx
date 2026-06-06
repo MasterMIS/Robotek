@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { ensureSessionId } from '@/utils/session';
 import { useToast } from '@/components/ToastProvider';
 import CustomDateTimePicker from '@/components/CustomDateTimePicker';
@@ -97,6 +97,7 @@ export default function AttendancePage() {
 
     // Real-time Location State
     const [liveLocation, setLiveLocation] = useState<{ lat: number, lng: number, accuracy?: number } | null>(null);
+    const [liveAddress, setLiveAddress] = useState<string | null>(null);
     const [locationError, setLocationError] = useState<string | null>(null);
     const [isApple, setIsApple] = useState(false);
     const [isMobile, setIsMobile] = useState(false);
@@ -104,7 +105,34 @@ export default function AttendancePage() {
     const [capturedImage, setCapturedImage] = useState<string | null>(null);
     const [submitTarget, setSubmitTarget] = useState<'IN' | 'OUT' | null>(null);
     const [masterSearch, setMasterSearch] = useState('');
-    const [reportViewMode, setReportViewMode] = useState<'STATUS' | 'TIME'>('STATUS');
+    const [reportViewMode, setReportViewMode] = useState<'STATUS' | 'TIME' | 'INFO'>('STATUS');
+
+    // Dual Scrollbar Logic
+    const topScrollRef = useRef<HTMLDivElement>(null);
+    const tableScrollRef = useRef<HTMLDivElement>(null);
+    const dummyDivRef = useRef<HTMLDivElement>(null);
+
+    const handleTopScroll = () => {
+        if (tableScrollRef.current && topScrollRef.current) {
+            tableScrollRef.current.scrollLeft = topScrollRef.current.scrollLeft;
+        }
+    };
+
+    const handleTableScroll = () => {
+        if (topScrollRef.current && tableScrollRef.current) {
+            topScrollRef.current.scrollLeft = tableScrollRef.current.scrollLeft;
+            if (dummyDivRef.current && dummyDivRef.current.style.width !== `${tableScrollRef.current.scrollWidth}px`) {
+                dummyDivRef.current.style.width = `${tableScrollRef.current.scrollWidth}px`;
+            }
+        }
+    };
+    
+    // Ensure initial width is set after data loads
+    useEffect(() => {
+        if (tableScrollRef.current && dummyDivRef.current) {
+            dummyDivRef.current.style.width = `${tableScrollRef.current.scrollWidth}px`;
+        }
+    }, [masterData, reportViewMode]);
 
     useEffect(() => {
         const ua = navigator.userAgent;
@@ -230,6 +258,27 @@ export default function AttendancePage() {
         return () => navigator.geolocation.clearWatch(watchId);
     }, []);
 
+    // Reverse Geocoding
+    useEffect(() => {
+        if (!liveLocation) return;
+        
+        const timeoutId = setTimeout(async () => {
+            try {
+                const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${liveLocation.lat}&lon=${liveLocation.lng}&zoom=18&addressdetails=1`);
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data && data.display_name) {
+                        setLiveAddress(data.display_name);
+                    }
+                }
+            } catch (err) {
+                console.error("Reverse geocoding failed", err);
+            }
+        }, 1500);
+
+        return () => clearTimeout(timeoutId);
+    }, [liveLocation?.lat, liveLocation?.lng]);
+
     // Timer Logic 
     useEffect(() => {
         let interval: NodeJS.Timeout;
@@ -330,6 +379,7 @@ export default function AttendancePage() {
                     userName: user.username,
                     latitude: liveLocation?.lat,
                     longitude: liveLocation?.lng,
+                    address: liveAddress,
                     photo: photoData
                 })
             });
@@ -678,7 +728,7 @@ export default function AttendancePage() {
             </div>
 
             {activeTab === 'ATTENDANCE' && (
-                <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+                <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
                     {/* Calendar Section */}
                     <div 
                         style={{ backgroundColor: 'var(--panel-card)' }}
@@ -699,13 +749,15 @@ export default function AttendancePage() {
                         </div>
                     </div>
 
-                    {/* Action Panel */}
-                    <div className="flex flex-col gap-6">
-                        <div 
-                            style={{ backgroundColor: 'var(--panel-card)' }}
-                            className="rounded-[32px] shadow-2xl p-8 border border-white/40 dark:border-white/5 text-center relative group overflow-hidden"
-                        >
-                            <div className={`absolute top-0 left-0 w-full h-1 ${currentStatus === 'CHECKED_IN' ? 'bg-[#FFD500] animate-pulse' : 'bg-[#003875] dark:bg-[#FFD500] opacity-30'}`}></div>
+                    {/* Action & Location Panel */}
+                    <div 
+                        style={{ backgroundColor: 'var(--panel-card)' }}
+                        className="lg:col-span-2 rounded-[32px] shadow-2xl p-6 border border-white/40 dark:border-white/5 relative flex flex-col xl:flex-row gap-6 overflow-hidden"
+                    >
+                        <div className={`absolute top-0 left-0 w-full h-1 ${currentStatus === 'CHECKED_IN' ? 'bg-[#FFD500] animate-pulse' : 'bg-[#003875] dark:bg-[#FFD500] opacity-30'}`}></div>
+                        
+                        {/* Global Work System (Left Half) */}
+                        <div className="flex-1 flex flex-col text-center items-center justify-start relative xl:border-r border-gray-200 dark:border-white/10 xl:pr-6 pb-6 xl:pb-0 border-b xl:border-b-0">
                             <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.25em] mb-2 opacity-70">
                                 {currentStatus === 'CHECKED_IN' ? 'Active Shift' : 'Global Work System'}
                             </h3>
@@ -714,10 +766,10 @@ export default function AttendancePage() {
                                     Since {checkInTime.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
                                 </div>
                             )}
-                            <div className={`text-5xl font-black mb-8 tracking-tighter font-mono ${currentStatus === 'CHECKED_IN' ? 'text-[#FFD500]' : 'text-[#003875] dark:text-white'}`}>{elapsedTime}</div>
+                            <div className={`text-4xl xl:text-5xl font-black mb-8 tracking-tighter font-mono ${currentStatus === 'CHECKED_IN' ? 'text-[#FFD500]' : 'text-[#003875] dark:text-white'}`}>{elapsedTime}</div>
                             
                             {currentStatus === 'IDLE' ? (
-                                <div className="space-y-4">
+                                <div className="space-y-4 w-full">
                                     <button
                                         onClick={() => setShowCameraMode('CHECK_IN')}
                                         disabled={!isInRange || isPageLoading}
@@ -740,27 +792,70 @@ export default function AttendancePage() {
                                     {isPageLoading ? 'Processing...' : '⏹ Check Out & End Shift'}
                                 </button>
                             ) : (
-                                <div className="p-6 bg-green-500/10 rounded-3xl border border-green-500/20 text-green-600 font-black text-sm uppercase tracking-widest">Shift Completed ✅</div>
+                                <div className="w-full p-6 bg-green-500/10 rounded-3xl border border-green-500/20 text-green-600 font-black text-sm uppercase tracking-widest">Shift Completed ✅</div>
                             )}
+
+                            <div className="w-full mt-6">
+                                {/* Current Actual */}
+                                {liveLocation && (
+                                    <div className="p-3 bg-gray-50 dark:bg-slate-900/50 rounded-2xl border border-white/5 text-center shadow-inner mb-3">
+                                        <div className="inline-flex items-center gap-2 mb-3 bg-green-500/10 px-3 py-1 rounded-full text-green-600 border border-green-500/20">
+                                            <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                                            <span className="text-[10px] font-black uppercase tracking-widest">Live GPS Active</span>
+                                        </div>
+                                        {liveAddress && (
+                                           <div className="mb-3 text-[11px] font-bold text-gray-500 dark:text-gray-400 w-full px-2 mx-auto leading-relaxed">
+                                               <MapPinIcon className="w-3 h-3 inline mr-1 text-[#003875] dark:text-[#FFD500]" />
+                                               {liveAddress}
+                                           </div>
+                                        )}
+                                        <div className="flex justify-center gap-6">
+                                            <div className="text-[11px] font-mono font-bold text-gray-600 dark:text-gray-300">
+                                                <span className="text-gray-400 mr-1">LAT</span> {liveLocation.lat.toFixed(5)}
+                                            </div>
+                                            <div className="text-[11px] font-mono font-bold text-gray-600 dark:text-gray-300">
+                                                <span className="text-gray-400 mr-1">LNG</span> {liveLocation.lng.toFixed(5)}
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Action Buttons */}
+                                <div className="flex flex-col gap-3">
+                                    <button onClick={refreshLocationManual} className="w-full py-3 bg-gray-50 dark:bg-slate-900/50 hover:bg-gray-100 dark:hover:bg-slate-900 rounded-xl border border-gray-200 dark:border-white/5 text-[11px] font-black uppercase tracking-widest text-gray-600 dark:text-gray-400 flex items-center justify-center gap-2 transition-all shadow-sm">
+                                        <ArrowPathIcon className="w-4 h-4" />
+                                        Refresh GPS
+                                    </button>
+                                    
+                                    {liveLocation && closestPoint && !isInRange && (
+                                       <a 
+                                           href={`https://www.google.com/maps/dir/?api=1&destination=${closestPoint.lat},${closestPoint.long}`} 
+                                           target="_blank" 
+                                           rel="noreferrer" 
+                                           className="w-full py-3 bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/20 dark:hover:bg-blue-900/40 rounded-xl border border-blue-200 dark:border-blue-500/20 text-[11px] font-black uppercase tracking-widest text-blue-600 dark:text-blue-400 flex items-center justify-center gap-2 transition-all shadow-sm"
+                                       >
+                                           <MapPinIcon className="w-4 h-4" />
+                                           Find Gap
+                                       </a>
+                                    )}
+                                </div>
+                            </div>
                         </div>
 
-                        {/* Location Intelligence Section */}
-                        <div 
-                            style={{ backgroundColor: 'var(--panel-card)' }}
-                            className="rounded-[32px] shadow-2xl p-8 border border-white/40 dark:border-white/5 flex-grow"
-                        >
-                             <h3 className="text-xs font-black mb-6 flex items-center gap-2 text-gray-800 dark:text-white uppercase border-b border-gray-100 dark:border-white/5 pb-4">
+                        {/* Location Intelligence (Right Half) */}
+                        <div className="flex-1 flex flex-col justify-start">
+                             <h3 className="text-[10px] font-black mb-4 flex items-center justify-center xl:justify-start gap-2 text-gray-800 dark:text-white uppercase">
                                 <MapPinIcon className="w-4 h-4 text-[#003875] dark:text-[#FFD500]" /> Location Intelligence
                              </h3>
 
                              {!user.late_long ? (
-                                 <div className="text-center py-6 opacity-40 italic text-xs font-bold text-gray-500">No HQ Registered</div>
+                                 <div className="flex-1 flex items-center justify-center opacity-40 italic text-xs font-bold text-gray-500">No HQ Registered</div>
                              ) : (
-                                 <div className="space-y-5">
+                                 <div className="flex-1 flex flex-col gap-3 overflow-y-auto no-scrollbar max-h-[450px]">
                                      {/* Registered Bases */}
                                      {registeredPoints && registeredPoints.length > 0 && (
-                                         <div className="p-4 bg-gray-50 dark:bg-slate-900/50 rounded-2xl border border-white/5 space-y-3 max-h-48 overflow-y-auto no-scrollbar shadow-inner">
-                                             <div className="sticky top-0 bg-gray-50 dark:bg-slate-900/50 pb-1 z-10 text-[8px] font-black text-gray-400 uppercase tracking-widest flex items-center justify-between">
+                                         <div className="p-3 bg-gray-50 dark:bg-slate-900/50 rounded-2xl border border-white/5 space-y-2 shadow-inner">
+                                             <div className="text-[9px] font-black text-gray-400 uppercase tracking-widest flex items-center justify-between pb-1">
                                                  <span>Registered Bases ({registeredPoints.length})</span>
                                                  {liveLocation && <span>Distance</span>}
                                              </div>
@@ -769,16 +864,13 @@ export default function AttendancePage() {
                                                  const isNearest = closestPoint && pt.lat === closestPoint.lat && pt.long === closestPoint.long;
                                                  
                                                  return (
-                                                     <div key={idx} className={`flex items-center justify-between p-2 rounded-xl border transition-all ${isNearest ? 'border-[#003875]/20 bg-[#003875]/5 dark:border-[#FFD500]/20 dark:bg-[#FFD500]/10 shadow-sm' : 'border-transparent hover:bg-white/50 dark:hover:bg-slate-800/50'}`}>
+                                                     <div key={idx} className={`flex items-center justify-between p-3 rounded-xl border transition-all ${isNearest ? 'border-[#003875]/20 bg-[#003875]/5 dark:border-[#FFD500]/20 dark:bg-[#FFD500]/10 shadow-sm' : 'border-transparent hover:bg-white/50 dark:hover:bg-slate-800/50'}`}>
                                                          <div className="flex items-center gap-2">
                                                              <MapPinIcon className={`w-4 h-4 shrink-0 ${isNearest ? 'text-[#003875] dark:text-[#FFD500]' : 'text-gray-400'}`} />
                                                              <div>
-                                                                 <div className={`text-[10px] font-bold uppercase tracking-wider ${isNearest ? 'text-[#003875] dark:text-[#FFD500]' : 'text-gray-600 dark:text-gray-400'}`}>
+                                                                 <div className={`text-[11px] font-bold uppercase tracking-wider ${isNearest ? 'text-[#003875] dark:text-[#FFD500]' : 'text-gray-600 dark:text-gray-400'}`}>
                                                                      {pt.name || `Location ${idx + 1}`}
-                                                                     {isNearest && <span className="ml-1 text-[8px] bg-[#003875] text-white dark:bg-[#FFD500] dark:text-[#003875] px-1 py-0.5 rounded uppercase font-black">Closest</span>}
-                                                                 </div>
-                                                                 <div className="text-[8px] font-mono font-bold text-gray-500 opacity-70">
-                                                                     {pt.lat.toFixed(5)}, {pt.long.toFixed(5)}
+                                                                     {isNearest && <span className="ml-2 text-[9px] bg-[#003875] text-white dark:bg-[#FFD500] dark:text-[#003875] px-1.5 py-0.5 rounded uppercase font-black">Closest</span>}
                                                                  </div>
                                                              </div>
                                                          </div>
@@ -794,54 +886,16 @@ export default function AttendancePage() {
                                          </div>
                                      )}
 
-                                     {/* Current Actual */}
-                                     {liveLocation && (
-                                         <div className="p-4 bg-gray-50 dark:bg-slate-900/50 rounded-2xl border border-white/5 text-center shadow-inner">
-                                             <div className="inline-flex items-center gap-2 mb-2 bg-green-500/10 px-3 py-1 rounded-full text-green-600 border border-green-500/20">
-                                                 <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-                                                 <span className="text-[8px] font-black uppercase tracking-widest">Live GPS Active</span>
-                                             </div>
-                                             <div className="flex justify-center gap-6">
-                                                 <div className="text-[10px] font-mono font-bold text-gray-600 dark:text-gray-300">
-                                                     <span className="text-gray-400 mr-1">LAT</span> {liveLocation.lat.toFixed(6)}
-                                                 </div>
-                                                 <div className="text-[10px] font-mono font-bold text-gray-600 dark:text-gray-300">
-                                                     <span className="text-gray-400 mr-1">LNG</span> {liveLocation.lng.toFixed(6)}
-                                                 </div>
-                                             </div>
-                                         </div>
-                                     )}
-
                                      {/* Big Distance Display */}
-                                     <div className="text-center py-4 border-t border-b border-gray-100 dark:border-white/5 my-2">
-                                         <div className="text-[8px] font-black text-gray-400 uppercase tracking-[0.2em] mb-3">Nearest Location Gap</div>
-                                         <div className={`text-6xl font-black tracking-tighter ${isInRange ? 'text-green-500' : 'text-red-500'} drop-shadow-sm`}>
+                                     <div className="text-center py-2 flex flex-col items-center justify-center mt-4">
+                                         <div className="text-[8px] font-black text-gray-400 uppercase tracking-[0.2em] mb-1">Nearest Gap</div>
+                                         <div className={`text-4xl font-black tracking-tighter ${isInRange ? 'text-green-500' : 'text-red-500'} drop-shadow-sm`}>
                                              {distance !== null ? `${Math.round(distance)}m` : '...'}
                                          </div>
                                          {isInRange && (
-                                             <div className="text-[10px] font-black uppercase tracking-[0.25em] mt-3 py-1.5 px-4 rounded-full inline-block bg-green-500/10 text-green-600 border border-green-500/20">
+                                             <div className="text-[9px] font-black uppercase tracking-[0.2em] mt-1 py-1 px-3 rounded-full inline-block bg-green-500/10 text-green-600 border border-green-500/20">
                                                  In Range ✓
                                              </div>
-                                         )}
-                                     </div>
-
-                                     {/* Action Buttons */}
-                                     <div className="flex flex-col gap-2 mt-2">
-                                         <button onClick={refreshLocationManual} className="w-full py-3 bg-gray-50 dark:bg-slate-900/50 hover:bg-gray-100 dark:hover:bg-slate-900 rounded-2xl border border-gray-200 dark:border-white/5 text-[10px] font-black uppercase tracking-widest text-gray-600 dark:text-gray-400 flex items-center justify-center gap-2 transition-all shadow-sm">
-                                             <ArrowPathIcon className="w-4 h-4" />
-                                             Refresh Location Sync
-                                         </button>
-                                         
-                                         {liveLocation && closestPoint && !isInRange && (
-                                            <a 
-                                                href={`https://www.google.com/maps/dir/?api=1&destination=${closestPoint.lat},${closestPoint.long}`} 
-                                                target="_blank" 
-                                                rel="noreferrer" 
-                                                className="w-full py-3 bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/20 dark:hover:bg-blue-900/40 rounded-2xl border border-blue-200 dark:border-blue-500/20 text-[10px] font-black uppercase tracking-widest text-blue-600 dark:text-blue-400 flex items-center justify-center gap-2 transition-all shadow-sm"
-                                            >
-                                                <MapPinIcon className="w-4 h-4" />
-                                                Find the nearest location gap on Google map
-                                            </a>
                                          )}
                                      </div>
                                  </div>
@@ -1260,55 +1314,59 @@ export default function AttendancePage() {
             {/* REPORT LIST */}
             {activeTab === 'REPORT' && (
                 <div className="bg-[#FCF9F0] dark:bg-slate-800 rounded-[32px] shadow-xl border border-white/10 overflow-hidden flex flex-col h-[calc(100vh-200px)] min-h-[600px]">
-                    {/* Header Top */}
-                    <div className="p-6 md:p-8 border-b border-gray-100 dark:border-white/5 bg-white/50 dark:bg-slate-900/50 flex flex-col xl:flex-row justify-between items-start xl:items-center gap-6">
-                        <div>
-                            <h3 className="text-2xl font-black text-[#FFD500] uppercase tracking-tighter flex items-center gap-3">
-                                <ClockIcon className="w-8 h-8" /> Attendance Comprehensive Report
-                            </h3>
-                            <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest mt-1">Matrix View &bull; Performance Analytics</div>
+                    {/* Header Top - Compact Controls */}
+                    <div className="p-3 px-4 md:px-6 border-b border-gray-100 dark:border-white/5 bg-white/50 dark:bg-slate-900/50 flex flex-wrap lg:flex-nowrap items-center justify-center gap-3 w-full">
+                        <input 
+                            type="text" 
+                            placeholder="Search by name..." 
+                            value={masterSearch}
+                            onChange={(e) => setMasterSearch(e.target.value)}
+                            className="w-full md:w-48 bg-white dark:bg-slate-900 border border-gray-200 dark:border-white/10 rounded-full px-4 py-2 text-[10px] font-black placeholder-gray-400 focus:outline-none focus:border-[#FFD500] shadow-sm shrink-0"
+                        />
+                        
+                        {/* Toggle Mode */}
+                        <div className="flex items-center bg-white dark:bg-slate-900 rounded-full p-1 border border-gray-200 dark:border-white/10 shadow-sm shrink-0">
+                            <button onClick={() => setReportViewMode('STATUS')} className={`px-4 py-1 rounded-full text-[9px] font-black uppercase tracking-widest transition-all ${reportViewMode === 'STATUS' ? 'bg-[#FFD500] text-white shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}>Status</button>
+                            <button onClick={() => setReportViewMode('TIME')} className={`px-4 py-1 rounded-full text-[9px] font-black uppercase tracking-widest transition-all ${reportViewMode === 'TIME' ? 'bg-[#FFD500] text-white shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}>Time</button>
+                            <button onClick={() => setReportViewMode('INFO')} className={`px-4 py-1 rounded-full text-[9px] font-black uppercase tracking-widest transition-all ${reportViewMode === 'INFO' ? 'bg-[#FFD500] text-white shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}>Info</button>
                         </div>
 
-                        <div className="flex flex-wrap items-center gap-4">
-                            <input 
-                                type="text" 
-                                placeholder="Search by name..." 
-                                value={masterSearch}
-                                onChange={(e) => setMasterSearch(e.target.value)}
-                                className="w-full md:w-48 bg-white dark:bg-slate-900 border border-gray-200 dark:border-white/10 rounded-full px-4 py-2.5 text-xs font-black placeholder-gray-400 focus:outline-none focus:border-[#FFD500] shadow-sm"
-                            />
-                            
-                            {/* Toggle Mode */}
-                            <div className="flex items-center bg-white dark:bg-slate-900 rounded-full p-1 border border-gray-200 dark:border-white/10 shadow-sm">
-                                <button onClick={() => setReportViewMode('STATUS')} className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${reportViewMode === 'STATUS' ? 'bg-[#FFD500] text-white shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}>Status</button>
-                                <button onClick={() => setReportViewMode('TIME')} className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${reportViewMode === 'TIME' ? 'bg-[#FFD500] text-white shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}>Time</button>
-                            </div>
-
-                            <div className="flex items-center gap-4 bg-white dark:bg-slate-900 px-4 py-1.5 rounded-full shadow-sm border border-gray-100 dark:border-white/5">
-                                <button onClick={() => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() - 1)))} className="p-1 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-full transition"><ChevronLeftIcon className="w-4 h-4 text-[#FFD500]" /></button>
-                                <span className="text-sm font-black text-gray-800 dark:text-white uppercase tracking-tighter w-32 text-center">
-                                    {currentDate.toLocaleString('default', { month: 'long', year: 'numeric' })}
-                                </span>
-                                <button onClick={() => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() + 1)))} className="p-1 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-full transition"><ChevronRightIcon className="w-4 h-4 text-[#FFD500]" /></button>
-                            </div>
-
-                            <button
-                                onClick={handleExportCSV}
-                                className="flex items-center gap-2 bg-[#003875] dark:bg-[#FFD500] text-white dark:text-black px-4 py-2 rounded-full font-black text-[10px] uppercase tracking-widest shadow-lg shadow-[#003875]/20 hover:-translate-y-0.5 transition-all active:scale-95"
-                            >
-                                <ArrowDownTrayIcon className="w-4 h-4" />
-                                Export CSV
-                            </button>
+                        <div className="flex items-center gap-2 bg-white dark:bg-slate-900 px-3 py-1 rounded-full shadow-sm border border-gray-100 dark:border-white/5 shrink-0">
+                            <button onClick={() => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() - 1)))} className="p-1 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-full transition"><ChevronLeftIcon className="w-3 h-3 text-[#FFD500]" /></button>
+                            <span className="text-[10px] font-black text-gray-800 dark:text-white uppercase tracking-tighter w-24 text-center">
+                                {currentDate.toLocaleString('default', { month: 'short', year: 'numeric' })}
+                            </span>
+                            <button onClick={() => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() + 1)))} className="p-1 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-full transition"><ChevronRightIcon className="w-3 h-3 text-[#FFD500]" /></button>
                         </div>
+
+                        <button
+                            onClick={handleExportCSV}
+                            className="flex items-center gap-1.5 bg-[#003875] dark:bg-[#FFD500] text-white dark:text-black px-4 py-1.5 rounded-full font-black text-[9px] uppercase tracking-widest shadow-lg shadow-[#003875]/20 hover:-translate-y-0.5 transition-all active:scale-95 shrink-0"
+                        >
+                            <ArrowDownTrayIcon className="w-3 h-3" />
+                            Export
+                        </button>
                     </div>
 
                     {!masterData ? (
                         <div className="flex-1 flex items-center justify-center text-gray-400 text-sm animate-pulse font-black">SYNCING DATA...</div>
                     ) : (
-                        <div 
-                           style={{ backgroundColor: 'var(--panel-card)', borderColor: 'var(--panel-border)' }}
-                           className="flex-1 overflow-auto custom-scrollbar relative"
-                         >
+                        <>
+                            {/* Dummy Top Scrollbar */}
+                            <div 
+                                ref={topScrollRef}
+                                onScroll={handleTopScroll}
+                                className="w-full overflow-x-auto custom-scrollbar border-b border-gray-100 dark:border-white/5"
+                            >
+                                <div ref={dummyDivRef} style={{ height: '1px' }} />
+                            </div>
+
+                            <div 
+                               ref={tableScrollRef}
+                               onScroll={handleTableScroll}
+                               style={{ backgroundColor: 'var(--panel-card)', borderColor: 'var(--panel-border)' }}
+                               className="flex-1 overflow-auto custom-scrollbar relative"
+                             >
                             <table className="w-full text-left border-collapse min-w-max">
                                 <thead>
                                     <tr>
@@ -1366,6 +1424,8 @@ export default function AttendancePage() {
                                                 let rawOut = record?.outTime;
                                                 let inPhoto = record?.inPhoto;
                                                 let outPhoto = record?.outPhoto;
+                                                let inLocation = record?.inLocation;
+                                                let outLocation = record?.outLocation;
 
                                                 if (isSunday) {
                                                     statusChar = 'SUN';
@@ -1395,7 +1455,7 @@ export default function AttendancePage() {
                                                     dotText = '-1';
                                                 }
 
-                                                dayCells.push({ d, statusChar, statusColor, dotText, rawIn, rawOut, inPhoto, outPhoto });
+                                                dayCells.push({ d, statusChar, statusColor, dotText, rawIn, rawOut, inPhoto, outPhoto, inLocation, outLocation });
                                             }
 
                                             const monthlyScore = (presents * 1) + (halfDays * 0.5) - (absents * 1);
@@ -1435,7 +1495,7 @@ export default function AttendancePage() {
                                                                          </div>
                                                                     )}
                                                                 </div>
-                                                            ) : (
+                                                            ) : reportViewMode === 'TIME' ? (
                                                                 <div className="flex flex-col items-center justify-center gap-0.5">
                                                                     {c.statusChar === 'SUN' || c.statusChar === 'L' || c.statusChar === 'A' || c.statusChar === '-' ? (
                                                                         <div className={`text-xs font-black uppercase tracking-tighter ${c.statusColor}`}>{c.statusChar}</div>
@@ -1466,6 +1526,41 @@ export default function AttendancePage() {
                                                                         </>
                                                                     )}
                                                                 </div>
+                                                            ) : (
+                                                                <div className="flex flex-col items-center justify-center gap-1 min-w-[120px]">
+                                                                    {c.statusChar === 'SUN' || c.statusChar === 'L' || c.statusChar === 'A' || c.statusChar === '-' ? (
+                                                                        <div className={`text-xs font-black uppercase tracking-tighter ${c.statusColor}`}>{c.statusChar}</div>
+                                                                    ) : (
+                                                                        <>
+                                                                            {c.rawIn && (
+                                                                                <div className="flex items-start gap-2 max-w-[180px] bg-gray-50 dark:bg-slate-800/50 rounded-md p-1.5 border border-gray-100 dark:border-white/5 shadow-sm text-left">
+                                                                                    {c.inPhoto && (
+                                                                                        <a href={c.inPhoto.startsWith('http') ? c.inPhoto : `https://drive.google.com/file/d/${c.inPhoto}/view`} target="_blank" rel="noopener noreferrer" className="shrink-0 group mt-0.5">
+                                                                                            <img src={c.inPhoto.startsWith('http') ? c.inPhoto : `https://drive.google.com/thumbnail?id=${c.inPhoto}&sz=w200-h200`} alt="In" className="w-6 h-6 rounded object-cover border border-gray-200 dark:border-white/20 group-hover:scale-[5] transition-transform origin-left z-10 relative shadow-sm" title="View Check-in Photo" />
+                                                                                        </a>
+                                                                                    )}
+                                                                                    <div className="text-[9px] font-medium text-gray-600 dark:text-gray-300 leading-tight w-[130px] whitespace-normal break-words line-clamp-3" title={c.inLocation || 'Location unavailable'}>
+                                                                                        <span className="font-black text-[#003875] dark:text-[#FFD500] mr-1">(IN)</span>
+                                                                                        {c.inLocation || 'N/A'}
+                                                                                    </div>
+                                                                                </div>
+                                                                            )}
+                                                                            {c.rawOut && (
+                                                                                <div className="flex items-start gap-2 max-w-[180px] bg-gray-50 dark:bg-slate-800/50 rounded-md p-1.5 border border-gray-100 dark:border-white/5 shadow-sm text-left mt-0.5">
+                                                                                    {c.outPhoto && (
+                                                                                        <a href={c.outPhoto.startsWith('http') ? c.outPhoto : `https://drive.google.com/file/d/${c.outPhoto}/view`} target="_blank" rel="noopener noreferrer" className="shrink-0 group mt-0.5">
+                                                                                            <img src={c.outPhoto.startsWith('http') ? c.outPhoto : `https://drive.google.com/thumbnail?id=${c.outPhoto}&sz=w200-h200`} alt="Out" className="w-6 h-6 rounded object-cover border border-gray-200 dark:border-white/20 group-hover:scale-[5] transition-transform origin-left z-10 relative shadow-sm" title="View Check-out Photo" />
+                                                                                        </a>
+                                                                                    )}
+                                                                                    <div className="text-[9px] font-medium text-gray-600 dark:text-gray-300 leading-tight w-[130px] whitespace-normal break-words line-clamp-3" title={c.outLocation || 'Location unavailable'}>
+                                                                                        <span className="font-black text-red-500 mr-1">(OUT)</span>
+                                                                                        {c.outLocation || 'N/A'}
+                                                                                    </div>
+                                                                                </div>
+                                                                            )}
+                                                                        </>
+                                                                    )}
+                                                                </div>
                                                             )}
                                                         </td>
                                                     ))}
@@ -1475,6 +1570,7 @@ export default function AttendancePage() {
                                 </tbody>
                             </table>
                         </div>
+                        </>
                     )}
                 </div>
             )}

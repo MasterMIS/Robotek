@@ -67,7 +67,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const { action, userId, userName, latitude, longitude, photo } = await req.json();
+    const { action, userId, userName, latitude, longitude, address, photo } = await req.json();
     if (!userId || !action) return NextResponse.json({ error: "Missing data" }, { status: 400 });
 
     let photoUrl = "";
@@ -114,6 +114,7 @@ export async function POST(req: NextRequest) {
         status: "IN",
         inPhoto: photoUrl,
         outPhoto: "",
+        inLocation: address || "",
       });
 
       return NextResponse.json({ success: true });
@@ -128,7 +129,7 @@ export async function POST(req: NextRequest) {
 
       if (!todayRecord) return NextResponse.json({ error: "Active check-in not found" }, { status: 404 });
 
-      await updateAttendanceRecord(todayRecord.id, timeStr, "COMPLETED", photoUrl);
+      await updateAttendanceRecord(todayRecord.id, timeStr, "COMPLETED", photoUrl, address || "");
 
       return NextResponse.json({ success: true });
     }
