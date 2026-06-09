@@ -620,6 +620,8 @@ export default function O2DPage() {
 
   // Modals
   const [isPartyModalOpen, setIsPartyModalOpen] = useState(false);
+  const [isPasteModalOpen, setIsPasteModalOpen] = useState(false);
+  const [pasteText, setPasteText] = useState("");
   const [isItemModalOpen, setIsItemModalOpen] = useState(false);
   const [activeItemIndex, setActiveItemIndex] = useState<number | null>(null);
   const [actionStatus, setActionStatus] = useState<
@@ -1067,6 +1069,56 @@ export default function O2DPage() {
   };
 
 
+
+  const handlePasteData = () => {
+    if (!pasteText.trim()) {
+        setIsPasteModalOpen(false);
+        return;
+    }
+
+    const lines = pasteText.split('\n');
+    const newItems: O2DItem[] = [];
+
+    lines.forEach(line => {
+      let parts = line.split('\t');
+      if (parts.length < 2 && line.includes(',')) {
+        parts = line.split(',');
+      }
+      
+      if (parts.length >= 2) {
+        const itemName = parts[0].trim();
+        const matchingItem = dropdownItems.find(di => di.name.toLowerCase() === itemName.toLowerCase());
+        
+        newItems.push({
+          item_name: itemName,
+          item_qty: parts[1].trim(),
+          est_amount: matchingItem ? matchingItem.amount : "",
+          item_specification: parts[2] ? parts[2].trim() : ""
+        });
+      } else if (parts.length === 1 && parts[0].trim() !== "") {
+        const itemName = parts[0].trim();
+        const matchingItem = dropdownItems.find(di => di.name.toLowerCase() === itemName.toLowerCase());
+        
+        newItems.push({
+          item_name: itemName,
+          item_qty: "1",
+          est_amount: matchingItem ? matchingItem.amount : "",
+          item_specification: ""
+        });
+      }
+    });
+
+    if (newItems.length > 0) {
+      if (items.length === 1 && !items[0].item_name && !items[0].item_qty) {
+        setItems(newItems);
+      } else {
+        setItems([...items, ...newItems]);
+      }
+    }
+    
+    setPasteText("");
+    setIsPasteModalOpen(false);
+  };
 
   const addItemRow = (count = 1) => {
     const newRows = Array.from({ length: count }).map(() => ({ 
@@ -3094,6 +3146,14 @@ export default function O2DPage() {
                       >
                         <PlusIcon className="w-4 h-4 stroke-[3]" /> Add Single Line
                       </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setIsPasteModalOpen(true)}
+                        className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-[#003875] dark:text-[#FFD500] hover:scale-105 transition-all bg-[#003875]/10 dark:bg-[#FFD500]/15 px-6 py-2.5 rounded-2xl shadow-sm border-2 border-transparent hover:border-[#003875]/20"
+                      >
+                        <ClipboardDocumentCheckIcon className="w-4 h-4 stroke-[3]" /> Paste Data
+                      </button>
                     </div>
                     {items.map((item, index) => (
                       <div
@@ -3901,6 +3961,57 @@ export default function O2DPage() {
         message={actionMessage}
         onClose={() => setIsStatusModalOpen(false)}
       />
+
+      {/* Paste Data Modal */}
+      {isPasteModalOpen && (
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-navy-950/40 backdrop-blur-md"
+            onClick={() => setIsPasteModalOpen(false)}
+          />
+          <div className="relative bg-white dark:bg-navy-900 w-full max-w-lg rounded-3xl shadow-2xl border border-gray-100 dark:border-navy-700 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <div className="p-5 border-b border-gray-100 dark:border-navy-700 flex items-center justify-between bg-gray-50/50 dark:bg-navy-800">
+              <div>
+                <h2 className="text-lg font-black text-gray-900 dark:text-white italic uppercase tracking-tight flex items-center gap-2">
+                  <ClipboardDocumentCheckIcon className="w-5 h-5 text-[#003875] dark:text-[#FFD500]" />
+                  Paste Items Data
+                </h2>
+                <p className="text-[10px] font-bold text-gray-400 mt-1">Paste your Excel data here. Ensure columns are: Name, Quantity, Specification.</p>
+              </div>
+              <button
+                onClick={() => setIsPasteModalOpen(false)}
+                className="p-2 text-gray-400 hover:text-red-500 transition-all"
+              >
+                <XMarkIcon className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-5">
+              <textarea
+                value={pasteText}
+                onChange={(e) => setPasteText(e.target.value)}
+                placeholder={`Item A\t10\tSpec A\nItem B\t5\tSpec B`}
+                className="w-full h-[200px] bg-[#FEF6DB] dark:bg-black p-4 rounded-2xl border border-orange-100 dark:border-navy-700 focus:border-[#FFD500] outline-none font-bold text-[12px] text-gray-800 dark:text-gray-100 shadow-sm whitespace-pre"
+              />
+              <div className="mt-5 flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setIsPasteModalOpen(false)}
+                  className="flex-1 py-3 px-4 bg-gray-100 dark:bg-navy-800 text-gray-600 dark:text-gray-300 rounded-xl font-black text-[11px] uppercase tracking-widest hover:bg-gray-200 dark:hover:bg-navy-700 transition-all"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handlePasteData}
+                  className="flex-1 py-3 px-4 bg-[#003875] dark:bg-[#FFD500] text-white dark:text-black rounded-xl font-black text-[11px] uppercase tracking-widest shadow-sm hover:scale-[1.02] transition-all"
+                >
+                  Import Data
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <ItemFormModal
         isOpen={isItemModalOpen}

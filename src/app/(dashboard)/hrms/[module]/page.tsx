@@ -276,7 +276,7 @@ export default function HRMSModulePage({ params }: { params: Promise<{ module: s
     if (!sourceItem) return;
 
     setActionStatus("loading"); setActionMessage("Importing..."); setIsStatusModalOpen(true);
-    
+
     const currentNow = new Date().toISOString();
     const payload: any = {
       candidate_name: sourceItem.candidate_name || "",
@@ -307,11 +307,11 @@ export default function HRMSModulePage({ params }: { params: Promise<{ module: s
       });
       if (res.ok) setActionStatus("success"); else setActionStatus("error");
     } catch { setActionStatus("error"); }
-    setTimeout(() => { 
-      setIsStatusModalOpen(false); 
-      setIsOnboardImportModalOpen(false); 
+    setTimeout(() => {
+      setIsStatusModalOpen(false);
+      setIsOnboardImportModalOpen(false);
       setSelectedOnboardSourceId("");
-      mutateItems(); 
+      mutateItems();
     }, 1500);
   };
 
@@ -732,11 +732,11 @@ export default function HRMSModulePage({ params }: { params: Promise<{ module: s
             <button onClick={() => { setConfigFormData(JSON.parse(JSON.stringify(globalConfigs))); setIsConfigModalOpen(true); }} className="flex items-center gap-2 px-4 py-1 font-black uppercase tracking-widest text-[10px] text-[#003875] dark:text-[#FFD500] hover:bg-slate-50 dark:hover:bg-navy-800 transition-all rounded-full">
               <Cog6ToothIcon className="w-3.5 h-3.5" /> <span>CONFIG</span>
             </button>
-            <button onClick={() => { 
+            <button onClick={() => {
               if (module === 'onboard') {
                 setIsOnboardImportModalOpen(true);
               } else {
-                setEditingItem(null); setFormData({}); setUploadFile(null); setIsModalOpen(true); 
+                setEditingItem(null); setFormData({}); setUploadFile(null); setIsModalOpen(true);
               }
             }} className="px-3 py-1 text-[#003875] dark:text-[#FFD500] hover:bg-slate-50 dark:hover:bg-navy-800 transition-all rounded-full">
               <PlusIcon className="w-4 h-4 stroke-[2.5]" />
@@ -749,7 +749,7 @@ export default function HRMSModulePage({ params }: { params: Promise<{ module: s
 
           {(module === 'candidate' || module === 'sales') && (
             <a href="https://script.google.com/macros/s/AKfycbxw5IrY05TYutqEA0WL9oQpSGc1RfYHqB4BrPE7YeUZ/dev" target="_blank" rel="noreferrer" className="flex items-center gap-2 px-5 py-1.5 font-black uppercase tracking-widest text-[10px] text-[#003875] dark:text-[#FFD500] bg-white dark:bg-navy-900 border-2 border-[#003875] dark:border-[#FFD500] hover:bg-slate-50 dark:hover:bg-navy-800 transition-all rounded-full shadow-md">
-               <DocumentTextIcon className="w-3.5 h-3.5" /> <span>GOOGLE FORM</span>
+              <DocumentTextIcon className="w-3.5 h-3.5" /> <span>GOOGLE FORM</span>
             </a>
           )}
         </div>
@@ -821,12 +821,12 @@ export default function HRMSModulePage({ params }: { params: Promise<{ module: s
             ) : layoutMode === "smart" ? (
               paginatedItems.map(item => {
                 const sel = selectedIds.has(item.id); const step = getActiveStep(item); const exp = expandedTiles[item.id];
-                const title = module === 'recruitment' ? (item as any).post_for_recruitment 
-                            : module === 'offboard' ? (item as any).emp_name
-                            : (item as any).candidate_name;
-                const subTitle = module === 'recruitment' ? `Loc: ${(item as any).for_which_location}` 
-                               : module === 'offboard' ? `Desig: ${(item as any).emp_designation}`
-                               : `Phone: ${(item as any).whatsapp_number}`;
+                const title = module === 'recruitment' ? (item as any).post_for_recruitment
+                  : module === 'offboard' ? (item as any).emp_name
+                    : (item as any).candidate_name;
+                const subTitle = module === 'recruitment' ? `Loc: ${(item as any).for_which_location}`
+                  : module === 'offboard' ? `Desig: ${(item as any).emp_designation}`
+                    : `Phone: ${(item as any).whatsapp_number}`;
 
                 return (
                   <div key={item.id} className="px-1">
@@ -1013,8 +1013,8 @@ export default function HRMSModulePage({ params }: { params: Promise<{ module: s
                                         )}
                                         {n === 2 && (
                                           <>
-                                            {(item as any).knowledge_transfer_2 && <div className="space-y-0.5 mt-1"><span className="opacity-50 text-[9px] font-black uppercase tracking-widest block">Knowledge Transfer:</span><div className="flex flex-wrap gap-1">{(item as any).knowledge_transfer_2.split(',').filter((x:string)=>x.trim()).map((k:string,idx:number)=><span key={idx} className="px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-300 text-[8px] font-black uppercase rounded shadow-sm">{k.trim()}</span>)}</div></div>}
-                                            {(item as any).asset_recovery_2 && <div className="space-y-0.5 mt-1"><span className="opacity-50 text-[9px] font-black uppercase tracking-widest block">Asset Recovery:</span><div className="flex flex-wrap gap-1">{(item as any).asset_recovery_2.split(',').filter((x:string)=>x.trim()).map((k:string,idx:number)=><span key={idx} className="px-1.5 py-0.5 bg-purple-100 dark:bg-purple-900/40 text-purple-800 dark:text-purple-300 text-[8px] font-black uppercase rounded shadow-sm">{k.trim()}</span>)}</div></div>}
+                                            {(item as any).knowledge_transfer_2 && <div className="space-y-0.5 mt-1"><span className="opacity-50 text-[9px] font-black uppercase tracking-widest block">Knowledge Transfer:</span><div className="flex flex-wrap gap-1">{(item as any).knowledge_transfer_2.split(',').filter((x: string) => x.trim()).map((k: string, idx: number) => <span key={idx} className="px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-300 text-[8px] font-black uppercase rounded shadow-sm">{k.trim()}</span>)}</div></div>}
+                                            {(item as any).asset_recovery_2 && <div className="space-y-0.5 mt-1"><span className="opacity-50 text-[9px] font-black uppercase tracking-widest block">Asset Recovery:</span><div className="flex flex-wrap gap-1">{(item as any).asset_recovery_2.split(',').filter((x: string) => x.trim()).map((k: string, idx: number) => <span key={idx} className="px-1.5 py-0.5 bg-purple-100 dark:bg-purple-900/40 text-purple-800 dark:text-purple-300 text-[8px] font-black uppercase rounded shadow-sm">{k.trim()}</span>)}</div></div>}
                                           </>
                                         )}
                                         {n === 3 && (
@@ -1028,7 +1028,7 @@ export default function HRMSModulePage({ params }: { params: Promise<{ module: s
                                             {['relieving_letter_4', 'experience_letter_4', 'f_and_f_statement_4', 'salary_slips_if_requested_4'].map((doc, idx) => {
                                               if ((item as any)[doc] === "Done") {
                                                 const label = ['Relieving Ltr', 'Experience Ltr', 'F&F Stmt', 'Salary Slips'][idx];
-                                                return <span key={idx} className="px-1.5 py-0.5 bg-emerald-100 dark:bg-emerald-900/40 text-emerald-800 dark:text-emerald-300 text-[8px] font-black uppercase rounded shadow-sm flex items-center gap-1"><CheckCircleIcon className="w-2.5 h-2.5"/> {label}</span>;
+                                                return <span key={idx} className="px-1.5 py-0.5 bg-emerald-100 dark:bg-emerald-900/40 text-emerald-800 dark:text-emerald-300 text-[8px] font-black uppercase rounded shadow-sm flex items-center gap-1"><CheckCircleIcon className="w-2.5 h-2.5" /> {label}</span>;
                                               }
                                               return null;
                                             })}
@@ -1195,11 +1195,11 @@ export default function HRMSModulePage({ params }: { params: Promise<{ module: s
                                         <input type="text" placeholder="Notice Period (In Days)" value={bulkOffboardInputs[id]?.notice_period_in_days_1 || ""} onChange={e => setBulkOffboardInputs({ ...bulkOffboardInputs, [id]: { ...(bulkOffboardInputs[id] || {}), notice_period_in_days_1: e.target.value } })} className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded font-bold text-xs" />
                                         <input type="text" placeholder="LWD (Last Working Day)" value={bulkOffboardInputs[id]?.lwd_1 || ""} onChange={e => setBulkOffboardInputs({ ...bulkOffboardInputs, [id]: { ...(bulkOffboardInputs[id] || {}), lwd_1: e.target.value } })} className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded font-bold text-xs" />
                                         <div className="col-span-2">
-                                          <UserSingleCombobox 
-                                            value={bulkOffboardInputs[id]?.handover_name_1 || ""} 
-                                            onChange={val => setBulkOffboardInputs({ ...bulkOffboardInputs, [id]: { ...(bulkOffboardInputs[id] || {}), handover_name_1: val } })} 
-                                            users={usersList.map(u => u.username || u.name).filter(Boolean)} 
-                                            placeholder="Select Handover Name..." 
+                                          <UserSingleCombobox
+                                            value={bulkOffboardInputs[id]?.handover_name_1 || ""}
+                                            onChange={val => setBulkOffboardInputs({ ...bulkOffboardInputs, [id]: { ...(bulkOffboardInputs[id] || {}), handover_name_1: val } })}
+                                            users={usersList.map(u => u.username || u.name).filter(Boolean)}
+                                            placeholder="Select Handover Name..."
                                           />
                                         </div>
                                         <textarea placeholder="Reason of Leaving" value={bulkOffboardInputs[id]?.reason_of_leaving_1 || ""} onChange={e => setBulkOffboardInputs({ ...bulkOffboardInputs, [id]: { ...(bulkOffboardInputs[id] || {}), reason_of_leaving_1: e.target.value } })} className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded font-bold text-xs col-span-2 resize-none h-16" />
@@ -1369,19 +1369,19 @@ export default function HRMSModulePage({ params }: { params: Promise<{ module: s
                         </div>
                       ) : f.name === "emp_name" && module === "offboard" ? (
                         <div className="pt-0">
-                          <UserSingleCombobox 
-                            value={formData[f.name] || ""} 
+                          <UserSingleCombobox
+                            value={formData[f.name] || ""}
                             onChange={val => {
                               const selectedUser = usersList.find(u => (u.username || u.name) === val);
-                              setFormData({ 
-                                ...formData, 
+                              setFormData({
+                                ...formData,
                                 [f.name]: val,
                                 emp_id: selectedUser?.id || "",
                                 emp_designation: selectedUser?.designation || ""
                               });
-                            }} 
-                            users={usersList.map(u => u.username || u.name).filter(Boolean)} 
-                            placeholder="Search Employee..." 
+                            }}
+                            users={usersList.map(u => u.username || u.name).filter(Boolean)}
+                            placeholder="Search Employee..."
                           />
                         </div>
                       ) : f.type === "textarea" ? (
@@ -1495,8 +1495,8 @@ export default function HRMSModulePage({ params }: { params: Promise<{ module: s
                       key={s}
                       onClick={() => setRemoveFollowUpStep(s)}
                       className={`py-2 rounded-xl text-[10px] font-black transition-all border-2 ${removeFollowUpStep === s
-                          ? "bg-purple-500 border-purple-500 text-white shadow-lg scale-110 z-10"
-                          : "bg-slate-50 dark:bg-navy-900 border-slate-100 dark:border-navy-700 text-slate-400 dark:text-navy-600 hover:border-purple-200 dark:hover:border-purple-900"
+                        ? "bg-purple-500 border-purple-500 text-white shadow-lg scale-110 z-10"
+                        : "bg-slate-50 dark:bg-navy-900 border-slate-100 dark:border-navy-700 text-slate-400 dark:text-navy-600 hover:border-purple-200 dark:hover:border-purple-900"
                         }`}
                     >
                       ST {s}
@@ -1514,8 +1514,8 @@ export default function HRMSModulePage({ params }: { params: Promise<{ module: s
                   <button
                     onClick={() => setRemoveFollowUpType('particular')}
                     className={`flex-1 py-4 px-4 rounded-2xl border-2 text-left transition-all ${removeFollowUpType === 'particular'
-                        ? "border-purple-500 bg-purple-50 dark:bg-purple-900/10"
-                        : "border-slate-100 dark:border-navy-700 bg-white dark:bg-navy-900"
+                      ? "border-purple-500 bg-purple-50 dark:bg-purple-900/10"
+                      : "border-slate-100 dark:border-navy-700 bg-white dark:bg-navy-900"
                       }`}
                   >
                     <div className="flex items-center gap-2 mb-1">
@@ -1527,8 +1527,8 @@ export default function HRMSModulePage({ params }: { params: Promise<{ module: s
                   <button
                     onClick={() => setRemoveFollowUpType('onwards')}
                     className={`flex-1 py-4 px-4 rounded-2xl border-2 text-left transition-all ${removeFollowUpType === 'onwards'
-                        ? "border-purple-500 bg-purple-50 dark:bg-purple-900/10"
-                        : "border-slate-100 dark:border-navy-700 bg-white dark:bg-navy-900"
+                      ? "border-purple-500 bg-purple-50 dark:bg-purple-900/10"
+                      : "border-slate-100 dark:border-navy-700 bg-white dark:bg-navy-900"
                       }`}
                   >
                     <div className="flex items-center gap-2 mb-1">
@@ -1599,11 +1599,11 @@ export default function HRMSModulePage({ params }: { params: Promise<{ module: s
                   <div className="w-full px-4 py-3 bg-slate-50 dark:bg-navy-950 border border-slate-100 dark:border-navy-800 rounded-xl text-[12px] font-bold text-slate-400 animate-pulse">Loading list...</div>
                 ) : (
                   <div className="relative">
-                    <div 
+                    <div
                       className="w-full px-4 py-3 bg-white dark:bg-navy-950 border border-slate-200 dark:border-navy-700 rounded-xl flex items-center cursor-text"
                       onClick={() => setIsSourceDropdownOpen(true)}
                     >
-                      <input 
+                      <input
                         type="text"
                         placeholder="Search candidate name, phone or ID..."
                         value={isSourceDropdownOpen ? sourceSearch : (onboardSourceItems.find(it => it.id === selectedOnboardSourceId) as any)?.candidate_name || sourceSearch}
@@ -1625,14 +1625,14 @@ export default function HRMSModulePage({ params }: { params: Promise<{ module: s
                       <>
                         <div className="fixed inset-0 z-10" onClick={() => setIsSourceDropdownOpen(false)} />
                         <ul className="relative z-20 mt-2 w-full max-h-60 overflow-y-auto bg-white dark:bg-navy-900 border border-slate-200 dark:border-navy-700 rounded-xl shadow-2xl p-2 custom-scrollbar">
-                          {onboardSourceItems.filter((it: any) => 
+                          {onboardSourceItems.filter((it: any) =>
                             (it.candidate_name || "").toLowerCase().includes(sourceSearch.toLowerCase()) ||
                             (it.whatsapp_number || "").includes(sourceSearch) ||
                             (it.id || "").toLowerCase().includes(sourceSearch.toLowerCase())
                           ).length === 0 ? (
                             <li className="px-4 py-3 text-xs text-slate-400 italic text-center">No results found.</li>
                           ) : (
-                            onboardSourceItems.filter((it: any) => 
+                            onboardSourceItems.filter((it: any) =>
                               (it.candidate_name || "").toLowerCase().includes(sourceSearch.toLowerCase()) ||
                               (it.whatsapp_number || "").includes(sourceSearch) ||
                               (it.id || "").toLowerCase().includes(sourceSearch.toLowerCase())
@@ -1669,7 +1669,7 @@ export default function HRMSModulePage({ params }: { params: Promise<{ module: s
                     <UserIcon className="w-5 h-5 text-[#003875] dark:text-[#FFD500]" />
                     <h3 className="text-sm font-black uppercase text-slate-800 dark:text-white tracking-tight">Candidate Details Preview</h3>
                   </div>
-                  
+
                   {(() => {
                     const candidate = onboardSourceItems.find(it => it.id === selectedOnboardSourceId) as any;
                     if (!candidate) return null;
@@ -1692,11 +1692,11 @@ export default function HRMSModulePage({ params }: { params: Promise<{ module: s
                           <p className="text-xs font-bold text-slate-700 dark:text-slate-300">{candidate.current_living_location || "—"}</p>
                         </div>
                         {candidate.upload_updated_cv && (
-                           <div className="col-span-2">
-                             <a href={candidate.upload_updated_cv} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#003875]/10 dark:bg-[#FFD500]/10 text-[#003875] dark:text-[#FFD500] rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-[#003875]/20 transition-colors">
-                               <DocumentTextIcon className="w-3.5 h-3.5" /> View Resume
-                             </a>
-                           </div>
+                          <div className="col-span-2">
+                            <a href={candidate.upload_updated_cv} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#003875]/10 dark:bg-[#FFD500]/10 text-[#003875] dark:text-[#FFD500] rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-[#003875]/20 transition-colors">
+                              <DocumentTextIcon className="w-3.5 h-3.5" /> View Resume
+                            </a>
+                          </div>
                         )}
                       </div>
                     );
