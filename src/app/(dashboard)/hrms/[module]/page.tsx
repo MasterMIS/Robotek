@@ -240,11 +240,81 @@ export default function HRMSModulePage({ params }: { params: Promise<{ module: s
   const [bulkToggles, setBulkToggles] = useState<Record<string, boolean>>({});
   const [bulkSocialMedia, setBulkSocialMedia] = useState<Record<string, string[]>>({});
   const [bulkLeadTimeInputs, setBulkLeadTimeInputs] = useState<Record<string, string>>({});
+  const [bulkOffboardInputs, setBulkOffboardInputs] = useState<Record<string, Record<string, string>>>({});
 
   const [isRemoveFollowUpModalOpen, setIsRemoveFollowUpModalOpen] = useState(false);
   const [targetItemForRemoveFollowUp, setTargetItemForRemoveFollowUp] = useState<AnyHrmsRecord | null>(null);
   const [removeFollowUpStep, setRemoveFollowUpStep] = useState(1);
   const [removeFollowUpType, setRemoveFollowUpType] = useState<'particular' | 'onwards'>('particular');
+
+  const [isOnboardImportModalOpen, setIsOnboardImportModalOpen] = useState(false);
+  const [onboardSourceModule, setOnboardSourceModule] = useState<'candidate' | 'sales'>('candidate');
+  const [onboardSourceItems, setOnboardSourceItems] = useState<AnyHrmsRecord[]>([]);
+  const [selectedOnboardSourceId, setSelectedOnboardSourceId] = useState<string>("");
+  const [isFetchingSource, setIsFetchingSource] = useState(false);
+  const [sourceSearch, setSourceSearch] = useState("");
+  const [isSourceDropdownOpen, setIsSourceDropdownOpen] = useState(false);
+
+
+  useEffect(() => {
+    if (isOnboardImportModalOpen) {
+      setIsFetchingSource(true);
+      fetch(`/api/hrms/${onboardSourceModule}`)
+        .then(r => r.json())
+        .then(data => {
+          if (Array.isArray(data)) setOnboardSourceItems(data);
+          else setOnboardSourceItems([]);
+        })
+        .catch(() => setOnboardSourceItems([]))
+        .finally(() => setIsFetchingSource(false));
+    }
+  }, [isOnboardImportModalOpen, onboardSourceModule]);
+
+  const handleOnboardImport = async () => {
+    if (!selectedOnboardSourceId) return;
+    const sourceItem = onboardSourceItems.find(it => it.id === selectedOnboardSourceId) as any;
+    if (!sourceItem) return;
+
+    setActionStatus("loading"); setActionMessage("Importing..."); setIsStatusModalOpen(true);
+    
+    const currentNow = new Date().toISOString();
+    const payload: any = {
+      candidate_name: sourceItem.candidate_name || "",
+      date_of_birth: sourceItem.date_of_birth || "",
+      applied_for: sourceItem.applied_for || "",
+      total_experience: sourceItem.total_experience || "",
+      current_ctc: sourceItem.current_ctc || "",
+      expected_ctc: sourceItem.expected_ctc || "",
+      notice_period_in_days: sourceItem.notice_period_in_days || "",
+      whatsapp_number: sourceItem.whatsapp_number || "",
+      current_living_location: sourceItem.current_living_location || "",
+      upload_updated_cv: sourceItem.upload_updated_cv || "",
+      reason_for_quit: sourceItem.reason_for_quit || "",
+      share_two_professional_references: sourceItem.share_two_professional_references || "",
+      gtk_office_comfortable: sourceItem.gtk_office_comfortable || "",
+      slot_booking: sourceItem.slot_booking || "",
+      remark: sourceItem.remark || "",
+      lead_time: sourceItem.lead_time || sourceItem.lead_time_for_emp_joining_7 || "",
+      created_at: currentNow,
+      planned_1: calculatePlannedDate(currentNow, globalConfigs[0]?.tat || "24 Hrs"),
+    };
+
+    try {
+      const res = await fetch(`/api/hrms/onboard`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      if (res.ok) setActionStatus("success"); else setActionStatus("error");
+    } catch { setActionStatus("error"); }
+    setTimeout(() => { 
+      setIsStatusModalOpen(false); 
+      setIsOnboardImportModalOpen(false); 
+      setSelectedOnboardSourceId("");
+      mutateItems(); 
+    }, 1500);
+  };
+
 
   useEffect(() => {
     fetch('/api/users')
@@ -481,18 +551,34 @@ export default function HRMSModulePage({ params }: { params: Promise<{ module: s
     const upd = { ...targetItemForRemoveFollowUp } as any;
     const startStep = removeFollowUpStep;
 
+    const clearModuleSpecificFields = (s: number, upd: any) => {
+      if (module === 'recruitment' && s === 1) upd.social_medias_1 = "";
+      if (module === 'candidate' && s === 7) upd.lead_time_for_emp_joining_7 = "";
+      if (module === 'offboard') {
+        if (s === 1) {
+          upd.notice_period_in_days_1 = ""; upd.lwd_1 = ""; upd.handover_name_1 = ""; upd.reason_of_leaving_1 = ""; upd.remarks_of_management_1 = "";
+        } else if (s === 2) {
+          upd.knowledge_transfer_2 = ""; upd.asset_recovery_2 = "";
+        } else if (s === 3) {
+          upd.discussion_with_hr_3 = ""; upd.conclusion_3 = "";
+        } else if (s === 4) {
+          upd.relieving_letter_4 = ""; upd.experience_letter_4 = ""; upd.f_and_f_statement_4 = ""; upd.salary_slips_if_requested_4 = "";
+        }
+      }
+    };
+
     if (removeFollowUpType === 'particular') {
       upd[`actual_${startStep}`] = "";
       upd[`status_${startStep}`] = "";
       upd[`remark_${startStep}`] = "";
-      if (module === 'recruitment' && startStep === 1) upd.social_medias_1 = "";
+      clearModuleSpecificFields(startStep, upd);
     } else {
       for (let s = startStep; s <= stepCount; s++) {
         upd[`actual_${s}`] = "";
         upd[`status_${s}`] = "";
         upd[`remark_${s}`] = "";
         if (s > startStep) upd[`planned_${s}`] = "";
-        if (module === 'recruitment' && s === 1) upd.social_medias_1 = "";
+        clearModuleSpecificFields(s, upd);
       }
     }
 
@@ -557,16 +643,19 @@ export default function HRMSModulePage({ params }: { params: Promise<{ module: s
     const ts: Record<string, boolean> = {};
     const sm: Record<string, string[]> = {};
     const lt: Record<string, string> = {};
+    const ob: Record<string, Record<string, string>> = {};
     selectedIds.forEach(id => {
       rmks[id] = "";
       ts[id] = true;
       sm[id] = [];
       lt[id] = "";
+      ob[id] = {};
     });
     setBulkRemarkInputs(rmks);
     setBulkToggles(ts);
     setBulkSocialMedia(sm);
     setBulkLeadTimeInputs(lt);
+    setBulkOffboardInputs(ob);
     setIsBulkModalOpen(true);
   };
 
@@ -593,6 +682,13 @@ export default function HRMSModulePage({ params }: { params: Promise<{ module: s
 
       if (module === 'candidate' && n === 7) {
         upd.lead_time_for_emp_joining_7 = bulkLeadTimeInputs[id] || "";
+      }
+
+      if (module === 'offboard') {
+        const offbFields = bulkOffboardInputs[id] || {};
+        for (const [k, v] of Object.entries(offbFields)) {
+          upd[k] = v;
+        }
       }
 
       if (n < stepCount) {
@@ -636,7 +732,13 @@ export default function HRMSModulePage({ params }: { params: Promise<{ module: s
             <button onClick={() => { setConfigFormData(JSON.parse(JSON.stringify(globalConfigs))); setIsConfigModalOpen(true); }} className="flex items-center gap-2 px-4 py-1 font-black uppercase tracking-widest text-[10px] text-[#003875] dark:text-[#FFD500] hover:bg-slate-50 dark:hover:bg-navy-800 transition-all rounded-full">
               <Cog6ToothIcon className="w-3.5 h-3.5" /> <span>CONFIG</span>
             </button>
-            <button onClick={() => { setEditingItem(null); setFormData({}); setUploadFile(null); setIsModalOpen(true); }} className="px-3 py-1 text-[#003875] dark:text-[#FFD500] hover:bg-slate-50 dark:hover:bg-navy-800 transition-all rounded-full">
+            <button onClick={() => { 
+              if (module === 'onboard') {
+                setIsOnboardImportModalOpen(true);
+              } else {
+                setEditingItem(null); setFormData({}); setUploadFile(null); setIsModalOpen(true); 
+              }
+            }} className="px-3 py-1 text-[#003875] dark:text-[#FFD500] hover:bg-slate-50 dark:hover:bg-navy-800 transition-all rounded-full">
               <PlusIcon className="w-4 h-4 stroke-[2.5]" />
             </button>
             <div className="w-[1px] h-5 bg-slate-200 dark:bg-navy-700 mx-1" />
@@ -645,8 +747,8 @@ export default function HRMSModulePage({ params }: { params: Promise<{ module: s
             </button>
           </div>
 
-          {module === 'candidate' && (
-            <a href="https://script.google.com/macros/s/AKfycbybAD4u_sYiboaNah8WmTmIanTQTZZdnEqoNUmA8KuDsPMSg94St1zKHaarG3IHggX3ow/exec" target="_blank" rel="noreferrer" className="flex items-center gap-2 px-5 py-1.5 font-black uppercase tracking-widest text-[10px] text-[#003875] dark:text-[#FFD500] bg-white dark:bg-navy-900 border-2 border-[#003875] dark:border-[#FFD500] hover:bg-slate-50 dark:hover:bg-navy-800 transition-all rounded-full shadow-md">
+          {(module === 'candidate' || module === 'sales') && (
+            <a href="https://script.google.com/macros/s/AKfycbxw5IrY05TYutqEA0WL9oQpSGc1RfYHqB4BrPE7YeUZ/dev" target="_blank" rel="noreferrer" className="flex items-center gap-2 px-5 py-1.5 font-black uppercase tracking-widest text-[10px] text-[#003875] dark:text-[#FFD500] bg-white dark:bg-navy-900 border-2 border-[#003875] dark:border-[#FFD500] hover:bg-slate-50 dark:hover:bg-navy-800 transition-all rounded-full shadow-md">
                <DocumentTextIcon className="w-3.5 h-3.5" /> <span>GOOGLE FORM</span>
             </a>
           )}
@@ -719,8 +821,12 @@ export default function HRMSModulePage({ params }: { params: Promise<{ module: s
             ) : layoutMode === "smart" ? (
               paginatedItems.map(item => {
                 const sel = selectedIds.has(item.id); const step = getActiveStep(item); const exp = expandedTiles[item.id];
-                const title = module === 'recruitment' ? (item as any).post_for_recruitment : (item as any).candidate_name;
-                const subTitle = module === 'recruitment' ? `Loc: ${(item as any).for_which_location}` : `Phone: ${(item as any).whatsapp_number}`;
+                const title = module === 'recruitment' ? (item as any).post_for_recruitment 
+                            : module === 'offboard' ? (item as any).emp_name
+                            : (item as any).candidate_name;
+                const subTitle = module === 'recruitment' ? `Loc: ${(item as any).for_which_location}` 
+                               : module === 'offboard' ? `Desig: ${(item as any).emp_designation}`
+                               : `Phone: ${(item as any).whatsapp_number}`;
 
                 return (
                   <div key={item.id} className="px-1">
@@ -894,6 +1000,42 @@ export default function HRMSModulePage({ params }: { params: Promise<{ module: s
                                         })()}
                                       </div>
                                     )}
+                                    {module === 'offboard' && (
+                                      <div className={`mt-1.5 pt-1.5 border-t space-y-1 ${done ? "border-emerald-100 dark:border-emerald-900/50" : "border-slate-100 dark:border-navy-800"}`}>
+                                        {n === 1 && (
+                                          <>
+                                            {(item as any).notice_period_in_days_1 && <div className="flex justify-between items-start text-[9px] font-black uppercase tracking-widest"><span className="opacity-50">Notice Period</span><span className="text-right">{(item as any).notice_period_in_days_1} Days</span></div>}
+                                            {(item as any).lwd_1 && <div className="flex justify-between items-start text-[9px] font-black uppercase tracking-widest"><span className="opacity-50">LWD</span><span className="text-right">{(item as any).lwd_1}</span></div>}
+                                            {(item as any).handover_name_1 && <div className="flex justify-between items-start text-[9px] font-black uppercase tracking-widest"><span className="opacity-50">Handover To</span><span className="text-right">{(item as any).handover_name_1}</span></div>}
+                                            {(item as any).reason_of_leaving_1 && <div className="flex justify-between items-start text-[9px] font-black uppercase tracking-widest"><span className="opacity-50">Reason</span><span className="text-right line-clamp-2 max-w-[120px]" title={(item as any).reason_of_leaving_1}>{(item as any).reason_of_leaving_1}</span></div>}
+                                            {(item as any).remarks_of_management_1 && <div className="flex justify-between items-start text-[9px] font-black uppercase tracking-widest"><span className="opacity-50">Mgt Remark</span><span className="text-right line-clamp-2 max-w-[120px]" title={(item as any).remarks_of_management_1}>{(item as any).remarks_of_management_1}</span></div>}
+                                          </>
+                                        )}
+                                        {n === 2 && (
+                                          <>
+                                            {(item as any).knowledge_transfer_2 && <div className="space-y-0.5 mt-1"><span className="opacity-50 text-[9px] font-black uppercase tracking-widest block">Knowledge Transfer:</span><div className="flex flex-wrap gap-1">{(item as any).knowledge_transfer_2.split(',').filter((x:string)=>x.trim()).map((k:string,idx:number)=><span key={idx} className="px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-300 text-[8px] font-black uppercase rounded shadow-sm">{k.trim()}</span>)}</div></div>}
+                                            {(item as any).asset_recovery_2 && <div className="space-y-0.5 mt-1"><span className="opacity-50 text-[9px] font-black uppercase tracking-widest block">Asset Recovery:</span><div className="flex flex-wrap gap-1">{(item as any).asset_recovery_2.split(',').filter((x:string)=>x.trim()).map((k:string,idx:number)=><span key={idx} className="px-1.5 py-0.5 bg-purple-100 dark:bg-purple-900/40 text-purple-800 dark:text-purple-300 text-[8px] font-black uppercase rounded shadow-sm">{k.trim()}</span>)}</div></div>}
+                                          </>
+                                        )}
+                                        {n === 3 && (
+                                          <>
+                                            {(item as any).discussion_with_hr_3 && <div className="flex justify-between items-start text-[9px] font-black uppercase tracking-widest"><span className="opacity-50">HR Discussion</span><span className="text-right line-clamp-2 max-w-[120px]" title={(item as any).discussion_with_hr_3}>{(item as any).discussion_with_hr_3}</span></div>}
+                                            {(item as any).conclusion_3 && <div className="flex justify-between items-start text-[9px] font-black uppercase tracking-widest"><span className="opacity-50">Conclusion</span><span className="text-right line-clamp-2 max-w-[120px]" title={(item as any).conclusion_3}>{(item as any).conclusion_3}</span></div>}
+                                          </>
+                                        )}
+                                        {n === 4 && (
+                                          <div className="flex flex-wrap gap-1 mt-1">
+                                            {['relieving_letter_4', 'experience_letter_4', 'f_and_f_statement_4', 'salary_slips_if_requested_4'].map((doc, idx) => {
+                                              if ((item as any)[doc] === "Done") {
+                                                const label = ['Relieving Ltr', 'Experience Ltr', 'F&F Stmt', 'Salary Slips'][idx];
+                                                return <span key={idx} className="px-1.5 py-0.5 bg-emerald-100 dark:bg-emerald-900/40 text-emerald-800 dark:text-emerald-300 text-[8px] font-black uppercase rounded shadow-sm flex items-center gap-1"><CheckCircleIcon className="w-2.5 h-2.5"/> {label}</span>;
+                                              }
+                                              return null;
+                                            })}
+                                          </div>
+                                        )}
+                                      </div>
+                                    )}
                                   </div>
                                 </div>
                               );
@@ -1002,7 +1144,7 @@ export default function HRMSModulePage({ params }: { params: Promise<{ module: s
               {Array.from(selectedIds).map(id => {
                 const item = items.find(r => r.id === id); if (!item) return null;
                 const step = getActiveStep(item); const t = bulkToggles[id] ?? true;
-                const title = module === 'recruitment' ? (item as any).post_for_recruitment : (item as any).candidate_name;
+                const title = module === 'recruitment' ? (item as any).post_for_recruitment : module === 'offboard' ? (item as any).emp_name : (item as any).candidate_name;
                 return (
                   <div key={id} className={`p-5 bg-white dark:bg-navy-900 rounded-3xl border transition-all ${t ? "border-[#003875]/20 dark:border-[#FFD500]/20 shadow-sm" : "opacity-40"}`}>
                     <div className="grid grid-cols-[1.5fr_2fr_auto] items-center gap-8">
@@ -1043,6 +1185,88 @@ export default function HRMSModulePage({ params }: { params: Promise<{ module: s
                                   <div className="bg-slate-50 dark:bg-navy-900 p-3 rounded-xl border border-slate-100 dark:border-navy-800 space-y-2">
                                     <p className="text-[9px] font-black uppercase text-slate-400">Lead Time For Emp. Joining (Step 7)</p>
                                     <input type="text" placeholder="Enter Lead Time" value={bulkLeadTimeInputs[id] || ""} onChange={e => setBulkLeadTimeInputs({ ...bulkLeadTimeInputs, [id]: e.target.value })} className="w-full px-4 py-2 bg-white dark:bg-navy-950 border border-slate-100 dark:border-navy-800 rounded-xl font-bold text-xs outline-none focus:border-[#003875]" />
+                                  </div>
+                                )}
+
+                                {module === 'offboard' && (
+                                  <div className="bg-slate-50 dark:bg-navy-900 p-3 rounded-xl border border-slate-100 dark:border-navy-800 space-y-3">
+                                    {step === 1 && (
+                                      <div className="grid grid-cols-2 gap-2">
+                                        <input type="text" placeholder="Notice Period (In Days)" value={bulkOffboardInputs[id]?.notice_period_in_days_1 || ""} onChange={e => setBulkOffboardInputs({ ...bulkOffboardInputs, [id]: { ...(bulkOffboardInputs[id] || {}), notice_period_in_days_1: e.target.value } })} className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded font-bold text-xs" />
+                                        <input type="text" placeholder="LWD (Last Working Day)" value={bulkOffboardInputs[id]?.lwd_1 || ""} onChange={e => setBulkOffboardInputs({ ...bulkOffboardInputs, [id]: { ...(bulkOffboardInputs[id] || {}), lwd_1: e.target.value } })} className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded font-bold text-xs" />
+                                        <div className="col-span-2">
+                                          <UserSingleCombobox 
+                                            value={bulkOffboardInputs[id]?.handover_name_1 || ""} 
+                                            onChange={val => setBulkOffboardInputs({ ...bulkOffboardInputs, [id]: { ...(bulkOffboardInputs[id] || {}), handover_name_1: val } })} 
+                                            users={usersList.map(u => u.username || u.name).filter(Boolean)} 
+                                            placeholder="Select Handover Name..." 
+                                          />
+                                        </div>
+                                        <textarea placeholder="Reason of Leaving" value={bulkOffboardInputs[id]?.reason_of_leaving_1 || ""} onChange={e => setBulkOffboardInputs({ ...bulkOffboardInputs, [id]: { ...(bulkOffboardInputs[id] || {}), reason_of_leaving_1: e.target.value } })} className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded font-bold text-xs col-span-2 resize-none h-16" />
+                                        <textarea placeholder="Remarks of Management" value={bulkOffboardInputs[id]?.remarks_of_management_1 || ""} onChange={e => setBulkOffboardInputs({ ...bulkOffboardInputs, [id]: { ...(bulkOffboardInputs[id] || {}), remarks_of_management_1: e.target.value } })} className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded font-bold text-xs col-span-2 resize-none h-16" />
+                                      </div>
+                                    )}
+                                    {step === 2 && (
+                                      <div className="space-y-4">
+                                        <div className="space-y-2">
+                                          <p className="text-[9px] font-black uppercase text-slate-400">Knowledge Transfer</p>
+                                          <div className="flex flex-wrap gap-2">
+                                            {["Mandatory checklist", "Ongoing tasks", "Login credentials (official) and Files", "Reports", "Dashboards"].map(opt => {
+                                              const currentStr = bulkOffboardInputs[id]?.knowledge_transfer_2 || "";
+                                              const currentArr = currentStr ? currentStr.split(',').map(s => s.trim()) : [];
+                                              const isSelected = currentArr.includes(opt);
+                                              return (
+                                                <label key={opt} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border cursor-pointer transition-all ${isSelected ? "bg-[#003875] text-[#FFD500] border-[#003875] shadow-sm" : "bg-white text-slate-500 border-slate-200 hover:bg-slate-50"}`}>
+                                                  <input type="checkbox" className="hidden" checked={isSelected} onChange={(e) => {
+                                                    const newArr = e.target.checked ? [...currentArr, opt] : currentArr.filter(x => x !== opt);
+                                                    setBulkOffboardInputs({ ...bulkOffboardInputs, [id]: { ...(bulkOffboardInputs[id] || {}), knowledge_transfer_2: newArr.join(', ') } });
+                                                  }} />
+                                                  <span className="text-[9px] font-black uppercase tracking-widest">{opt}</span>
+                                                </label>
+                                              );
+                                            })}
+                                          </div>
+                                        </div>
+                                        <div className="space-y-2">
+                                          <p className="text-[9px] font-black uppercase text-slate-400">Asset Recovery</p>
+                                          <div className="flex flex-wrap gap-2">
+                                            {["Laptop / Desktop", "ID Card / SIM", "Phone", "Access card", "keys", "Asset clearance form sign"].map(opt => {
+                                              const currentStr = bulkOffboardInputs[id]?.asset_recovery_2 || "";
+                                              const currentArr = currentStr ? currentStr.split(',').map(s => s.trim()) : [];
+                                              const isSelected = currentArr.includes(opt);
+                                              return (
+                                                <label key={opt} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border cursor-pointer transition-all ${isSelected ? "bg-[#003875] text-[#FFD500] border-[#003875] shadow-sm" : "bg-white text-slate-500 border-slate-200 hover:bg-slate-50"}`}>
+                                                  <input type="checkbox" className="hidden" checked={isSelected} onChange={(e) => {
+                                                    const newArr = e.target.checked ? [...currentArr, opt] : currentArr.filter(x => x !== opt);
+                                                    setBulkOffboardInputs({ ...bulkOffboardInputs, [id]: { ...(bulkOffboardInputs[id] || {}), asset_recovery_2: newArr.join(', ') } });
+                                                  }} />
+                                                  <span className="text-[9px] font-black uppercase tracking-widest">{opt}</span>
+                                                </label>
+                                              );
+                                            })}
+                                          </div>
+                                        </div>
+                                      </div>
+                                    )}
+                                    {step === 3 && (
+                                      <div className="grid grid-cols-1 gap-2">
+                                        <textarea placeholder="Discussion with HR" value={bulkOffboardInputs[id]?.discussion_with_hr_3 || ""} onChange={e => setBulkOffboardInputs({ ...bulkOffboardInputs, [id]: { ...(bulkOffboardInputs[id] || {}), discussion_with_hr_3: e.target.value } })} className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded font-bold text-xs resize-none h-16" />
+                                        <textarea placeholder="Conclusion" value={bulkOffboardInputs[id]?.conclusion_3 || ""} onChange={e => setBulkOffboardInputs({ ...bulkOffboardInputs, [id]: { ...(bulkOffboardInputs[id] || {}), conclusion_3: e.target.value } })} className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded font-bold text-xs resize-none h-16" />
+                                      </div>
+                                    )}
+                                    {step === 4 && (
+                                      <div className="grid grid-cols-2 gap-2">
+                                        {['Relieving Letter', 'Experience Letter', 'F&F Statement', 'Salary Slips (if requested)'].map((doc, idx) => {
+                                          const fName = ['relieving_letter_4', 'experience_letter_4', 'f_and_f_statement_4', 'salary_slips_if_requested_4'][idx];
+                                          return (
+                                            <label key={fName} className="flex items-center gap-2 text-xs font-bold text-slate-700">
+                                              <input type="checkbox" checked={bulkOffboardInputs[id]?.[fName] === "Done"} onChange={e => setBulkOffboardInputs({ ...bulkOffboardInputs, [id]: { ...(bulkOffboardInputs[id] || {}), [fName]: e.target.checked ? "Done" : "" } })} className="rounded" />
+                                              {doc}
+                                            </label>
+                                          );
+                                        })}
+                                      </div>
+                                    )}
                                   </div>
                                 )}
 
@@ -1142,6 +1366,23 @@ export default function HRMSModulePage({ params }: { params: Promise<{ module: s
                       ) : f.name === "requirement_by" ? (
                         <div className="pt-0">
                           <UserSingleCombobox value={formData[f.name] || ""} onChange={val => setFormData({ ...formData, [f.name]: val })} users={usersList.map(u => u.username || u.name).filter(Boolean)} placeholder="Select User..." />
+                        </div>
+                      ) : f.name === "emp_name" && module === "offboard" ? (
+                        <div className="pt-0">
+                          <UserSingleCombobox 
+                            value={formData[f.name] || ""} 
+                            onChange={val => {
+                              const selectedUser = usersList.find(u => (u.username || u.name) === val);
+                              setFormData({ 
+                                ...formData, 
+                                [f.name]: val,
+                                emp_id: selectedUser?.id || "",
+                                emp_designation: selectedUser?.designation || ""
+                              });
+                            }} 
+                            users={usersList.map(u => u.username || u.name).filter(Boolean)} 
+                            placeholder="Search Employee..." 
+                          />
                         </div>
                       ) : f.type === "textarea" ? (
                         <textarea value={formData[f.name] || ""} onChange={e => setFormData({ ...formData, [f.name]: e.target.value })} className="w-full bg-[#FFFBF0] dark:bg-navy-900 px-4 py-3 rounded-xl border border-orange-100 dark:border-navy-700 focus:border-[#FFD500] outline-none font-bold text-xs text-gray-800 dark:text-zinc-100 transition-all shadow-sm resize-none min-h-[80px]" rows={3} />
@@ -1310,6 +1551,170 @@ export default function HRMSModulePage({ params }: { params: Promise<{ module: s
             <div className="flex gap-4 mt-8">
               <button onClick={() => setIsRemoveFollowUpModalOpen(false)} className="flex-1 py-3.5 bg-white dark:bg-navy-800 border border-slate-200 dark:border-navy-700 text-slate-500 dark:text-navy-400 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-slate-50 dark:hover:bg-navy-700 transition-all">Cancel</button>
               <button onClick={handleRemoveFollowUp} className="flex-1 py-3.5 bg-purple-600 dark:bg-purple-500 text-white rounded-xl font-black text-xs uppercase tracking-widest hover:bg-purple-700 dark:hover:bg-purple-400 transition-all shadow-lg active:scale-95">Reset Step</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Onboard Import Modal */}
+      {isOnboardImportModalOpen && (
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setIsOnboardImportModalOpen(false)} />
+          <div className="relative bg-[#FFFBF0] dark:bg-navy-900 w-full max-w-lg rounded-3xl shadow-2xl flex flex-col max-h-[90vh] animate-in fade-in zoom-in-95 duration-300 border border-orange-100/50 dark:border-navy-700 overflow-hidden">
+            <div className="p-5 border-b border-orange-100/50 dark:border-navy-800 flex justify-between items-center bg-[#003875] dark:bg-navy-900 text-white">
+              <div>
+                <h2 className="text-lg font-black tracking-tight flex items-center gap-2 uppercase">
+                  <DocumentTextIcon className="w-5 h-5 text-[#FFD500]" /> Import To Onboard
+                </h2>
+                <p className="text-[#FFD500] dark:text-slate-400 font-bold text-[8px] uppercase tracking-widest mt-0.5">Fetch Candidate/Sales Data</p>
+              </div>
+              <button onClick={() => setIsOnboardImportModalOpen(false)} className="p-1.5 hover:bg-white/10 rounded-lg transition-colors">
+                <XMarkIcon className="w-6 h-6" />
+              </button>
+            </div>
+            <div className="p-6 space-y-6 bg-white dark:bg-navy-800/50 flex-1 overflow-y-auto">
+              <div className="space-y-2">
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-navy-400">Select Source</p>
+                <div className="flex gap-4">
+                  <label className="flex items-center gap-2 cursor-pointer group">
+                    <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center transition-colors ${onboardSourceModule === 'candidate' ? 'border-[#003875] dark:border-[#FFD500]' : 'border-slate-300 dark:border-navy-600'}`}>
+                      {onboardSourceModule === 'candidate' && <div className="w-2 h-2 rounded-full bg-[#003875] dark:bg-[#FFD500]" />}
+                    </div>
+                    <input type="radio" className="hidden" checked={onboardSourceModule === 'candidate'} onChange={() => { setOnboardSourceModule('candidate'); setSelectedOnboardSourceId(""); }} />
+                    <span className={`text-[12px] font-black uppercase tracking-wider transition-colors ${onboardSourceModule === 'candidate' ? 'text-[#003875] dark:text-[#FFD500]' : 'text-slate-500 dark:text-navy-400 group-hover:text-slate-700'}`}>Candidate Selection</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer group">
+                    <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center transition-colors ${onboardSourceModule === 'sales' ? 'border-[#003875] dark:border-[#FFD500]' : 'border-slate-300 dark:border-navy-600'}`}>
+                      {onboardSourceModule === 'sales' && <div className="w-2 h-2 rounded-full bg-[#003875] dark:bg-[#FFD500]" />}
+                    </div>
+                    <input type="radio" className="hidden" checked={onboardSourceModule === 'sales'} onChange={() => { setOnboardSourceModule('sales'); setSelectedOnboardSourceId(""); }} />
+                    <span className={`text-[12px] font-black uppercase tracking-wider transition-colors ${onboardSourceModule === 'sales' ? 'text-[#003875] dark:text-[#FFD500]' : 'text-slate-500 dark:text-navy-400 group-hover:text-slate-700'}`}>Sales Candidates</span>
+                  </label>
+                </div>
+              </div>
+
+              <div className="space-y-2 relative">
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-navy-400">Select Person</p>
+                {isFetchingSource ? (
+                  <div className="w-full px-4 py-3 bg-slate-50 dark:bg-navy-950 border border-slate-100 dark:border-navy-800 rounded-xl text-[12px] font-bold text-slate-400 animate-pulse">Loading list...</div>
+                ) : (
+                  <div className="relative">
+                    <div 
+                      className="w-full px-4 py-3 bg-white dark:bg-navy-950 border border-slate-200 dark:border-navy-700 rounded-xl flex items-center cursor-text"
+                      onClick={() => setIsSourceDropdownOpen(true)}
+                    >
+                      <input 
+                        type="text"
+                        placeholder="Search candidate name, phone or ID..."
+                        value={isSourceDropdownOpen ? sourceSearch : (onboardSourceItems.find(it => it.id === selectedOnboardSourceId) as any)?.candidate_name || sourceSearch}
+                        onChange={(e) => {
+                          setSourceSearch(e.target.value);
+                          setIsSourceDropdownOpen(true);
+                          if (selectedOnboardSourceId) setSelectedOnboardSourceId("");
+                        }}
+                        onFocus={() => {
+                          setIsSourceDropdownOpen(true);
+                          setSourceSearch("");
+                        }}
+                        className="flex-1 bg-transparent outline-none text-[12px] font-bold text-gray-800 dark:text-white placeholder:text-slate-400"
+                      />
+                      <ChevronDownIcon className={`w-4 h-4 text-slate-400 transition-transform ${isSourceDropdownOpen ? 'rotate-180' : ''}`} />
+                    </div>
+
+                    {isSourceDropdownOpen && (
+                      <>
+                        <div className="fixed inset-0 z-10" onClick={() => setIsSourceDropdownOpen(false)} />
+                        <ul className="relative z-20 mt-2 w-full max-h-60 overflow-y-auto bg-white dark:bg-navy-900 border border-slate-200 dark:border-navy-700 rounded-xl shadow-2xl p-2 custom-scrollbar">
+                          {onboardSourceItems.filter((it: any) => 
+                            (it.candidate_name || "").toLowerCase().includes(sourceSearch.toLowerCase()) ||
+                            (it.whatsapp_number || "").includes(sourceSearch) ||
+                            (it.id || "").toLowerCase().includes(sourceSearch.toLowerCase())
+                          ).length === 0 ? (
+                            <li className="px-4 py-3 text-xs text-slate-400 italic text-center">No results found.</li>
+                          ) : (
+                            onboardSourceItems.filter((it: any) => 
+                              (it.candidate_name || "").toLowerCase().includes(sourceSearch.toLowerCase()) ||
+                              (it.whatsapp_number || "").includes(sourceSearch) ||
+                              (it.id || "").toLowerCase().includes(sourceSearch.toLowerCase())
+                            ).map((it: any) => (
+                              <li
+                                key={it.id}
+                                onClick={() => {
+                                  setSelectedOnboardSourceId(it.id);
+                                  setIsSourceDropdownOpen(false);
+                                  setSourceSearch("");
+                                }}
+                                className="px-4 py-3 text-[12px] font-black cursor-pointer hover:bg-slate-50 dark:hover:bg-navy-800 text-[#003875] dark:text-white rounded-lg transition-all border-b border-slate-50 dark:border-navy-800 last:border-0"
+                              >
+                                <div className="flex justify-between items-center">
+                                  <span>{it.candidate_name || "Unknown"}</span>
+                                  <span className="text-[10px] text-slate-400 uppercase bg-slate-100 dark:bg-navy-950 px-2 py-0.5 rounded">{it.id}</span>
+                                </div>
+                                <div className="text-[10px] text-slate-500 dark:text-slate-400 font-bold mt-1">
+                                  <PhoneIcon className="w-3 h-3 inline mr-1 -mt-0.5" />{it.whatsapp_number || "N/A"}
+                                </div>
+                              </li>
+                            ))
+                          )}
+                        </ul>
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {selectedOnboardSourceId && (
+                <div className="p-5 bg-slate-50 dark:bg-navy-900/50 border border-slate-100 dark:border-navy-800 rounded-2xl space-y-4">
+                  <div className="flex items-center gap-2 border-b border-slate-200 dark:border-navy-700 pb-3">
+                    <UserIcon className="w-5 h-5 text-[#003875] dark:text-[#FFD500]" />
+                    <h3 className="text-sm font-black uppercase text-slate-800 dark:text-white tracking-tight">Candidate Details Preview</h3>
+                  </div>
+                  
+                  {(() => {
+                    const candidate = onboardSourceItems.find(it => it.id === selectedOnboardSourceId) as any;
+                    if (!candidate) return null;
+                    return (
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest mb-1">Applied For</p>
+                          <p className="text-xs font-bold text-slate-700 dark:text-slate-300">{candidate.applied_for || "—"}</p>
+                        </div>
+                        <div>
+                          <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest mb-1">Total Experience</p>
+                          <p className="text-xs font-bold text-slate-700 dark:text-slate-300">{candidate.total_experience || "—"}</p>
+                        </div>
+                        <div>
+                          <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest mb-1">Expected CTC</p>
+                          <p className="text-xs font-bold text-slate-700 dark:text-slate-300">{candidate.expected_ctc || "—"}</p>
+                        </div>
+                        <div>
+                          <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest mb-1">Location</p>
+                          <p className="text-xs font-bold text-slate-700 dark:text-slate-300">{candidate.current_living_location || "—"}</p>
+                        </div>
+                        {candidate.upload_updated_cv && (
+                           <div className="col-span-2">
+                             <a href={candidate.upload_updated_cv} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#003875]/10 dark:bg-[#FFD500]/10 text-[#003875] dark:text-[#FFD500] rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-[#003875]/20 transition-colors">
+                               <DocumentTextIcon className="w-3.5 h-3.5" /> View Resume
+                             </a>
+                           </div>
+                        )}
+                      </div>
+                    );
+                  })()}
+
+                  <div className="pt-3 border-t border-slate-200 dark:border-navy-700 mt-2">
+                    <p className="text-[10px] font-bold text-emerald-600 dark:text-emerald-500 flex items-center gap-1.5 uppercase tracking-widest">
+                      <CheckCircleIcon className="w-3.5 h-3.5" /> Ready to Import
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="p-5 border-t border-slate-100 dark:border-navy-800 flex justify-end gap-3 bg-[#FEFBF0] dark:bg-navy-800/80">
+              <button onClick={() => setIsOnboardImportModalOpen(false)} className="px-6 py-2.5 text-[11px] font-black uppercase text-slate-400 dark:text-navy-400 hover:text-slate-600 dark:hover:text-white transition-colors">Cancel</button>
+              <button onClick={handleOnboardImport} disabled={!selectedOnboardSourceId} className={`px-6 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-widest shadow-lg transition-all ${selectedOnboardSourceId ? 'bg-[#003875] dark:bg-[#FFD500] text-[#FFD500] dark:text-navy-950 hover:scale-[1.02]' : 'bg-slate-200 dark:bg-navy-700 text-slate-400 dark:text-navy-500 cursor-not-allowed'}`}>
+                Import & Create
+              </button>
             </div>
           </div>
         </div>

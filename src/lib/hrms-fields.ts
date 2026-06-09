@@ -25,7 +25,7 @@ export const RECRUITMENT_FIELDS: FormField[] = [
 export const CANDIDATE_BASE_FIELDS: FormField[] = [
   { name: "candidate_name", label: "Candidate Name", type: "text" },
   { name: "date_of_birth", label: "Date Of Birth", type: "date" },
-  { name: "applied_for", label: "Applied For", type: "select", options: ["Accountant", "Admin", "Driver", "E-Commerce", "Executive Assistant", "Graphic Designer", "Guard", "HR", "Lead Generator", "MIS", "Office Admin", "Office Boy", "Process Coordinator", "Purchase Manager", "Sales & Marketing Executive", "UVX Designer", "Other"] },
+  { name: "applied_for", label: "Applied For", type: "select", options: ["Accountant", "Admin", "Driver", "E-Commerce", "Executive Assistant", "Graphic Designer", "Guard", "HR", "Lead Generator", "MIS", "Office Admin", "Office Boy", "Process Coordinator", "Purchase Manager", "Sales", "Sales & Marketing Executive", "UVX Designer", "Other"] },
   { name: "total_experience", label: "Total Experience", type: "text" },
   { name: "current_ctc", label: "Current CTC", type: "text" },
   { name: "expected_ctc", label: "Expected CTC", type: "text" },
@@ -54,12 +54,21 @@ export const ONBOARD_FIELDS: FormField[] = [
   { name: "lead_time", label: "Lead Time", type: "text" },
 ];
 
+export const OFFBOARD_FIELDS: FormField[] = [
+  { name: "emp_id", label: "Employee ID", type: "text" },
+  { name: "emp_name", label: "Employee Name", type: "text" },
+  { name: "emp_designation", label: "Employee Designation", type: "text" },
+  { name: "reporting_manager_name", label: "Reporting Manager Name", type: "text" },
+  { name: "other_info", label: "Other Info", type: "textarea" },
+];
+
 export function getFieldsForModule(module: HrmsModuleType): FormField[] {
   switch (module) {
     case "recruitment": return RECRUITMENT_FIELDS;
     case "candidate": return CANDIDATE_FIELDS;
     case "sales": return SALES_FIELDS;
     case "onboard": return ONBOARD_FIELDS;
+    case "offboard": return OFFBOARD_FIELDS;
   }
 }
 
@@ -69,6 +78,7 @@ export function getStepCount(module: HrmsModuleType): number {
     case "candidate": return 7;
     case "sales": return 8;
     case "onboard": return 11;
+    case "offboard": return 4;
   }
 }
 
@@ -78,5 +88,6 @@ export function getModuleName(module: HrmsModuleType): string {
     case "candidate": return "Candidate Selection";
     case "sales": return "Sales Candidates";
     case "onboard": return "Onboarding";
+    case "offboard": return "Offboarding";
   }
 }

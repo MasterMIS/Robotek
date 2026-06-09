@@ -28,6 +28,7 @@ export default function Sidebar({ mobileOpen, setMobileOpen }: SidebarProps) {
   const [candidatePendingCount, setCandidatePendingCount] = useState(0);
   const [salesPendingCount, setSalesPendingCount] = useState(0);
   const [onboardPendingCount, setOnboardPendingCount] = useState(0);
+  const [offboardPendingCount, setOffboardPendingCount] = useState(0);
 
   useEffect(() => {
     if (!session?.user) return;
@@ -118,6 +119,7 @@ export default function Sidebar({ mobileOpen, setMobileOpen }: SidebarProps) {
           setCandidatePendingCount(isAdminRole ? hrmsSummary.candidate?.totalPending || 0 : hrmsSummary.candidate?.assignedPending?.[u] || 0);
           setSalesPendingCount(isAdminRole ? hrmsSummary.sales?.totalPending || 0 : hrmsSummary.sales?.assignedPending?.[u] || 0);
           setOnboardPendingCount(isAdminRole ? hrmsSummary.onboard?.totalPending || 0 : hrmsSummary.onboard?.assignedPending?.[u] || 0);
+          setOffboardPendingCount(isAdminRole ? hrmsSummary.offboard?.totalPending || 0 : hrmsSummary.offboard?.assignedPending?.[u] || 0);
         }
 
       } catch (err) {
@@ -270,6 +272,11 @@ export default function Sidebar({ mobileOpen, setMobileOpen }: SidebarProps) {
                         {item.href === '/hrms/onboard' && onboardPendingCount > 0 && (
                           <span className={`transition-all duration-300 ${mobileOpen ? 'opacity-100' : 'opacity-0 md:group-hover:opacity-100'} bg-[#CE2029] text-white text-xs font-black px-2.5 py-0.5 rounded-full shadow-sm`}>
                             {onboardPendingCount}
+                          </span>
+                        )}
+                        {item.href === '/hrms/offboard' && offboardPendingCount > 0 && (
+                          <span className={`transition-all duration-300 ${mobileOpen ? 'opacity-100' : 'opacity-0 md:group-hover:opacity-100'} bg-[#CE2029] text-white text-xs font-black px-2.5 py-0.5 rounded-full shadow-sm`}>
+                            {offboardPendingCount}
                           </span>
                         )}
                       </Link>

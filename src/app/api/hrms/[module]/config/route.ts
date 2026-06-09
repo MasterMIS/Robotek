@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 export async function GET(request: Request, { params }: { params: Promise<{ module: string }> }) {
   const { module: rawModule } = await params;
   const module = rawModule as HrmsModuleType;
-  if (!["recruitment", "candidate", "sales", "onboard"].includes(module)) {
+  if (!["recruitment", "candidate", "sales", "onboard", "offboard"].includes(module)) {
     return NextResponse.json({ error: "Invalid module" }, { status: 400 });
   }
 

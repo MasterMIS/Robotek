@@ -40,6 +40,7 @@ export const navigation = [
   { name: 'Candidate', id: 'hrms', href: '/hrms/candidate', icon: UserGroupIcon, section: 'HRMS' },
   { name: 'Sales HR', id: 'hrms', href: '/hrms/sales', icon: CurrencyDollarIcon, section: 'HRMS' },
   { name: 'Onboard', id: 'hrms', href: '/hrms/onboard', icon: UserPlusIcon, section: 'HRMS' },
+  { name: 'Offboard', id: 'hrms', href: '/hrms/offboard', icon: BriefcaseIcon, section: 'HRMS' },
 
   // Sales & Field Section
   { name: 'Sales', id: 'sales', href: '/sales', icon: CurrencyDollarIcon, section: 'Sales & Field' },
