@@ -908,3 +908,56 @@ export async function getAllItemNames() {
   
   return Array.from(itemNames).sort();
 }
+
+export async function appendOutFormData(
+  o2dNo: string,
+  extractedData: any
+): Promise<boolean> {
+  try {
+    const sheets = await (o2dService as any).getSheetsClient();
+    
+    // Fallback/Format extracted values
+    const orderNo = extractedData.OrderNo || extractedData.orderNo || "";
+    const date = extractedData.Date || extractedData.date || "";
+    const partyName = extractedData.PartyName || extractedData.partyName || "";
+    const status = extractedData.Status || "Success";
+    const lineItems = extractedData.LineItems || extractedData.lineItems || [];
+
+    let rowsToAppend: any[][] = [];
+
+    if (lineItems.length === 0) {
+      // If no line items found or it's an error status, still push one row
+      rowsToAppend = [
+        [o2dNo, orderNo, date, partyName, "", "", "", "", status]
+      ];
+    } else {
+      // Push a row for each line item
+      rowsToAppend = lineItems.map((item: any) => [
+        o2dNo,
+        orderNo,
+        date,
+        partyName,
+        item.Description || item.description || "",
+        item.Qty || item.qty || "",
+        item.Price || item.price || "",
+        item.Amount || item.amount || "",
+        status
+      ]);
+    }
+
+    await sheets.spreadsheets.values.append({
+      spreadsheetId: GOOGLE_SHEET_ID,
+      range: `Out Form!A:I`,
+      valueInputOption: "USER_ENTERED",
+      requestBody: {
+        values: rowsToAppend,
+      },
+    });
+
+    return true;
+  } catch (error) {
+    console.error("Error appending to Out Form:", error);
+    return false;
+  }
+}
+

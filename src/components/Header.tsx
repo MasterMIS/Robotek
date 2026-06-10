@@ -4,6 +4,10 @@ import { useSession, signOut } from "next-auth/react";
 import Image from "next/image";
 import Link from "next/link";
 import useSWR from "swr";
+import { useState, useRef, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { navigation } from "@/lib/navigation";
+import { usePermissions } from "@/hooks/usePermissions";
 import {
   BellIcon,
   MagnifyingGlassIcon,
@@ -23,6 +27,34 @@ interface HeaderProps {
 
 export default function Header({ onMenuClick }: HeaderProps) {
   const { data: session } = useSession();
+  const [searchQuery, setSearchQuery] = useState("");
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const searchRef = useRef<HTMLDivElement>(null);
+  const router = useRouter();
+  const { permissions: userPermissions, isAdmin } = usePermissions();
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (searchRef.current && !searchRef.current.contains(event.target as Node)) {
+        setIsSearchOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const filteredNavigation = navigation.filter(item => {
+    if (item.id === 'dashboard' || item.id === 'chat' || item.id === 'scheduler' || item.id === 'grn' || item.id === 'field-driver' || item.id === 'stationary') return true;
+    if (userPermissions.length > 0) {
+      return userPermissions.some((p: string) => p.toLowerCase() === item.id.toLowerCase());
+    }
+    return isAdmin;
+  });
+
+  const searchResults = filteredNavigation.filter(item => 
+    item.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+    item.section.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   const getNormalizedImageUrl = (url: string) => {
     if (!url) return "";
@@ -73,14 +105,47 @@ export default function Header({ onMenuClick }: HeaderProps) {
       {/* Right Section: Search, Notifications & Profile */}
       <div className="flex items-center gap-1 md:gap-2 flex-shrink-0">
         {/* Search Input - Hidden on mobile */}
-        <div className="relative group hidden lg:block flex-shrink-1">
+        <div ref={searchRef} className="relative group hidden lg:block flex-shrink-1">
           <MagnifyingGlassIcon className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-white/50 group-focus-within:text-white transition-colors" />
           <input
             suppressHydrationWarning
             type="text"
-            placeholder="Search..."
+            placeholder="Search pages..."
+            value={searchQuery}
+            onChange={(e) => {
+              setSearchQuery(e.target.value);
+              setIsSearchOpen(true);
+            }}
+            onFocus={() => setIsSearchOpen(true)}
             className="w-32 lg:w-52 pl-11 pr-4 py-1.5 bg-white/10 border border-white/20 rounded-xl focus:outline-none focus:ring-2 focus:ring-white/30 focus:border-white/50 focus:bg-white/20 transition-all text-xs font-bold placeholder:text-white/40 text-white"
           />
+          
+          {/* Search Dropdown */}
+          {isSearchOpen && searchResults.length > 0 && (
+            <div className="absolute top-full mt-2 w-full lg:w-64 -right-10 lg:right-0 bg-white dark:bg-navy-800 rounded-xl shadow-lg border border-gray-100 dark:border-navy-700 overflow-hidden z-50 max-h-80 overflow-y-auto">
+              <div className="p-1.5">
+                {searchResults.map((item, idx) => (
+                  <button
+                    key={`${item.name}-${idx}`}
+                    onClick={() => {
+                      router.push(item.href);
+                      setIsSearchOpen(false);
+                      setSearchQuery("");
+                    }}
+                    className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 dark:hover:bg-white/5 rounded-lg transition-colors flex items-center gap-3 group/item"
+                  >
+                    <div className="flex items-center justify-center w-6 h-6 rounded-md bg-gray-100 dark:bg-navy-900 group-hover/item:bg-[#003875]/10 dark:group-hover/item:bg-[#FFD500]/10 transition-colors">
+                      <item.icon className="w-4 h-4 text-gray-500 dark:text-gray-400 group-hover/item:text-[#003875] dark:group-hover/item:text-[#FFD500]" />
+                    </div>
+                    <div>
+                      <div className="font-semibold text-gray-900 dark:text-white">{item.name}</div>
+                      <div className="text-[10px] text-gray-500 font-medium tracking-wider uppercase">{item.section}</div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Theme Toggle (Replaces Bell) */}
