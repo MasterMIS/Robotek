@@ -931,18 +931,20 @@ export async function appendOutFormData(
         [o2dNo, orderNo, date, partyName, "", "", "", "", status]
       ];
     } else {
-      // Push a row for each line item
-      rowsToAppend = lineItems.map((item: any) => [
-        o2dNo,
-        orderNo,
-        date,
-        partyName,
-        item.Description || item.description || "",
-        item.Qty || item.qty || "",
-        item.Price || item.price || "",
-        item.Amount || item.amount || "",
-        status
-      ]);
+      // Push a single row with line items as JSON
+      rowsToAppend = [
+        [
+          o2dNo,
+          orderNo,
+          date,
+          partyName,
+          JSON.stringify(lineItems),
+          "",
+          "",
+          "",
+          status
+        ]
+      ];
     }
 
     await sheets.spreadsheets.values.append({
@@ -958,6 +960,41 @@ export async function appendOutFormData(
   } catch (error) {
     console.error("Error appending to Out Form:", error);
     return false;
+  }
+}
+
+export async function getOutFormData(): Promise<any[]> {
+  try {
+    const sheets = await (o2dService as any).getSheetsClient();
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId: GOOGLE_SHEET_ID,
+      range: "Out Form!A:I",
+    });
+
+    const rows = response.data.values || [];
+    // rows[0] is header, skip it.
+    if (rows.length <= 1) return [];
+
+    const data: any[] = [];
+    for (let i = 1; i < rows.length; i++) {
+      const row = rows[i];
+      data.push({
+        o2dNo: row[0] || "",
+        orderNo: row[1] || "",
+        date: row[2] || "",
+        partyName: row[3] || "",
+        description: row[4] || "", // Might be a JSON string or plain string
+        qty: row[5] || "",
+        price: row[6] || "",
+        amount: row[7] || "",
+        status: row[8] || "",
+      });
+    }
+
+    return data;
+  } catch (error) {
+    console.error("Error fetching Out Form data:", error);
+    return [];
   }
 }
 

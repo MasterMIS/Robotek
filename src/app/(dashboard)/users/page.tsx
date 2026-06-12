@@ -796,6 +796,25 @@ export default function UsersPage() {
           style={{ borderColor: 'var(--panel-border)', backgroundColor: 'var(--panel-card)' }}
           className="rounded-2xl border overflow-hidden shadow-sm transition-all duration-500"
         >
+          {/* Integrated Search Row */}
+          <div 
+            style={{ 
+              backgroundColor: 'var(--panel-card)',
+              borderBottom: '1px solid var(--panel-border)',
+            }}
+            className="px-3 md:px-4 py-3 flex flex-col lg:flex-row lg:items-center justify-between gap-4"
+          >
+            <div className="relative group flex-1 max-w-full lg:max-w-sm">
+              <MagnifyingGlassIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-[#FFD500] transition-colors" />
+              <input
+                type="text"
+                placeholder="Search user..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-10 pr-4 py-1.5 bg-gray-50 dark:bg-navy-900 border border-gray-100 dark:border-navy-700/50 rounded-lg focus:border-[#FFD500] outline-none font-bold text-[13px] text-gray-700 dark:text-white transition-all shadow-sm"
+              />
+            </div>
+          </div>
           <div className="overflow-x-auto overflow-y-auto max-h-[70vh] no-scrollbar">
             <table className="w-full text-left border-collapse table-auto">
               <thead>
@@ -809,7 +828,7 @@ export default function UsersPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200 dark:divide-white/10">
-                {users.map(user => (
+                {filteredUsers.map(user => (
                   <tr key={user.id} className="hover:bg-orange-50/10 transition-colors group">
                     <td className="px-3 md:px-6 py-3 md:py-4 border-r border-gray-200 dark:border-white/10 sticky left-0 bg-white dark:bg-[#131C2E] z-10">
                       <div className="flex items-center gap-2 md:gap-3">

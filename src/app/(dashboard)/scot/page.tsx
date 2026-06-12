@@ -417,6 +417,23 @@ export default function ScotPage() {
   const totalPages = Math.ceil(sortedData.length / itemsPerPage);
   const paginatedData = sortedData.slice((currentPage - 1) * itemsPerPage, (currentPage - 1) * itemsPerPage + itemsPerPage);
 
+  const getDynamicCalendarDates = () => {
+    if (activeTab !== 'calls') return [];
+    const datesSet = new Set<number>();
+    paginatedData.forEach((record: any) => {
+      const effectiveDate = getEffectiveFollowUpDate(record);
+      if (effectiveDate) {
+        const d = new Date(effectiveDate);
+        if (!isNaN(d.getTime())) {
+          d.setHours(0,0,0,0);
+          datesSet.add(d.getTime());
+        }
+      }
+    });
+    const uniqueDates = Array.from(datesSet).sort((a, b) => a - b);
+    return uniqueDates.map(time => new Date(time));
+  };
+
   const handleUpdateCall = async (updatedRecord: CallRecord) => {
     setIsUpdating(true);
     // Check if party already exists in our master list
@@ -801,7 +818,7 @@ export default function ScotPage() {
               </div>
             </div>
 
-            {/* Filter Buttons */}
+            {/* Filter Buttons & Calendar Navigation */}
             {activeTab === 'calls' && (
               <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-1">
                 {[
@@ -1053,9 +1070,9 @@ export default function ScotPage() {
 
         {/* Table Section (for feeder / calls / lost tabs) */}
         {activeTab !== 'dashboard' && (
-        <div className="overflow-x-auto min-h-[400px]">
+        <div className="overflow-x-auto overflow-y-auto max-h-[65vh] min-h-[400px] relative">
           <table className="w-full text-left border-collapse table-auto">
-            <thead>
+            <thead className="sticky top-0 z-30 shadow-sm">
               <tr className="bg-[#003875] dark:bg-navy-950 text-white dark:text-slate-200 uppercase text-[10px] md:text-[11px] font-black tracking-widest whitespace-nowrap">
                 {activeTab === 'feeder' ? (
                   [
@@ -1085,32 +1102,46 @@ export default function ScotPage() {
                     </th>
                   ))
                 ) : (
-                  [
-                    { label: 'Action', key: 'action' },
-                    { label: 'Follow up info', key: 'latestStatus' },
-                    { label: 'Last Order', key: 'lastOrderDate' },
-                    { label: 'Party Details', key: 'partyName' },
-                    { label: 'Contact Details', key: 'concernPerson' },
-                    { label: 'Location Details', key: 'district' },
-                    { label: 'Type', key: 'customerType' },
-                    { label: 'Sales Person', key: 'salesPerson' }
-                  ].map((col) => (
-                    <th 
-                      key={col.key}
-                      onClick={() => col.key !== 'action' && setSortConfig(prev => ({ 
-                        key: col.key, 
-                        direction: prev.key === col.key && prev.direction === 'asc' ? 'desc' : 'asc' 
-                      }))}
-                      className={`px-4 py-3 border-r border-white/5 ${col.key !== 'action' ? 'cursor-pointer hover:bg-white/5' : ''} transition-colors`}
-                    >
-                      <div className="flex items-center gap-1.5 lg:justify-start">
-                        {col.label}
-                        {sortConfig.key === col.key && (
-                          <span className="text-[#FFD500] font-bold text-sm">{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>
-                        )}
-                      </div>
-                    </th>
-                  ))
+                  <>
+                    {[
+                      { label: 'Action', key: 'action', sticky: 'left-0', w: 'w-[100px] min-w-[100px]', z: 'z-20 bg-[#003875] dark:bg-navy-950' },
+                      { label: 'Last Order', key: 'lastOrderDate', sticky: 'left-[100px]', w: 'w-[120px] min-w-[120px]', z: 'z-20 bg-[#003875] dark:bg-navy-950' },
+                      { label: 'Party Details', key: 'partyName', sticky: 'left-[220px]', w: 'w-[300px] min-w-[300px]', z: 'z-20 bg-[#003875] dark:bg-navy-950', shadow: 'shadow-[4px_0_6px_-2px_rgba(0,0,0,0.2)]' },
+                      { label: 'Contact Details', key: 'concernPerson' },
+                      { label: 'Sales Person', key: 'salesPerson' }
+                    ].map((col) => (
+                      <th 
+                        key={col.key}
+                        onClick={() => col.key !== 'action' && setSortConfig(prev => ({ 
+                          key: col.key, 
+                          direction: prev.key === col.key && prev.direction === 'asc' ? 'desc' : 'asc' 
+                        }))}
+                        className={`px-4 py-3 border-r border-white/5 ${col.key !== 'action' ? 'cursor-pointer hover:bg-white/5' : ''} transition-colors ${col.sticky ? `sticky ${col.sticky} ${col.w} ${col.z} ${col.shadow || ''}` : ''}`}
+                      >
+                        <div className="flex items-center gap-1.5 lg:justify-start">
+                          {col.label}
+                          {sortConfig.key === col.key && (
+                            <span className="text-[#FFD500] font-bold text-sm">{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>
+                          )}
+                        </div>
+                      </th>
+                    ))}
+                    {getDynamicCalendarDates().map((date, idx) => {
+                      const isToday = new Date().toDateString() === date.toDateString();
+                      return (
+                        <th key={`cal-${idx}`} className={`px-2 py-3 border-r border-white/5 text-center min-w-[110px] ${isToday ? 'bg-[#FFD500]/10' : ''}`}>
+                          <div className="flex flex-col items-center gap-0.5">
+                            <span className={`text-[9px] uppercase font-black ${isToday ? 'text-[#FFD500]' : 'text-gray-300 dark:text-slate-400'}`}>
+                              {date.toLocaleDateString('en-GB', { weekday: 'short' })}
+                            </span>
+                            <span className={`text-[11px] font-black tracking-widest ${isToday ? 'text-white' : ''}`}>
+                              {date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}
+                            </span>
+                          </div>
+                        </th>
+                      );
+                    })}
+                  </>
                 )}
               </tr>
             </thead>
@@ -1195,8 +1226,8 @@ export default function ScotPage() {
                         </>
                       ) : (
                         <>
-                          <td className="px-4 py-2.5 text-center border-r border-gray-100 dark:border-white/5">
-                            <div className="flex items-center justify-center gap-1.5 transition-all">
+                          <td className="px-4 py-2.5 text-center border-r border-gray-100 dark:border-white/5 sticky left-0 z-10 w-[100px] min-w-[100px] bg-white dark:bg-navy-900 group-hover:bg-orange-50/50 dark:group-hover:bg-white/5 transition-colors">
+                            <div className="flex items-center justify-center gap-1.5">
                               <button 
                                 onClick={() => setSelectedFollowUpParty(record)}
                                 className="p-1.5 bg-emerald-100/50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 hover:bg-emerald-600 hover:text-white rounded-lg transition-all border border-emerald-200 dark:border-emerald-800/30 shadow-sm"
@@ -1217,39 +1248,15 @@ export default function ScotPage() {
                               </button>
                             </div>
                           </td>
-                          <td className="px-4 py-2.5 border-r border-gray-100 dark:border-white/5">
-                            <div className="flex flex-col gap-1.5 min-w-[120px]">
-                              <div className="flex items-center gap-1.5">
-                                 <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest border shadow-sm ${
-                                   record.latestStatus === 'Order Won' 
-                                   ? 'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-400'
-                                   : record.latestStatus === 'Order Lost'
-                                   ? 'bg-rose-100 text-rose-700 border-rose-200 dark:bg-rose-900/40 dark:text-rose-400'
-                                   : record.latestStatus === 'Not Answered'
-                                   ? 'bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-900/40 dark:text-orange-400'
-                                   : 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/40 dark:text-blue-400'
-                                 }`}>
-                                   {record.latestStatus}
-                                 </span>
-                              </div>
-                                 <div className="flex items-center gap-1.5">
-                                    <ClockIcon className="w-3 h-3 text-gray-400" />
-                                    <span className="text-[10px] font-black text-[#003875] dark:text-[#FFD500]">
-                                      {formatDisplayDate(getEffectiveFollowUpDate(record)) || "No Data"}
-                                    </span>
-                                 </div>
-                               </div>
-                             </td>
-
                              {/* Last Order Column */}
-                             <td className="px-4 py-2.5 border-r border-gray-100 dark:border-white/5">
+                             <td className="px-4 py-2.5 border-r border-gray-100 dark:border-white/5 sticky left-[100px] z-10 w-[120px] min-w-[120px] bg-white dark:bg-navy-900 group-hover:bg-orange-50/50 dark:group-hover:bg-white/5 transition-colors">
                                <div className="flex flex-col">
                                  <span className="text-[11px] font-black text-gray-700 dark:text-slate-300">{formatDisplayDate(record.lastOrderDate) || "—"}</span>
                                </div>
                              </td>
 
                           {/* Merged Party Column */}
-                          <td className="px-4 py-2.5 border-r border-gray-100 dark:border-white/5">
+                          <td className="px-4 py-2.5 border-r border-gray-100 dark:border-white/5 sticky left-[220px] z-10 w-[300px] min-w-[300px] bg-white dark:bg-navy-900 group-hover:bg-orange-50/50 dark:group-hover:bg-white/5 transition-colors shadow-[4px_0_6px_-2px_rgba(0,0,0,0.1)]">
                             <div className="flex items-center gap-3">
                               <div className="w-8 h-8 rounded-xl bg-blue-50 dark:bg-navy-950 flex items-center justify-center border border-blue-100 dark:border-navy-700 shadow-sm shrink-0">
                                 <FingerPrintIcon className="w-4 h-4 text-blue-600 dark:text-blue-400" />
@@ -1285,23 +1292,45 @@ export default function ScotPage() {
                             </div>
                           </td>
 
-                          {/* Merged Location Column */}
-                          <td className="px-4 py-2.5 border-r border-gray-100 dark:border-white/5">
-                            <div className="flex items-center gap-3">
-                              <div className="w-8 h-8 rounded-xl bg-orange-50 dark:bg-navy-950 flex items-center justify-center border border-orange-100 dark:border-navy-700 shadow-sm shrink-0">
-                                <CalendarDaysIcon className="w-4 h-4 text-orange-600 dark:text-orange-400" />
-                              </div>
-                              <div className="min-w-0">
-                                <p className="text-[11px] font-black text-[#003875] dark:text-[#FFD500] uppercase tracking-wider">{record.region}</p>
-                                <p className="text-[10px] font-bold text-gray-400 dark:text-slate-500 truncate mt-0.5">
-                                  {record.district}, {record.state}
-                                </p>
-                              </div>
-                            </div>
-                          </td>
-
-                          <td className="px-4 py-2.5 border-r border-gray-100 dark:border-white/5 text-[11px] font-bold text-gray-600 dark:text-slate-400">{record.customerType}</td>
                           <td className="px-4 py-2.5 border-r border-gray-100 dark:border-white/5 text-[11px] font-black text-[#003875] dark:text-[#FFD500] uppercase truncate max-w-[120px]">{record.salesPerson}</td>
+
+                          {/* Dynamic Calendar Cells */}
+                          {getDynamicCalendarDates().map((date, idx) => {
+                            const effectiveFollowUp = getEffectiveFollowUpDate(record);
+                            let showBadge = false;
+                            
+                            if (effectiveFollowUp) {
+                              const d = new Date(effectiveFollowUp);
+                              if (!isNaN(d.getTime())) {
+                                d.setHours(0,0,0,0);
+                                const calDate = new Date(date);
+                                calDate.setHours(0,0,0,0);
+                                showBadge = d.getTime() === calDate.getTime();
+                              }
+                            }
+                            
+                            return (
+                              <td key={`cell-${idx}`} className="px-2 py-2.5 border-r border-gray-100 dark:border-white/5 text-center min-w-[110px]">
+                                {showBadge && record.latestStatus ? (
+                                  <div className="flex justify-center w-full">
+                                    <span className={`px-2 py-1 w-full max-w-[100px] text-center rounded text-[9px] font-black uppercase tracking-widest border shadow-sm truncate ${
+                                      record.latestStatus === 'Order Won' 
+                                      ? 'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-400'
+                                      : record.latestStatus === 'Order Lost'
+                                      ? 'bg-rose-100 text-rose-700 border-rose-200 dark:bg-rose-900/40 dark:text-rose-400'
+                                      : record.latestStatus === 'Not Answered'
+                                      ? 'bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-900/40 dark:text-orange-400'
+                                      : 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/40 dark:text-blue-400'
+                                    }`}>
+                                      {record.latestStatus}
+                                    </span>
+                                  </div>
+                                ) : (
+                                  <span className="text-gray-200 dark:text-white/5 font-mono text-sm">-</span>
+                                )}
+                              </td>
+                            );
+                          })}
                         </>
                       )}
                     </motion.tr>
