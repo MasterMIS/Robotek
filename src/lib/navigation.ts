@@ -48,6 +48,7 @@ export const navigation = [
 
   // Operations Section
   { name: 'O2D', id: 'o2d', href: '/o2d', icon: ShoppingBagIcon, section: 'Operations' },
+  { name: 'O2D KB', id: 'o2dkb', href: '/o2dkb', icon: ShoppingBagIcon, section: 'Operations' },
   { name: 'I2R', id: 'i2r', href: '/i2r', icon: ArchiveBoxIcon, section: 'Operations' },
   { name: 'I2R Packing', id: 'i2r-packing', href: '/i2r-packing', icon: ArchiveBoxIcon, section: 'Operations' },
   { name: 'Item Receive (PACKING)', id: 'item-receive-packing', href: '/item-receive-packing', icon: ArchiveBoxIcon, section: 'Operations' },

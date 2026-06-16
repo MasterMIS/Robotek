@@ -2,13 +2,7 @@
 
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { useSession } from "next-auth/react";
-import {
-  O2D,
-  O2DItem,
-  O2D_STEPS,
-  O2D_STEP_SHORTS,
-  O2DStepConfig,
-} from "@/types/o2d";
+import { O2DKB, O2DKBItemDetail, O2DKB_STEPS, O2DKB_STEP_SHORTS, O2DKBStepConfig } from "@/types/o2dkb";
 import { PartyManagement } from "@/types/party-management";
 import useSWR, { mutate, useSWRConfig } from "swr";
 const fetcher = async (url: string) => {
@@ -16,46 +10,6 @@ const fetcher = async (url: string) => {
   return res.json();
 };
 
-const expandO2DItem = (item: O2D): O2D[] => {
-  if (item.item_name && /^1\.\s/.test(item.item_name)) {
-    const names = item.item_name
-      .split(" | ")
-      .map((s) => s.replace(/^\d+\.\s*/, "").trim());
-    const qtys = (item.item_qty || "")
-      .split(" | ")
-      .map((s) => s.replace(/^\d+\.\s*/, "").trim());
-    const amounts = (item.est_amount || "")
-      .split(" | ")
-      .map((s) => s.replace(/^\d+\.\s*/, "").trim());
-    const specs = (item.item_specification || "")
-      .split(" | ")
-      .map((s) => s.replace(/^\d+\.\s*/, "").trim());
-
-    return names.map((name, idx) => ({
-      ...item,
-      id: idx === 0 ? item.id : `${item.id}-${idx}`,
-      item_name: name,
-      item_qty: qtys[idx] || "",
-      est_amount: amounts[idx] || "",
-      item_specification: specs[idx] || "",
-    }));
-  } else if (item.item_name && item.item_name.includes('\n')) {
-    const names = item.item_name.split('\n').map(s => s.trim());
-    const qtys = (item.item_qty || "").split('\n').map(s => s.trim());
-    const amounts = (item.est_amount || "").split('\n').map(s => s.trim());
-    const specs = (item.item_specification || "").split('\n').map(s => s.trim());
-
-    return names.map((name, idx) => ({
-      ...item,
-      id: idx === 0 ? item.id : `${item.id}-${idx}`,
-      item_name: name,
-      item_qty: qtys[idx] || "",
-      est_amount: amounts[idx] || "",
-      item_specification: specs[idx] || "",
-    }));
-  }
-  return [item];
-};
 import { getDriveImageUrl, getDriveDownloadUrl, getDrivePreviewUrl } from "@/lib/drive-utils";
 import {
   PlusIcon,
@@ -426,7 +380,7 @@ export default function O2DPage() {
   const [selectedDateFilters, setSelectedDateFilters] = useState<string[]>([]);
   const [selectedStepFilters, setSelectedStepFilters] = useState<number[]>([]);
 
-  const [allO2Ds, setAllO2Ds] = useState<O2D[]>([]);
+  const [allO2Ds, setAllO2Ds] = useState<O2DKB[]>([]);
   const [isAllLoading, setIsAllLoading] = useState(false);
   const [totalOrdersServer, setTotalOrdersServer] = useState(0);
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -440,7 +394,7 @@ export default function O2DPage() {
   // --- TABLE view: 100 items per page, server-side ---
   const [tableCurrentPage, setTableCurrentPage] = useState(1);
   const [tableItemsPerPage] = useState(10);
-  const tableQueryKey = `/api/o2d?page=${tableCurrentPage}&limit=${tableItemsPerPage}&search=${debouncedSearch}&dateFilters=${encodeURIComponent(JSON.stringify(selectedDateFilters))}&stepFilters=${encodeURIComponent(JSON.stringify(selectedStepFilters))}&partyFilter=${tableFilterParty}&orderFilter=${tableFilterOrderNo}&itemNameFilter=${tableFilterItemName}&pendingFilter=${tableFilterPending}&startDate=${filterStartDate}&endDate=${filterEndDate}`;
+  const tableQueryKey = `/api/o2dkb?page=${tableCurrentPage}&limit=${tableItemsPerPage}&search=${debouncedSearch}&dateFilters=${encodeURIComponent(JSON.stringify(selectedDateFilters))}&stepFilters=${encodeURIComponent(JSON.stringify(selectedStepFilters))}&partyFilter=${tableFilterParty}&orderFilter=${tableFilterOrderNo}&itemNameFilter=${tableFilterItemName}&pendingFilter=${tableFilterPending}&startDate=${filterStartDate}&endDate=${filterEndDate}`;
 
   const { data: paginatedResponse, error: paginatedError } = useSWR(
     tableQueryKey,
@@ -450,10 +404,10 @@ export default function O2DPage() {
 
   useEffect(() => {
     if (paginatedResponse) {
-      const expanded = (paginatedResponse.data || []).flatMap(expandO2DItem);
+      const expanded = (paginatedResponse.data || []);
       // Strictly filter items by name in the table view if a filter is active
       const filtered = tableFilterItemName 
-        ? expanded.filter((item: O2D) => item.item_name.toLowerCase().trim() === tableFilterItemName.toLowerCase().trim())
+        ? expanded.filter((item: O2DKB) => item.item_name.toLowerCase().trim() === tableFilterItemName.toLowerCase().trim())
         : expanded;
       setAllO2Ds(filtered);
       setTotalOrdersServer(paginatedResponse.total || 0);
@@ -465,7 +419,7 @@ export default function O2DPage() {
 
   // Fetch all unique item names for the filter dropdown (never shrinks)
   const { data: allItemNamesMaster } = useSWR<string[]>(
-    "/api/o2d?type=itemnames",
+    "/api/o2dkb?type=itemnames",
     fetcher,
     { revalidateOnFocus: false, refreshInterval: 600000 }
   );
@@ -473,7 +427,7 @@ export default function O2DPage() {
   // --- SIDEBAR/PANELS view: 10 orders per page, lazy server-side ---
   const [sidebarCurrentPage, setSidebarCurrentPage] = useState(1);
   const [sidebarItemsPerPage] = useState(10);
-  const sidebarQueryKey = `/api/o2d?page=${sidebarCurrentPage}&limit=${sidebarItemsPerPage}&search=${debouncedSearch}&dateFilters=${encodeURIComponent(JSON.stringify(selectedDateFilters))}&stepFilters=${encodeURIComponent(JSON.stringify(selectedStepFilters))}&partyFilter=${tableFilterParty}&orderFilter=${tableFilterOrderNo}&itemNameFilter=${tableFilterItemName}&pendingFilter=${tableFilterPending}&startDate=${filterStartDate}&endDate=${filterEndDate}`;
+  const sidebarQueryKey = `/api/o2dkb?page=${sidebarCurrentPage}&limit=${sidebarItemsPerPage}&search=${debouncedSearch}&dateFilters=${encodeURIComponent(JSON.stringify(selectedDateFilters))}&stepFilters=${encodeURIComponent(JSON.stringify(selectedStepFilters))}&partyFilter=${tableFilterParty}&orderFilter=${tableFilterOrderNo}&itemNameFilter=${tableFilterItemName}&pendingFilter=${tableFilterPending}&startDate=${filterStartDate}&endDate=${filterEndDate}`;
   const { data: sidebarResponse, isLoading: isSidebarLoading } = useSWR(
     sidebarQueryKey,
     fetcher,
@@ -486,7 +440,7 @@ export default function O2DPage() {
     totalOrders: number;
     totalRows: number;
   }>(
-    "/api/o2d/summary",
+    "/api/o2dkb/summary",
     fetcher,
     { revalidateOnFocus: true, refreshInterval: 30000 }
   );
@@ -505,7 +459,7 @@ export default function O2DPage() {
 
   // Fetch all order numbers for the Order ID filter dropdown
   const { data: allOrderNumbers } = useSWR<string[]>(
-    "/api/o2d?type=ordernumbers",
+    "/api/o2dkb?type=ordernumbers",
     fetcher,
     {
       revalidateOnFocus: false,
@@ -531,7 +485,7 @@ export default function O2DPage() {
       await Promise.all([
         globalMutate(tableQueryKey, undefined, { revalidate: true }),
         globalMutate(sidebarQueryKey, undefined, { revalidate: true }),
-        globalMutate("/api/o2d/summary", undefined, { revalidate: true })
+        globalMutate("/api/o2dkb/summary", undefined, { revalidate: true })
       ]);
 
       setActionStatus("success");
@@ -545,14 +499,14 @@ export default function O2DPage() {
       setIsSyncing(false);
     }
   };
-  // Extract O2D data
+  // Extract O2DKB data
   const allO2DsRaw = allO2DData || [];
 
   const groupedOrders = useMemo(() => {
-    return allO2DsRaw.reduce((acc: Record<string, O2D[]>, o2d: O2D) => {
-      const orderNo = (o2d.order_no || "Unknown").trim();
+    return allO2DsRaw.reduce((acc: Record<string, O2DKB[]>, o2dkb: O2DKB) => {
+      const orderNo = (o2dkb.order_no || "Unknown").trim();
       if (!acc[orderNo]) acc[orderNo] = [];
-      acc[orderNo].push(o2d);
+      acc[orderNo].push(o2dkb);
       return acc;
     }, {});
   }, [allO2DsRaw]);
@@ -560,14 +514,14 @@ export default function O2DPage() {
   // Dedicated grouped map for the SIDEBAR — built from the sidebar's own page data
   // This avoids crashes when sidebar is on page N but table is on page 1
   const sidebarGroupedOrders = useMemo(() => {
-    let rows: O2D[] = (sidebarResponse?.data || []).flatMap(expandO2DItem);
+    let rows: O2DKB[] = (sidebarResponse?.data || []);
     if (tableFilterItemName) {
-      rows = rows.filter((item: O2D) => item.item_name.toLowerCase().trim() === tableFilterItemName.toLowerCase().trim());
+      rows = rows.filter((item: O2DKB) => item.item_name.toLowerCase().trim() === tableFilterItemName.toLowerCase().trim());
     }
-    return rows.reduce((acc: Record<string, O2D[]>, o2d: O2D) => {
-      const orderNo = (o2d.order_no || "Unknown").trim();
+    return rows.reduce((acc: Record<string, O2DKB[]>, o2dkb: O2DKB) => {
+      const orderNo = (o2dkb.order_no || "Unknown").trim();
       if (!acc[orderNo]) acc[orderNo] = [];
-      acc[orderNo].push(o2d);
+      acc[orderNo].push(o2dkb);
       return acc;
     }, {});
   }, [sidebarResponse, tableFilterItemName]);
@@ -612,7 +566,7 @@ export default function O2DPage() {
     party_name: "",
     remark: "",
   });
-  const [items, setItems] = useState<O2DItem[]>([]);
+  const [items, setItems] = useState<any[]>([]);
   const [newPartyDraft, setNewPartyDraft] =
     useState<Partial<PartyManagement> | null>(null);
   const [screenshotFile, setScreenshotFile] = useState<File | null>(null);
@@ -644,7 +598,7 @@ export default function O2DPage() {
   const [busySearchQuery, setBusySearchQuery] = useState("");
 
   // Fetch all orders for Busy Modal (not paginated)
-  const busyQueryKey = `/api/o2d?page=1&limit=-1&pendingFilter=true&currentUser=${currentUser}&userRole=${userRole}`;
+  const busyQueryKey = `/api/o2dkb?page=1&limit=-1&pendingFilter=true&currentUser=${currentUser}&userRole=${userRole}`;
   const { data: busyResponse } = useSWR(
     isBusyModalOpen ? busyQueryKey : null,
     fetcher,
@@ -652,22 +606,22 @@ export default function O2DPage() {
   );
 
   const busyOrdersGrouped = useMemo(() => {
-    return (busyResponse?.data || []).reduce((acc: Record<string, O2D[]>, o2d: O2D) => {
-      const orderNo = (o2d.order_no || "Unknown").trim();
+    return (busyResponse?.data || []).reduce((acc: Record<string, O2DKB[]>, o2dkb: O2DKB) => {
+      const orderNo = (o2dkb.order_no || "Unknown").trim();
       if (!acc[orderNo]) acc[orderNo] = [];
-      acc[orderNo].push(o2d);
+      acc[orderNo].push(o2dkb);
       return acc;
     }, {});
   }, [busyResponse]);
 
-  const [masterOrderMap, setMasterOrderMap] = useState<Record<string, O2D[]>>({});
+  const [masterOrderMap, setMasterOrderMap] = useState<Record<string, O2DKB[]>>({});
 
   useEffect(() => {
     setMasterOrderMap(prev => {
       const next = { ...prev };
       
       // Helper to merge while avoiding overwriting full data with partial/filtered data
-      const mergeIfBetter = (no: string, items: O2D[]) => {
+      const mergeIfBetter = (no: string, items: O2DKB[]) => {
         if (!no || !items || items.length === 0) return;
         const trimmedNo = no.trim();
         const existing = next[trimmedNo];
@@ -683,17 +637,17 @@ export default function O2DPage() {
       };
 
       // Merge Table orders (usually 10 items per page)
-      Object.entries(groupedOrders as Record<string, O2D[]>).forEach(([no, items]) => {
+      Object.entries(groupedOrders as Record<string, O2DKB[]>).forEach(([no, items]) => {
         mergeIfBetter(no, items);
       });
 
       // Merge Sidebar orders (usually 10 orders per page)
-      Object.entries(sidebarGroupedOrders as Record<string, O2D[]>).forEach(([no, items]) => {
+      Object.entries(sidebarGroupedOrders as Record<string, O2DKB[]>).forEach(([no, items]) => {
         mergeIfBetter(no, items);
       });
 
       // Merge Busy orders (from modal)
-      Object.entries(busyOrdersGrouped as Record<string, O2D[]>).forEach(([no, items]) => {
+      Object.entries(busyOrdersGrouped as Record<string, O2DKB[]>).forEach(([no, items]) => {
         mergeIfBetter(no, items);
       });
 
@@ -711,21 +665,21 @@ export default function O2DPage() {
     if (fromMaster && fromMaster.length > 0) {
       // If we have a filter, verify if the current sidebar/table has a more "relevant" version
       // but generally the master map should be the safest bet for completeness.
-      const fromSidebar = (sidebarGroupedOrders as Record<string, O2D[]>)[trimmedNo];
+      const fromSidebar = (sidebarGroupedOrders as Record<string, O2DKB[]>)[trimmedNo];
       if (fromSidebar && fromSidebar.length > fromMaster.length) return fromSidebar;
       return fromMaster;
     }
     
     // 2. Sidebar (current page - reactive fallback)
-    const fromSidebar = (sidebarGroupedOrders as Record<string, O2D[]>)[trimmedNo];
+    const fromSidebar = (sidebarGroupedOrders as Record<string, O2DKB[]>)[trimmedNo];
     if (fromSidebar && fromSidebar.length > 0) return fromSidebar;
 
     // 3. Table view (current page - reactive fallback)
-    const fromTable = (groupedOrders as Record<string, O2D[]>)[trimmedNo];
+    const fromTable = (groupedOrders as Record<string, O2DKB[]>)[trimmedNo];
     if (fromTable && fromTable.length > 0) return fromTable;
     
     // 4. Busy orders (from modal - reactive fallback)
-    const fromBusy = (busyOrdersGrouped as Record<string, O2D[]>)[trimmedNo];
+    const fromBusy = (busyOrdersGrouped as Record<string, O2DKB[]>)[trimmedNo];
     if (fromBusy && fromBusy.length > 0) return fromBusy;
 
     return [];
@@ -773,8 +727,8 @@ export default function O2DPage() {
 
   // Setup Config
   const [isSetupModalOpen, setIsSetupModalOpen] = useState(false);
-  const [globalConfigs, setGlobalConfigs] = useState<O2DStepConfig[]>([]);
-  const [stepConfigs, setStepConfigs] = useState<O2DStepConfig[]>([]);
+  const [globalConfigs, setGlobalConfigs] = useState<O2DKBStepConfig[]>([]);
+  const [stepConfigs, setStepConfigs] = useState<O2DKBStepConfig[]>([]);
   const [usersList, setUsersList] = useState<string[]>([]);
 
   // Step Update Modal State
@@ -794,14 +748,14 @@ export default function O2DPage() {
   const fetchO2Ds = async () => {
     // Now handled by SWR
     // We just trigger a revalidation if needed
-    mutate("O2D");
+    mutate("O2DKB");
   };
 
   const fetchDetails = async () => {
     try {
       const [imsRes, configRes, partiesRes] = await Promise.all([
         fetch("/api/ims"),
-        fetch("/api/o2d/config"),
+        fetch("/api/o2dkb/config"),
         fetch("/api/party-management?limit=9999"), // get all party names for dropdown
       ]);
 
@@ -828,7 +782,7 @@ export default function O2DPage() {
       }
 
       if (configData && Array.isArray(configData)) {
-        const mergedConfigs = O2D_STEPS.map((step, idx) => {
+        const mergedConfigs = O2DKB_STEPS.map((step, idx) => {
           const found =
             configData.find((c: any) => c.step_name === step) || configData[idx];
           return {
@@ -841,18 +795,18 @@ export default function O2DPage() {
         setStepConfigs(mergedConfigs);
       }
     } catch (error) {
-      console.error("Error fetching o2d details:", error);
+      console.error("Error fetching o2dkb details:", error);
     }
   };
 
-  const generateOrderNo = (existing: O2D[]) => {
+  const generateOrderNo = (existing: O2DKB[]) => {
     const orderNos = Array.from(new Set(existing.map((o) => o.order_no)));
-    if (orderNos.length === 0) return "OR-01";
+    if (orderNos.length === 0) return "SH-01";
     const maxNum = orderNos.reduce((max, no) => {
-      const num = parseInt(no.replace("OR-", ""));
+      const num = parseInt(no?.replace("SH-", "") || "0");
       return !isNaN(num) && num > max ? num : max;
     }, 0);
-    return `OR-${(maxNum + 1).toString().padStart(2, "0")}`;
+    return `SH-${(maxNum + 1).toString().padStart(2, "0")}`;
   };
 
   const calculatePlannedDate = (baseDate: string | Date, tatString: string) => {
@@ -923,7 +877,7 @@ export default function O2DPage() {
     return date.toISOString();
   };
 
-  const getPendingStepIdx = (orderItems: O2D[]): number => {
+  const getPendingStepIdx = (orderItems: O2DKB[]): number => {
     const firstItem = orderItems[0] as any;
     for (let i = 1; i <= 11; i++) {
       const pVal = (firstItem[`planned_${i}`] || "").toString().trim();
@@ -959,14 +913,14 @@ export default function O2DPage() {
     return -1;
   };
 
-  const getBaseFilterMatch = (no: string, items: O2D[]): boolean => {
+  const getBaseFilterMatch = (no: string, items: O2DKB[]): boolean => {
     // With server-side filtering, we just return true here as the data is already filtered
     return true;
   };
 
   // Helper: check if an order matches the date filter based on planned times of steps
   const orderMatchesDateFilter = (
-    orderItems: O2D[],
+    orderItems: O2DKB[],
     filter: string,
   ): boolean => {
     if (!filter) return true; // Status-based filters
@@ -1077,7 +1031,7 @@ export default function O2DPage() {
     }
 
     const lines = pasteText.split('\n');
-    const newItems: O2DItem[] = [];
+    const newItems: any[] = [];
 
     lines.forEach(line => {
       let parts = line.split('\t');
@@ -1152,7 +1106,7 @@ export default function O2DPage() {
 
   const handleItemChange = (
     index: number,
-    field: keyof O2DItem,
+    field: keyof any,
     value: string,
   ) => {
     const newItems = [...items];
@@ -1190,7 +1144,7 @@ export default function O2DPage() {
     setEditingOrderNo(null);
   };
 
-  const mergeItems = (itemsToMerge: O2DItem[]) => {
+  const mergeItems = (itemsToMerge: any[]) => {
     const item_name = itemsToMerge.map((it, i) => `${i + 1}. ${it.item_name}`).join(" | ");
     const item_qty = itemsToMerge.map((it, i) => `${i + 1}. ${it.item_qty}`).join(" | ");
     const est_amount = itemsToMerge.map((it, i) => `${i + 1}. ${it.est_amount}`).join(" | ");
@@ -1198,7 +1152,7 @@ export default function O2DPage() {
     return { item_name, item_qty, est_amount, item_specification };
   };
 
-  const mergeExpandedItems = (expandedItems: O2D[]): O2D | null => {
+  const mergeExpandedItems = (expandedItems: O2DKB[]): O2DKB | null => {
     if (expandedItems.length === 0) return null;
     if (expandedItems.length === 1) return expandedItems[0];
 
@@ -1284,7 +1238,7 @@ export default function O2DPage() {
           }
         }
 
-        const { item_name, item_qty, est_amount, item_specification } = mergeItems(items);
+        const item_details = JSON.stringify(items);
         let idToUse = items[0]?.id || baseRecord.id;
         if (idToUse && typeof idToUse === "string") {
           idToUse = idToUse.split("-")[0];
@@ -1299,15 +1253,12 @@ export default function O2DPage() {
         const updated = {
           ...baseRecord,
           id: idToUse,
-          item_name,
-          item_qty,
-          est_amount,
-          item_specification,
+          item_details,
           party_name: commonData.party_name,
           remark: commonData.remark,
           created_at: baseTime,
           updated_at: now,
-        } as O2D;
+        } as O2DKB;
 
         // Recalculate cascading logic for THIS item/row
         let currentBaseForUpdated = updated.created_at || now;
@@ -1358,7 +1309,7 @@ export default function O2DPage() {
         optimisticO2Ds = optimisticO2Ds.filter(
           (o) => o.order_no !== editingOrderNo,
         );
-        optimisticO2Ds = [...updatedItems.flatMap(expandO2DItem), ...optimisticO2Ds];
+        optimisticO2Ds = [...updatedItems, ...optimisticO2Ds];
 
         // Optimistic UI removed for data integrity
         
@@ -1366,10 +1317,10 @@ export default function O2DPage() {
         resetForm();
 
         const formData = new FormData();
-        formData.append("o2dData", JSON.stringify(updatedItems));
+        formData.append("o2dkbData", JSON.stringify(updated));
         if (screenshotFile) formData.append("order_screenshot", screenshotFile);
 
-        const res = await fetch(`/api/o2d/order/${editingOrderNo}`, {
+        const res = await fetch(`/api/o2dkb/order/${editingOrderNo}`, {
           method: "PUT",
           body: formData,
         });
@@ -1380,34 +1331,32 @@ export default function O2DPage() {
         let initRecord: any = { planned_1: calculatePlannedDate(now, tat1) };
         for (let i = 2; i <= 11; i++) initRecord[`planned_${i}`] = "";
 
-        const { item_name, item_qty, est_amount, item_specification } = mergeItems(items);
+        const item_details = JSON.stringify(items);
         currentMaxId++;
         const newItems = [{
           ...initRecord,
           id: currentMaxId.toString(),
           order_no: finalOrderNo,
           party_name: commonData.party_name,
-          item_name,
-          item_qty,
-          est_amount,
-          item_specification,
+          item_details,
           remark: commonData.remark,
           filled_by: currentUser,
           created_at: now,
           updated_at: now,
-        } as O2D];
+        } as O2DKB];
 
-        optimisticO2Ds = [...newItems.flatMap(expandO2DItem), ...optimisticO2Ds];
+        optimisticO2Ds = [...newItems, ...optimisticO2Ds];
 
         // Optimistic UI removed for data integrity
 
         setIsModalOpen(false);
         resetForm();
 
-        const formData = new FormData();
-        formData.append("o2dData", JSON.stringify(newItems));
-        if (screenshotFile) formData.append("order_screenshot", screenshotFile);
-        const res = await fetch("/api/o2d", { method: "POST", body: formData });
+        const res = await fetch("/api/o2dkb", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(newItems[0]),
+        });
         if (!res.ok) throw new Error("Creation failed");
 
         // IF we have a NEW PARTY draft, submit it now with the actual finalOrderNo
@@ -1433,23 +1382,20 @@ export default function O2DPage() {
       // Revalidate all relevant keys
       globalMutate(tableQueryKey);
       globalMutate(sidebarQueryKey);
-      globalMutate("/api/o2d/summary");
-      globalMutate("/api/o2d?type=ordernumbers");
+      globalMutate("/api/o2dkb/summary");
+      globalMutate("/api/o2dkb?type=ordernumbers");
 
       // MANUAL CACHE UPDATE: Ensure the master map has the latest data immediately
       // This handles the case where the order is not on the current sidebar pagination page
       if (editingOrderNo) {
-        const { item_name, item_qty, est_amount, item_specification } = mergeItems(items);
+        const item_details = JSON.stringify(items);
         const updatedItems = [{
           ...groupedOrders[editingOrderNo][0],
-          item_name,
-          item_qty,
-          est_amount,
-          item_specification,
+          item_details,
           party_name: commonData.party_name,
           remark: commonData.remark,
           updated_at: now
-        }].flatMap(expandO2DItem);
+        }];
         
         setMasterOrderMap(prev => ({
           ...prev,
@@ -1473,26 +1419,49 @@ export default function O2DPage() {
 
   const handleEdit = (orderNo: string) => {
     const orderItems = masterOrderMap[orderNo.trim()] || [];
+    if (orderItems.length === 0) return;
+    
+    const order = orderItems[0];
     setEditingOrderNo(orderNo);
     setCommonData({
       order_no: orderNo,
-      party_name: orderItems[0].party_name,
-      remark: orderItems[0].remark,
+      party_name: order.party_name,
+      remark: order.remark,
     });
     
-    setItems(
-      orderItems.map((o) => ({
-        id: o.id,
-        item_name: o.item_name,
-        item_qty: o.item_qty,
-        est_amount: o.est_amount,
-        item_specification: o.item_specification || "",
-      })),
-    );
+    let parsedItems: any[] = [];
+    try {
+      parsedItems = typeof order.item_details === 'string' ? JSON.parse(order.item_details) : order.item_details;
+      if (!Array.isArray(parsedItems)) parsedItems = [];
+    } catch (e) {
+      parsedItems = [];
+    }
+
+    if (parsedItems.length > 0) {
+      setItems(
+        parsedItems.map((o) => ({
+          id: order.id, // Keep the parent row ID for updates
+          item_name: o.item_name || "",
+          item_qty: o.item_qty || "1",
+          est_amount: o.est_amount || "0",
+          item_specification: o.item_specification || "",
+        }))
+      );
+    } else {
+      setItems(
+        orderItems.map((o) => ({
+          id: o.id,
+          item_name: o.item_name,
+          item_qty: o.item_qty,
+          est_amount: o.est_amount,
+          item_specification: o.item_specification || "",
+        }))
+      );
+    }
 
     setImagePreview(
-      orderItems[0].order_screenshot
-        ? getDriveImageUrl(orderItems[0].order_screenshot)
+      order.order_screenshot
+        ? getDriveImageUrl(order.order_screenshot)
         : null,
     );
     setIsModalOpen(true);
@@ -1519,7 +1488,7 @@ export default function O2DPage() {
     setIsStatusModalOpen(true);
 
     try {
-      const res = await fetch(`/api/o2d/order/${orderNo}`, {
+      const res = await fetch(`/api/o2dkb/order/${orderNo}`, {
         method: "DELETE",
       });
       if (!res.ok) throw new Error("Delete failed");
@@ -1530,8 +1499,8 @@ export default function O2DPage() {
       // Revalidate
       globalMutate(tableQueryKey);
       globalMutate(sidebarQueryKey);
-      globalMutate("/api/o2d/summary");
-      globalMutate("/api/o2d?type=ordernumbers");
+      globalMutate("/api/o2dkb/summary");
+      globalMutate("/api/o2dkb?type=ordernumbers");
       setTimeout(() => setIsStatusModalOpen(false), 2000);
     } catch (err) {
       setActionStatus("error");
@@ -1546,7 +1515,7 @@ export default function O2DPage() {
     setIsStatusModalOpen(true);
     try {
       const [configRes, usersRes] = await Promise.all([
-        fetch("/api/o2d/config"),
+        fetch("/api/o2dkb/config"),
         fetch("/api/users"),
       ]);
       const configData = await configRes.json();
@@ -1555,7 +1524,7 @@ export default function O2DPage() {
       setUsersList(usersData.map((u: any) => u.username));
 
       if (configData && Array.isArray(configData)) {
-        const mergedConfigs = O2D_STEPS.map((step, idx) => {
+        const mergedConfigs = O2DKB_STEPS.map((step, idx) => {
           const found =
             configData.find((c) => c.step_name === step) || configData[idx];
           return {
@@ -1567,7 +1536,7 @@ export default function O2DPage() {
         setStepConfigs(mergedConfigs);
       } else {
         setStepConfigs(
-          O2D_STEPS.map((step) => ({
+          O2DKB_STEPS.map((step) => ({
             step_name: step,
             tat: "",
             responsible_person: "",
@@ -1589,7 +1558,7 @@ export default function O2DPage() {
     setActionMessage("Saving Configurations...");
     setIsStatusModalOpen(true);
     try {
-      const res = await fetch("/api/o2d/config", {
+      const res = await fetch("/api/o2dkb/config", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(stepConfigs),
@@ -1638,7 +1607,7 @@ export default function O2DPage() {
     setIsStatusModalOpen(true);
 
     try {
-      const res = await fetch("/api/o2d/toggle-status", {
+      const res = await fetch("/api/o2dkb/toggle-status", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ orderNo, action, value: newValue }),
@@ -1649,7 +1618,7 @@ export default function O2DPage() {
       setActionMessage("Status Updated");
       globalMutate(tableQueryKey);
       globalMutate(sidebarQueryKey);
-      globalMutate("/api/o2d/summary");
+      globalMutate("/api/o2dkb/summary");
 
       // MANUAL CACHE UPDATE: Reflect the status change in the master map immediately
       setMasterOrderMap(prev => {
@@ -1674,7 +1643,7 @@ export default function O2DPage() {
     if (!allO2DsRaw || allO2DsRaw.length === 0) return [];
 
     // 1. Group by order_no
-    const groups: Record<string, O2D[]> = {};
+    const groups: Record<string, O2DKB[]> = {};
     allO2DsRaw.forEach((item: any) => {
       const no = (item.order_no || "Unknown").trim();
       if (!groups[no]) groups[no] = [];
@@ -1688,7 +1657,7 @@ export default function O2DPage() {
     );
 
     // 3. Flatten back, items in groups should be ASCENDING created_at (first entry on top)
-    const result: O2D[] = [];
+    const result: O2DKB[] = [];
     sortedNos.forEach((no) => {
       const sortedGroup = [...groups[no]].sort(
         (x, y) =>
@@ -1786,7 +1755,7 @@ export default function O2DPage() {
     setIsStatusModalOpen(true);
 
     try {
-      const res = await fetch("/api/o2d/remove-followup", {
+      const res = await fetch("/api/o2dkb/remove-followup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1803,7 +1772,7 @@ export default function O2DPage() {
       setIsRemoveFollowUpModalOpen(false);
       globalMutate(tableQueryKey, undefined, { revalidate: true });
       globalMutate(sidebarQueryKey, undefined, { revalidate: true });
-      globalMutate("/api/o2d/summary", undefined, { revalidate: true });
+      globalMutate("/api/o2dkb/summary", undefined, { revalidate: true });
 
       // MANUAL CACHE UPDATE: Refresh the master map to reflect purged steps immediately
       setMasterOrderMap(prev => {
@@ -1816,6 +1785,12 @@ export default function O2DPage() {
               (newO as any)[`status_${i}`] = "";
               (newO as any)[`actual_${i}`] = "";
               (newO as any)[`planned_${i}`] = "";
+              if (i === 1) {
+                (newO as any).voucher_num_1 = "";
+                (newO as any).attach_bill_1 = "";
+              } else if (i === 5) {
+                (newO as any).attach_billty_5 = "";
+              }
             }
           }
           return newO;
@@ -1845,7 +1820,7 @@ export default function O2DPage() {
 
     try {
       // Send export request
-      const response = await fetch("/api/o2d/export", {
+      const response = await fetch("/api/o2dkb/export", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1864,7 +1839,7 @@ export default function O2DPage() {
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = `O2D_Export_${new Date().toISOString().split("T")[0]}.csv`;
+      link.download = `O2DKB_Export_${new Date().toISOString().split("T")[0]}.csv`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -1882,7 +1857,7 @@ export default function O2DPage() {
     }
   };
 
-  const getCurrentStep = (order: O2D[]) => {
+  const getCurrentStep = (order: O2DKB[]) => {
     return getPendingStepIdx(order);
   };
 
@@ -1931,21 +1906,7 @@ export default function O2DPage() {
 
     // Add step-specific fields
     if (stepIdx === 1) {
-      fields.final_amount_1 = first?.final_amount_1 || "";
-      fields.so_number_1 = first?.so_number_1 || "";
-      fields.merge_order_with_1 = first?.merge_order_with_1 || "";
-    } else if (stepIdx === 5) {
-      fields.num_of_parcel_5 = first?.num_of_parcel_5 || "";
-      fields.actual_date_of_order_packed_5 =
-        first?.actual_date_of_order_packed_5 || "";
-    } else if (stepIdx === 7) {
-      fields.voucher_num_7 = first?.voucher_num_7 || "";
-    } else if (stepIdx === 8) {
-      fields.order_details_checked_8 = first?.order_details_checked_8 || "No";
-      fields.voucher_num_51_8 = first?.voucher_num_51_8 || "";
-      fields.t_amt_8 = first?.t_amt_8 || "";
-    } else if (stepIdx === 9) {
-      fields.num_of_parcel_9 = first?.num_of_parcel_9 || "";
+      fields.voucher_num_1 = first?.voucher_num_1 || "";
     }
 
     setStepUpdateFields(fields);
@@ -1966,26 +1927,14 @@ export default function O2DPage() {
     if (fields.status === "Yes") {
       let errorMsg = "";
       const existingAttachment =
-        stepIdx === 1 ? first.upload_so_1 :
-        stepIdx === 5 ? first.upload_pi_5 :
-        stepIdx === 9 ? first.attach_bilty_9 : "";
+        stepIdx === 1 ? first.attach_bill_1 :
+        stepIdx === 5 ? first.attach_billty_5 : "";
 
       if (stepIdx === 1) {
-        if (!fields.so_number_1) errorMsg = "SO Number is mandatory.";
-        else if (!fields.final_amount_1) errorMsg = "Final Amount is mandatory.";
-        else if (!stepAttachment && !existingAttachment) errorMsg = "SO Attachment is mandatory.";
+        if (!fields.voucher_num_1) errorMsg = "Voucher Number is mandatory.";
+        else if (!stepAttachment && !existingAttachment) errorMsg = "Bill Attachment is mandatory.";
       } else if (stepIdx === 5) {
-        if (!fields.num_of_parcel_5) errorMsg = "Number of Parcels is mandatory.";
-        else if (!fields.actual_date_of_order_packed_5) errorMsg = "Actual Date of Packing is mandatory.";
-        else if (!stepAttachment && !existingAttachment) errorMsg = "PI Attachment is mandatory.";
-      } else if (stepIdx === 7) {
-        if (!fields.voucher_num_7) errorMsg = "Voucher Number is mandatory.";
-      } else if (stepIdx === 8) {
-        if (!fields.voucher_num_51_8) errorMsg = "Voucher Number (51) is mandatory.";
-        else if (!fields.t_amt_8) errorMsg = "Total Amount is mandatory.";
-      } else if (stepIdx === 9) {
-        if (!fields.num_of_parcel_9) errorMsg = "Number of Parcels is mandatory.";
-        else if (!stepAttachment && !existingAttachment) errorMsg = "Bilty Attachment is mandatory.";
+        if (!stepAttachment && !existingAttachment) errorMsg = "Billty Attachment is mandatory.";
       }
 
       if (errorMsg) {
@@ -1999,30 +1948,15 @@ export default function O2DPage() {
     const timestamp = new Date().toISOString();
     const currentO2Ds = allO2DsRaw;
 
-    const orderItems = selectedOrder.map((o2d: any) => {
-      const updated = { ...o2d };
+    const orderItems = selectedOrder.map((o2dkb: any) => {
+      const updated = { ...o2dkb };
       const stepIdx = currentStepToUpdate;
 
       (updated as any)[`status_${stepIdx}`] = stepUpdateFields.status;
       (updated as any)[`actual_${stepIdx}`] = timestamp;
 
       if (stepIdx === 1) {
-        updated.final_amount_1 = stepUpdateFields.final_amount_1;
-        updated.so_number_1 = stepUpdateFields.so_number_1;
-        updated.merge_order_with_1 = stepUpdateFields.merge_order_with_1;
-      } else if (stepIdx === 5) {
-        updated.num_of_parcel_5 = stepUpdateFields.num_of_parcel_5;
-        updated.actual_date_of_order_packed_5 =
-          stepUpdateFields.actual_date_of_order_packed_5;
-      } else if (stepIdx === 7) {
-        updated.voucher_num_7 = stepUpdateFields.voucher_num_7;
-      } else if (stepIdx === 8) {
-        updated.order_details_checked_8 =
-          stepUpdateFields.order_details_checked_8;
-        updated.voucher_num_51_8 = stepUpdateFields.voucher_num_51_8;
-        updated.t_amt_8 = stepUpdateFields.t_amt_8;
-      } else if (stepIdx === 9) {
-        updated.num_of_parcel_9 = stepUpdateFields.num_of_parcel_9;
+        updated.voucher_num_1 = stepUpdateFields.voucher_num_1;
       }
 
       if (
@@ -2032,16 +1966,6 @@ export default function O2DPage() {
       ) {
         let nextStepIdx = stepIdx + 1;
 
-        // Skip logic: if Step 3 is Yes, skip Step 4 and go straight to Step 5
-        if (stepIdx === 3 && stepUpdateFields.status === "Yes") {
-          (updated as any)[`planned_4`] = "";
-          nextStepIdx = 5;
-        }
-
-        // Termination logic: if Step 4 is No, end the process (do not plan Step 5)
-        if (stepIdx === 4 && stepUpdateFields.status === "No") {
-          return updated;
-        }
 
         const nextTat = globalConfigs[nextStepIdx - 1]?.tat || "24 Hrs";
         let baseForNext = timestamp;
@@ -2071,7 +1995,7 @@ export default function O2DPage() {
         formData.append("orderNo", selectedOrderNo);
         formData.append("step", currentStepToUpdate.toString());
 
-        const uploadRes = await fetch("/api/o2d/upload", {
+        const uploadRes = await fetch("/api/o2dkb/upload", {
           method: "POST",
           body: formData,
         });
@@ -2087,9 +2011,8 @@ export default function O2DPage() {
       // If we uploaded a file, attach its ID to the merged record
       if (fileUploaded && mergedOrder && uploadedFileId) {
         const fieldMap: any = {
-          1: "upload_so_1",
-          5: "upload_pi_5",
-          9: "attach_bilty_9",
+          1: "attach_bill_1",
+          5: "attach_billty_5",
         };
         const targetField = fieldMap[currentStepToUpdate];
         if (targetField) {
@@ -2097,10 +2020,10 @@ export default function O2DPage() {
         }
       }
 
-      const res = await fetch(`/api/o2d/order/${selectedOrderNo}`, {
+      const res = await fetch(`/api/o2dkb/order/${selectedOrderNo}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(mergedOrder ? [mergedOrder] : []),
+        body: JSON.stringify(mergedOrder ? mergedOrder : {}),
       });
 
       if (!res.ok) throw new Error("Step update failed");
@@ -2108,10 +2031,10 @@ export default function O2DPage() {
       setActionMessage("Step Updated Successfully");
       globalMutate(tableQueryKey, undefined, { revalidate: true });
       globalMutate(sidebarQueryKey, undefined, { revalidate: true });
-      globalMutate("/api/o2d/summary", undefined, { revalidate: true });
+      globalMutate("/api/o2dkb/summary", undefined, { revalidate: true });
 
       // MANUAL CACHE UPDATE: Ensure the detail panel shows the updated step immediately
-      const stepItems = orderItems.map(expandO2DItem).flat();
+      const stepItems = orderItems;
       if (stepItems.length > 0) {
         setMasterOrderMap(prev => ({
           ...prev,
@@ -2132,7 +2055,7 @@ export default function O2DPage() {
       <div className="flex flex-col lg:flex-row items-center justify-between gap-4 px-2 shrink-0">
         <div className="text-center lg:text-left min-w-0">
           <h1 className="text-xl md:text-2xl font-black text-gray-900 dark:text-white tracking-tight italic">
-            O2D SYSTEM
+            O2DKB SYSTEM
           </h1>
           <p className="text-[#003875] dark:text-[#FFD500] font-black text-[9px] md:text-[10px] uppercase tracking-[0.2em] opacity-80 -mt-1">
             Syncing Intelligence
@@ -2188,14 +2111,7 @@ export default function O2DPage() {
               <Cog6ToothIcon className="w-4 h-4 stroke-[3]" />
               <span className="hidden sm:inline">Setup</span>
             </button>
-            <div className="h-4 w-[1px] bg-[#003875]/10 dark:bg-[#FFD500]/10 mx-0.5" />
-            <button
-              onClick={() => setIsBusyModalOpen(true)}
-              className="flex items-center gap-2 text-[#003875] dark:text-[#FFD500] px-2 sm:px-3 py-1.5 font-black text-[11px] uppercase tracking-widest rounded-full hover:bg-[#003875]/5 dark:hover:bg-navy-700 transition-all"
-            >
-              <ClipboardDocumentCheckIcon className="w-4 h-4 stroke-[3]" />
-              <span className="hidden sm:inline">For Busy</span>
-            </button>
+
           </div>
         </div>
       </div>
@@ -2226,7 +2142,7 @@ export default function O2DPage() {
           {showFilters && (
             <div className="flex flex-col shrink-0 border-b border-gray-100 dark:border-navy-800 animate-in slide-in-from-top duration-300">
               <div className="flex items-center gap-2 overflow-x-auto no-scrollbar px-3 py-2 bg-white dark:bg-navy-900">
-                {O2D_STEP_SHORTS.map((stepName, idx) => {
+                {O2DKB_STEP_SHORTS.map((stepName, idx) => {
                   const stepIdx = idx + 1;
                   const count = getStepFilterCount(stepIdx);
                   const isActive = selectedStepFilters.includes(stepIdx);
@@ -2389,96 +2305,107 @@ export default function O2DPage() {
                     </thead>
                     <tbody className="divide-y divide-gray-50 dark:divide-navy-800/20">
                       {tableData.length > 0 ? (
-                        tableData.map((item: O2D, idx: number) => (
-                          <tr
-                            key={idx}
-                            className="group hover:bg-[#003875]/[0.02] dark:hover:bg-white/5 transition-colors"
-                          >
-                            <td className="px-6 py-4">
-                              <div className="flex flex-col">
-                                <span className="text-[13px] font-black text-[#003875] dark:text-[#FFD500]">
-                                  {item.order_no}
-                                </span>
-                                {item.hold && (
-                                  <span className="text-[7px] text-orange-500 font-black uppercase tracking-tighter">
-                                    On Hold
-                                  </span>
-                                )}
-                                {item.cancelled && (
-                                  <span className="text-[7px] text-red-500 font-black uppercase tracking-tighter">
-                                    Cancelled
-                                  </span>
-                                )}
-                              </div>
-                            </td>
-                            <td
-                              className="px-6 py-4 text-[12px] font-black text-gray-700 dark:text-gray-200 uppercase max-w-[200px] truncate"
-                              title={item.party_name}
+                        tableData.flatMap((item: O2DKB, orderIdx: number) => {
+                          let parsedItems: any[] = [];
+                          try {
+                            parsedItems = typeof item.item_details === 'string' ? JSON.parse(item.item_details) : item.item_details;
+                            if (!Array.isArray(parsedItems)) parsedItems = [];
+                          } catch (e) {
+                            parsedItems = [];
+                          }
+                          if (parsedItems.length === 0) parsedItems = [{}];
+
+                          return parsedItems.map((subItem: any, subIdx: number) => (
+                            <tr
+                              key={`${orderIdx}-${subIdx}`}
+                              className="group hover:bg-[#003875]/[0.02] dark:hover:bg-white/5 transition-colors"
                             >
-                              {item.party_name}
-                            </td>
-                            <td
-                              className="px-6 py-4 text-[12px] font-bold text-gray-600 dark:text-gray-300 uppercase max-w-[250px] truncate"
-                              title={item.item_name}
-                            >
-                              {item.item_name}
-                            </td>
-                            <td
-                              className="px-6 py-4 text-[12px] font-bold text-gray-500 dark:text-gray-400 uppercase max-w-[200px] truncate"
-                              title={item.item_specification}
-                            >
-                              {item.item_specification || "-"}
-                            </td>
-                            <td className="px-6 py-4 text-center font-black text-[#003875] dark:text-[#FFD500] text-[13px]">
-                              {item.item_qty}
-                            </td>
-                            <td className="px-6 py-4 text-[11px] font-bold text-gray-400 tracking-tight">
-                              {item.created_at ? (
+                              <td className="px-6 py-4">
                                 <div className="flex flex-col">
-                                  <span className="text-gray-700 dark:text-gray-200">
-                                    {new Date(
-                                      item.created_at,
-                                    ).toLocaleDateString("en-GB")}
+                                  <span className="text-[13px] font-black text-[#003875] dark:text-[#FFD500]">
+                                    {item.order_no}
                                   </span>
-                                  <span className="text-[9px] text-[#003875] dark:text-[#FFD500] font-black opacity-70 uppercase">
-                                    {new Date(
-                                      item.created_at,
-                                    ).toLocaleTimeString([], {
-                                      hour: "2-digit",
-                                      minute: "2-digit",
-                                      second: "2-digit",
-                                      hour12: false,
-                                    })}
-                                  </span>
+                                  {item.hold && (
+                                    <span className="text-[7px] text-orange-500 font-black uppercase tracking-tighter">
+                                      On Hold
+                                    </span>
+                                  )}
+                                  {item.cancelled && (
+                                    <span className="text-[7px] text-red-500 font-black uppercase tracking-tighter">
+                                      Cancelled
+                                    </span>
+                                  )}
                                 </div>
-                              ) : (
-                                "-"
-                              )}
-                            </td>
-                            <td className="px-6 py-4 text-[11px] font-black text-gray-500 uppercase tracking-tighter">
-                              {item.filled_by || "-"}
-                            </td>
-                            <td className="px-6 py-4">
-                              <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                <button
-                                  onClick={() => {
-                                    setSelectedOrderNo(item.order_no);
-                                    setPageViewMode("panels");
-                                  }}
-                                  className="p-1.5 bg-[#003875]/5 text-[#003875] rounded-lg hover:bg-[#003875] hover:text-white transition-all"
-                                >
-                                  <EyeIcon className="w-3.5 h-3.5" />
-                                </button>
-                                <button
-                                  onClick={() => handleEdit(item.order_no)}
-                                  className="p-1.5 bg-amber-50 text-amber-600 rounded-lg hover:bg-amber-500 hover:text-white transition-all"
-                                >
-                                  <PencilSquareIcon className="w-3.5 h-3.5" />
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        ))
+                              </td>
+                              <td
+                                className="px-6 py-4 text-[12px] font-black text-gray-700 dark:text-gray-200 uppercase max-w-[200px] truncate"
+                                title={item.party_name}
+                              >
+                                {item.party_name}
+                              </td>
+                              <td
+                                className="px-6 py-4 text-[12px] font-bold text-gray-600 dark:text-gray-300 uppercase max-w-[250px] truncate"
+                                title={subItem.item_name}
+                              >
+                                {subItem.item_name || "-"}
+                              </td>
+                              <td
+                                className="px-6 py-4 text-[12px] font-bold text-gray-500 dark:text-gray-400 uppercase max-w-[200px] truncate"
+                                title={subItem.item_specification}
+                              >
+                                {subItem.item_specification || "-"}
+                              </td>
+                              <td className="px-6 py-4 text-center font-black text-[#003875] dark:text-[#FFD500] text-[13px]">
+                                {subItem.item_qty || 0}
+                              </td>
+                              <td className="px-6 py-4 text-[11px] font-bold text-gray-400 tracking-tight">
+                                {item.created_at ? (
+                                  <div className="flex flex-col">
+                                    <span className="text-gray-700 dark:text-gray-200">
+                                      {new Date(
+                                        item.created_at,
+                                      ).toLocaleDateString("en-GB")}
+                                    </span>
+                                    <span className="text-[9px] text-[#003875] dark:text-[#FFD500] font-black opacity-70 uppercase">
+                                      {new Date(
+                                        item.created_at,
+                                      ).toLocaleTimeString([], {
+                                        hour: "2-digit",
+                                        minute: "2-digit",
+                                        second: "2-digit",
+                                        hour12: false,
+                                      })}
+                                    </span>
+                                  </div>
+                                ) : (
+                                  "-"
+                                )}
+                              </td>
+                              <td className="px-6 py-4 text-[11px] font-black text-gray-500 uppercase tracking-tighter">
+                                {item.filled_by || "-"}
+                              </td>
+                              <td className="px-6 py-4">
+                                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                  <button
+                                    onClick={() => {
+                                      setSelectedOrderNo(item.order_no);
+                                      setPageViewMode("panels");
+                                    }}
+                                    className="p-1.5 bg-[#003875]/5 text-[#003875] rounded-lg hover:bg-[#003875] hover:text-white transition-all"
+                                  >
+                                    <EyeIcon className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button
+                                    onClick={() => handleEdit(item.order_no)}
+                                    className="p-1.5 bg-amber-50 text-amber-600 rounded-lg hover:bg-amber-500 hover:text-white transition-all"
+                                  >
+                                    <PencilSquareIcon className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          ));
+                        })
                       ) : (
                         <tr>
                           <td colSpan={7} className="px-6 py-20 text-center">
@@ -2601,16 +2528,18 @@ export default function O2DPage() {
                           const orderItems = sidebarGroupedOrders[no.trim()];
                           if (!orderItems || orderItems.length === 0) return null;
                           const first = orderItems[0];
-                          const totalQty = orderItems.reduce(
-                            (sum: number, item: O2D) =>
-                              sum + (parseFloat(item.item_qty) || 0),
-                            0,
+                          let parsedItems: any[] = [];
+                          try {
+                            const parsed = typeof first?.item_details === 'string' ? JSON.parse(first.item_details) : first?.item_details;
+                            parsedItems = Array.isArray(parsed) ? parsed : [];
+                          } catch (e) {
+                            parsedItems = [];
+                          }
+                          const totalAmt = parsedItems.reduce(
+                            (sum: number, item: any) => sum + (parseFloat(item.est_amount) || 0),
+                            0
                           );
-                          const totalAmt = orderItems.reduce(
-                            (sum: number, item: O2D) =>
-                              sum + (parseFloat(item.est_amount) || 0),
-                            0,
-                          );
+                          const itemsCount = parsedItems.length;
 
                           // Find current pending stage using the unified helper
                           const pIdx = getPendingStepIdx(orderItems);
@@ -2678,14 +2607,7 @@ export default function O2DPage() {
                               <div className="flex justify-between items-start mb-0.5 pl-1.5">
                                 <div className="flex flex-wrap items-center gap-2 min-w-0">
                                   <span className="text-[13px] font-black text-gray-900 dark:text-white truncate tracking-tight flex items-center gap-2">
-                                    {currentStageIdx === 0 &&
-                                      !isCancelled &&
-                                      !isHold && (
-                                        <span className="relative flex h-2 w-2 shrink-0">
-                                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                                          <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.8)] animate-pulse"></span>
-                                        </span>
-                                      )}
+
                                     {no}
                                   </span>
                                   {first?.cancelled ? (
@@ -2740,7 +2662,7 @@ export default function O2DPage() {
                                         <span className="w-1 h-1 rounded-full bg-amber-400 animate-pulse shrink-0 block" />
                                         <span className="truncate">
                                           Step {currentStageIdx + 1}:{" "}
-                                          {O2D_STEP_SHORTS[currentStageIdx]}
+                                          {O2DKB_STEP_SHORTS[currentStageIdx]}
                                         </span>
                                       </span>
                                       {plannedTimeStr && (
@@ -2754,7 +2676,7 @@ export default function O2DPage() {
                                 </div>
                                 <div className="flex flex-col items-end shrink-0 leading-[1.1]">
                                   <span className="text-[10px] font-black text-gray-400 uppercase tracking-tighter mb-0.5">
-                                    {orderItems.length} ITEMS
+                                    {itemsCount} ITEMS
                                   </span>
                                   <span className="text-[12px] font-black text-[#003875] dark:text-[#FFD500]">
                                     ₹
@@ -2876,7 +2798,7 @@ export default function O2DPage() {
                 </div>
 
                 <div className="grid grid-cols-2 gap-2">
-                  {O2D_STEP_SHORTS.map((step, idx) => {
+                  {O2DKB_STEP_SHORTS.map((step, idx) => {
                     const stepIdx = idx + 1;
                     const isSelected = exportSelectedSteps.includes(stepIdx);
                     return (
@@ -2991,62 +2913,6 @@ export default function O2DPage() {
                   </div>
 
                   <div className="flex flex-wrap items-end gap-5">
-                    <div className="relative group">
-                      <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1.5 mb-2">
-                        <PhotoIcon className="w-3 h-3 text-[#FFD500]" />
-                        Order Proof <span className="text-red-500 ml-1">*</span>
-                      </label>
-                      <label
-                        className="flex flex-col items-center justify-center w-28 h-28 bg-gray-50/50 dark:bg-navy-900 border-2 border-dashed border-gray-100 dark:border-navy-700 rounded-3xl hover:border-[#FFD500] cursor-pointer transition-all active:scale-95 shadow-inner overflow-hidden relative"
-                        onDragOver={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                        }}
-                        onDrop={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          const file = e.dataTransfer.files?.[0];
-                          if (file) {
-                            setScreenshotFile(file);
-                            setImagePreview(URL.createObjectURL(file));
-                          }
-                        }}
-                      >
-                        {imagePreview ? (
-                          <img
-                            src={imagePreview}
-                            className="w-full h-full object-cover"
-                            alt="Order Proof"
-                          />
-                        ) : (
-                          <>
-                            <PhotoIcon className="w-7 h-7 text-gray-200 group-hover:text-[#FFD500] transition-colors" />
-                            <span className="text-[8px] font-black text-gray-300 mt-2 tracking-tighter">
-                              UPLOAD
-                            </span>
-                          </>
-                        )}
-                        <input
-                          type="file"
-                          className="hidden"
-                          accept="image/*"
-                          onChange={handleFileChange}
-                        />
-                      </label>
-                      {imagePreview && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setScreenshotFile(null);
-                            setImagePreview(null);
-                          }}
-                          className="absolute -top-1 -right-1 p-1.5 bg-red-500 text-white rounded-xl shadow-lg border-2 border-white"
-                        >
-                          <XMarkIcon className="w-3 h-3" />
-                        </button>
-                      )}
-                    </div>
-
                     <div className="flex-1 flex flex-col gap-4">
                       <div className={!editingOrderNo ? "hidden" : ""}>
                         <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1.5 mb-2">
@@ -3101,6 +2967,7 @@ export default function O2DPage() {
                       placeholder="Order notes..."
                     />
                   </div>
+
                 </div>
 
                 {/* Dynamic Items */}
@@ -3444,7 +3311,7 @@ export default function O2DPage() {
             <div className="p-5 border-b border-orange-100/30 dark:border-navy-700 flex items-center justify-between shrink-0 bg-[#FEF6DB] dark:bg-navy-800">
               <div>
                 <h2 className="text-lg font-black text-[#CE2029] italic uppercase tracking-tight">
-                  Step Update: {O2D_STEP_SHORTS[currentStepToUpdate - 1]}
+                  Step Update: {O2DKB_STEP_SHORTS[currentStepToUpdate - 1]}
                 </h2>
                 <p className="text-[9px] font-black text-gray-400 uppercase tracking-[0.2em] mt-0.5">
                   Execution Protocol {selectedOrderNo}
@@ -3500,78 +3367,26 @@ export default function O2DPage() {
                 {/* Step Specific Fields */}
                 {currentStepToUpdate === 1 && (
                   <div className="space-y-4 pt-2 border-t border-gray-100 dark:border-white/5">
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">
-                          Final Amount <span className="text-red-500">*</span>
-                        </label>
-                        <input
-                          type="text"
-                          value={stepUpdateFields.final_amount_1}
-                          onChange={(e) =>
-                            setStepUpdateFields({
-                              ...stepUpdateFields,
-                              final_amount_1: e.target.value,
-                            })
-                          }
-                          className="w-full h-[36px] bg-[#FEF6DB] dark:bg-black px-3 rounded-lg border border-orange-100 dark:border-navy-700 font-bold text-[11px] text-gray-800 dark:text-white"
-                          placeholder="Value..."
-                        />
-                      </div>
-                      <div>
-                        <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">
-                          SO Number <span className="text-red-500">*</span>
-                        </label>
-                        <input
-                          type="text"
-                          value={stepUpdateFields.so_number_1}
-                          onChange={(e) =>
-                            setStepUpdateFields({
-                              ...stepUpdateFields,
-                              so_number_1: e.target.value,
-                            })
-                          }
-                          className="w-full h-[36px] bg-[#FEF6DB] dark:bg-black px-3 rounded-lg border border-orange-100 dark:border-navy-700 font-bold text-[11px] text-gray-800 dark:text-white"
-                          placeholder="SO#..."
-                        />
-                      </div>
-                    </div>
-                    <div className="space-y-4">
-                      <SearchableDropdown
-                        label="Merge Order With"
-                        icon={IdentificationIcon}
-                        value={
-                          stepUpdateFields.merge_order_with_1
-                            ? (() => {
-                              const match = Object.keys(groupedOrders).find(
-                                (no) =>
-                                  no === stepUpdateFields.merge_order_with_1,
-                              );
-                              return match
-                                ? `${match} | ${(groupedOrders as any)[match][0]?.party_name || ""}`
-                                : stepUpdateFields.merge_order_with_1;
-                            })()
-                            : ""
-                        }
-                        onChange={(val) => {
-                          const no = val.split(" | ")[0];
+                    <div>
+                      <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block font-bold">
+                        Voucher Number <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={stepUpdateFields.voucher_num_1 || ""}
+                        onChange={(e) =>
                           setStepUpdateFields({
                             ...stepUpdateFields,
-                            merge_order_with_1: no,
-                          });
-                        }}
-                        options={Object.keys(groupedOrders)
-                          .filter((no) => no !== selectedOrderNo)
-                          .map(
-                            (no) =>
-                              `${no} | ${groupedOrders[no][0]?.party_name || ""}`,
-                          )}
-                        placeholder="Select Order ID..."
+                            voucher_num_1: e.target.value,
+                          })
+                        }
+                        className="w-full h-[36px] bg-[#FEF6DB] dark:bg-black px-3 rounded-lg border border-orange-100 dark:border-navy-700 font-bold text-[11px] text-gray-800 dark:text-white"
+                        placeholder="Voucher#..."
                       />
                     </div>
                     <div>
-                      <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block flex items-center gap-1.5">
-                        <PhotoIcon className="w-3 h-3" /> Upload SO (Attachment) <span className="text-red-500">*</span>
+                      <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block flex items-center gap-1.5 font-bold">
+                        <PhotoIcon className="w-3 h-3" /> Upload Bill (Attachment) <span className="text-red-500">*</span>
                       </label>
                       <label
                         className="flex items-center justify-center w-full h-24 border-2 border-dashed border-orange-100 rounded-2xl hover:bg-orange-50/30 cursor-pointer overflow-hidden relative"
@@ -3606,7 +3421,7 @@ export default function O2DPage() {
                           <div className="text-center">
                             <PlusIcon className="w-5 h-5 text-gray-300 mx-auto" />
                             <span className="text-[9px] font-black text-gray-300 tracking-widest uppercase">
-                              Select File
+                              Select Bill File
                             </span>
                           </div>
                         )}
@@ -3631,203 +3446,8 @@ export default function O2DPage() {
                 {currentStepToUpdate === 5 && (
                   <div className="space-y-4 pt-2 border-t border-gray-100 dark:border-white/5">
                     <div>
-                      <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block font-bold">
-                        Number of Parcel <span className="text-red-500">*</span>
-                      </label>
-                      <input
-                        type="text"
-                        value={stepUpdateFields.num_of_parcel_5}
-                        onChange={(e) =>
-                          setStepUpdateFields({
-                            ...stepUpdateFields,
-                            num_of_parcel_5: e.target.value,
-                          })
-                        }
-                        className="w-full h-[36px] bg-[#FEF6DB] dark:bg-black px-3 rounded-lg border border-orange-100 dark:border-navy-700 font-bold text-[11px] text-gray-800 dark:text-white"
-                        placeholder="Count..."
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest block font-bold">
-                        Actual Date of Packing <span className="text-red-500">*</span>
-                      </label>
-                      <input
-                        type="date"
-                        value={
-                          stepUpdateFields.actual_date_of_order_packed_5
-                            ? new Date(
-                              stepUpdateFields.actual_date_of_order_packed_5,
-                            )
-                              .toISOString()
-                              .split("T")[0]
-                            : ""
-                        }
-                        onChange={(e) =>
-                          setStepUpdateFields({
-                            ...stepUpdateFields,
-                            actual_date_of_order_packed_5: new Date(
-                              e.target.value,
-                            ).toISOString(),
-                          })
-                        }
-                        className="w-full h-[36px] bg-[#FEF6DB] dark:bg-black px-3 rounded-lg border border-orange-100 dark:border-navy-700 font-bold text-[11px] text-gray-800 dark:text-white outline-none"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest block flex items-center gap-1.5 font-bold">
-                        <PhotoIcon className="w-3 h-3" /> Upload PI (Attachment) <span className="text-red-500">*</span>
-                      </label>
-                      <label
-                        className="flex items-center justify-center w-full h-24 border-2 border-dashed border-orange-100 rounded-2xl hover:bg-orange-50/30 cursor-pointer overflow-hidden relative mt-1.5"
-                        onDragOver={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                        }}
-                        onDrop={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          const file = e.dataTransfer.files?.[0];
-                          if (file) {
-                            setStepAttachment(file);
-                            setStepAttachmentPreview(URL.createObjectURL(file));
-                          }
-                        }}
-                      >
-                        {stepAttachmentPreview &&
-                          stepAttachment?.type.startsWith("image/") ? (
-                          <img
-                            src={stepAttachmentPreview || ""}
-                            className="w-full h-full object-cover"
-                          />
-                        ) : stepAttachment ? (
-                          <div className="flex flex-col items-center gap-1">
-                            <ArchiveBoxIcon className="w-8 h-8 text-[#003875]/40" />
-                            <span className="text-[8px] font-black text-gray-400 max-w-[150px] truncate">
-                              {stepAttachment?.name}
-                            </span>
-                          </div>
-                        ) : (
-                          <div className="text-center">
-                            <PlusIcon className="w-5 h-5 text-gray-300 mx-auto" />
-                            <span className="text-[9px] font-black text-gray-300 tracking-widest uppercase">
-                              Select PI
-                            </span>
-                          </div>
-                        )}
-                        <input
-                          type="file"
-                          className="hidden"
-                          onChange={(e) => {
-                            const file = e.target.files?.[0];
-                            if (file) {
-                              setStepAttachment(file);
-                              setStepAttachmentPreview(
-                                URL.createObjectURL(file),
-                              );
-                            }
-                          }}
-                        />
-                      </label>
-                    </div>
-                  </div>
-                )}
-
-                {currentStepToUpdate === 7 && (
-                  <div className="space-y-4 pt-2 border-t border-gray-100 dark:border-white/5">
-                    <div>
-                      <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block font-bold">
-                        Voucher Number <span className="text-red-500">*</span>
-                      </label>
-                      <input
-                        type="text"
-                        value={stepUpdateFields.voucher_num_7}
-                        onChange={(e) =>
-                          setStepUpdateFields({
-                            ...stepUpdateFields,
-                            voucher_num_7: e.target.value,
-                          })
-                        }
-                        className="w-full h-[36px] bg-[#FEF6DB] dark:bg-black px-3 rounded-lg border border-orange-100 dark:border-navy-700 font-bold text-[11px] text-gray-800 dark:text-white"
-                        placeholder="Voucher#..."
-                      />
-                    </div>
-                  </div>
-                )}
-
-                {currentStepToUpdate === 8 && (
-                  <div className="space-y-4 pt-2 border-t border-gray-100 dark:border-white/5">
-                    <YesNoToggle
-                      label="Details checked in Sheet?"
-                      value={stepUpdateFields.order_details_checked_8}
-                      onChange={(val) =>
-                        setStepUpdateFields({
-                          ...stepUpdateFields,
-                          order_details_checked_8: val,
-                        })
-                      }
-                    />
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block font-bold">
-                          Voucher Num (51) <span className="text-red-500">*</span>
-                        </label>
-                        <input
-                          type="text"
-                          value={stepUpdateFields.voucher_num_51_8}
-                          onChange={(e) =>
-                            setStepUpdateFields({
-                              ...stepUpdateFields,
-                              voucher_num_51_8: e.target.value,
-                            })
-                          }
-                          className="w-full h-[36px] bg-[#FEF6DB] dark:bg-black px-3 rounded-lg border border-orange-100 dark:border-navy-700 font-bold text-[11px] text-gray-800 dark:text-white"
-                          placeholder="V#51..."
-                        />
-                      </div>
-                      <div>
-                        <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block font-bold">
-                          T. Amount <span className="text-red-500">*</span>
-                        </label>
-                        <input
-                          type="text"
-                          value={stepUpdateFields.t_amt_8}
-                          onChange={(e) =>
-                            setStepUpdateFields({
-                              ...stepUpdateFields,
-                              t_amt_8: e.target.value,
-                            })
-                          }
-                          className="w-full h-[36px] bg-[#FEF6DB] dark:bg-black px-3 rounded-lg border border-orange-100 dark:border-navy-700 font-bold text-[11px] text-[#003875] dark:text-[#FFD500]"
-                          placeholder="Amt..."
-                        />
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {currentStepToUpdate === 9 && (
-                  <div className="space-y-4 pt-2 border-t border-gray-100 dark:border-white/5">
-                    <div>
-                      <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block font-bold">
-                        Number of Parcel <span className="text-red-500">*</span>
-                      </label>
-                      <input
-                        type="text"
-                        value={stepUpdateFields.num_of_parcel_9}
-                        onChange={(e) =>
-                          setStepUpdateFields({
-                            ...stepUpdateFields,
-                            num_of_parcel_9: e.target.value,
-                          })
-                        }
-                        className="w-full h-[36px] bg-[#FEF6DB] dark:bg-black px-3 rounded-lg border border-orange-100 dark:border-navy-700 font-bold text-[11px] text-gray-800 dark:text-white"
-                        placeholder="Count..."
-                      />
-                    </div>
-                    <div>
                       <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest block flex items-center gap-1.5 font-bold font-bold">
-                        <PhotoIcon className="w-3 h-3" /> Attach Bilty to CRM
-                        (Attachment) <span className="text-red-500">*</span>
+                        <PhotoIcon className="w-3 h-3" /> Upload Billty (Attachment) <span className="text-red-500">*</span>
                       </label>
                       <label
                         className="flex items-center justify-center w-full h-24 border-2 border-dashed border-orange-100 rounded-2xl hover:bg-orange-50/30 cursor-pointer overflow-hidden relative mt-1.5"
@@ -3862,7 +3482,7 @@ export default function O2DPage() {
                           <div className="text-center">
                             <PlusIcon className="w-5 h-5 text-gray-300 mx-auto" />
                             <span className="text-[9px] font-black text-gray-300 tracking-widest uppercase">
-                              Select Bilty to CRM
+                              Select Billty File
                             </span>
                           </div>
                         )}
@@ -4062,7 +3682,7 @@ export default function O2DPage() {
                   onChange={(e) => setRemoveStep(parseInt(e.target.value))}
                   className="w-full h-[48px] bg-[#FEF6DB] dark:bg-black px-4 rounded-xl border border-orange-100 dark:border-navy-700 font-bold text-[13px] outline-none appearance-none"
                 >
-                  {O2D_STEPS.map((step, idx) => (
+                  {O2DKB_STEPS.map((step, idx) => (
                     <option key={idx} value={idx + 1}>
                       Step {idx + 1}: {step}
                     </option>
@@ -4237,7 +3857,7 @@ function BusyModal({
         }
       }
 
-      const expandedOrders = orders.flatMap(expandO2DItem);
+      const expandedOrders = orders;
 
       return {
         orderNo: first.order_no,
@@ -4580,7 +4200,7 @@ function YesNoToggle({
 }
 
 interface O2DDetailPanelProps {
-  selectedOrder: O2D[];
+  selectedOrder: O2DKB[];
   selectedOrderNo: string | null;
   setSelectedOrderNo: (no: string | null) => void;
   isAllLoading: boolean;
@@ -4621,6 +4241,24 @@ function O2DDetailPanel({
   const topScrollRef = useRef<HTMLDivElement>(null);
   const bottomScrollRef = useRef<HTMLDivElement>(null);
   const [tableScrollWidth, setTableScrollWidth] = useState(0);
+
+  let parsedItems: any[] = [];
+  try {
+    const parsed = typeof selectedOrder?.[0]?.item_details === 'string' ? JSON.parse(selectedOrder[0].item_details) : selectedOrder?.[0]?.item_details;
+    parsedItems = Array.isArray(parsed) ? parsed : [];
+  } catch (e) {
+    parsedItems = [];
+  }
+
+  const detailTotalAmt = parsedItems.reduce(
+    (sum: number, item: any) => sum + (parseFloat(item.est_amount) || 0),
+    0
+  );
+  const detailTotalQty = parsedItems.reduce(
+    (sum: number, item: any) => sum + (parseFloat(item.item_qty) || 0),
+    0
+  );
+  const detailItemsCount = parsedItems.length;
 
   useEffect(() => {
     if (detailViewMode === "table" && bottomScrollRef.current) {
@@ -4686,8 +4324,7 @@ function O2DDetailPanel({
               {" "}
               {/* Workflow Actions */}
               {!selectedOrder[0]?.hold &&
-                !selectedOrder[0]?.cancelled &&
-                !isStep1Lockout && (
+                !selectedOrder[0]?.cancelled && (
                   <div className="flex items-center gap-1.5">
                     {isSpecialRole && (
                       <button
@@ -4798,7 +4435,7 @@ function O2DDetailPanel({
                           Loadout
                         </span>
                         <span className="text-[13px] font-black text-gray-700 dark:text-gray-100">
-                          {selectedOrder.length} Items
+                          {detailItemsCount} Items
                         </span>
                       </div>
                     </div>
@@ -4835,20 +4472,7 @@ function O2DDetailPanel({
                               });
                             })()}
                           </span>
-                          {isStep1Lockout && (
-                            <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 border border-red-100 dark:border-red-800 text-[12px] font-black shadow-sm">
-                              <ClockIcon className="w-4 h-4 animate-pulse" />
-                              -
-                              {lockoutTimeLeft.m
-                                .toString()
-                                .padStart(2, "0")}
-                              :
-                              {lockoutTimeLeft.s
-                                .toString()
-                                .padStart(2, "0")}{" "}
-                              to enable
-                            </span>
-                          )}
+
                         </div>
                       </div>
                     </div>
@@ -4901,47 +4525,7 @@ function O2DDetailPanel({
                     )}
                   </div>
                 </div>
-                <div className="md:col-span-3 flex justify-end">
-                  <div className="relative group w-28 h-28">
-                    <div className="absolute inset-0 bg-[#FFD500] blur-lg opacity-10" />
-                    <div className="relative h-full bg-white dark:bg-black border-4 border-white dark:border-navy-800 rounded-xl overflow-hidden shadow-xl group-hover:scale-105 transition-transform">
-                      {selectedOrder[0]?.order_screenshot ? (
-                        <img
-                          src={getPreviewUrl(
-                            selectedOrder[0]?.order_screenshot,
-                          )}
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <PhotoIcon className="w-6 h-6 text-gray-100 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
-                      )}
-                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                        <a
-                          href={getPreviewUrl(
-                            selectedOrder[0]?.order_screenshot,
-                          )}
-                          target="_blank"
-                          className="p-2 bg-white rounded-full transition-transform hover:scale-110"
-                          title="View"
-                        >
-                          <EyeIcon className="w-4 h-4 text-black" />
-                        </a>
-                        {selectedOrder[0]?.order_screenshot && (
-                          <a
-                            href={getDownloadUrl(
-                              selectedOrder[0]?.order_screenshot,
-                            )}
-                            target="_blank"
-                            className="p-2 bg-white rounded-full transition-transform hover:scale-110"
-                            title="Download"
-                          >
-                            <ArrowDownTrayIcon className="w-4 h-4 text-black" />
-                          </a>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
+
               </div>
 
               {/* Promotional Deployment - Extra Items for Dispatch */}
@@ -5073,13 +4657,7 @@ function O2DDetailPanel({
                   </h3>
                   <div className="text-[12px] font-black text-[#003875] dark:text-[#FFD500] uppercase tracking-tighter">
                     TOTAL Value: ₹
-                    {selectedOrder
-                      .reduce(
-                        (sum: number, i: O2D) =>
-                          sum + (parseFloat(i.est_amount) || 0),
-                        0,
-                      )
-                      .toLocaleString()}
+                    {detailTotalAmt.toLocaleString()}
                   </div>
                 </div>
                 <div className="overflow-x-auto">
@@ -5099,7 +4677,7 @@ function O2DDetailPanel({
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100 dark:divide-navy-800/20">
-                      {selectedOrder.map((item: O2D, idx: number) => (
+                      {parsedItems.map((item: any, idx: number) => (
                         <tr
                           key={idx}
                           className="text-[12px] font-bold text-gray-700 dark:text-gray-300 hover:bg-[#003875]/[0.02] dark:hover:bg-navy-700/10 transition-colors"
@@ -5129,18 +4707,11 @@ function O2DDetailPanel({
                           Aggregate Order Sum
                         </td>
                         <td className="px-6 py-4 text-center bg-[#003875]/5 dark:bg-[#003875]/10 text-gray-700 dark:text-gray-300">
-                          {selectedOrder.length} Items
+                          {detailItemsCount} Items
                         </td>
                         <td className="px-6 py-4 text-right bg-[#003875] text-white">
                           ₹
-                          {selectedOrder
-                            .reduce(
-                              (sum: number, i: O2D) =>
-                                sum +
-                                (parseFloat(i.est_amount) || 0),
-                              0,
-                            )
-                            .toLocaleString()}
+                          {detailTotalAmt.toLocaleString()}
                         </td>
                       </tr>
                     </tfoot>
@@ -5148,229 +4719,94 @@ function O2DDetailPanel({
                 </div>
               </div>
               {/* Operational Manifest - Step Specific Details */}
-              <div className="bg-white dark:bg-navy-800/50 rounded-2xl border-2 border-gray-100 dark:border-navy-700 shadow-md overflow-hidden">
+              <div className="bg-white dark:bg-navy-800/50 rounded-2xl border-2 border-gray-100 dark:border-navy-700 shadow-md overflow-hidden mb-6">
                 <div className="px-6 py-3 border-b border-gray-100 dark:border-navy-700 bg-white/40 dark:bg-transparent">
-                  <h3 className="text-[10px] font-black text-gray-500 uppercase tracking-widest flex items-center gap-2 items-center">
+                  <h3 className="text-[10px] font-black text-gray-500 uppercase tracking-widest flex items-center gap-2">
                     <div className="w-1 h-3.5 bg-[#003875] rounded-full" />{" "}
                     Operational Manifest
                   </h3>
                 </div>
-                <div className="p-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-y-8 gap-x-12">
-                  {/* Step 1: SO Details */}
+                <div className="p-6 grid grid-cols-1 sm:grid-cols-2 gap-y-8 gap-x-12">
+                  {/* Step 1: Bill Update */}
                   <div className="space-y-4">
                     <div className="flex items-center gap-2 text-[11px] font-black text-[#003875] dark:text-[#FFD500] uppercase tracking-widest border-b border-gray-100 pb-2">
-                      <IdentificationIcon className="w-4 h-4" />{" "}
-                      Step 1: SO Protocol
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="flex flex-col">
-                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">
-                          SO Number
-                        </span>
-                        <span className="text-[14px] font-black text-gray-700 dark:text-gray-200">
-                          {selectedOrder[0]?.so_number_1 || "-"}
-                        </span>
-                      </div>
-                      <div className="flex flex-col">
-                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">
-                          Final Amt
-                        </span>
-                        <span className="text-[14px] font-black text-[#003875] dark:text-[#FFD500]">
-                          ₹
-                          {(parseFloat(
-                            selectedOrder[0]?.final_amount_1 || "0",
-                          ) || 0).toLocaleString()}
-                        </span>
-                      </div>
+                      <DocumentTextIcon className="w-4 h-4" />{" "}
+                      Step 1: Bill Update
                     </div>
                     <div className="flex flex-col">
                       <span className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">
-                        Merge With
+                        Voucher Number
                       </span>
                       <span className="text-[14px] font-black text-gray-700 dark:text-gray-200">
-                        {selectedOrder[0]?.merge_order_with_1 ||
-                          "N/A"}
+                        {selectedOrder[0]?.voucher_num_1 || "-"}
                       </span>
                     </div>
                     {(() => {
-                      const soDoc = selectedOrder.find((o: O2D) => o.upload_so_1)?.upload_so_1;
-                      if (!soDoc) return null;
-                      return (
-                        <div className="flex items-center gap-2 mt-1">
-                          <a
-                            href={getPreviewUrl(soDoc)}
-                            target="_blank"
-                            className="p-1 px-2.5 bg-[#003875]/5 dark:bg-[#FFD500]/5 text-[#003875] dark:text-[#FFD500] rounded-full text-[9px] font-black uppercase tracking-widest hover:bg-[#003875] hover:text-white dark:hover:bg-[#FFD500] dark:hover:text-black transition-all flex items-center gap-1"
-                          >
-                            <EyeIcon className="w-3 h-3" />
-                            View
-                          </a>
-                          <a
-                            href={getDownloadUrl(soDoc)}
-                            target="_blank"
-                            className="flex items-center gap-1.5 px-3 py-2 bg-[#003875]/5 rounded-lg text-[11px] font-black text-[#003875] hover:bg-[#003875]/10 transition-all uppercase tracking-widest"
-                            title="Download SO Doc"
-                          >
-                            <ArrowDownTrayIcon className="w-4 h-4" />
-                          </a>
-                        </div>
-                      );
-                    })()}
-                  </div>
-
-                  {/* Step 5: Packing */}
-                  <div className="space-y-4">
-                    <div className="flex items-center gap-2 text-[11px] font-black text-[#003875] dark:text-[#FFD500] uppercase tracking-widest border-b border-gray-100 pb-2">
-                      <ArchiveBoxIcon className="w-4 h-4" /> Step 5:
-                      Packing
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="flex flex-col">
-                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">
-                          Parcels
-                        </span>
-                        <span className="text-[14px] font-black text-gray-700 dark:text-gray-200">
-                          {selectedOrder[0]?.num_of_parcel_5 || "-"}
-                        </span>
-                      </div>
-                      <div className="flex flex-col">
-                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">
-                          Packed On
-                        </span>
-                        <span className="text-[14px] font-black text-gray-700 dark:text-gray-200">
-                          {selectedOrder[0]
-                            ?.actual_date_of_order_packed_5
-                            ? new Date(
-                              selectedOrder[0]
-                                ?.actual_date_of_order_packed_5,
-                            ).toLocaleDateString()
-                            : "-"}
-                        </span>
-                      </div>
-                    </div>
-                    {(() => {
-                      const piDoc = selectedOrder.find((o: O2D) => o.upload_pi_5)?.upload_pi_5;
-                      if (!piDoc) return null;
-                      return (
-                        <div className="flex items-center gap-2 mt-1">
-                          <a
-                            href={getPreviewUrl(piDoc)}
-                            target="_blank"
-                            className="p-1 px-2.5 bg-[#003875]/5 dark:bg-[#FFD500]/5 text-[#003875] dark:text-[#FFD500] rounded-full text-[9px] font-black uppercase tracking-widest hover:bg-[#003875] hover:text-white dark:hover:bg-[#FFD500] dark:hover:text-black transition-all flex items-center gap-1"
-                          >
-                            <EyeIcon className="w-3 h-3" />
-                            View
-                          </a>
-                          <a
-                            href={getDownloadUrl(piDoc)}
-                            target="_blank"
-                            className="flex items-center gap-1.5 px-3 py-2 bg-[#003875]/5 rounded-lg text-[11px] font-black text-[#003875] hover:bg-[#003875]/10 transition-all uppercase tracking-widest"
-                            title="Download PI Doc"
-                          >
-                            <ArrowDownTrayIcon className="w-4 h-4" />
-                          </a>
-                        </div>
-                      );
-                    })()}
-                  </div>
-
-                  {/* Step 7 & 9: Dispatch & Bilty */}
-                  <div className="space-y-8">
-                    <div className="space-y-3">
-                      <div className="flex items-center gap-2 text-[11px] font-black text-[#003875] dark:text-[#FFD500] uppercase tracking-widest border-b border-gray-100 pb-2">
-                        <CalendarDaysIcon className="w-4 h-4" />{" "}
-                        Step 7: Dispatch
-                      </div>
-                      <div className="flex flex-col">
-                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">
-                          Voucher #
-                        </span>
-                        <span className="text-[14px] font-black text-gray-700 dark:text-gray-200">
-                          {selectedOrder[0]?.voucher_num_7 || "-"}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="space-y-3">
-                      <div className="flex items-center gap-2 text-[11px] font-black text-[#003875] dark:text-[#FFD500] uppercase tracking-widest border-b border-gray-100 pb-2">
-                        <HashtagIcon className="w-4 h-4" /> Step 9:
-                        Send Bilty to CRM
-                      </div>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="flex flex-col">
+                      const attachBill = selectedOrder[0]?.attach_bill_1;
+                      if (!attachBill) return (
+                        <div className="flex flex-col mt-3">
                           <span className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">
-                            Parcels
+                            Bill Attachment
                           </span>
                           <span className="text-[14px] font-black text-gray-700 dark:text-gray-200">
-                            {selectedOrder[0]?.num_of_parcel_9 ||
-                              "-"}
+                            -
                           </span>
                         </div>
-                        {(() => {
-                          const biltyDoc = selectedOrder.find((o: O2D) => o.attach_bilty_9)?.attach_bilty_9;
-                          if (!biltyDoc) return null;
-                          return (
-                            <div className="flex items-center gap-2 self-end mb-1">
-                              <a
-                                href={getPreviewUrl(biltyDoc)}
-                                target="_blank"
-                                className="flex items-center gap-2 px-3 py-1.5 bg-[#003875]/5 rounded-lg text-[10px] font-black text-[#003875] hover:bg-[#003875]/10 w-fit transition-all uppercase tracking-widest"
-                              >
-                                <EyeIcon className="w-3.5 h-3.5" /> Bilty
-                              </a>
-                              <a
-                                href={getDownloadUrl(biltyDoc)}
-                                target="_blank"
-                                className="p-1.5 bg-[#003875]/5 rounded-lg text-[#003875] hover:bg-[#003875]/10 transition-all"
-                                title="Download Bilty"
-                              >
-                                <ArrowDownTrayIcon className="w-3.5 h-3.5" />
-                              </a>
-                            </div>
-                          );
-                        })()}
-                      </div>
-                    </div>
+                      );
+                      return (
+                        <div className="flex flex-col mt-3">
+                          <span className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter mb-1">
+                            Bill Attachment
+                          </span>
+                          <div className="flex items-center gap-2">
+                            <a
+                              href={getPreviewUrl(attachBill)}
+                              target="_blank"
+                              className="p-1 px-2.5 bg-[#003875]/5 dark:bg-[#FFD500]/5 text-[#003875] dark:text-[#FFD500] rounded-full text-[9px] font-black uppercase tracking-widest hover:bg-[#003875] hover:text-white dark:hover:bg-[#FFD500] dark:hover:text-black transition-all flex items-center gap-1"
+                            >
+                              <EyeIcon className="w-3 h-3" />
+                              View Bill
+                            </a>
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </div>
 
-                  {/* Step 8: Verification */}
-                  <div className="space-y-4 lg:col-span-2">
+                  {/* Step 5: Share Billty */}
+                  <div className="space-y-4">
                     <div className="flex items-center gap-2 text-[11px] font-black text-[#003875] dark:text-[#FFD500] uppercase tracking-widest border-b border-gray-100 pb-2">
-                      <CalendarDaysIcon className="w-4 h-4" /> Step
-                      8: Operational Audit
+                      <HashtagIcon className="w-4 h-4" />{" "}
+                      Step 5: Share Billty
                     </div>
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-6">
-                      <div className="flex flex-col">
-                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">
-                          Checked
-                        </span>
-                        <span
-                          className={`text-[14px] font-black ${selectedOrder[0]?.order_details_checked_8 === "Yes" ? "text-green-500" : "text-red-500"}`}
-                        >
-                          {selectedOrder[0]
-                            ?.order_details_checked_8 || "No"}
-                        </span>
-                      </div>
-                      <div className="flex flex-col">
-                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">
-                          Voucher 51
-                        </span>
-                        <span className="text-[14px] font-black text-gray-700 dark:text-gray-200">
-                          {selectedOrder[0]?.voucher_num_51_8 ||
-                            "-"}
-                        </span>
-                      </div>
-                      <div className="flex flex-col sm:col-span-2">
-                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">
-                          T. Amount
-                        </span>
-                        <span className="text-[14px] font-black text-[#003875] dark:text-[#FFD500]">
-                          ₹
-                          {(parseFloat(
-                            selectedOrder[0]?.t_amt_8 || "0",
-                          ) || 0).toLocaleString()}
-                        </span>
-                      </div>
-                    </div>
+                    {(() => {
+                      const attachBillty = selectedOrder[0]?.attach_billty_5;
+                      if (!attachBillty) return (
+                        <div className="flex flex-col">
+                          <span className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">
+                            Billty Attachment
+                          </span>
+                          <span className="text-[14px] font-black text-gray-700 dark:text-gray-200">
+                            -
+                          </span>
+                        </div>
+                      );
+                      return (
+                        <div className="flex flex-col">
+                          <span className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter mb-1">
+                            Billty Attachment
+                          </span>
+                          <a
+                            href={getPreviewUrl(attachBillty)}
+                            target="_blank"
+                            className="w-fit p-1 px-2.5 bg-[#003875]/5 dark:bg-[#FFD500]/5 text-[#003875] dark:text-[#FFD500] rounded-full text-[9px] font-black uppercase tracking-widest hover:bg-[#003875] hover:text-white dark:hover:bg-[#FFD500] dark:hover:text-black transition-all flex items-center gap-1"
+                          >
+                            <EyeIcon className="w-3 h-3" />
+                            View Billty
+                          </a>
+                        </div>
+                      );
+                    })()}
                   </div>
                 </div>
               </div>
@@ -5424,7 +4860,7 @@ function O2DDetailPanel({
                       <th className="px-6 py-4 text-right border-r border-[#003875]/10">
                         Estimated Amount
                       </th>
-                      {O2D_STEPS.map((step, idx) => (
+                      {O2DKB_STEPS.map((step, idx) => (
                         <th
                           key={idx}
                           className="px-4 py-3 text-center border-r border-[#003875]/10 last:border-r-0 align-top"
@@ -5435,7 +4871,7 @@ function O2DDetailPanel({
                               Step {idx + 1}
                             </span>
                             <span className="text-[10px] whitespace-normal leading-tight">
-                              {O2D_STEP_SHORTS[idx]}
+                              {O2DKB_STEP_SHORTS[idx]}
                             </span>
                           </div>
                         </th>
@@ -5443,7 +4879,9 @@ function O2DDetailPanel({
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[#CE2029]/5 dark:divide-navy-800/20">
-                    {selectedOrder.map((item: O2D, idx: number) => (
+                    {parsedItems.map((item: any, idx: number) => {
+                      const parentOrder = selectedOrder[0] || {} as any;
+                      return (
                       <tr
                         key={idx}
                         className="hover:bg-white/50 dark:hover:bg-white/5 transition-colors text-[13px] font-medium text-gray-700 dark:text-gray-200"
@@ -5462,19 +4900,19 @@ function O2DDetailPanel({
                         </td>
                         <td className="px-6 py-3 text-right font-black text-[#003875] dark:text-[#FFD500] border-r border-[#CE2029]/5">
                           ₹
-                          {parseFloat(
+                          {(parseFloat(
                             item.est_amount,
-                          ).toLocaleString()}
+                          ) || 0).toLocaleString()}
                         </td>
-                        {O2D_STEPS.map((_, stepIdx) => {
-                          const plannedRaw = item[
-                            `planned_${stepIdx + 1}` as keyof O2D
+                        {O2DKB_STEPS.map((_, stepIdx) => {
+                          const plannedRaw = parentOrder[
+                            `planned_${stepIdx + 1}` as keyof O2DKB
                           ] as string;
-                          const actualRaw = item[
-                            `actual_${stepIdx + 1}` as keyof O2D
+                          const actualRaw = parentOrder[
+                            `actual_${stepIdx + 1}` as keyof O2DKB
                           ] as string;
-                          const status = item[
-                            `status_${stepIdx + 1}` as keyof O2D
+                          const status = parentOrder[
+                            `status_${stepIdx + 1}` as keyof O2DKB
                           ] as string;
 
                           const planned = formatDate(plannedRaw);
@@ -5535,7 +4973,8 @@ function O2DDetailPanel({
                           );
                         })}
                       </tr>
-                    ))}
+                      );
+                    })}
                   </tbody>
                   <tfoot>
                     <tr className="bg-[#FEF6DB]/80 dark:bg-navy-950 font-black text-[#003875] dark:text-white text-[13px] border-t-2 border-[#003875]/20 shadow-inner">
@@ -5544,25 +4983,15 @@ function O2DDetailPanel({
                       </td>
                       <td className="px-6 py-4 border-r border-[#003875]/10"></td>
                       <td className="px-6 py-4 text-center border-r border-[#003875]/10">
-                        {selectedOrder.reduce(
-                          (sum: number, i: O2D) =>
-                            sum + (parseFloat(i.item_qty) || 0),
-                          0,
-                        )}{" "}
+                        {detailTotalQty}{" "}
                         Units
                       </td>
                       <td className="px-6 py-4 text-right text-[#003875] dark:text-[#FFD500] border-r border-[#003875]/10">
                         ₹
-                        {selectedOrder
-                          .reduce(
-                            (sum: number, i: O2D) =>
-                              sum + (parseFloat(i.est_amount) || 0),
-                            0,
-                          )
-                          .toLocaleString()}
+                        {detailTotalAmt.toLocaleString()}
                       </td>
                       <td
-                        colSpan={O2D_STEPS.length}
+                        colSpan={O2DKB_STEPS.length}
                         className="px-6 py-4"
                       ></td>
                     </tr>
@@ -5586,4 +5015,8 @@ function O2DDetailPanel({
     </div>
   );
 }
+
+
+
+
 

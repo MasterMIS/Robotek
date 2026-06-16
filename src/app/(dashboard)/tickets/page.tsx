@@ -151,6 +151,13 @@ export default function TicketsPage() {
 
   useEffect(() => {
     fetchUsers();
+
+    if (typeof window !== "undefined") {
+      const searchParams = new URLSearchParams(window.location.search);
+      if (searchParams.get('action') === 'new') {
+        setIsNewModalOpen(true);
+      }
+    }
   }, []);
 
   useEffect(() => {
