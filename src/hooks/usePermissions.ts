@@ -17,10 +17,10 @@ export function usePermissions() {
     userId ? `/api/users/${userId}/permissions` : null,
     fetcher,
     {
-      revalidateOnFocus: false,
-      revalidateIfStale: false,
-      revalidateOnReconnect: false,
-      dedupingInterval: 30000, // 30 seconds deduping
+      revalidateOnFocus: true,
+      revalidateIfStale: true,
+      revalidateOnReconnect: true,
+      dedupingInterval: 5000, // 5 seconds deduping
     }
   );
 

@@ -60,6 +60,7 @@ export const navigation = [
   // Assets & Inventory Section
   { name: 'Stationary', id: 'stationary', href: '/inventory/stationary', icon: ClipboardDocumentListIcon, section: 'Inventory & Assets' },
   { name: 'Asset Management', id: 'asset-management', href: '/asset-management', icon: ComputerDesktopIcon, section: 'Inventory & Assets' },
+  { name: 'Recharge', id: 'recharge', href: '/recharge', icon: CurrencyDollarIcon, section: 'Inventory & Assets' },
 
   // Communication Section
   { name: 'Chat', id: 'chat', href: '/chat', icon: ChatBubbleLeftRightIcon, section: 'Communication' },

@@ -6,6 +6,7 @@ const IMAGE_FOLDER_ID = "1WJiXLo7XVy8YDoSN1pNPCRatGzDA7yb9";
 export const O2D_UPLOADS_FOLDER_ID = "19ZqWS5zYD2P4SIpcGNQR8gXcDiagH2rq";
 export const I2R_UPLOADS_FOLDER_ID = "16rv4h7PBrc1n0EtC91RNfRGeIxrGFSQo";
 export const O2DKB_UPLOADS_FOLDER_ID = "15Aw-m9qixPsONxIh5b3ND1l5RIDaHmXJ";
+export const RECHARGE_UPLOADS_FOLDER_ID = "1G_zO-DZbWVg67-AN6stxITjdz6i6Yj1w";
 
 async function getDriveClient() {
   const oauth2Client = new google.auth.OAuth2(

@@ -1676,24 +1676,24 @@ export default function O2DPage() {
       const searchLower = searchTerm.toLowerCase();
       const matchesSearch =
         !searchTerm ||
-        item.order_no.toLowerCase().includes(searchLower) ||
-        item.party_name.toLowerCase().includes(searchLower) ||
-        item.item_name.toLowerCase().includes(searchLower);
+        (item.order_no || "").toLowerCase().includes(searchLower) ||
+        (item.party_name || "").toLowerCase().includes(searchLower) ||
+        (item.item_name || "").toLowerCase().includes(searchLower);
 
       // Party Filter
       const matchesParty =
         !tableFilterParty ||
-        item.party_name.toLowerCase().includes(tableFilterParty.toLowerCase());
+        (item.party_name || "").toLowerCase().includes(tableFilterParty.toLowerCase());
 
       // Order ID Filter
       const matchesOrderId =
         !tableFilterOrderNo ||
-        item.order_no.toLowerCase().includes(tableFilterOrderNo.toLowerCase());
+        (item.order_no || "").toLowerCase().includes(tableFilterOrderNo.toLowerCase());
 
       // Item Name Filter
       const matchesItemName =
         !tableFilterItemName ||
-        item.item_name
+        (item.item_name || "")
           .toLowerCase()
           .includes(tableFilterItemName.toLowerCase());
 
