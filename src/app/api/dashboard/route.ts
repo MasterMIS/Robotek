@@ -277,11 +277,17 @@ export async function GET(req: NextRequest) {
       .sort((a: any, b: any) => parseDate(a.start_time)!.getTime() - parseDate(b.start_time)!.getTime())
       .slice(0, 10);
 
+    const attendanceTodayWithRole = attendanceToday.map((r: any) => ({
+        ...r,
+        role: users.find((u: any) => String(u.id) === String(r.userId))?.role_name || 'User'
+    }));
+
+    const filteredAttendanceToday = isAdmin
+        ? attendanceTodayWithRole
+        : attendanceTodayWithRole.filter((r: any) => r.userId === userId || r.userName === username);
+
     return NextResponse.json({
-      attendanceToday: attendanceToday.map((r: any) => ({
-          ...r,
-          role: users.find((u: any) => String(u.id) === String(r.userId))?.role_name || 'User'
-      })).slice(0, 10),
+      attendanceToday: filteredAttendanceToday.slice(0, 10),
       summary: {
         totalIn: inTodayCount,
         onLeave: leaveTodayCount,
@@ -293,11 +299,20 @@ export async function GET(req: NextRequest) {
       partyBirthdays: partyBirthdays.map((p: any) => ({ partyName: p.partyName, partyType: p.partyType })),
       partyAnniversaries: partyAnniversaries.map((p: any) => ({ partyName: p.partyName, partyType: p.partyType })),
       openTickets: (isAdmin ? openTickets : openTickets.filter((t: any) => t.raised_by === username || t.solver_person === username)).slice(0, 15),
-      recentLeaves: (isAdmin ? leaves : leaves.filter((l: any) => l.userName === username)).slice(0, 5).map((l: any) => ({
-        ...l,
-        startDate: normalizeDateStr(l.startDate),
-        endDate: normalizeDateStr(l.endDate)
-      })),
+      recentLeaves: (isAdmin ? leaves : leaves.filter((l: any) => l.userName === username)).slice(0, 5).map((l: any) => {
+        const startDate = normalizeDateStr(l.startDate);
+        const endDate = normalizeDateStr(l.endDate);
+        const involved = [l.responsibility1, l.responsibility2, l.responsibility3].map((rid: any) => {
+          const u = users.find((uu: any) => String(uu.id) === String(rid));
+          return u ? (u.full_name || u.username) : null;
+        }).filter(Boolean);
+        return {
+          ...l,
+          startDate,
+          endDate,
+          involved
+        };
+      }),
       upcomingMeetings,
       teamMembers: users.map((u: any) => ({ username: u.username, image_url: u.image_url })),
       score: companyMetrics,

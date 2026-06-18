@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { sendWhatsAppMessage } from "@/lib/maytapi";
-import { formatDate, formatDateMMM } from "@/lib/dateUtils";
-import { getUsers } from "@/lib/google-sheets";
+import { formatDateMMM } from "@/lib/dateUtils";
 import { leaveRequestService, leaveRemarkService, LeaveRequest, LeaveRemark } from "@/lib/leave-sheets";
 
 export const dynamic = "force-dynamic";
@@ -24,7 +22,10 @@ export async function GET(req: NextRequest) {
     const allLeaves = await leaveRequestService.getAll();
     let leaves = allLeaves;
 
-    if (role !== 'Admin' && userId) {
+    const roleUpper = (role || '').toUpperCase();
+    const isAdminOrEA = roleUpper === 'ADMIN' || roleUpper === 'EA';
+
+    if (!isAdminOrEA && userId) {
       leaves = allLeaves.filter((l) => 
         String(l.userId) === String(userId) || 
         String(l.responsibility1) === String(userId) ||
@@ -43,10 +44,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const data = await req.json();
-    const { action, userId, userName, leaveId, status, comment, responsibility1, responsibility2, responsibility3, acceptedBy } = data;
-
-    const allUsers = await getUsers();
-    const getUserPhone = (id: string) => allUsers.find(u => String(u.id) === String(id))?.phone;
+    const { action, userId, userName, leaveId, status, comment, responsibility1, responsibility2, responsibility3, acceptedBy, leaveType, halfDaySession, tasks1, tasks2, tasks3, sharedTask } = data;
 
     if (action === 'UPDATE_STATUS') {
       if (!leaveId || !status) return NextResponse.json({ error: "Missing data" }, { status: 400 });
@@ -56,30 +54,28 @@ export async function POST(req: NextRequest) {
       if (!lv) throw new Error("Leave not found");
 
       await leaveRequestService.update(leaveId, { ...lv, status });
-      
-      // Notify Applicant
-      const applicantPhone = getUserPhone(lv.userId || "");
-      if (applicantPhone) {
-        const message = `🔄 *Leave Status Changed*\n━━━━━━━━━━━━━━━━━\n👤 *Applicant:* ${lv.userName}\n📅 *Period:* ${formatDateMMM(lv.startDate || "")} to ${formatDateMMM(lv.endDate || "")}\n🏷️ *New Status:* *${status}*\n\n_System generated notification_`;
-        await sendWhatsAppMessage(applicantPhone, message);
-      }
       return NextResponse.json({ success: true });
 
     } else if (action === 'ACCEPT_RESPONSIBILITY') {
         if (!leaveId || !acceptedBy) return NextResponse.json({ error: "Missing data" }, { status: 400 });
-        
+
+        const which: number | undefined = data.which ? Number(data.which) : undefined;
+
         const allLeaves = await leaveRequestService.getAll();
         const lv = allLeaves.find(l => l.id === leaveId);
         if (!lv) throw new Error("Leave not found");
 
-        await leaveRequestService.update(leaveId, { ...lv, status: "Pending", acceptedBy });
-        
-        // Notify Applicant
-        const applicantPhone = getUserPhone(lv.userId || "");
-        if (applicantPhone) {
-            const message = `✅ *Responsibility Accepted*\n━━━━━━━━━━━━━━━━━\n👤 *Applicant:* ${lv.userName}\n🤝 *Accepted By:* ${acceptedBy}\n📅 *Leave Period:* ${formatDateMMM(lv.startDate || "")} to ${formatDateMMM(lv.endDate || "")}\n\n_The colleague has confirmed they will handle your work._`;
-            await sendWhatsAppMessage(applicantPhone, message);
+        const now = new Date().toISOString();
+        const updated: any = { ...lv, status: "Pending" };
+        if (which && [1,2,3].includes(which)) {
+          updated[`acceptedBy${which}`] = acceptedBy;
+          updated[`acceptedAt${which}`] = now;
+        } else {
+          updated.acceptedBy = acceptedBy;
+          updated.updatedAt = now;
         }
+
+        await leaveRequestService.update(leaveId, updated);
         return NextResponse.json({ success: true });
 
     } else if (action === 'ADD_REMARK') {
@@ -92,28 +88,6 @@ export async function POST(req: NextRequest) {
         createdAt: new Date().toISOString()
       };
       await leaveRemarkService.add(newRemark);
-
-      const allLeaves = await leaveRequestService.getAll();
-      const lv = allLeaves.find(l => l.id === leaveId);
-      if (!lv) return NextResponse.json({ success: true });
-
-      const template = `💬 *New Remark Added*\n━━━━━━━━━━━━━━━━━\n👤 *By:* ${userName}\n📝 *Comment:* ${comment}\n📄 *Ref Leave:* ${formatDateMMM(lv.startDate || "")} - ${formatDateMMM(lv.endDate || "")}\n\n_Please check your dashboard for details._`;
-
-      if (lv.userName !== userName) {
-          const applicantPhone = getUserPhone(lv.userId || "");
-          if (applicantPhone) {
-              await sendWhatsAppMessage(applicantPhone, template);
-          }
-      } else {
-          const phones = [lv.responsibility1, lv.responsibility2, lv.responsibility3]
-            .filter(Boolean)
-            .map(id => getUserPhone(id!))
-            .filter(Boolean);
-          
-          for (const phone of phones) {
-            await sendWhatsAppMessage(phone!, template);
-          }
-      }
       return NextResponse.json({ success: true });
 
     } else {
@@ -125,6 +99,8 @@ export async function POST(req: NextRequest) {
         id: `LV-${Date.now()}`,
         userId: String(userId),
         userName: userName || "Unknown",
+        leaveType: leaveType || "Full Day",
+        halfDaySession: halfDaySession || "",
         startDate,
         endDate,
         reason,
@@ -132,31 +108,29 @@ export async function POST(req: NextRequest) {
         responsibility1: responsibility1 || "",
         responsibility2: responsibility2 || "",
         responsibility3: responsibility3 || "",
+        tasks1: tasks1 || "",
+        tasks2: tasks2 || "",
+        tasks3: tasks3 || "",
+        sharedTask: sharedTask || "",
         acceptedBy: "",
         updatedAt: new Date().toISOString()
       };
 
+      // Ensure canonical columns exist in the sheet before appending.
+      // This avoids blank cells when headers were renamed or the header cache is stale.
+      const canonical = [
+        'id','userId','userName','leaveType','halfDaySession','startDate','endDate','reason','status',
+        'responsibility1','responsibility2','responsibility3','tasks1','tasks2','tasks3','sharedTask',
+        'acceptedBy','acceptedBy1','acceptedAt1','acceptedBy2','acceptedAt2','acceptedBy3','acceptedAt3','createdAt','updatedAt'
+      ];
+      try {
+        await (leaveRequestService as any).ensureColumns(canonical);
+      } catch (e) {
+        // Non-fatal: log and continue — add will still attempt to append using current header map
+        console.warn('ensureColumns failed for Leave sheet', e);
+      }
+
       await leaveRequestService.add(newLeave);
-
-      const getRName = (id?: string) => id ? allUsers.find(u => String(u.id) === String(id))?.username || id : '';
-      const rNames = [responsibility1, responsibility2, responsibility3].filter(Boolean).map(getRName).join(', ');
-
-      // Notify Applicant
-      const applicantPhone = getUserPhone(userId);
-      if (applicantPhone) {
-        const message = `🔔 *Leave Application Submitted*\n━━━━━━━━━━━━━━━━━\n👤 *Applicant:* ${userName}\n📅 *From:* ${formatDateMMM(startDate)}\n📅 *To:* ${formatDateMMM(endDate)}\n📝 *Reason:* ${reason}\n👥 *Responsibilities:* ${rNames || 'None'}\n\n_Your request is now pending review._`;
-        await sendWhatsAppMessage(applicantPhone, message);
-      }
-
-      // Notify Responsibility selected
-      const responsibilityIds = [responsibility1, responsibility2, responsibility3].filter(Boolean);
-      for (const rId of responsibilityIds) {
-          const rPhone = getUserPhone(rId!);
-          if (rPhone) {
-              const message = `📋 *New Responsibility Assigned*\n━━━━━━━━━━━━━━━━━\n👤 *Applicant:* ${userName}\n📅 *From:* ${formatDateMMM(startDate)}\n📅 *To:* ${formatDateMMM(endDate)}\n🤝 *Your Role:* Responsibility Person\n\n_You have been marked to handle the work in their absence._`;
-              await sendWhatsAppMessage(rPhone, message);
-          }
-      }
 
       return NextResponse.json({ success: true, leave: newLeave });
     }
@@ -178,14 +152,6 @@ export async function PUT(req: NextRequest) {
 
         const updated = { ...lv, ...updates };
         await leaveRequestService.update(leaveId, updated);
-
-        // Notify Applicant
-        const allUsers = await getUsers();
-        const applicantPhone = allUsers.find(u => String(u.id) === String(updated.userId))?.phone;
-        if (applicantPhone) {
-            const message = `📝 *Leave Request Updated*\n━━━━━━━━━━━━━━━━━\n👤 *Applicant:* ${updated.userName}\n📅 *Updated To:* ${formatDateMMM(updated.startDate || "")} - ${formatDateMMM(updated.endDate || "")}\n📝 *Reason:* ${updated.reason}\n\n_Please check the dashboard for the latest details._`;
-            await sendWhatsAppMessage(applicantPhone, message);
-        }
 
         return NextResponse.json({ success: true });
     } catch (error) {
@@ -211,13 +177,6 @@ export async function DELETE(req: NextRequest) {
         const targetRemarks = allRemarks.filter(r => r.leaveId === leaveId);
         for (const rem of targetRemarks) {
             await leaveRemarkService.delete(rem.id);
-        }
-
-        const allUsers = await getUsers();
-        const applicantPhone = allUsers.find(u => String(u.id) === String(lv.userId))?.phone;
-        if (applicantPhone) {
-            const message = `🗑️ *Leave Request Deleted*\n━━━━━━━━━━━━━━━━━\n👤 *Applicant:* ${lv.userName}\n📅 *Was For:* ${formatDateMMM(lv.startDate || "")}\n\n_This leave request has been removed from the system._`;
-            await sendWhatsAppMessage(applicantPhone, message);
         }
 
         return NextResponse.json({ success: true });

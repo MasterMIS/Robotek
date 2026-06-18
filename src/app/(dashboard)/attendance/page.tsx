@@ -22,32 +22,15 @@ import {
     ArrowRightCircleIcon,
     PencilSquareIcon,
     TrashIcon,
-    ArrowDownTrayIcon
+    ArrowDownTrayIcon,
+    PlusIcon,
+    MagnifyingGlassIcon,
+    SunIcon,
+    ClipboardDocumentListIcon,
+    UsersIcon,
+    XMarkIcon,
+    DocumentTextIcon
 } from '@heroicons/react/24/outline';
-
-interface Leave {
-    id: string;
-    userId: string;
-    userName: string;
-    userImage?: string;
-    startDate: string;
-    endDate: string;
-    reason: string;
-    status: string;
-    responsibility1?: string;
-    responsibility2?: string;
-    responsibility3?: string;
-    acceptedBy?: string;
-    updatedAt?: string;
-}
-
-interface Remark {
-    id: string;
-    leaveId: string;
-    userName: string;
-    comment: string;
-    createdAt: string;
-}
 
 // Icons (Using local SVG / Lucide pattern from project)
 const StatusIcon = ({ status }: { status: string }) => {
@@ -58,12 +41,16 @@ const StatusIcon = ({ status }: { status: string }) => {
 
 export default function AttendancePage() {
     const { success, error } = useToast();
-    const [activeTab, setActiveTab] = useState<'ATTENDANCE' | 'LEAVE' | 'ATTENDANCE_MASTER' | 'REPORT'>('ATTENDANCE');
+    const [activeTab, setActiveTab] = useState<'ATTENDANCE' | 'ATTENDANCE_MASTER' | 'REPORT'>('ATTENDANCE');
     const [reportSearch, setReportSearch] = useState('');
     const [reportView, setReportView] = useState<'STATUS' | 'TIME'>('STATUS');
     const [user, setUser] = useState<any>(null);
     const SHIFT_START_TIME = "09:30";
     const [isPageLoading, setIsPageLoading] = useState(false);
+
+    // Derived role helpers (recalculated whenever user changes)
+    const userRoleUpper = (user?.role || '').toUpperCase();
+    const isAdminOrEA = userRoleUpper === 'ADMIN' || userRoleUpper === 'EA';
 
     // Attendance State
     const [currentDate, setCurrentDate] = useState(new Date());
@@ -75,23 +62,13 @@ export default function AttendancePage() {
     const videoRef = React.useRef<HTMLVideoElement>(null);
     const canvasRef = React.useRef<HTMLCanvasElement>(null);
 
-    // Leave State
-    const [leaves, setLeaves] = useState<Leave[]>([]);
-    const [leaveForm, setLeaveForm] = useState({ 
-        startDate: '', 
-        endDate: '', 
-        reason: '',
-        responsibility1: '',
-        responsibility2: '',
-        responsibility3: ''
-    });
-    const [editingLeave, setEditingLeave] = useState<Leave | null>(null);
+    
 
     // Admin State
-    const [selectedLeave, setSelectedLeave] = useState<Leave | null>(null);
-    const [remarks, setRemarks] = useState<Remark[]>([]);
-    const [newRemark, setNewRemark] = useState('');
-    const [loadingRemarks, setLoadingRemarks] = useState(false);
+    
+    
+    
+    
     const [masterData, setMasterData] = useState<{ users: any[], attendance: any[], leaves: any[] } | null>(null);
     const [expandedUserId, setExpandedUserId] = useState<string | null>(null);
 
@@ -183,8 +160,8 @@ export default function AttendancePage() {
                 // Read tab query param
                 const searchParams = new URLSearchParams(window.location.search);
                 const tabParam = searchParams.get('tab');
-                if (tabParam === 'LEAVE' || tabParam === 'ATTENDANCE_MASTER' || tabParam === 'REPORT') {
-                    setActiveTab(tabParam);
+                if (tabParam === 'ATTENDANCE_MASTER' || tabParam === 'REPORT') {
+                    setActiveTab(tabParam as 'ATTENDANCE' | 'ATTENDANCE_MASTER' | 'REPORT');
                 }
 
                 const authRes = await fetch('/api/auth/session');
@@ -214,7 +191,6 @@ export default function AttendancePage() {
                     setUser(fullUser);
                     await Promise.all([
                         fetchAttendance(fullUser.id),
-                        fetchLeaves(fullUser.id, fullUser.role),
                         fetchMasterData()
                     ]);
                 }
@@ -344,24 +320,16 @@ export default function AttendancePage() {
         }
     };
 
-    const fetchLeaves = async (userId: string, role: string) => {
-        const res = await fetch(`/api/leave?userId=${userId}&role=${role}`);
-        const data = await res.json();
-        if (data.leaves) setLeaves(data.leaves);
-    };
+    
 
-    const fetchRemarks = async (leaveId: string) => {
-        setLoadingRemarks(true);
-        const res = await fetch(`/api/leave?type=remarks&leaveId=${leaveId}`);
-        const data = await res.json();
-        if (data.remarks) setRemarks(data.remarks);
-        setLoadingRemarks(false);
-    };
+    
 
     const fetchMasterData = async () => {
         try {
             const res = await fetch('/api/attendance/master');
             const data = await res.json();
+            const resLeaves = await fetch('/api/leave?role=ADMIN');
+            const dataLeaves = await resLeaves.json();
             if (data.users) setMasterData(data);
         } catch (e) {
             console.error(e);
@@ -398,122 +366,19 @@ export default function AttendancePage() {
         }
     };
 
-    const handleLeaveSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        
-        // Unique person check
-        const selected = [leaveForm.responsibility1, leaveForm.responsibility2, leaveForm.responsibility3].filter(Boolean);
-        if (new Set(selected).size !== selected.length) {
-            error("Please select different persons for each responsibility slot");
-            return;
-        }
+    
 
-        setIsPageLoading(true);
-        try {
-            const method = editingLeave ? 'PUT' : 'POST';
-            const body = editingLeave 
-                ? { leaveId: editingLeave.id, ...leaveForm }
-                : { userId: user.id, userName: user.username, ...leaveForm };
+    
 
-            const res = await fetch('/api/leave', {
-                method,
-                body: JSON.stringify(body)
-            });
-            if (!res.ok) throw new Error('Failed');
+    
 
-            setLeaveForm({ startDate: '', endDate: '', reason: '', responsibility1: '', responsibility2: '', responsibility3: '' });
-            setEditingLeave(null);
-            await fetchLeaves(user.id, user.role);
-            success(editingLeave ? 'Leave updated!' : 'Leave request submitted!');
-        } catch (e) {
-            error('Failed to process leave');
-        } finally {
-            setIsPageLoading(false);
-        }
-    };
+    
 
-    const [isConfirmOpen, setIsConfirmOpen] = useState(false);
-    const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+    
 
-    const handleLeaveDelete = async (leaveId: string) => {
-        setPendingDeleteId(leaveId);
-        setIsConfirmOpen(true);
-    };
+    
 
-    const confirmDelete = async () => {
-        if (!pendingDeleteId) return;
-        setIsPageLoading(true);
-        try {
-            const res = await fetch(`/api/leave?leaveId=${pendingDeleteId}`, { method: 'DELETE' });
-            if (!res.ok) throw new Error('Failed');
-            await fetchLeaves(user.id, user.role);
-            success('Leave deleted successfully');
-        } catch (e) {
-            error('Failed to delete leave');
-        } finally {
-            setIsPageLoading(false);
-            setPendingDeleteId(null);
-            setIsConfirmOpen(false);
-        }
-    };
-
-    const handleAcceptResponsibility = async (leaveId: string) => {
-        setIsPageLoading(true);
-        try {
-            const res = await fetch('/api/leave', {
-                method: 'POST',
-                body: JSON.stringify({ action: 'ACCEPT_RESPONSIBILITY', leaveId, acceptedBy: user.username })
-            });
-            if (!res.ok) throw new Error('Failed');
-            await fetchLeaves(user.id, user.role);
-            success('You have accepted responsibility for this leave');
-        } catch (e) {
-            error('Failed to accept responsibility');
-        } finally {
-            setIsPageLoading(false);
-        }
-    };
-
-    const handleStatusUpdate = async (status: 'Approved' | 'Rejected', leaveId?: string) => {
-        const targetId = leaveId || selectedLeave?.id;
-        if (!targetId) return;
-        setIsPageLoading(true);
-        try {
-            const res = await fetch('/api/leave', {
-                method: 'POST',
-                body: JSON.stringify({ action: 'UPDATE_STATUS', leaveId: targetId, status })
-            });
-            if (!res.ok) throw new Error('Failed');
-
-            await fetchLeaves(user.id, user.role);
-            if (selectedLeave) setSelectedLeave(null);
-            success(`Leave request ${status}`);
-        } catch (e) {
-            error('Failed to update status');
-        } finally {
-            setIsPageLoading(false);
-        }
-    };
-
-    const handleAddRemark = async () => {
-        if (!newRemark.trim() || !selectedLeave) return;
-        setIsPageLoading(true);
-        try {
-            const res = await fetch('/api/leave', {
-                method: 'POST',
-                body: JSON.stringify({ action: 'ADD_REMARK', leaveId: selectedLeave.id, userName: user.username, comment: newRemark })
-            });
-            if (!res.ok) throw new Error('Failed');
-
-            setNewRemark('');
-            await fetchRemarks(selectedLeave.id);
-            success('Comment added!');
-        } catch (e) {
-            error('Failed to add comment');
-        } finally {
-            setIsPageLoading(false);
-        }
-    };
+    
 
     const formatDateIST = (dateStr: string) => {
         if (!dateStr) return "-";
@@ -567,7 +432,7 @@ export default function AttendancePage() {
         const rows: string[][] = [headers];
 
         masterData.users
-            .filter(u => user?.role?.toLowerCase() === 'admin' || String(u.id) === String(user.id))
+            .filter(u => isAdminOrEA || String(u.id) === String(user.id))
             .filter(u => (u.full_name || u.username)?.toLowerCase().includes(masterSearch.toLowerCase()) || String(u.id).toLowerCase().includes(masterSearch.toLowerCase()))
             .forEach(u => {
                 const monthAtt = masterData.attendance.filter(a => String(a.userId) === String(u.id)) || [];
@@ -635,10 +500,10 @@ export default function AttendancePage() {
             const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
             const record = history.find(h => normalizeDateSheet(h.date) === dateStr);
             const isToday = dateStr === todayStr;
-            const leave = leaves.find(l => {
+            const leave = masterData?.leaves?.find((l:any) => {
                 const start = normalizeDateSheet(l.startDate);
                 const end = normalizeDateSheet(l.endDate);
-                return dateStr >= start && dateStr <= end && l.status === 'Approved';
+                return String(l.userId) === String(user.id) && dateStr >= start && dateStr <= end && l.status === 'Approved';
             });
             const isSunday = new Date(year, month, d).getDay() === 0;
 
@@ -905,202 +770,13 @@ export default function AttendancePage() {
                 </div>
             )}
 
-            {/* Other tabs follow similar premium patterns... (LEAVE, MASTER) */}
-            {activeTab === 'LEAVE' && (
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                     {/* Leave Form */}
-                     <div 
-                        style={{ backgroundColor: 'var(--panel-card)' }}
-                        className="rounded-[32px] p-8 shadow-xl border border-white/10 h-fit"
-                     >
-                        <div className="flex justify-between items-center mb-8">
-                            <h3 className="text-xl font-black text-[#003875] dark:text-[#FFD500] uppercase tracking-tighter">
-                                {editingLeave ? 'Edit Leave Request' : 'Submit Leave Request'}
-                            </h3>
-                            {editingLeave && (
-                                <button 
-                                    onClick={() => { setEditingLeave(null); setLeaveForm({ startDate: '', endDate: '', reason: '', responsibility1: '', responsibility2: '', responsibility3: '' }); }}
-                                    className="text-[10px] font-black uppercase text-red-500 hover:underline"
-                                >
-                                    Cancel Edit
-                                </button>
-                            )}
-                        </div>
-                        <form onSubmit={handleLeaveSubmit} className="space-y-4">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <CustomDateTimePicker label="From Date" dateOnly value={leaveForm.startDate} onChange={v => setLeaveForm({...leaveForm, startDate: v})} required />
-                                <CustomDateTimePicker label="To Date" dateOnly value={leaveForm.endDate} onChange={v => setLeaveForm({...leaveForm, endDate: v})} required />
-                            </div>
-                            
-                            <div className="space-y-2">
-                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Responsibility Selection</label>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                    {[1, 2, 3].map(num => (
-                                        <div key={num} className={num === 3 ? "sm:col-span-2" : ""}>
-                                            <SearchableSelect
-                                                options={masterData?.users
-                                                    .filter(u => String(u.id) !== String(user.id))
-                                                    .map(u => ({ id: u.id, label: u.full_name || u.username })) || []}
-                                                value={(leaveForm as any)[`responsibility${num}`]}
-                                                onChange={v => setLeaveForm({...leaveForm, [`responsibility${num}`]: v})}
-                                                placeholder={num === 1 ? 'Primary Resp.' : num === 2 ? 'Secondary Resp.' : 'Tertiary Resp.'}
-                                            />
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-
-                            <div className="space-y-2">
-                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Reason</label>
-                                <textarea 
-                                    className="w-full h-24 p-4 rounded-xl bg-gray-50 dark:bg-slate-900 border border-gray-100 dark:border-white/5 focus:border-[#FFD500] outline-none text-xs font-medium transition-all"
-                                    value={leaveForm.reason}
-                                    onChange={e => setLeaveForm({...leaveForm, reason: e.target.value})}
-                                    required
-                                    placeholder="Enter detailed reason here..."
-                                />
-                            </div>
-                            <button type="submit" className="w-full py-4 bg-[#003875] dark:bg-[#FFD500] text-white dark:text-black font-black rounded-xl text-[10px] uppercase tracking-widest shadow-lg shadow-[#003875]/10 hover:-translate-y-1 transition-all">
-                                {editingLeave ? 'Update Leave Request' : 'Submit Application'}
-                            </button>
-                        </form>
-                     </div>
-
-                     {/* Leave History */}
-                     <div className="lg:col-span-2 space-y-4">
-                         {leaves.map(lv => {
-                            const isRequester = String(lv.userId) === String(user.id);
-                            const isListedColleague = [lv.responsibility1, lv.responsibility2, lv.responsibility3].some(id => String(id) === String(user.id));
-                            const hasAccepted = lv.acceptedBy && lv.acceptedBy.trim() !== "";
-                            const amIAcceptor = lv.acceptedBy === user.username;
-
-                            return (
-                                <div 
-                                    key={lv.id} 
-                                    style={{ backgroundColor: 'var(--panel-card)' }}
-                                    className="p-4 rounded-[20px] border border-white/10 hover:border-[#FFD500]/30 group transition-all shadow-sm relative overflow-hidden"
-                                >
-                                    <div className="flex justify-between items-start mb-3">
-                                         <div className="flex items-center gap-3 cursor-pointer" onClick={() => { setSelectedLeave(lv); fetchRemarks(lv.id); }}>
-                                             <div className="w-9 h-9 bg-gray-100 dark:bg-slate-800 rounded-xl flex items-center justify-center font-black text-gray-500 text-xs">
-                                                 {lv.userName.charAt(0)}
-                                             </div>
-                                             <div>
-                                                 <div className="text-[11px] font-black text-gray-900 dark:text-white uppercase tracking-tighter">{lv.userName}</div>
-                                                 <div className="text-[9px] font-bold text-gray-400 uppercase">{formatDateMMM(lv.startDate)} - {formatDateMMM(lv.endDate)}</div>
-                                             </div>
-                                         </div>
-                                         <div className="flex items-center gap-2">
-                                            <div className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest shadow-sm ${
-                                                lv.status === 'Approved' ? 'bg-green-500 text-white' : 
-                                                lv.status === 'Rejected' ? 'bg-red-500 text-white' : 
-                                                'bg-[#FFD500] text-black shadow-[#FFD500]/20'
-                                            }`}>
-                                                {lv.status}
-                                            </div>
-
-                                            <button 
-                                                onClick={(e) => { e.stopPropagation(); setSelectedLeave(lv); fetchRemarks(lv.id); }}
-                                                className="p-1.5 bg-purple-50 dark:bg-purple-500/10 hover:bg-purple-100 text-purple-600 rounded-lg transition-all relative flex items-center justify-center border border-purple-100 dark:border-purple-500/20 shadow-sm"
-                                                title="View Discussion"
-                                            >
-                                                <CommentBtnIcon className="w-3.5 h-3.5" />
-                                                <span className="ml-1 text-[8px] font-black">{remarks.filter(r => r.leaveId === lv.id).length || 0}</span>
-                                            </button>
-
-                                            {isRequester && lv.status === 'Pending' && (
-                                                <div className="flex items-center gap-1.5">
-                                                    <button 
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            setEditingLeave(lv);
-                                                            setLeaveForm({
-                                                                startDate: lv.startDate,
-                                                                endDate: lv.endDate,
-                                                                reason: lv.reason,
-                                                                responsibility1: lv.responsibility1 || '',
-                                                                responsibility2: lv.responsibility2 || '',
-                                                                responsibility3: lv.responsibility3 || ''
-                                                            });
-                                                        }}
-                                                        className="p-1.5 bg-blue-50 dark:bg-blue-500/10 hover:bg-blue-100 text-blue-500 rounded-lg transition-all border border-blue-100 dark:border-blue-500/20"
-                                                        title="Edit Leave"
-                                                    >
-                                                        <PencilSquareIcon className="w-3.5 h-3.5" />
-                                                    </button>
-                                                    <button 
-                                                        onClick={(e) => { e.stopPropagation(); handleLeaveDelete(lv.id); }}
-                                                        className="p-1.5 bg-red-50 dark:bg-red-500/10 hover:bg-red-100 text-red-500 rounded-lg transition-all border border-red-100 dark:border-red-500/20"
-                                                        title="Delete Leave"
-                                                    >
-                                                        <TrashIcon className="w-3.5 h-3.5" />
-                                                    </button>
-                                                </div>
-                                            )}
-                                         </div>
-                                    </div>
-                                    
-                                    <div className="mb-3 pl-1">
-                                        <p className="text-[10px] text-gray-500 dark:text-gray-400 italic opacity-80 line-clamp-1">"{lv.reason}"</p>
-                                    </div>
-
-                                    {/* Responsibility Section */}
-                                    <div className="pt-3 border-t border-gray-100 dark:border-white/5 flex flex-wrap items-center gap-2">
-                                        {[lv.responsibility1, lv.responsibility2, lv.responsibility3].filter(Boolean).map((rid, idx) => {
-                                            const rUser = masterData?.users.find(u => String(u.id) === String(rid));
-                                            const colors = ['bg-purple-50 text-purple-600 border-purple-100', 'bg-blue-50 text-blue-600 border-blue-100', 'bg-orange-50 text-orange-600 border-orange-100'];
-                                            return (
-                                                <div key={idx} className={`px-3 py-1 border rounded-full text-[8px] font-black uppercase ${colors[idx % colors.length]}`}>
-                                                    RESPONSIBILITY: {rUser?.full_name || rUser?.username || 'USER'}
-                                                </div>
-                                            );
-                                        })}
-                                        
-                                        <div className="flex-1"></div>
-
-                                         {/* Admin Quick Actions */}
-                                         {user.role === 'Admin' && lv.status === 'Pending' && (
-                                             <div className="flex items-center gap-2 mr-2">
-                                                 <button 
-                                                     onClick={(e) => { e.stopPropagation(); handleStatusUpdate('Approved', lv.id); }}
-                                                     className="px-4 py-1.5 bg-green-500 hover:bg-green-600 text-white text-[9px] font-black uppercase tracking-widest rounded-full shadow-lg shadow-green-500/10 transition-all active:scale-95"
-                                                 >
-                                                     Authorize
-                                                 </button>
-                                                 <button 
-                                                     onClick={(e) => { e.stopPropagation(); handleStatusUpdate('Rejected', lv.id); }}
-                                                     className="px-4 py-1.5 bg-red-500 hover:bg-red-600 text-white text-[9px] font-black uppercase tracking-widest rounded-full shadow-lg shadow-red-500/10 transition-all active:scale-95"
-                                                 >
-                                                     Decline
-                                                 </button>
-                                             </div>
-                                         )}
-
-                                         {isListedColleague && !hasAccepted && (
-                                            <button 
-                                                onClick={(e) => { e.stopPropagation(); handleAcceptResponsibility(lv.id); }}
-                                                className="px-4 py-1.5 bg-green-500 hover:bg-green-600 text-white text-[9px] font-black uppercase tracking-widest rounded-full shadow-lg shadow-green-500/10 transition-all active:scale-95"
-                                            >
-                                                I'll take responsibility
-                                            </button>
-                                        )}
-                                        {hasAccepted && (
-                                            <div className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 dark:bg-blue-500/10 border border-blue-100 dark:border-blue-500/20 rounded-full">
-                                                <div className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></div>
-                                                <span className="text-[8px] font-black uppercase text-blue-600">Handled by {lv.acceptedBy}</span>
-                                            </div>
-                                        )}
-                                    </div>
 
 
-                                    {/* Glass Decor */}
-                                    <div className="absolute -bottom-1 -right-1 w-8 h-8 bg-[#FFD500]/5 rounded-full blur-xl group-hover:bg-[#FFD500]/10 transition-colors"></div>
-                                </div>
-                            );
-                        })}
-                     </div>
-                </div>
-            )}
+
+
+
+
+
 
             {/* MASTER LIST */}
             {activeTab === 'ATTENDANCE_MASTER' && (
@@ -1142,7 +818,7 @@ export default function AttendancePage() {
                             </thead>
                             <tbody>
                                 {masterData.users
-                                    .filter(u => user?.role?.toLowerCase() === 'admin' || String(u.id) === String(user.id))
+                                    .filter(u => isAdminOrEA || String(u.id) === String(user.id))
                                     .filter(u => (u.full_name || u.username)?.toLowerCase().includes(masterSearch.toLowerCase()) || String(u.id).toLowerCase().includes(masterSearch.toLowerCase()))
                                     .map(u => {
                                      const monthAtt = masterData?.attendance.filter(a => String(a.userId) === String(u.id)) || [];
@@ -1390,7 +1066,7 @@ export default function AttendancePage() {
                                 </thead>
                                 <tbody>
                                     {masterData.users
-                                        .filter(u => user?.role?.toLowerCase() === 'admin' || String(u.id) === String(user.id))
+                                        .filter(u => isAdminOrEA || String(u.id) === String(user.id))
                                         .filter(u => (u.full_name || u.username)?.toLowerCase().includes(masterSearch.toLowerCase()) || String(u.id).toLowerCase().includes(masterSearch.toLowerCase()))
                                         .map(u => {
                                             const monthAtt = masterData?.attendance.filter(a => String(a.userId) === String(u.id)) || [];
@@ -1575,81 +1251,6 @@ export default function AttendancePage() {
                 </div>
             )}
 
-            {/* Leave Detail Modal */}
-            {selectedLeave && (
-                <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-md flex items-center justify-center p-4">
-                     <div className="bg-[#FCF9F0] dark:bg-slate-800 rounded-[28px] w-full max-w-4xl max-h-[85vh] overflow-hidden flex flex-col shadow-2xl border border-white/10 animate-in zoom-in duration-200">
-                        <div className="p-4 border-b border-white/10 flex justify-between items-center bg-[#003875]/5">
-                             <h4 className="font-black text-sm uppercase tracking-widest text-[#003875] dark:text-[#FFD500]">Lifecycle Detail: {selectedLeave.id}</h4>
-                             <button onClick={() => setSelectedLeave(null)} className="text-gray-400 hover:text-black dark:hover:text-white text-xl font-black flex items-center justify-center w-8 h-8 rounded-full hover:bg-black/5">&times;</button>
-                        </div>
-                        <div className="flex-1 overflow-y-auto p-5 grid grid-cols-1 md:grid-cols-2 gap-5">
-                             <div className="space-y-4">
-                                <div className="p-5 bg-[#003875] rounded-[20px] text-white shadow-xl">
-                                    <div className="text-[9px] font-black uppercase opacity-60 mb-1">Request Origin</div>
-                                    <div className="text-xl font-black tracking-tighter mb-3">{selectedLeave.userName}</div>
-                                    <div className="flex gap-4">
-                                        <div>
-                                            <div className="text-[8px] font-black uppercase opacity-60">From</div>
-                                            <div className="text-xs font-bold">{formatDateIST(selectedLeave.startDate)}</div>
-                                        </div>
-                                        <div className="w-0.5 h-6 bg-white/20"></div>
-                                        <div>
-                                            <div className="text-[8px] font-black uppercase opacity-60">To</div>
-                                            <div className="text-xs font-bold">{formatDateIST(selectedLeave.endDate)}</div>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div className="p-5 bg-gray-50 dark:bg-slate-900 rounded-[20px] border border-white/5">
-                                    <div className="text-[9px] font-black uppercase text-gray-400 mb-1">Internal Reason</div>
-                                    <p className="text-xs font-medium italic">"{selectedLeave.reason}"</p>
-                                </div>
-                             </div>
-
-                             <div className="flex flex-col h-full space-y-3">
-                                <div className="flex-1 bg-gray-50 dark:bg-slate-900 rounded-[20px] p-5 border border-white/5 overflow-y-auto space-y-3 max-h-[300px]">
-                                    <div className="text-[9px] font-black uppercase text-gray-400 mb-2">Discussion Trail</div>
-                                    {remarks.map(r => (
-                                        <div key={r.id} className={`p-3 rounded-2xl text-[10px] ${r.userName === user.username ? 'bg-[#003875] text-white ml-6 shadow-md' : 'bg-white dark:bg-slate-800 mr-6'} border border-white/5`}>
-                                            <div className="font-black mb-1 flex justify-between items-center opacity-60">
-                                                <span>{r.userName}</span>
-                                                <span className="text-[7px]">{formatTimeIST(r.createdAt)}</span>
-                                            </div>
-                                            {r.comment}
-                                        </div>
-                                    ))}
-                                </div>
-                                <div className="flex gap-2 p-1.5 bg-white dark:bg-slate-800 rounded-[16px] border border-white/10 shadow-sm shrink-0">
-                                    <input 
-                                        className="flex-1 px-3 py-1.5 bg-transparent outline-none text-[10px] font-bold"
-                                        placeholder="Add comment..."
-                                        value={newRemark}
-                                        onChange={e => setNewRemark(e.target.value)}
-                                        onKeyDown={e => e.key === 'Enter' && handleAddRemark()}
-                                    />
-                                    <button onClick={handleAddRemark} className="p-2.5 bg-[#003875] dark:bg-[#FFD500] text-white dark:text-black rounded-xl active:scale-95 transition-transform">
-                                        <CommentBtnIcon className="w-4 h-4" />
-                                    </button>
-                                </div>
-                             </div>
-                        </div>
-
-                        {/* Sticky Action Footer */}
-                        <div className="p-4 border-t border-gray-100 dark:border-white/5 bg-gray-50/50 dark:bg-slate-900/50 flex gap-4 shrink-0">
-                            {user?.role?.toLowerCase() === 'admin' && selectedLeave.status === 'Pending' ? (
-                                <>
-                                    <button onClick={() => handleStatusUpdate('Approved')} className="flex-1 py-3 bg-green-500 hover:bg-green-600 text-white rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg shadow-green-500/20 transition-all">Authorize</button>
-                                    <button onClick={() => handleStatusUpdate('Rejected')} className="flex-1 py-3 bg-red-500 hover:bg-red-600 text-white rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg shadow-red-500/20 transition-all">Decline</button>
-                                </>
-                            ) : (
-                                <div className={`flex-1 py-3 text-center rounded-xl font-black text-[10px] uppercase tracking-widest ${selectedLeave.status === 'Approved' ? 'bg-green-500/10 text-green-600 border border-green-500/20' : selectedLeave.status === 'Rejected' ? 'bg-red-500/10 text-red-600 border border-red-500/20' : 'bg-amber-400/10 text-amber-500 border border-amber-400/20'}`}>
-                                    Status: {selectedLeave.status}
-                                </div>
-                            )}
-                        </div>
-                     </div>
-                </div>
-            )}
             {/* Camera Modal */}
             {showCameraMode && (
                 <div className="fixed inset-0 z-[200] bg-black/80 backdrop-blur-sm flex flex-col items-center justify-center p-4">
@@ -1680,15 +1281,6 @@ export default function AttendancePage() {
                 </div>
             )}
 
-            <ConfirmModal 
-                isOpen={isConfirmOpen}
-                onClose={() => setIsConfirmOpen(false)}
-                onConfirm={confirmDelete}
-                title="Delete Leave Request"
-                message="Are you sure you want to delete this leave request? This action will also remove all associated remarks and cannot be undone."
-                confirmLabel="Delete Request"
-                type="danger"
-            />
         </div>
     );
 }

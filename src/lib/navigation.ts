@@ -36,6 +36,7 @@ export const navigation = [
   // HRMS Section
   { name: 'Users', id: 'users', href: '/users', icon: UsersIcon, section: 'HRMS' },
   { name: 'Attendance', id: 'attendance', href: '/attendance', icon: ClipboardDocumentListIcon, section: 'HRMS' },
+  { name: 'Leave', id: 'leave', href: '/leave', icon: CalendarIcon, section: 'HRMS' },
   { name: 'Recruitment', id: 'hrms', href: '/hrms/recruitment', icon: BriefcaseIcon, section: 'HRMS' },
   { name: 'Candidate', id: 'hrms', href: '/hrms/candidate', icon: UserGroupIcon, section: 'HRMS' },
   { name: 'Sales HR', id: 'hrms', href: '/hrms/sales', icon: CurrencyDollarIcon, section: 'HRMS' },

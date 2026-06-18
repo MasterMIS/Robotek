@@ -1080,6 +1080,7 @@ export default function UsersPage() {
                     <option value="GTK">GTK</option>
                     <option value="Kundli">Kundli</option>
                     <option value="KB">KB</option>
+                    <option value="Shalimar Bagh">Shalimar Bagh</option>
                   </select>
                 </div>
 

@@ -8,6 +8,8 @@ export interface LeaveRequest {
   id: string;
   userId: string;
   userName: string;
+  leaveType: string;          // "Full Day" | "Half Day"
+  halfDaySession: string;     // "First Half" | "Second Half" (only when Half Day)
   startDate: string;
   endDate: string;
   reason: string;
@@ -15,7 +17,18 @@ export interface LeaveRequest {
   responsibility1: string;
   responsibility2: string;
   responsibility3: string;
+  tasks1: string;             // tasks for responsibility1 person
+  tasks2: string;             // tasks for responsibility2 person
+  tasks3: string;             // tasks for responsibility3 person
+  sharedTask: string;         // common task shared with whoever accepts
   acceptedBy: string;
+  acceptedBy1?: string;
+  acceptedAt1?: string;
+  acceptedBy2?: string;
+  acceptedAt2?: string;
+  acceptedBy3?: string;
+  acceptedAt3?: string;
+  createdAt?: string;
   updatedAt: string;
 }
 
@@ -30,7 +43,7 @@ export interface LeaveRemark {
 class LeaveRequestService extends BaseSheetsService<LeaveRequest> {
   protected spreadsheetId = GOOGLE_SHEET_ID;
   protected sheetName = LEAVE_SHEET;
-  protected range = "A:L";
+  protected range = "A:Z";
   protected idColumnIndex = 0;
 
   mapRowToItem(row: any[]): LeaveRequest {
@@ -39,6 +52,8 @@ class LeaveRequestService extends BaseSheetsService<LeaveRequest> {
       id: get("id"),
       userId: get("userId"),
       userName: get("userName"),
+      leaveType: get("leaveType") || "Full Day",
+      halfDaySession: get("halfDaySession") || "",
       startDate: get("startDate"),
       endDate: get("endDate"),
       reason: get("reason"),
@@ -46,7 +61,18 @@ class LeaveRequestService extends BaseSheetsService<LeaveRequest> {
       responsibility1: get("responsibility1"),
       responsibility2: get("responsibility2"),
       responsibility3: get("responsibility3"),
+      tasks1: get("tasks1"),
+      tasks2: get("tasks2"),
+      tasks3: get("tasks3"),
+      sharedTask: get("sharedTask") || "",
       acceptedBy: get("acceptedBy"),
+      acceptedBy1: get("acceptedBy1"),
+      acceptedAt1: get("acceptedAt1"),
+      acceptedBy2: get("acceptedBy2"),
+      acceptedAt2: get("acceptedAt2"),
+      acceptedBy3: get("acceptedBy3"),
+      acceptedAt3: get("acceptedAt3"),
+      createdAt: get("createdAt"),
       updatedAt: get("updatedAt"),
     };
   }
@@ -60,6 +86,8 @@ class LeaveRequestService extends BaseSheetsService<LeaveRequest> {
     set("id", item.id);
     set("userId", item.userId);
     set("userName", item.userName);
+    set("leaveType", item.leaveType || "Full Day");
+    set("halfDaySession", item.halfDaySession || "");
     set("startDate", item.startDate);
     set("endDate", item.endDate);
     set("reason", item.reason);
@@ -67,8 +95,19 @@ class LeaveRequestService extends BaseSheetsService<LeaveRequest> {
     set("responsibility1", item.responsibility1);
     set("responsibility2", item.responsibility2);
     set("responsibility3", item.responsibility3);
-    set("acceptedBy", item.acceptedBy);
-    set("updatedAt", item.updatedAt);
+    set("tasks1", item.tasks1 || "");
+    set("tasks2", item.tasks2 || "");
+    set("tasks3", item.tasks3 || "");
+    set("sharedTask", item.sharedTask || "");
+    set("acceptedBy", item.acceptedBy || "");
+    set("acceptedBy1", (item as any).acceptedBy1 || "");
+    set("acceptedAt1", (item as any).acceptedAt1 || "");
+    set("acceptedBy2", (item as any).acceptedBy2 || "");
+    set("acceptedAt2", (item as any).acceptedAt2 || "");
+    set("acceptedBy3", (item as any).acceptedBy3 || "");
+    set("acceptedAt3", (item as any).acceptedAt3 || "");
+    set("createdAt", (item as any).createdAt || "");
+    set("updatedAt", item.updatedAt || "");
 
     const maxIdx = Math.max(...Object.values(this.hMap), 0);
     for (let i = 0; i <= maxIdx; i++) {

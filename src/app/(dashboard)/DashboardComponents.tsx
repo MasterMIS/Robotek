@@ -480,7 +480,7 @@ export function UpcomingMeetingsPanel({ meetings, teamMembers }: { meetings: any
 
 export function CompactTable({ title, icon: Icon, data, columns, linkHref }: any) {
     return (
-        <div className="bg-white dark:bg-navy-800 rounded-[2rem] border border-gray-100 dark:border-white/5 shadow-sm overflow-hidden flex flex-col h-[280px]">
+      <div className="bg-white dark:bg-navy-800 rounded-[2rem] border border-gray-100 dark:border-white/5 shadow-lg overflow-hidden flex flex-col h-[340px]">
             <div className="p-4 border-b border-gray-50 dark:border-white/5 flex items-center justify-between bg-gray-50/30 dark:bg-white/1">
                 <h3 className="text-[10px] font-black text-gray-900 dark:text-white uppercase tracking-widest flex items-center gap-2">
                     <Icon className="w-4 h-4 text-[#003875] dark:text-[#FFD500]" />
@@ -505,13 +505,13 @@ export function CompactTable({ title, icon: Icon, data, columns, linkHref }: any
                                 <td colSpan={columns.length} className="p-8 text-center text-[10px] font-bold text-gray-300 uppercase italic">Synchronization Pending...</td>
                             </tr>
                         ) : data.map((row: any, i: number) => (
-                            <tr key={i} className="hover:bg-gray-50 dark:hover:bg-white/1 transition-colors group">
-                                {columns.map((col: any, j: number) => (
-                                    <td key={j} className={`p-3 text-[10px] font-bold text-gray-700 dark:text-gray-300 ${col.className}`}>
-                                        {col.render ? col.render(row) : row[col.key]}
-                                    </td>
-                                ))}
-                            </tr>
+                          <tr key={i} className="hover:bg-gray-50 dark:hover:bg-white/1 transition-colors group">
+                            {columns.map((col: any, j: number) => (
+                              <td key={j} className={`p-4 align-top text-[10px] font-bold text-gray-700 dark:text-gray-300 whitespace-normal ${col.className}`}>
+                                {col.render ? col.render(row) : row[col.key]}
+                              </td>
+                            ))}
+                          </tr>
                         ))}
                     </tbody>
                 </table>

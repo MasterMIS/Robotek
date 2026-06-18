@@ -109,7 +109,7 @@ export default function Dashboard() {
            <StatusTile label="On Leave" value={data?.summary?.onLeave || 0} icon={UserMinusIcon} color="text-amber-600 dark:text-amber-400" bg="bg-amber-50 dark:bg-amber-900/30" />
            
            <QuickActionSquare label="New Ticket" href="/tickets?action=new" icon={PlusIcon} color="bg-[#003875] dark:bg-[#FFD500] dark:text-[#003875]" />
-           <QuickActionSquare label="Apply Leave" href="/attendance?tab=LEAVE" icon={CalendarIcon} color="bg-rose-500" />
+           <QuickActionSquare label="Apply Leave" href="/leave?open=apply" icon={CalendarIcon} color="bg-rose-500" />
            <QuickActionSquare label="Attendance" href="/attendance" icon={ClockIcon} color="bg-emerald-500" />
         </div>
 
@@ -175,8 +175,8 @@ export default function Dashboard() {
         <CompactTable 
             title="Team Absence Power"
             icon={UserMinusIcon}
-            data={data?.recentLeaves || []}
-            linkHref="/attendance?tab=LEAVE"
+          data={(data?.recentLeaves || []).filter((l: any) => (l.status || '').toLowerCase() === 'pending')}
+            linkHref="/leave"
             columns={[
                 { label: 'User/Reason', key: 'userName', render: (row: any) => (
                     <div className="flex flex-col">
@@ -184,6 +184,9 @@ export default function Dashboard() {
                         <span className="text-[9px] text-gray-400 font-bold uppercase tracking-widest mt-0.5">{new Date(row.startDate).toLocaleDateString()}</span>
                     </div>
                 )},
+                      { label: 'Involved', key: 'involved', render: (row: any) => (
+                        <div className="text-[11px] text-gray-600">{(row.involved || []).join(', ')}</div>
+                      )},
                 { label: 'Status', key: 'status', className: 'text-right', render: (row: any) => (
                     <span className={`px-2 py-0.5 rounded-full text-[9px] uppercase ${
                         row.status === 'Approved' ? 'bg-emerald-500/10 text-emerald-500 font-black' : 

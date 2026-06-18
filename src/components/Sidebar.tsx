@@ -23,6 +23,7 @@ export default function Sidebar({ mobileOpen, setMobileOpen }: SidebarProps) {
   const [ticketsOpenCount, setTicketsOpenCount] = useState(0);
   const [o2dPendingCount, setO2dPendingCount] = useState(0);
   const [chatUnreadCount, setChatUnreadCount] = useState(0);
+  const [leavePendingCount, setLeavePendingCount] = useState(0);
   
   const [recruitmentPendingCount, setRecruitmentPendingCount] = useState(0);
   const [candidatePendingCount, setCandidatePendingCount] = useState(0);
@@ -49,13 +50,14 @@ export default function Sidebar({ mobileOpen, setMobileOpen }: SidebarProps) {
           return null;
         };
 
-        const [delData, checkData, tickData, o2dSummary, chatData, hrmsSummary] = await Promise.all([
+        const [delData, checkData, tickData, o2dSummary, chatData, hrmsSummary, recentLeaves] = await Promise.all([
           safeFetch('/api/delegations'),
           safeFetch('/api/checklists'),
           safeFetch('/api/tickets'),
           safeFetch('/api/o2d/summary'),   // lightweight — just aggregate counts, not all rows
           safeFetch('/api/chat/users'),
           safeFetch('/api/hrms/summary')
+          , safeFetch('/api/dashboard')
         ]);
         
         // Filter for USER role
@@ -106,6 +108,16 @@ export default function Sidebar({ mobileOpen, setMobileOpen }: SidebarProps) {
         const totalPending = stepCounts.slice(0, 11).reduce((sum: number, c: number) => sum + (c || 0), 0);
         setO2dPendingCount(totalPending);
 
+        // Pending leave count for sidebar badge (only show pending leaves)
+        try {
+          const dash = recentLeaves || (await safeFetch('/api/dashboard')) || {};
+          const leavesArr = dash?.recentLeaves || [];
+          const pendingCount = leavesArr.filter((l: any) => (l.status || '').toLowerCase() === 'pending').length;
+          setLeavePendingCount(pendingCount);
+        } catch (e) {
+          // ignore
+        }
+
         // Chat Logic
         const totalUnreadChat = Array.isArray(chatData) ? chatData.reduce((acc, user) => acc + (user.unreadCount || 0), 0) : 0;
         setChatUnreadCount(totalUnreadChat);
@@ -138,7 +150,7 @@ export default function Sidebar({ mobileOpen, setMobileOpen }: SidebarProps) {
 
   const filteredNavigation = navigation.filter(item => {
     // Dashboard is the system home, visible to all authenticated users, Chat is available to all, Scheduler set to visible
-    if (item.id === 'dashboard' || item.id === 'chat' || item.id === 'scheduler' || item.id === 'grn' || item.id === 'field-driver' || item.id === 'stationary') return true;
+    if (item.id === 'dashboard' || item.id === 'chat' || item.id === 'scheduler' || item.id === 'grn' || item.id === 'field-driver' || item.id === 'stationary' || item.id === 'attendance' || item.id === 'leave') return true;
 
     // If matrix permissions exist, use them strictly
     if (userPermissions.length > 0) {
@@ -252,6 +264,11 @@ export default function Sidebar({ mobileOpen, setMobileOpen }: SidebarProps) {
                         {item.id === 'chat' && chatUnreadCount > 0 && (
                           <span className={`transition-all duration-300 ${mobileOpen ? 'opacity-100' : 'opacity-0 md:group-hover:opacity-100'} bg-[#CE2029] text-white text-xs font-black px-2.5 py-0.5 rounded-full shadow-sm`}>
                             {chatUnreadCount}
+                          </span>
+                        )}
+                        {item.id === 'leave' && leavePendingCount > 0 && (
+                          <span className={`transition-all duration-300 ${mobileOpen ? 'opacity-100' : 'opacity-0 md:group-hover:opacity-100'} bg-[#CE2029] text-white text-xs font-black px-2.5 py-0.5 rounded-full shadow-sm`}>
+                            {leavePendingCount}
                           </span>
                         )}
                         {item.href === '/hrms/recruitment' && recruitmentPendingCount > 0 && (

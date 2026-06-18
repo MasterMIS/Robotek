@@ -13,8 +13,10 @@ export default function RechargePage() {
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
+  const [isQuickRecharge, setIsQuickRecharge] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
 
   // Filter & Search State
   const [activeFilter, setActiveFilter] = useState<"ALL" | "OVERDUE" | "TODAY" | "TOMORROW" | "DAY_AFTER" | "DISCONTINUED">("ALL");
@@ -92,6 +94,7 @@ export default function RechargePage() {
       attach_bill: "",
       type: "Recharge",
     });
+    setPendingFile(null);
     setIsEditing(false);
     setShowModal(true);
   };
@@ -109,32 +112,38 @@ export default function RechargePage() {
       attach_bill: item.attach_bill,
       type: (item.type === "Remove from Recharge" ? "Discontinued" : item.type) || "Recharge",
     });
+    setPendingFile(null);
     setIsEditing(true);
+    setIsQuickRecharge(false);
     setShowModal(true);
   };
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const openQuickRechargeModal = (item: any) => {
+    setFormData({
+      id: "",
+      timestamp: "",
+      filled_by: currentUser,
+      doer_wifi_name: item.doer_wifi_name,
+      phone_wifi_num: item.phone_wifi_num,
+      date_of_recharge: new Date().toISOString().split("T")[0],
+      validity: item.validity || "30",
+      amount: item.amount || "",
+      attach_bill: "",
+      type: "Recharge",
+    });
+    setPendingFile(null);
+    setIsEditing(false);
+    setIsQuickRecharge(true);
+    setShowModal(true);
+  };
+
+  // Only store the selected file locally — actual upload happens on Save
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
-    setUploading(true);
-    const fd = new FormData();
-    fd.append("file", file);
-
-    try {
-      const res = await fetch("/api/recharge/upload", {
-        method: "POST",
-        body: fd,
-      });
-      const data = await res.json();
-      if (data.fileId) {
-        setFormData({ ...formData, attach_bill: data.fileId });
-      }
-    } catch (error) {
-      console.error("Upload failed", error);
-      alert("Failed to upload bill.");
-    }
-    setUploading(false);
+    setPendingFile(file);
+    // Clear any previously saved bill ID so it gets replaced on submit
+    setFormData(prev => ({ ...prev, attach_bill: "" }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -144,9 +153,41 @@ export default function RechargePage() {
     const endpoint = "/api/recharge";
     const method = isEditing ? "PUT" : "POST";
 
+    let attachBillId = formData.attach_bill;
+
+    // Upload pending file now (on Save), not on file select
+    if (pendingFile) {
+      setUploading(true);
+      try {
+        const fd = new FormData();
+        fd.append("file", pendingFile);
+        const uploadRes = await fetch("/api/recharge/upload", {
+          method: "POST",
+          body: fd,
+        });
+        const uploadData = await uploadRes.json();
+        if (uploadData.fileId) {
+          attachBillId = uploadData.fileId;
+        } else {
+          alert("Failed to upload bill. Please try again.");
+          setSubmitting(false);
+          setUploading(false);
+          return;
+        }
+      } catch (error) {
+        console.error("Upload failed", error);
+        alert("Failed to upload bill.");
+        setSubmitting(false);
+        setUploading(false);
+        return;
+      }
+      setUploading(false);
+    }
+
     const payload = {
       ...formData,
-      type: formData.type === "Discontinued" ? "Remove from Recharge" : formData.type, // Map it back if backend expects it
+      attach_bill: attachBillId,
+      type: formData.type === "Discontinued" ? "Remove from Recharge" : formData.type,
     };
 
     try {
@@ -157,6 +198,7 @@ export default function RechargePage() {
       });
 
       if (res.ok) {
+        setPendingFile(null);
         setShowModal(false);
         fetchRecharges();
       } else {
@@ -232,11 +274,22 @@ export default function RechargePage() {
 
   const getExpiryDate = (rDateStr: string, validity: string) => {
     if (!rDateStr || !validity) return null;
-    const rDate = new Date(rDateStr);
-    if (isNaN(rDate.getTime())) return null;
+    // Parse the date parts manually to avoid UTC vs local timezone issues
+    const parts = rDateStr.split("-");
+    if (parts.length < 3) {
+      const rDate = new Date(rDateStr);
+      if (isNaN(rDate.getTime())) return null;
+      const validityDays = parseInt(validity) || 0;
+      const expiryDate = new Date(rDate.getFullYear(), rDate.getMonth(), rDate.getDate() + validityDays);
+      return expiryDate;
+    }
+    const year = parseInt(parts[0]);
+    const month = parseInt(parts[1]) - 1; // 0-indexed
+    const day = parseInt(parts[2]);
+    if (isNaN(year) || isNaN(month) || isNaN(day)) return null;
     const validityDays = parseInt(validity) || 0;
-    const expiryDate = new Date(rDate);
-    expiryDate.setDate(rDate.getDate() + validityDays);
+    // Create expiry date in local time (midnight) to avoid timezone offset
+    const expiryDate = new Date(year, month, day + validityDays);
     return expiryDate;
   };
 
@@ -354,7 +407,7 @@ export default function RechargePage() {
     const expiryDate = getExpiryDate(item.date_of_recharge, item.validity);
     if (!expiryDate) return false;
     const diffTime = expiryDate.getTime() - today.getTime();
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
     return diffDays < 0;
   }).length;
 
@@ -362,7 +415,7 @@ export default function RechargePage() {
     const expiryDate = getExpiryDate(item.date_of_recharge, item.validity);
     if (!expiryDate) return false;
     const diffTime = expiryDate.getTime() - today.getTime();
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
     return diffDays === 0;
   }).length;
 
@@ -370,7 +423,7 @@ export default function RechargePage() {
     const expiryDate = getExpiryDate(item.date_of_recharge, item.validity);
     if (!expiryDate) return false;
     const diffTime = expiryDate.getTime() - today.getTime();
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
     return diffDays === 1;
   }).length;
 
@@ -378,7 +431,7 @@ export default function RechargePage() {
     const expiryDate = getExpiryDate(item.date_of_recharge, item.validity);
     if (!expiryDate) return false;
     const diffTime = expiryDate.getTime() - today.getTime();
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
     return diffDays === 2;
   }).length;
 
@@ -424,7 +477,7 @@ export default function RechargePage() {
     if (!expiryDate) return false;
     
     const diffTime = expiryDate.getTime() - today.getTime();
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
 
     if (activeFilter === "OVERDUE") return diffDays < 0;
     if (activeFilter === "TODAY") return diffDays === 0;
@@ -613,7 +666,7 @@ export default function RechargePage() {
                   iconColor = "text-gray-400 bg-gray-100 dark:bg-gray-800";
                 } else if (expiryDate) {
                   const diffTime = expiryDate.getTime() - today.getTime();
-                  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                  const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
                   if (diffDays <= 0) iconColor = "text-rose-500 bg-rose-50 dark:bg-rose-500/10";
                   else if (diffDays === 1) iconColor = "text-amber-500 bg-amber-50 dark:bg-amber-500/10";
                   else if (diffDays === 2) iconColor = "text-emerald-500 bg-emerald-50 dark:bg-emerald-500/10"; // Fine for now
@@ -685,7 +738,12 @@ export default function RechargePage() {
                     </div>
 
                     {/* Actions */}
-                    <div className="flex items-center justify-end gap-3 min-w-[120px] border-l-2 border-gray-100 dark:border-white/5 pl-6 shrink-0">
+                    <div className="flex items-center justify-end gap-3 min-w-[180px] border-l-2 border-gray-100 dark:border-white/5 pl-6 shrink-0">
+                      {!isDiscontinued && (
+                        <button onClick={() => openQuickRechargeModal(r)} title="Quick Recharge" className="p-2 bg-[#007AFF]/10 text-[#007AFF] hover:bg-[#007AFF]/20 dark:text-[#0A84FF] dark:hover:bg-[#0A84FF]/20 rounded-lg transition-colors">
+                          <BoltIcon className="w-4 h-4" />
+                        </button>
+                      )}
                       {r.attach_bill && (
                         <a href={`/api/drive-proxy?id=${r.attach_bill}`} target="_blank" rel="noreferrer" className="p-2 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 dark:bg-indigo-500/10 dark:text-indigo-400 rounded-lg transition-colors" title="View Bill">
                           <EyeIcon className="w-4 h-4" />
@@ -766,100 +824,139 @@ export default function RechargePage() {
 
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="bg-white dark:bg-navy-900 w-full max-w-xl rounded-2xl shadow-2xl border border-gray-100 dark:border-white/10 overflow-hidden flex flex-col max-h-[90vh]">
-            <div className="p-4 bg-[#003875] dark:bg-[#111827] border-b border-white/10 flex justify-between items-center shrink-0">
-               <h2 className="text-sm font-black text-[#FFD500] uppercase tracking-widest">{isEditing ? "Edit Record" : "New Recharge"}</h2>
-               <button onClick={() => setShowModal(false)} className="text-white/70 hover:text-white transition-colors">
-                 <XMarkIcon className="w-5 h-5" />
-               </button>
-            </div>
-            
-            <form onSubmit={handleSubmit} className="p-5 overflow-auto custom-scrollbar flex-1 space-y-4">
-              
-              <div className="flex gap-2 p-1 bg-gray-100 dark:bg-[#0a0f1c] rounded-xl">
-                <button
-                  type="button"
-                  onClick={() => setFormData({...formData, type: "Recharge"})}
-                  className={`flex-1 py-2 px-3 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
-                    formData.type === "Recharge" 
-                      ? "bg-white dark:bg-navy-800 text-[#003875] dark:text-[#FFD500] shadow-sm border border-gray-200 dark:border-white/5" 
-                      : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
-                  }`}
-                >
-                  Recharge
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setFormData({...formData, type: "Discontinued"})}
-                  className={`flex-1 py-2 px-3 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
-                    formData.type === "Discontinued"
-                      ? "bg-white dark:bg-navy-800 text-rose-500 shadow-sm border border-gray-200 dark:border-white/5" 
-                      : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
-                  }`}
-                >
-                  Discontinued
-                </button>
+          <div className="bg-white/95 dark:bg-[#1C1C1E]/95 backdrop-blur-xl w-full max-w-xl rounded-3xl shadow-2xl border border-gray-200/50 dark:border-white/10 overflow-hidden flex flex-col max-h-[90vh]">
+            {/* Header */}
+            <div className={`p-5 flex items-center justify-between shrink-0 ${isQuickRecharge ? 'bg-emerald-500' : 'bg-[#007AFF]'}`}>
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-white/20 rounded-2xl">
+                  {isQuickRecharge ? (
+                    <BoltIcon className="w-4 h-4 text-white" />
+                  ) : (
+                    <BoltIcon className="w-4 h-4 text-white" />
+                  )}
+                </div>
+                <div>
+                  <h2 className="text-sm font-black text-white tracking-wide leading-none">
+                    {isQuickRecharge ? "Quick Recharge" : isEditing ? "Edit Record" : "New Recharge"}
+                  </h2>
+                  <p className="text-[10px] font-semibold text-white/70 mt-0.5 uppercase tracking-wider">
+                    {isQuickRecharge ? "Add quick recharge for this connection" : isEditing ? "Update connection details" : "Add new connection"}
+                  </p>
+                </div>
               </div>
+              <button
+                onClick={() => setShowModal(false)}
+                className="p-2 bg-white/10 hover:bg-white/20 rounded-2xl transition-colors"
+              >
+                <XMarkIcon className="w-4 h-4 text-white" />
+              </button>
+            </div>
+            <form onSubmit={handleSubmit} className="p-5 overflow-auto custom-scrollbar flex-1 space-y-5">
+
+              {isQuickRecharge && (
+                <div className="bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/30 rounded-2xl p-4">
+                  <p className="text-[11px] font-bold text-emerald-700 dark:text-emerald-300 uppercase tracking-wide">
+                    ✓ Connection Details (Read-Only)
+                  </p>
+                </div>
+              )}
+
+              {/* Type Toggle - Hide in quick recharge */}
+              {!isQuickRecharge && (
+                <div className="flex gap-2 p-1 bg-gray-100 dark:bg-black/30 rounded-2xl">
+                  <button
+                    type="button"
+                    onClick={() => setFormData({...formData, type: "Recharge"})}
+                    className={`flex-1 py-2.5 px-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                      formData.type === "Recharge"
+                        ? "bg-[#007AFF] text-white shadow-md shadow-[#007AFF]/30"
+                        : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
+                    }`}
+                  >
+                    ⚡ Recharge
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFormData({...formData, type: "Discontinued"})}
+                    className={`flex-1 py-2.5 px-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                      formData.type === "Discontinued"
+                        ? "bg-[#FF3B30] text-white shadow-md shadow-[#FF3B30]/30"
+                        : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
+                    }`}
+                  >
+                    ✕ Discontinued
+                  </button>
+                </div>
+              )}
 
               <div className="grid grid-cols-2 gap-4">
+                {/* Doer / WiFi Name */}
                 <div className="col-span-2 md:col-span-1">
-                  <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1.5">Doer / WiFi Name</label>
+                  <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-1.5">Doer / WiFi Name</label>
                   <input
                     required
-                    list="doers-list"
+                    disabled={isQuickRecharge}
+                    list={!isQuickRecharge ? "doers-list" : undefined}
                     value={formData.doer_wifi_name}
                     onChange={e => setFormData({...formData, doer_wifi_name: e.target.value})}
-                    className="w-full bg-gray-50 dark:bg-[#111827] border border-gray-200 dark:border-white/10 rounded-lg p-2.5 text-xs font-bold text-gray-900 dark:text-white focus:ring-2 focus:ring-[#003875] dark:focus:ring-[#FFD500] focus:border-transparent outline-none transition-all uppercase"
+                    className={`w-full bg-gray-50 dark:bg-black/30 border border-gray-200 dark:border-white/10 rounded-2xl px-4 py-2.5 text-xs font-bold text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-[#007AFF] focus:border-transparent outline-none transition-all uppercase ${isQuickRecharge ? 'opacity-70 cursor-not-allowed' : ''}`}
                     placeholder="Enter or Select Name"
                   />
-                  <datalist id="doers-list">
-                    {uniqueDoers.map((d, idx) => (
-                      <option key={idx} value={d.name} />
-                    ))}
-                  </datalist>
+                  {!isQuickRecharge && (
+                    <datalist id="doers-list">
+                      {uniqueDoers.map((d, idx) => (
+                        <option key={idx} value={d.name} />
+                      ))}
+                    </datalist>
+                  )}
                 </div>
-                
+
+                {/* Phone / WiFi Number */}
                 <div className="col-span-2 md:col-span-1">
-                  <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1.5">Phone / WiFi Number</label>
+                  <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-1.5">Phone / WiFi Number</label>
                   <input
                     required
+                    disabled={isQuickRecharge}
                     type="text"
                     value={formData.phone_wifi_num}
                     onChange={e => setFormData({...formData, phone_wifi_num: e.target.value})}
-                    className="w-full bg-gray-50 dark:bg-[#111827] border border-gray-200 dark:border-white/10 rounded-lg p-2.5 text-xs font-bold text-gray-900 dark:text-white focus:ring-2 focus:ring-[#003875] dark:focus:ring-[#FFD500] focus:border-transparent outline-none transition-all"
+                    className={`w-full bg-gray-50 dark:bg-black/30 border border-gray-200 dark:border-white/10 rounded-2xl px-4 py-2.5 text-xs font-bold text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-[#007AFF] focus:border-transparent outline-none transition-all ${isQuickRecharge ? 'opacity-70 cursor-not-allowed' : ''}`}
                     placeholder="Enter Number"
                   />
                 </div>
 
+                {/* Date of Recharge */}
                 <div className="col-span-2 md:col-span-1">
-                  <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1.5">Date of Recharge</label>
+                  <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-1.5">Date of Recharge</label>
                   <input
                     required
                     type="date"
                     value={formData.date_of_recharge}
                     onChange={e => setFormData({...formData, date_of_recharge: e.target.value})}
-                    className="w-full bg-gray-50 dark:bg-[#111827] border border-gray-200 dark:border-white/10 rounded-lg p-2.5 text-xs font-bold text-gray-900 dark:text-white focus:ring-2 focus:ring-[#003875] dark:focus:ring-[#FFD500] focus:border-transparent outline-none transition-all"
+                    className="w-full bg-gray-50 dark:bg-black/30 border border-gray-200 dark:border-white/10 rounded-2xl px-4 py-2.5 text-xs font-bold text-gray-900 dark:text-white focus:ring-2 focus:ring-[#007AFF] focus:border-transparent outline-none transition-all"
                   />
                 </div>
 
+                {/* Validity */}
                 <div className="col-span-2 md:col-span-1">
-                  <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1.5">Validity (Days)</label>
+                  <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-1.5">Validity (Days)</label>
                   <input
                     required
                     type="number"
                     min="1"
                     value={formData.validity}
                     onChange={e => setFormData({...formData, validity: e.target.value})}
-                    className="w-full bg-gray-50 dark:bg-[#111827] border border-gray-200 dark:border-white/10 rounded-lg p-2.5 text-xs font-bold text-gray-900 dark:text-white focus:ring-2 focus:ring-[#003875] dark:focus:ring-[#FFD500] focus:border-transparent outline-none transition-all"
+                    className="w-full bg-gray-50 dark:bg-black/30 border border-gray-200 dark:border-white/10 rounded-2xl px-4 py-2.5 text-xs font-bold text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-[#007AFF] focus:border-transparent outline-none transition-all"
                     placeholder="e.g. 30"
                   />
                 </div>
 
+                {/* Amount */}
                 <div className="col-span-2 md:col-span-1">
-                  <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1.5">Amount</label>
+                  <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-1.5">Amount</label>
                   <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <span className="text-gray-500 font-bold text-xs">₹</span>
+                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                      <span className="text-[#007AFF] font-black text-sm">₹</span>
                     </div>
                     <input
                       required
@@ -867,45 +964,67 @@ export default function RechargePage() {
                       step="0.01"
                       value={formData.amount}
                       onChange={e => setFormData({...formData, amount: e.target.value})}
-                      className="w-full bg-gray-50 dark:bg-[#111827] border border-gray-200 dark:border-white/10 rounded-lg p-2.5 pl-7 text-xs font-bold text-gray-900 dark:text-white focus:ring-2 focus:ring-[#003875] dark:focus:ring-[#FFD500] focus:border-transparent outline-none transition-all"
+                      className="w-full bg-gray-50 dark:bg-black/30 border border-gray-200 dark:border-white/10 rounded-2xl px-4 py-2.5 pl-9 text-xs font-bold text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-[#007AFF] focus:border-transparent outline-none transition-all"
                       placeholder="0.00"
                     />
                   </div>
                 </div>
 
+                {/* Attach Bill */}
                 <div className="col-span-2 md:col-span-1">
-                  <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1.5">Attach Bill</label>
+                  <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-1.5">Attach Bill</label>
                   <div className="flex items-center gap-2">
-                    <label className={`flex-1 flex items-center justify-center gap-1 border border-dashed border-gray-300 dark:border-white/20 rounded-lg p-2.5 cursor-pointer hover:border-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-500/10 transition-colors ${uploading ? 'opacity-50 pointer-events-none' : ''}`}>
-                       <DocumentArrowUpIcon className="w-4 h-4 text-gray-400" />
-                       <span className="text-[10px] font-bold text-gray-500 uppercase">{uploading ? 'Uploading...' : 'Choose File'}</span>
-                       <input type="file" className="hidden" onChange={handleFileUpload} />
+                    <label className="flex-1 flex items-center justify-center gap-2 border-2 border-dashed border-gray-200 dark:border-white/10 rounded-2xl p-2.5 cursor-pointer hover:border-[#007AFF] hover:bg-[#007AFF]/5 transition-all group">
+                      <DocumentArrowUpIcon className="w-4 h-4 text-gray-400 group-hover:text-[#007AFF] transition-colors" />
+                      <span className="text-[10px] font-bold text-gray-400 group-hover:text-[#007AFF] uppercase truncate max-w-[100px] transition-colors">
+                        {pendingFile ? pendingFile.name : 'Choose File'}
+                      </span>
+                      <input type="file" className="hidden" onChange={handleFileUpload} />
                     </label>
-                    {formData.attach_bill && (
-                      <div className="w-9 h-9 bg-emerald-100 text-emerald-600 rounded-lg flex items-center justify-center shrink-0" title="Bill Attached">
-                        ✓
+                    {(pendingFile || formData.attach_bill) && (
+                      <div className={`w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 text-sm font-bold ${
+                        pendingFile
+                          ? 'bg-[#007AFF]/10 text-[#007AFF]'
+                          : 'bg-[#34C759]/10 text-[#34C759]'
+                      }`} title={pendingFile ? `Ready: ${pendingFile.name}` : 'Bill attached'}>
+                        {pendingFile ? '📎' : '✓'}
                       </div>
                     )}
                   </div>
+                  {pendingFile && (
+                    <p className="text-[9px] font-semibold text-[#007AFF] mt-1.5 pl-1">Will upload when you save ↑</p>
+                  )}
                 </div>
               </div>
 
-              <div className="pt-4 mt-2 border-t border-gray-100 dark:border-white/5 flex justify-end gap-2">
-                 <button
-                   type="button"
-                   onClick={() => setShowModal(false)}
-                   className="px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest text-gray-500 hover:bg-gray-100 dark:hover:bg-white/5 transition-colors"
-                 >
-                   Cancel
-                 </button>
-                 <button
-                   type="submit"
-                   disabled={submitting || uploading}
-                   className="bg-[#003875] dark:bg-[#FFD500] hover:brightness-110 text-white dark:text-[#003875] px-6 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest shadow-sm transition-all active:scale-95 disabled:opacity-50 disabled:pointer-events-none"
-                 >
-                   {submitting ? 'Saving...' : 'Save Record'}
-                 </button>
+              {/* Footer Buttons */}
+              <div className="pt-4 mt-1 border-t border-gray-100 dark:border-white/5 flex justify-end gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setShowModal(false)}
+                  className="px-5 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-white/5 hover:bg-gray-200 dark:hover:bg-white/10 transition-all"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submitting || uploading}
+                  className={`flex items-center gap-2 text-white px-6 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 disabled:opacity-50 disabled:pointer-events-none ${
+                    isQuickRecharge
+                      ? 'bg-emerald-500 hover:bg-emerald-600 shadow-md shadow-emerald-500/20'
+                      : 'bg-[#007AFF] hover:bg-[#005bb5] shadow-md shadow-[#007AFF]/20'
+                  }`}
+                >
+                  {(submitting || uploading) && (
+                    <svg className="animate-spin w-3 h-3" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                    </svg>
+                  )}
+                  {uploading ? 'Uploading...' : submitting ? 'Saving...' : isQuickRecharge ? 'Save Recharge' : 'Save Record'}
+                </button>
               </div>
+
             </form>
           </div>
         </div>

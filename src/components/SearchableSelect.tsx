@@ -28,6 +28,8 @@ export default function SearchableSelect({
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLDivElement>(null);
+  const [dropdownPos, setDropdownPos] = useState({ top: 0, left: 0, width: 0 });
 
   const selectedOption = options.find(opt => String(opt.id) === String(value));
 
@@ -37,7 +39,8 @@ export default function SearchableSelect({
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node) &&
+          triggerRef.current && !triggerRef.current.contains(event.target as Node)) {
         setIsOpen(false);
       }
     }
@@ -45,8 +48,19 @@ export default function SearchableSelect({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  useEffect(() => {
+    if (isOpen && triggerRef.current) {
+      const rect = triggerRef.current.getBoundingClientRect();
+      setDropdownPos({
+        top: rect.bottom + 8,
+        left: rect.left,
+        width: rect.width
+      });
+    }
+  }, [isOpen]);
+
   return (
-    <div className="relative w-full" ref={dropdownRef}>
+    <div className="w-full" ref={triggerRef}>
       {label && (
         <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1 mb-1 block">
           {label}
@@ -64,7 +78,15 @@ export default function SearchableSelect({
       </div>
 
       {isOpen && (
-        <div className="absolute z-[11000] w-full mt-2 bg-white dark:bg-slate-900 border border-gray-200 dark:border-white/10 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+        <div
+          ref={dropdownRef}
+          className="fixed z-[11000] bg-white dark:bg-slate-900 border border-gray-200 dark:border-white/10 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200"
+          style={{
+            top: `${dropdownPos.top}px`,
+            left: `${dropdownPos.left}px`,
+            width: `${dropdownPos.width}px`
+          }}
+        >
           <div className="p-2 border-b border-gray-100 dark:border-white/5 flex items-center gap-2 bg-gray-50/50 dark:bg-slate-800/50">
             <MagnifyingGlassIcon className="w-3.5 h-3.5 text-gray-400 ml-1" />
             <input

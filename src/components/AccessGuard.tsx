@@ -30,8 +30,8 @@ export default function AccessGuard({ children }: { children: React.ReactNode })
       return;
     }
 
-    // Skip check for login, Dashboard (root), chat, grn, scheduler, and field-driver
-    if (pathname === "/login" || pathname === "/" || pathname.startsWith("/chat") || pathname.startsWith("/grn") || pathname.startsWith("/scheduler") || pathname.startsWith("/field-driver") || pathname.startsWith("/inventory/stationary")) {
+    // Skip check for universally accessible core features
+    if (pathname === "/login" || pathname === "/" || pathname.startsWith("/chat") || pathname.startsWith("/grn") || pathname.startsWith("/scheduler") || pathname.startsWith("/field-driver") || pathname.startsWith("/inventory/stationary") || pathname.startsWith("/attendance") || pathname.startsWith("/leave")) {
       setIsAuthorized(true);
       return;
     }
@@ -47,7 +47,7 @@ export default function AccessGuard({ children }: { children: React.ReactNode })
       let hasAccess = false;
       
       if (userPermissions.length > 0) {
-        hasAccess = userPermissions.includes(currentNavItem.id);
+        hasAccess = userPermissions.some((p: string) => p.toLowerCase() === currentNavItem.id.toLowerCase());
       } else {
         // Fallback: Admins see all if no matrix data
         hasAccess = isAdmin;
