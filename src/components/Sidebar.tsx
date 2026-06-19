@@ -150,7 +150,7 @@ export default function Sidebar({ mobileOpen, setMobileOpen }: SidebarProps) {
 
   const filteredNavigation = navigation.filter(item => {
     // Dashboard is the system home, visible to all authenticated users, Chat is available to all, Scheduler set to visible
-    if (item.id === 'dashboard' || item.id === 'chat' || item.id === 'scheduler' || item.id === 'grn' || item.id === 'field-driver' || item.id === 'stationary' || item.id === 'attendance' || item.id === 'leave') return true;
+    if (item.id === 'dashboard' || item.id === 'chat' || item.id === 'scheduler' || item.id === 'grn' || item.id === 'field-driver' || item.id === 'stationary' || item.id === 'attendance' || item.id === 'leave' || item.id === 'scot' || item.id === 'scot-kb') return true;
 
     // If matrix permissions exist, use them strictly
     if (userPermissions.length > 0) {

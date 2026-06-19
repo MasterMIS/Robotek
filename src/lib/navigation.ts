@@ -66,4 +66,5 @@ export const navigation = [
   // Communication Section
   { name: 'Chat', id: 'chat', href: '/chat', icon: ChatBubbleLeftRightIcon, section: 'Communication' },
   { name: 'Scot', id: 'scot', href: '/scot', icon: PhoneIcon, section: 'Communication' },
+  { name: 'Scot KB', id: 'scot-kb', href: '/scot-kb', icon: PhoneIcon, section: 'Communication' },
 ];
