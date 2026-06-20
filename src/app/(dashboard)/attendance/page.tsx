@@ -41,7 +41,7 @@ const StatusIcon = ({ status }: { status: string }) => {
 
 export default function AttendancePage() {
     const { success, error } = useToast();
-    const [activeTab, setActiveTab] = useState<'ATTENDANCE' | 'ATTENDANCE_MASTER' | 'REPORT'>('ATTENDANCE');
+    const [activeTab, setActiveTab] = useState<'ATTENDANCE' | 'ATTENDANCE_MASTER' | 'REPORT' | 'LATECOMERS'>('ATTENDANCE');
     const [reportSearch, setReportSearch] = useState('');
     const [reportView, setReportView] = useState<'STATUS' | 'TIME'>('STATUS');
     const [user, setUser] = useState<any>(null);
@@ -54,6 +54,7 @@ export default function AttendancePage() {
 
     // Attendance State
     const [currentDate, setCurrentDate] = useState(new Date());
+    const [latecomersDate, setLatecomersDate] = useState(new Date());
     const [history, setHistory] = useState<any[]>([]);
     const [currentStatus, setCurrentStatus] = useState<'IDLE' | 'CHECKED_IN' | 'COMPLETED'>('IDLE');
     const [elapsedTime, setElapsedTime] = useState('00:00:00');
@@ -160,8 +161,8 @@ export default function AttendancePage() {
                 // Read tab query param
                 const searchParams = new URLSearchParams(window.location.search);
                 const tabParam = searchParams.get('tab');
-                if (tabParam === 'ATTENDANCE_MASTER' || tabParam === 'REPORT') {
-                    setActiveTab(tabParam as 'ATTENDANCE' | 'ATTENDANCE_MASTER' | 'REPORT');
+                if (tabParam === 'ATTENDANCE_MASTER' || tabParam === 'REPORT' || tabParam === 'LATECOMERS') {
+                    setActiveTab(tabParam as 'ATTENDANCE' | 'ATTENDANCE_MASTER' | 'REPORT' | 'LATECOMERS');
                 }
 
                 const authRes = await fetch('/api/auth/session');
@@ -428,7 +429,7 @@ export default function AttendancePage() {
         const daysInMonth = new Date(year, month + 1, 0).getDate();
         const todayStr = getIstDateString();
 
-        const headers = ['Employee Name', 'Employee ID', ...Array.from({ length: daysInMonth }, (_, i) => String(i + 1))];
+        const headers = ['Employee Name', 'Employee ID', 'Late Days', ...Array.from({ length: daysInMonth }, (_, i) => String(i + 1))];
         const rows: string[][] = [headers];
 
         masterData.users
@@ -438,6 +439,7 @@ export default function AttendancePage() {
                 const monthAtt = masterData.attendance.filter(a => String(a.userId) === String(u.id)) || [];
                 const uLeaves = masterData.leaves?.filter((l:any) => String(l.userId) === String(u.id) && l.status === 'Approved') || [];
                 
+                let lateDaysCount = 0;
                 const rowData = [u.full_name || u.username, String(u.id)];
 
                 for (let d = 1; d <= daysInMonth; d++) {
@@ -457,6 +459,10 @@ export default function AttendancePage() {
                     } else if (leave) {
                         cellValue = 'L';
                     } else if (record?.inTime) {
+                        const inIST = new Date(new Date(record.inTime).getTime() + 5.5 * 3600000);
+                        const isLate = inIST.getUTCHours() > 9 || (inIST.getUTCHours() === 9 && inIST.getUTCMinutes() > 40);
+                        if (isLate) lateDaysCount++;
+
                         let hours = 0;
                         if (record.outTime) {
                             hours = (new Date(record.outTime).getTime() - new Date(record.inTime).getTime()) / 3600000;
@@ -471,6 +477,7 @@ export default function AttendancePage() {
                     }
                     rowData.push(cellValue);
                 }
+                rowData.splice(2, 0, String(lateDaysCount));
                 rows.push(rowData);
             });
 
@@ -570,9 +577,9 @@ export default function AttendancePage() {
                     >
                         {[
                             { id: 'ATTENDANCE', label: 'Dashboard', icon: CalendarBtnIcon },
-                            { id: 'LEAVE', label: 'Leaves', icon: ArrowRightCircleIcon },
                             { id: 'ATTENDANCE_MASTER', label: 'Attendance Master', icon: UserBtnIcon },
-                            { id: 'REPORT', label: 'Attendance Report', icon: ClockIcon }
+                            { id: 'REPORT', label: 'Attendance Report', icon: ClockIcon },
+                            { id: 'LATECOMERS', label: 'Latecomers', icon: ClipboardDocumentListIcon }
                         ].map((tab) => (
                             <button
                                 key={tab.id}
@@ -857,6 +864,12 @@ export default function AttendancePage() {
                                         let dotColor = null;
                                         let dotText = '';
 
+                                        let isLate = false;
+                                        if (record?.inTime) {
+                                            const inIST = new Date(new Date(record.inTime).getTime() + 5.5 * 3600000);
+                                            isLate = inIST.getUTCHours() > 9 || (inIST.getUTCHours() === 9 && inIST.getUTCMinutes() > 40);
+                                        }
+
                                         if (isSunday) {
                                             statusChar = 'SUN';
                                             statusColor = 'text-gray-300 font-bold';
@@ -874,15 +887,15 @@ export default function AttendancePage() {
                                             // Half day occurs if checked out AND total logged time <= 4 hours
                                             if (record.outTime && hours <= 4) {
                                                 halfDays++;
-                                                statusChar = 'HD';
+                                                statusChar = isLate ? 'HD(L)' : 'HD';
                                                 statusColor = 'text-orange-500 font-black';
                                                 dotColor = 'bg-orange-500';
                                                 dotText = '0.5';
                                             } else {
                                                 presents++;
-                                                statusChar = 'P';
-                                                statusColor = 'text-green-500 font-black';
-                                                dotColor = 'bg-green-500';
+                                                statusChar = isLate ? 'P(L)' : 'P';
+                                                statusColor = isLate ? 'text-red-500 font-black' : 'text-green-500 font-black';
+                                                dotColor = isLate ? 'bg-red-500' : 'bg-green-500';
                                                 dotText = '1';
                                             }
                                         } else if (dateStr < todayStr) {
@@ -893,7 +906,7 @@ export default function AttendancePage() {
                                             dotText = '-1';
                                         }
 
-                                        dayCells.push({ d, statusChar, statusColor, dotColor, dotText });
+                                        dayCells.push({ d, statusChar, statusColor, dotColor, dotText, isLate });
                                      }
 
                                      const monthlyScore = (presents * 1) + (halfDays * 0.5) - (absents * 1);
@@ -967,7 +980,7 @@ export default function AttendancePage() {
                                                             </div>
                                                             <div className="grid grid-cols-5 sm:grid-cols-7 md:grid-cols-10 gap-3">
                                                                 {dayCells.map((c, idx) => (
-                                                                    <div key={idx} className="relative bg-gray-50/50 dark:bg-slate-900 border border-gray-100 dark:border-white/5 rounded-[20px] p-3 flex flex-col items-center justify-center min-h-[72px] shadow-[inset_0_2px_4px_rgba(0,0,0,0.02)] hover:shadow-md transition-shadow group">
+                                                                    <div key={idx} className={`relative ${c.isLate ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-500/30' : 'bg-gray-50/50 dark:bg-slate-900 border-gray-100 dark:border-white/5'} rounded-[20px] p-3 flex flex-col items-center justify-center min-h-[72px] shadow-[inset_0_2px_4px_rgba(0,0,0,0.02)] hover:shadow-md transition-shadow group`}>
                                                                         {c.dotColor && <div className={`absolute -top-2 -right-2 w-auto min-w-[22px] h-5 px-1.5 rounded-full ${c.dotColor} border-[3px] border-white dark:border-slate-800 text-[10px] text-white flex items-center justify-center font-black shadow-sm z-10 scale-105`}>{c.dotText}</div>}
                                                                         <div className="text-[11px] font-black text-gray-800 dark:text-gray-200 mb-2 opacity-80">{c.d}</div>
                                                                         <div className={`text-[11px] font-black uppercase tracking-wider ${c.statusColor}`}>{c.statusChar}</div>
@@ -1103,6 +1116,12 @@ export default function AttendancePage() {
                                                 let inLocation = record?.inLocation;
                                                 let outLocation = record?.outLocation;
 
+                                                let isLate = false;
+                                                if (rawIn) {
+                                                    const inIST = new Date(new Date(rawIn).getTime() + 5.5 * 3600000);
+                                                    isLate = inIST.getUTCHours() > 9 || (inIST.getUTCHours() === 9 && inIST.getUTCMinutes() > 40);
+                                                }
+
                                                 if (isSunday) {
                                                     statusChar = 'SUN';
                                                     statusColor = 'text-gray-800 dark:text-gray-200 font-bold';
@@ -1115,13 +1134,13 @@ export default function AttendancePage() {
                                                     if (rawOut) hours = (new Date(rawOut).getTime() - new Date(rawIn).getTime()) / 3600000;
                                                     if (rawOut && hours <= 4) {
                                                         halfDays++;
-                                                        statusChar = 'HD';
+                                                        statusChar = isLate ? 'HD(L)' : 'HD';
                                                         statusColor = 'text-orange-500 font-black';
                                                         dotText = '+0.5';
                                                     } else {
                                                         presents++;
-                                                        statusChar = 'P';
-                                                        statusColor = 'text-green-500 font-black';
+                                                        statusChar = isLate ? 'P(L)' : 'P';
+                                                        statusColor = isLate ? 'text-red-500 font-black' : 'text-green-500 font-black';
                                                         dotText = '+1';
                                                     }
                                                 } else if (dateStr < todayStr) {
@@ -1131,7 +1150,7 @@ export default function AttendancePage() {
                                                     dotText = '-1';
                                                 }
 
-                                                dayCells.push({ d, statusChar, statusColor, dotText, rawIn, rawOut, inPhoto, outPhoto, inLocation, outLocation });
+                                                dayCells.push({ d, statusChar, statusColor, dotText, rawIn, rawOut, inPhoto, outPhoto, inLocation, outLocation, isLate });
                                             }
 
                                             const monthlyScore = (presents * 1) + (halfDays * 0.5) - (absents * 1);
@@ -1160,7 +1179,7 @@ export default function AttendancePage() {
                                                         <td 
                                                           key={idx} 
                                                           style={{ borderColor: 'var(--panel-border)' }}
-                                                          className="p-2 border-b border-r text-center min-w-[60px] align-middle"
+                                                          className={`p-2 border-b border-r text-center min-w-[60px] align-middle ${c.isLate ? 'bg-red-50/50 dark:bg-red-900/10' : ''}`}
                                                         >
                                                             {reportViewMode === 'STATUS' ? (
                                                                 <div className="flex flex-col items-center justify-center gap-1">
@@ -1247,6 +1266,76 @@ export default function AttendancePage() {
                             </table>
                         </div>
                         </>
+                    )}
+                </div>
+            )}
+
+            {/* LATECOMERS LIST */}
+            {activeTab === 'LATECOMERS' && (
+                <div 
+                    style={{ backgroundColor: 'var(--panel-card)' }}
+                    className="rounded-[32px] p-4 md:p-8 shadow-xl border border-white/10 overflow-x-auto min-h-[600px]"
+                >
+                    <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
+                        <div className="flex items-center gap-4 bg-white dark:bg-slate-900 px-4 py-2 rounded-full shadow-sm border border-gray-100 dark:border-white/5">
+                            <button onClick={() => setLatecomersDate(new Date(new Date(latecomersDate).setDate(latecomersDate.getDate() - 1)))} className="p-1 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-full transition"><ChevronLeftIcon className="w-5 h-5 text-gray-500" /></button>
+                            <span className="text-sm font-black text-[#003875] dark:text-[#FFD500] uppercase tracking-widest w-32 text-center">
+                                {latecomersDate.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+                            </span>
+                            <button onClick={() => setLatecomersDate(new Date(new Date(latecomersDate).setDate(latecomersDate.getDate() + 1)))} className="p-1 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-full transition"><ChevronRightIcon className="w-5 h-5 text-gray-500" /></button>
+                        </div>
+                    </div>
+                    {!masterData ? (
+                        <div className="text-gray-400 text-sm animate-pulse font-black text-center py-20">SYNCING DATA...</div>
+                    ) : (
+                        <table className="w-full text-left border-separate border-spacing-y-4 min-w-[800px] font-serif">
+                            <thead>
+                                <tr className="text-sm font-medium text-gray-500 uppercase tracking-widest text-center">
+                                    <th className="px-6 py-2 text-left">Employee Details</th>
+                                    <th className="px-4 py-2">In Time</th>
+                                    <th className="px-4 py-2">Location</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {masterData.users
+                                    .filter(u => isAdminOrEA || String(u.id) === String(user.id))
+                                    .map(u => {
+                                        const dateStr = `${latecomersDate.getFullYear()}-${String(latecomersDate.getMonth() + 1).padStart(2, '0')}-${String(latecomersDate.getDate()).padStart(2, '0')}`;
+                                        const record = masterData.attendance.find(a => String(a.userId) === String(u.id) && normalizeDateSheet(a.date) === dateStr);
+                                        
+                                        if (!record?.inTime) return null;
+                                        
+                                        const inIST = new Date(new Date(record.inTime).getTime() + 5.5 * 3600000);
+                                        const isLate = inIST.getUTCHours() > 9 || (inIST.getUTCHours() === 9 && inIST.getUTCMinutes() > 40);
+                                        
+                                        if (!isLate) return null;
+
+                                        return (
+                                            <tr key={u.id} className="bg-white dark:bg-slate-900 rounded-[24px] shadow-sm relative z-10 hover:shadow-md transition-shadow">
+                                                <td className="px-6 py-4 rounded-l-[24px]">
+                                                    <div className="flex items-center gap-4">
+                                                        <div className="w-10 h-10 rounded-full bg-[#FFD500] flex items-center justify-center font-black text-white shadow-sm overflow-hidden shrink-0">
+                                                            {u.image_url ? <img src={u.image_url} alt="" className="w-full h-full object-cover" /> : <UserBtnIcon className="w-5 h-5 text-white" />}
+                                                        </div>
+                                                        <div>
+                                                            <div className="text-sm font-black text-[#003875] dark:text-white uppercase tracking-tighter">{u.full_name || u.username}</div>
+                                                            <div className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">ID: {String(u.id).substring(0, 6)}</div>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td className="px-4 py-4 text-center">
+                                                    <span className="bg-red-50 text-red-500 dark:bg-red-500/10 px-4 py-2 rounded-full text-sm font-black">{formatTimeIST(record.inTime)}</span>
+                                                </td>
+                                                <td className="px-4 py-4 text-center rounded-r-[24px]">
+                                                    <div className="text-[10px] font-medium text-gray-500 dark:text-gray-400 max-w-[250px] mx-auto truncate" title={record.inLocation || 'N/A'}>
+                                                        {record.inLocation || 'N/A'}
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                            </tbody>
+                        </table>
                     )}
                 </div>
             )}

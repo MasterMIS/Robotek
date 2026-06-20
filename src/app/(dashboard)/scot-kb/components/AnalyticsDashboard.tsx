@@ -17,7 +17,8 @@ import {
   StarIcon,
   ExclamationTriangleIcon,
   ArrowTrendingUpIcon,
-  ArrowTrendingDownIcon
+  ArrowTrendingDownIcon,
+  ShoppingBagIcon
 } from "@heroicons/react/24/outline";
 
 import {
@@ -25,7 +26,7 @@ import {
   LineChart, Line, PieChart, Pie, Cell, AreaChart, Area, Legend, LabelList
 } from "recharts";
 
-export default function AnalyticsDashboard({ feeders }: { feeders: DataFeeder[] }) {
+export default function AnalyticsDashboard({ feeders, scotRows = [] }: { feeders: DataFeeder[], scotRows?: any[] }) {
   const [filters, setFilters] = useState<AnalyticsFilters>({
     dateRange: 'all',
     customStart: '',
@@ -133,8 +134,18 @@ export default function AnalyticsDashboard({ feeders }: { feeders: DataFeeder[] 
 
           {/* Employee */}
           <div>
-            <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3">Employee</label>
-            <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3">Call Type</label>
+            <select 
+              value={filters.employee}
+              onChange={(e) => setFilters(f => ({ ...f, employee: e.target.value }))}
+              className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-xs font-bold text-slate-700 dark:text-slate-200 outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="all">All Employees</option>
+              {uniqueEmployees.map((e, i) => <option key={i} value={e}>{e}</option>)}
+            </select>
+          </div>
+
+          {/* Call Type */}
+          <div>
             <select 
               value={filters.callType}
               onChange={(e) => setFilters(f => ({ ...f, callType: e.target.value }))}
@@ -263,6 +274,159 @@ export default function AnalyticsDashboard({ feeders }: { feeders: DataFeeder[] 
           </div>
         </div>
 
+        {/* 3.5 Order Behaviour Content Table */}
+        <div className="col-span-12 xl:col-span-8">
+          <div className="p-6 rounded-[2rem] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm relative overflow-hidden h-full flex flex-col">
+            <h3 className="font-black text-slate-900 dark:text-white text-sm uppercase tracking-widest flex items-center gap-2 mb-6 relative z-10">
+              <ShoppingBagIcon className="w-5 h-5 text-blue-500" />
+              Order Behaviour Content
+            </h3>
+            <div className="overflow-x-auto overflow-y-auto custom-scrollbar relative z-10 rounded-2xl border border-slate-200 dark:border-slate-800 max-h-[500px]">
+              <table className="w-full text-left border-collapse table-auto relative min-w-[1000px]">
+                <thead className="sticky top-0 z-30 shadow-md ring-1 ring-slate-800">
+                  <tr className="bg-slate-900 text-white">
+                    <th rowSpan={2} className="px-6 py-4 text-[11px] font-black uppercase tracking-widest whitespace-nowrap border-r border-slate-700 w-[250px] sticky left-0 z-40 bg-slate-900">Client Name</th>
+                    <th colSpan={3} className="px-6 py-2 text-[11px] font-black uppercase tracking-widest text-center text-amber-400 border-b border-r border-slate-700 bg-slate-900">Month</th>
+                    <th colSpan={3} className="px-6 py-2 text-[11px] font-black uppercase tracking-widest text-center text-amber-400 border-b border-slate-700 bg-slate-900">Week</th>
+                  </tr>
+                  <tr className="bg-slate-900 text-white">
+                    <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-center border-r border-slate-700 bg-slate-900">No. of Orders / Month</th>
+                    <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-center border-r border-slate-700 bg-slate-900">Actual Orders Received</th>
+                    <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-center border-r border-slate-700 bg-slate-900">Remaining Orders</th>
+                    <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-center border-r border-slate-700 bg-slate-900">Weekly Order Planned</th>
+                    <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-center border-r border-slate-700 bg-slate-900">Actual Order Received This Week</th>
+                    <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-center bg-slate-900">Remaining Order</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                  {(() => {
+                    const now = new Date();
+                    const currentMonth = now.getMonth();
+                    const currentYear = now.getFullYear();
+                    
+                    const day = now.getDay();
+                    const diff = now.getDate() - day + (day === 0 ? -6 : 1);
+                    const startOfWeek = new Date(now.getFullYear(), now.getMonth(), diff);
+                    startOfWeek.setHours(0,0,0,0);
+
+                    // Filter to strictly O2D KB parties (those with > 0 orders)
+                    const o2dPartiesOnly = scotRows.filter(r => r.rawOrders && r.rawOrders.length > 0);
+
+                    if (o2dPartiesOnly.length === 0) {
+                      return <tr><td colSpan={7} className="px-6 py-10 text-center text-xs font-bold text-slate-400 uppercase tracking-widest">No target data available</td></tr>;
+                    }
+
+                    const computedRows = o2dPartiesOnly.map(row => {
+                      let monthlyTarget: number | null = null;
+                      let weeklyTarget: number | null = null;
+                      let actualMonth = 0;
+                      let actualWeek = 0;
+
+                      if (row.rawOrders && row.rawOrders.length > 0) {
+                        const activeMonthsSet = new Set<string>();
+                        
+                        row.rawOrders.forEach((order: any) => {
+                          const orderDate = new Date(order.created_at);
+                          const time = orderDate.getTime();
+                          
+                          if (!isNaN(time)) {
+                            const monthKey = `${orderDate.getFullYear()}-${orderDate.getMonth()}`;
+                            activeMonthsSet.add(monthKey);
+                          }
+                          
+                          if (orderDate.getMonth() === currentMonth && orderDate.getFullYear() === currentYear) {
+                            actualMonth++;
+                            if (orderDate >= startOfWeek) {
+                              actualWeek++;
+                            }
+                          }
+                        });
+
+                        const activeMonths = activeMonthsSet.size;
+                        monthlyTarget = activeMonths > 0 ? Math.max(1, Math.round(row.rawOrders.length / activeMonths)) : 1;
+                        weeklyTarget = Math.round(monthlyTarget / 4);
+                      }
+
+                      return {
+                        ...row,
+                        monthlyTarget,
+                        weeklyTarget,
+                        actualMonth,
+                        actualWeek,
+                        hasTarget: monthlyTarget !== null && monthlyTarget > 0
+                      };
+                    });
+
+                    const sortedRows = computedRows.sort((a, b) => {
+                      if (a.hasTarget && !b.hasTarget) return -1;
+                      if (!a.hasTarget && b.hasTarget) return 1;
+                      if (a.hasTarget && b.hasTarget) {
+                        return (b.monthlyTarget as number) - (a.monthlyTarget as number);
+                      }
+                      return 0;
+                    });
+
+                    return sortedRows.map((row, idx) => {
+                      const hasTarget = row.hasTarget;
+                      const remainingMonth = hasTarget ? (row.monthlyTarget as number) - row.actualMonth : null;
+                      const remainingWeek = hasTarget ? (row.weeklyTarget as number) - row.actualWeek : null;
+
+                      return (
+                        <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                          <td className="px-6 py-4 sticky left-0 z-10 bg-white dark:bg-slate-900 border-r border-slate-100 dark:border-slate-800 group-hover:bg-slate-50 dark:group-hover:bg-slate-800/50 transition-colors">
+                            <p className="text-[11px] font-black text-slate-900 dark:text-white uppercase truncate" title={row.toName}>{row.toName}</p>
+                            <p className="text-[9px] font-bold text-slate-500 italic mt-0.5 truncate">{row.employeeName || "No employee"}</p>
+                          </td>
+                          <td className="px-4 py-4 text-center border-r border-slate-100 dark:border-slate-800">
+                            {hasTarget ? (
+                              <span className="text-xs font-black text-blue-900 dark:text-blue-400">{row.monthlyTarget}</span>
+                            ) : (
+                              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">N/A</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-4 text-center border-r border-slate-100 dark:border-slate-800">
+                            <span className="text-xs font-black text-emerald-600 dark:text-emerald-400">{row.actualMonth}</span>
+                          </td>
+                          <td className="px-4 py-4 text-center border-r border-slate-100 dark:border-slate-800">
+                            {hasTarget ? (
+                              <span className={`inline-flex items-center gap-1 px-2.5 py-1 text-[10px] font-black rounded-full ${(remainingMonth as number) <= 0 ? 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30' : 'bg-red-100 text-red-600 dark:bg-red-900/30'}`}>
+                                {(remainingMonth as number) <= 0 ? <ArrowTrendingUpIcon className="w-3 h-3" /> : <ArrowTrendingDownIcon className="w-3 h-3" />}
+                                {(remainingMonth as number) <= 0 ? `+${Math.abs(remainingMonth as number)}` : `-${remainingMonth}`}
+                              </span>
+                            ) : (
+                              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">N/A</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-4 text-center border-r border-slate-100 dark:border-slate-800">
+                            {hasTarget ? (
+                              <span className="text-xs font-black text-blue-900 dark:text-blue-400">{row.weeklyTarget}</span>
+                            ) : (
+                              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">N/A</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-4 text-center border-r border-slate-100 dark:border-slate-800">
+                            <span className="text-xs font-black text-emerald-600 dark:text-emerald-400">{row.actualWeek}</span>
+                          </td>
+                          <td className="px-4 py-4 text-center">
+                            {hasTarget ? (
+                              <span className={`inline-flex items-center gap-1 px-2.5 py-1 text-[10px] font-black rounded-full ${(remainingWeek as number) <= 0 ? 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30' : 'bg-red-100 text-red-600 dark:bg-red-900/30'}`}>
+                                {(remainingWeek as number) <= 0 ? <ArrowTrendingUpIcon className="w-3 h-3" /> : <ArrowTrendingDownIcon className="w-3 h-3" />}
+                                {(remainingWeek as number) <= 0 ? `+${Math.abs(remainingWeek as number)}` : `-${remainingWeek}`}
+                              </span>
+                            ) : (
+                              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">N/A</span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    });
+                  })()}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
         {/* 4. Time Intelligence Analysis (Hourly Heatmap) */}
         <div className="relative p-6 rounded-[2rem] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden z-0">
           <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-[80%] h-[80%] bg-orange-500/5 dark:bg-orange-500/10 rounded-full blur-[100px] z-[-1]"></div>
@@ -296,14 +460,14 @@ export default function AnalyticsDashboard({ feeders }: { feeders: DataFeeder[] 
                       {dayArray.map((val, dIdx) => {
                         const intensity = val / maxVal;
                         let bgClass = "bg-slate-100 dark:bg-slate-800";
-                        if (intensity > 0) bgClass = "bg-blue-100 dark:bg-blue-900/30";
-                        if (intensity > 0.2) bgClass = "bg-blue-300 dark:bg-blue-700/50";
-                        if (intensity > 0.5) bgClass = "bg-blue-500 dark:bg-blue-600";
-                        if (intensity > 0.8) bgClass = "bg-blue-700 dark:bg-blue-500";
+                        if (intensity > 0) bgClass = "bg-amber-100 dark:bg-amber-900/30";
+                        if (intensity > 0.2) bgClass = "bg-amber-300 dark:bg-amber-700/50";
+                        if (intensity > 0.5) bgClass = "bg-amber-500 dark:bg-amber-600";
+                        if (intensity > 0.8) bgClass = "bg-amber-600 dark:bg-amber-500";
                         
                         return (
                           <div key={dIdx} className={`h-8 rounded-md flex items-center justify-center transition-all hover:scale-105 cursor-pointer ${bgClass}`} title={`${val} calls`}>
-                            {val > 0 && <span className={`text-[9px] font-black ${intensity > 0.5 ? 'text-white' : 'text-blue-900 dark:text-blue-200'}`}>{val}</span>}
+                            {val > 0 && <span className={`text-[9px] font-black ${intensity > 0.5 ? 'text-white' : 'text-amber-900 dark:text-amber-200'}`}>{val}</span>}
                           </div>
                         );
                       })}

@@ -273,3 +273,117 @@ export async function getFollowUpData(): Promise<FollowUpRecord[]> {
     return [];
   }
 }
+
+export interface FrequencyRecord {
+  partyName: string;
+  frequency: string;
+}
+
+const FREQUENCY_SPREADSHEET_ID = "1IhvpIYKBojl3hn0SdV-gMp79ehNg5p4Ggp_Znjfzc-I";
+
+export async function getFrequencyData(): Promise<FrequencyRecord[]> {
+  try {
+    const sheets = await getSheetsClient();
+    let response;
+    try {
+      response = await sheets.spreadsheets.values.get({
+        spreadsheetId: FREQUENCY_SPREADSHEET_ID,
+        range: `'Frequency'!A:B`,
+      });
+    } catch (err: any) {
+      if (err.message?.includes('Unable to parse range')) {
+        // Sheet doesn't exist, try to create it
+        await sheets.spreadsheets.batchUpdate({
+          spreadsheetId: FREQUENCY_SPREADSHEET_ID,
+          requestBody: {
+            requests: [{ addSheet: { properties: { title: "Frequency" } } }]
+          }
+        });
+        // Try getting again (it will be empty but won't error)
+        response = await sheets.spreadsheets.values.get({
+          spreadsheetId: FREQUENCY_SPREADSHEET_ID,
+          range: `'Frequency'!A:B`,
+        });
+      } else {
+        throw err;
+      }
+    }
+
+    const rows = response.data.values || [];
+    return rows.map((row) => ({
+      partyName: row[0] || "",
+      frequency: row[1] || "",
+    }));
+  } catch (error) {
+    console.error("Error fetching Frequency data:", error);
+    return [];
+  }
+}
+
+export async function updateFrequencyData(partyName: string, frequency: string): Promise<boolean> {
+  try {
+    const sheets = await getSheetsClient();
+    let response;
+    try {
+      response = await sheets.spreadsheets.values.get({
+        spreadsheetId: FREQUENCY_SPREADSHEET_ID,
+        range: `'Frequency'!A:B`,
+      });
+    } catch (err: any) {
+      if (err.message?.includes('Unable to parse range')) {
+        // Sheet doesn't exist, try to create it
+        await sheets.spreadsheets.batchUpdate({
+          spreadsheetId: FREQUENCY_SPREADSHEET_ID,
+          requestBody: {
+            requests: [{ addSheet: { properties: { title: "Frequency" } } }]
+          }
+        });
+        // Add headers
+        await sheets.spreadsheets.values.append({
+          spreadsheetId: FREQUENCY_SPREADSHEET_ID,
+          range: `'Frequency'!A:B`,
+          valueInputOption: "USER_ENTERED",
+          requestBody: { values: [["Party Name", "Frequency (Days)"]] }
+        });
+        // Try getting again
+        response = await sheets.spreadsheets.values.get({
+          spreadsheetId: FREQUENCY_SPREADSHEET_ID,
+          range: `'Frequency'!A:B`,
+        });
+      } else {
+        throw err;
+      }
+    }
+
+    const rows = response.data.values || [];
+    // Start index at 0, row numbers start at 1
+    const rowIndex = rows.findIndex(row => (row[0] || "").toLowerCase().trim() === partyName.toLowerCase().trim());
+
+    if (rowIndex !== -1) {
+      // Update existing
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: FREQUENCY_SPREADSHEET_ID,
+        range: `'Frequency'!A${rowIndex + 1}:B${rowIndex + 1}`,
+        valueInputOption: "USER_ENTERED",
+        requestBody: {
+          values: [[rows[rowIndex][0], frequency]],
+        },
+      });
+    } else {
+      // Append new
+      await sheets.spreadsheets.values.append({
+        spreadsheetId: FREQUENCY_SPREADSHEET_ID,
+        range: `'Frequency'!A1:B`,
+        valueInputOption: "USER_ENTERED",
+        requestBody: {
+          values: [[partyName, frequency]],
+        },
+      });
+    }
+
+    return true;
+  } catch (error: any) {
+    console.error("Error updating Frequency data:", error);
+    throw new Error(error.message || "Failed to update frequency data in sheet");
+  }
+}

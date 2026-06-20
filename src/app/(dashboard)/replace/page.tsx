@@ -424,7 +424,7 @@ export default function ReplacePage() {
 
   const calculatePlannedDate = (base: Date | string, tat: string): string => {
     let date = new Date(base); if (isNaN(date.getTime())) return "";
-    const val = parseFloat(tat); const unit = tat.includes("day") ? "day" : "hr";
+    const val = parseFloat(tat); const unit = tat.toLowerCase().includes("day") ? "day" : "hr";
     let mins = unit === "day" ? val * 10 * 60 : val * 60;
     while (mins > 0) {
       if (date.getDay() === 0) { date.setDate(date.getDate() + 1); date.setHours(9, 30, 0, 0); continue; }

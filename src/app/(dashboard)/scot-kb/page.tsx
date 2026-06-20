@@ -21,7 +21,8 @@ import {
   PhoneArrowDownLeftIcon,
   NoSymbolIcon,
   InformationCircleIcon,
-  ShoppingCartIcon
+  ShoppingCartIcon,
+  PencilIcon
 } from "@heroicons/react/24/outline";
 
 import {
@@ -40,7 +41,7 @@ import {
   Cell
 } from "recharts";
 
-import { O2D } from "@/types/o2d";
+import { O2DKB } from "@/types/o2dkb";
 import { DataFeeder } from "@/types/data-feeder";
 import AnalyticsDashboard from "./components/AnalyticsDashboard";
 
@@ -51,8 +52,8 @@ const COLORS = ['#3B82F6', '#10B981', '#8B5CF6', '#F59E0B', '#EF4444', '#EC4899'
 export default function ScotKbPage() {
   const [activeTab, setActiveTab] = useState<"dashboard" | "data-feeder" | "scot">("dashboard");
 
-  const { data: o2dDataRes, isValidating: isO2DLoading } = useSWR(
-    `/api/o2d?limit=-1`,
+  const { data: o2dkbDataRes, isValidating: isO2DKBLoading } = useSWR(
+    `/api/o2dkb?limit=-1`,
     fetcher
   );
 
@@ -61,8 +62,14 @@ export default function ScotKbPage() {
     fetcher
   );
 
-  const o2ds: O2D[] = o2dDataRes?.data || [];
+  const { data: frequencyDataRes, mutate: mutateFrequency } = useSWR(
+    `/api/scot/frequency`,
+    fetcher
+  );
+
+  const o2ds: O2DKB[] = o2dkbDataRes?.data || [];
   const feeders: DataFeeder[] = feederData?.data || [];
+  const frequencyRecords: { partyName: string, frequency: string }[] = frequencyDataRes?.data || [];
 
   const [uploading, setUploading] = useState(false);
   const [uploadMessage, setUploadMessage] = useState("");
@@ -72,9 +79,54 @@ export default function ScotKbPage() {
   const [scotPage, setScotPage] = useState(1);
   const itemsPerPage = 25;
   const [selectedScotMonth, setSelectedScotMonth] = useState<string>("");
+  const [showTodayOnly, setShowTodayOnly] = useState(false);
 
   const [searchFeeder, setSearchFeeder] = useState("");
   const [feederPage, setFeederPage] = useState(1);
+
+  const [isFreqModalOpen, setIsFreqModalOpen] = useState(false);
+  const [freqParty, setFreqParty] = useState("");
+  const [freqValue, setFreqValue] = useState("");
+  const [isSavingFreq, setIsSavingFreq] = useState(false);
+
+  const saveFrequency = async () => {
+    if (!freqParty || !freqValue) return;
+    setIsSavingFreq(true);
+
+    // Optimistic Update: instantly update UI
+    const optimisticRecords = [...frequencyRecords];
+    const existingIdx = optimisticRecords.findIndex(r => r.partyName === freqParty);
+    if (existingIdx !== -1) {
+      optimisticRecords[existingIdx] = { ...optimisticRecords[existingIdx], frequency: freqValue };
+    } else {
+      optimisticRecords.push({ partyName: freqParty, frequency: freqValue });
+    }
+    
+    // Mutate local cache immediately and don't revalidate yet
+    mutateFrequency({ success: true, data: optimisticRecords }, false);
+    setIsFreqModalOpen(false);
+
+    try {
+      const res = await fetch("/api/scot/frequency", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ partyName: freqParty, frequency: freqValue })
+      });
+      if (!res.ok) {
+        // If it failed, revalidate to get true state back
+        mutateFrequency();
+        const d = await res.json();
+        alert(d.error || "Failed to save frequency");
+      }
+    } catch (e) {
+      console.error(e);
+      // Revalidate to rollback
+      mutateFrequency();
+      alert("Error saving frequency");
+    } finally {
+      setIsSavingFreq(false);
+    }
+  };
 
   // Parse Duration to Seconds
   const parseDurationToSeconds = (dur: string) => {
@@ -190,36 +242,52 @@ export default function ScotKbPage() {
       const d = excelSerialToDate(f.callDate);
       if (d) set.add(`${d.toLocaleString('default', { month: 'short' })} ${d.getFullYear().toString().substring(2)}`);
     });
-    return Array.from(set);
-  }, [feeders]);
+    o2ds.forEach(o => {
+      const d = new Date(o.created_at);
+      if (!isNaN(d.getTime())) set.add(`${d.toLocaleString('default', { month: 'short' })} ${d.getFullYear().toString().substring(2)}`);
+    });
+    
+    // Ensure current month is always available
+    const now = new Date();
+    set.add(`${now.toLocaleString('default', { month: 'short' })} ${now.getFullYear().toString().substring(2)}`);
+    
+    return Array.from(set).sort((a, b) => {
+      const [m1, y1] = a.split(" ");
+      const [m2, y2] = b.split(" ");
+      const d1 = new Date(`${m1} 1, 20${y1}`);
+      const d2 = new Date(`${m2} 1, 20${y2}`);
+      return d2.getTime() - d1.getTime(); // Descending
+    });
+  }, [feeders, o2ds]);
 
   const activeScotMonth = selectedScotMonth || (uniqueMonths.length > 0 ? uniqueMonths[0] : "");
 
   const scotMonthDates = useMemo(() => {
+    if (showTodayOnly) {
+      const now = new Date();
+      return [`${now.getFullYear()}-${(now.getMonth()+1).toString().padStart(2,'0')}-${now.getDate().toString().padStart(2,'0')}`];
+    }
+
     if (!activeScotMonth) return [];
-    const set = new Set<string>();
-    feeders.forEach(f => {
-      const d = excelSerialToDate(f.callDate);
-      if (d) {
-        const mStr = `${d.toLocaleString('default', { month: 'short' })} ${d.getFullYear().toString().substring(2)}`;
-        if (mStr === activeScotMonth) {
-          const dateStr = `${d.getFullYear()}-${(d.getMonth()+1).toString().padStart(2,'0')}-${d.getDate().toString().padStart(2,'0')}`;
-          set.add(dateStr);
-        }
-      }
-    });
-    o2ds.forEach(o => {
-      const d = new Date(o.created_at);
-      if (!isNaN(d.getTime())) {
-        const mStr = `${d.toLocaleString('default', { month: 'short' })} ${d.getFullYear().toString().substring(2)}`;
-        if (mStr === activeScotMonth) {
-          const dateStr = `${d.getFullYear()}-${(d.getMonth()+1).toString().padStart(2,'0')}-${d.getDate().toString().padStart(2,'0')}`;
-          set.add(dateStr);
-        }
-      }
-    });
-    return Array.from(set).sort();
-  }, [feeders, o2ds, activeScotMonth]);
+    
+    const [mStr, yStr] = activeScotMonth.split(" ");
+    const monthIndex = new Date(`${mStr} 1, 20${yStr}`).getMonth();
+    const year = parseInt(`20${yStr}`);
+    
+    const now = new Date();
+    const isCurrentMonth = now.getMonth() === monthIndex && now.getFullYear() === year;
+    
+    const lastDay = isCurrentMonth ? now.getDate() : new Date(year, monthIndex + 1, 0).getDate();
+    
+    const dates = [];
+    for (let i = 1; i <= lastDay; i++) {
+      const d = new Date(year, monthIndex, i);
+      const dateStr = `${d.getFullYear()}-${(d.getMonth()+1).toString().padStart(2,'0')}-${d.getDate().toString().padStart(2,'0')}`;
+      dates.push(dateStr);
+    }
+    
+    return dates;
+  }, [activeScotMonth, showTodayOnly]);
 
   // Cross-reference logic for Scot Tab
   const scotRows = useMemo(() => {
@@ -239,8 +307,18 @@ export default function ScotKbPage() {
       feederGroup.set(key, group);
     });
     
+    // 1.5 Map manual frequencies
+    const manualFreqMap = new Map<string, number>();
+    frequencyRecords.forEach(r => {
+      const name = (r.partyName || "").toLowerCase().trim();
+      const freq = parseInt(r.frequency || "0", 10);
+      if (name && !isNaN(freq) && freq > 0) {
+        manualFreqMap.set(name, freq);
+      }
+    });
+
     // 2. Group O2Ds by normalized party_name
-    const o2dGroup = new Map<string, O2D[]>();
+    const o2dGroup = new Map<string, O2DKB[]>();
     o2ds.forEach(o => {
       const name = (o.party_name || '').toLowerCase().trim();
       if (!name) return;
@@ -249,10 +327,17 @@ export default function ScotKbPage() {
       o2dGroup.set(name, group);
     });
 
-    const rows = Array.from(feederGroup.values()).map(data => {
-      const toName = data.originalName;
-      const normalizedToName = toName.toLowerCase().trim();
+    const allNormalizedNames = new Set<string>([
+      ...Array.from(o2dGroup.keys()),
+      ...Array.from(feederGroup.keys())
+    ]);
+
+    const rows = Array.from(allNormalizedNames).map(normalizedToName => {
+      const data = feederGroup.get(normalizedToName) || { originalName: '', employeeName: '', callsByDate: {} };
       const orders = o2dGroup.get(normalizedToName) || [];
+      
+      const toName = data.originalName || (orders.length > 0 ? orders[0].party_name : normalizedToName);
+      
       
       const ordersByDate: Record<string, boolean> = {};
       
@@ -270,16 +355,42 @@ export default function ScotKbPage() {
       const totalOrders = orders.length;
       let lastOrderDate: Date | null = null;
       let frequencyDays: number | null = null;
+      let isManualFrequency = false;
       let nextPlannedDate: Date | null = null;
 
-      if (totalOrders > 0) {
+      if (manualFreqMap.has(normalizedToName)) {
+        frequencyDays = manualFreqMap.get(normalizedToName)!;
+        isManualFrequency = true;
+      } else if (totalOrders > 0) {
         lastOrderDate = new Date(orders[0].created_at);
         if (totalOrders > 1) {
           const firstOrderDate = new Date(orders[totalOrders - 1].created_at);
-          const diffTime = lastOrderDate.getTime() - firstOrderDate.getTime();
-          frequencyDays = Math.max(1, Math.round(diffTime / (86400000 * (totalOrders - 1))));
+          const now = new Date();
           
-          nextPlannedDate = new Date(lastOrderDate.getTime() + (frequencyDays * 86400000));
+          // Calculate elapsed days from first order to now
+          const elapsedDays = (now.getTime() - firstOrderDate.getTime()) / 86400000;
+          
+          // Enforce a minimum 30-day baseline to prevent absurdly high targets for clustered orders
+          const effectiveDays = Math.max(30, elapsedDays);
+          
+          // Frequency is the effective days divided by total orders
+          frequencyDays = Math.max(1, Math.round(effectiveDays / totalOrders));
+        }
+      }
+
+      const callDates = Object.keys(data.callsByDate).sort((a,b) => new Date(b).getTime() - new Date(a).getTime());
+      const lastCallDate = callDates.length > 0 ? new Date(callDates[0]) : null;
+
+      if (frequencyDays) {
+        let baseDate: Date | null = null;
+        if (lastCallDate && lastOrderDate) {
+          baseDate = lastCallDate.getTime() > lastOrderDate.getTime() ? lastCallDate : lastOrderDate;
+        } else {
+          baseDate = lastCallDate || lastOrderDate;
+        }
+        
+        if (baseDate) {
+          nextPlannedDate = new Date(baseDate.getTime() + (frequencyDays * 86400000));
         }
       }
 
@@ -290,7 +401,9 @@ export default function ScotKbPage() {
         ordersByDate,
         totalOrders,
         lastOrderDate,
+        lastCallDate,
         frequencyDays,
+        isManualFrequency,
         nextPlannedDate,
         rawOrders: orders
       };
@@ -298,10 +411,32 @@ export default function ScotKbPage() {
 
     // Search filter
     const searchTerm = searchScot.toLowerCase().trim();
-    if (!searchTerm) return rows;
+    let filteredRows = rows;
     
-    return rows.filter(r => r.toName.toLowerCase().includes(searchTerm));
-  }, [feeders, o2ds, searchScot]);
+    if (searchTerm) {
+      filteredRows = filteredRows.filter(r => r.toName.toLowerCase().includes(searchTerm));
+    }
+    
+    if (showTodayOnly) {
+      const today = new Date();
+      const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+      filteredRows = filteredRows.filter(r => {
+        if (!r.nextPlannedDate) return false;
+        const d = r.nextPlannedDate;
+        const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        return dateStr === todayStr;
+      });
+    }
+
+    filteredRows.sort((a, b) => {
+      // O2D parties first
+      if (a.totalOrders > 0 && b.totalOrders === 0) return -1;
+      if (a.totalOrders === 0 && b.totalOrders > 0) return 1;
+      return 0;
+    });
+
+    return filteredRows;
+  }, [feeders, o2ds, searchScot, showTodayOnly]);
 
   const paginatedScotRows = scotRows.slice((scotPage - 1) * itemsPerPage, scotPage * itemsPerPage);
 
@@ -312,8 +447,96 @@ export default function ScotKbPage() {
   });
   const paginatedFeeders = filteredFeeders.slice((feederPage - 1) * itemsPerPage, feederPage * itemsPerPage);
 
+  const exportScotCSV = () => {
+    const headerRow = [
+      "Target Name",
+      "Total Orders",
+      "Last Order Date",
+      "Recent Follow Up",
+      "Order Frequency",
+      "Next Planned Date",
+      ...scotMonthDates.map(dateStr => {
+        const d = new Date(dateStr);
+        const day = d.getDate();
+        const month = d.toLocaleString('default', { month: 'short' });
+        return `${day}${day === 1 || day === 21 || day === 31 ? 'st' : day === 2 || day === 22 ? 'nd' : day === 3 || day === 23 ? 'rd' : 'th'} ${month}`;
+      })
+    ];
+
+    const dataRows = scotRows.map(row => {
+      const lastOrderStr = row.lastOrderDate ? row.lastOrderDate.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' }) : "No Orders";
+      const lastCallStr = row.lastCallDate ? row.lastCallDate.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' }) : "No Calls";
+      const freqStr = row.frequencyDays ? `${row.frequencyDays} Days` : "N/A";
+      const nextDateStr = row.nextPlannedDate ? row.nextPlannedDate.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' }) : "N/A";
+
+      const dailyData = scotMonthDates.map(dateStr => {
+        const isScheduledDate = row.nextPlannedDate && 
+          `${row.nextPlannedDate.getFullYear()}-${String(row.nextPlannedDate.getMonth() + 1).padStart(2, '0')}-${String(row.nextPlannedDate.getDate()).padStart(2, '0')}` === dateStr;
+        const cType = row.callsByDate[dateStr];
+        const hasOrder = row.ordersByDate[dateStr];
+
+        if (isScheduledDate) return "S";
+        if (cType) return cType;
+        if (hasOrder) return "Order";
+        return "-";
+      });
+
+      return [
+        row.toName,
+        row.totalOrders,
+        lastOrderStr,
+        lastCallStr,
+        freqStr,
+        nextDateStr,
+        ...dailyData
+      ];
+    });
+
+    const csvContent = [
+      headerRow.join(","),
+      ...dataRows.map(row => row.map(cell => `"${cell}"`).join(","))
+    ].join("\n");
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `Scot_Analytics_${activeScotMonth.replace(' ', '_')}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   return (
-    <div className="space-y-6 max-w-[1600px] mx-auto animate-in fade-in zoom-in-95 duration-500">
+    <div className="flex flex-col h-[calc(100vh-160px)] gap-6 max-w-[1600px] mx-auto animate-in fade-in zoom-in-95 duration-500">
+      <style dangerouslySetInnerHTML={{__html: `
+        .custom-scrollbar::-webkit-scrollbar {
+          width: 14px;
+          height: 14px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+          background: #f1f5f9;
+          border-radius: 8px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+          background-color: #94a3b8;
+          border-radius: 8px;
+          border: 3px solid #f1f5f9;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+          background-color: #64748b;
+        }
+        .dark .custom-scrollbar::-webkit-scrollbar-track {
+          background: #0f172a;
+        }
+        .dark .custom-scrollbar::-webkit-scrollbar-thumb {
+          background-color: #334155;
+          border: 3px solid #0f172a;
+        }
+        .dark .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+          background-color: #475569;
+        }
+      `}} />
       {/* Header - Apple/Scheduler Theme */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-4 rounded-[2rem] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm transition-all">
         <div className="flex items-center gap-3">
@@ -356,13 +579,13 @@ export default function ScotKbPage() {
 
       {/* Dashboard Tab */}
       {activeTab === "dashboard" && (
-        <AnalyticsDashboard feeders={feeders} />
+        <AnalyticsDashboard feeders={feeders} scotRows={scotRows} />
       )}
 
       {/* Data Feeder Tab */}
       {activeTab === "data-feeder" && (
-        <div className="space-y-6">
-          <div className="rounded-[2rem] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm transition-all duration-500">
+        <div className="flex-1 min-h-0 flex flex-col space-y-6">
+          <div className="flex-1 min-h-0 flex flex-col rounded-[2rem] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm transition-all duration-500">
             {/* Header / Actions Row */}
             <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-800">
               <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
@@ -421,17 +644,17 @@ export default function ScotKbPage() {
             </div>
 
             {/* Table */}
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse table-auto">
+            <div className="flex-1 min-h-0 overflow-x-auto overflow-y-auto relative custom-scrollbar">
+              <table className="w-full text-left border-collapse table-auto relative">
                 <thead>
                   <tr className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white">
-                    <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest whitespace-nowrap">Employee Details</th>
-                    <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest whitespace-nowrap">Target Info</th>
-                    <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest whitespace-nowrap">Call Metrics</th>
+                    <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest whitespace-nowrap border-r-2 border-blue-500/50">Employee Details</th>
+                    <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest whitespace-nowrap border-r-2 border-blue-500/50">Target Info</th>
+                    <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest whitespace-nowrap border-r-2 border-blue-500/50">Call Metrics</th>
                     <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest whitespace-nowrap">Timestamp</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                <tbody className="divide-y-2 divide-slate-200 dark:divide-slate-800">
                   {paginatedFeeders.length === 0 ? (
                     <tr><td colSpan={4} className="px-6 py-10 text-center text-sm font-bold text-slate-400 uppercase tracking-widest">No data available</td></tr>
                   ) : paginatedFeeders.map((f, idx) => (
@@ -492,7 +715,7 @@ export default function ScotKbPage() {
 
       {/* Scot Tab */}
       {activeTab === "scot" && (
-        <div className="rounded-[2rem] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm transition-all duration-500">
+        <div className="flex-1 min-h-0 flex flex-col rounded-[2rem] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm transition-all duration-500">
           <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row justify-between items-center gap-4">
             <h2 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-widest flex items-center gap-2">
               <TableCellsIcon className="w-5 h-5 text-emerald-500" />
@@ -505,6 +728,24 @@ export default function ScotKbPage() {
                 <span className="flex items-center px-2 text-[10px] font-black uppercase tracking-widest text-slate-400 whitespace-nowrap">{scotPage} / {Math.ceil(scotRows.length / itemsPerPage) || 1}</span>
                 <button onClick={() => setScotPage(p => Math.min(Math.ceil(scotRows.length / itemsPerPage), p + 1))} disabled={scotPage >= Math.ceil(scotRows.length / itemsPerPage)} className="px-3 py-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-[10px] font-black uppercase tracking-widest rounded-xl disabled:opacity-50 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors shadow-sm text-slate-700 dark:text-slate-300">Next</button>
               </div>
+
+              {/* CSV Export Button */}
+              <button 
+                onClick={exportScotCSV}
+                className="px-4 py-1.5 bg-indigo-50 dark:bg-indigo-900/30 border border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-400 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors shadow-sm flex items-center gap-1.5"
+              >
+                <DocumentArrowUpIcon className="w-4 h-4" />
+                CSV
+              </button>
+
+              {/* Today Button */}
+              <button 
+                onClick={() => {setShowTodayOnly(!showTodayOnly); setScotPage(1);}}
+                className={`px-4 py-1.5 border rounded-xl text-xs font-black uppercase tracking-widest transition-colors shadow-sm flex items-center gap-1.5 ${showTodayOnly ? 'bg-teal-500 text-white border-teal-600' : 'bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-white hover:bg-slate-100 dark:hover:bg-slate-700'}`}
+              >
+                <CalendarIcon className="w-4 h-4" />
+                Today
+              </button>
 
               {/* Search Input */}
               <input 
@@ -527,33 +768,34 @@ export default function ScotKbPage() {
               )}
             </div>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse table-auto">
+          <div className="flex-1 min-h-0 overflow-x-auto overflow-y-auto relative custom-scrollbar">
+            <table className="w-full text-left border-collapse table-auto relative">
               <thead>
-                <tr className="bg-slate-50 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400">
-                  <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest whitespace-nowrap">Target Name</th>
-                  <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-center">Total Orders</th>
-                  <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-center">Last Order Date</th>
-                  <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-center">Order Frequency</th>
-                  <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-center">Next Planned Date</th>
+                <tr className="bg-gradient-to-r from-emerald-600 to-teal-600 text-white">
+                  <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest whitespace-nowrap sticky top-0 left-0 z-30 bg-emerald-600 border-r-2 border-emerald-500/80 w-[200px] min-w-[200px] max-w-[200px]">Target Name</th>
+                  <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-center sticky top-0 left-[200px] z-30 bg-emerald-600 border-r-2 border-emerald-500/80 w-[100px] min-w-[100px] max-w-[100px]">Total Orders</th>
+                  <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-center sticky top-0 left-[300px] z-30 bg-emerald-600 border-r-2 border-emerald-500/80 w-[150px] min-w-[150px] max-w-[150px]">Last Order Date</th>
+                  <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-center sticky top-0 left-[450px] z-30 bg-emerald-600 border-r-2 border-emerald-500/80 w-[150px] min-w-[150px] max-w-[150px]">Recent Follow Up</th>
+                  <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-center sticky top-0 left-[600px] z-30 bg-emerald-600 border-r-2 border-emerald-500/80 w-[160px] min-w-[160px] max-w-[160px]">Order Frequency</th>
+                  <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-center sticky top-0 left-[760px] z-30 bg-emerald-600 border-r-2 border-emerald-700/80 shadow-[4px_0_10px_-4px_rgba(0,0,0,0.3)] w-[160px] min-w-[160px] max-w-[160px]">Next Planned Date</th>
                   {scotMonthDates.map(dateStr => {
                     const d = new Date(dateStr);
                     const day = d.getDate();
                     const month = d.toLocaleString('default', { month: 'short' });
                     return (
-                      <th key={dateStr} className="px-4 py-4 text-[10px] font-black uppercase tracking-widest text-center whitespace-nowrap">
+                      <th key={dateStr} className="px-4 py-4 text-[10px] font-black uppercase tracking-widest text-center whitespace-nowrap sticky top-0 z-20 bg-emerald-600/90 backdrop-blur-sm border-r-2 border-emerald-500/30">
                         {day}{day === 1 || day === 21 || day === 31 ? 'st' : day === 2 || day === 22 ? 'nd' : day === 3 || day === 23 ? 'rd' : 'th'} {month}
                       </th>
                     );
                   })}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+              <tbody className="divide-y-2 divide-slate-200 dark:divide-slate-700">
                 {paginatedScotRows.length === 0 ? (
-                  <tr><td colSpan={5} className="px-6 py-10 text-center text-sm font-bold text-slate-400 uppercase tracking-widest">No target records found</td></tr>
+                  <tr><td colSpan={6} className="px-6 py-10 text-center text-sm font-bold text-slate-400 uppercase tracking-widest">No target records found</td></tr>
                 ) : paginatedScotRows.map((row, idx) => (
-                  <tr key={idx} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
-                    <td className="px-6 py-4">
+                  <tr key={idx} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors group/row">
+                    <td className="px-6 py-4 whitespace-nowrap sticky left-0 z-10 bg-white dark:bg-slate-900 border-r-2 border-slate-200 dark:border-slate-700 w-[200px] min-w-[200px] max-w-[200px] truncate group-hover/row:bg-slate-50 dark:group-hover/row:bg-slate-800/80 transition-colors">
                       <div className="flex flex-col gap-1">
                         <p className="text-xs font-black text-slate-900 dark:text-white flex items-center gap-1.5">
                           <UserIcon className="w-4 h-4 text-emerald-500" />
@@ -565,12 +807,12 @@ export default function ScotKbPage() {
                         </p>
                       </div>
                     </td>
-                    <td className="px-6 py-4 text-center">
+                    <td className="px-6 py-4 text-center sticky left-[200px] z-10 bg-white dark:bg-slate-900 border-r-2 border-slate-200 dark:border-slate-700 w-[100px] min-w-[100px] max-w-[100px] group-hover/row:bg-slate-50 dark:group-hover/row:bg-slate-800/80 transition-colors">
                       <span className="inline-flex items-center justify-center min-w-[2rem] px-2 py-1 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-black rounded-xl">
                         {row.totalOrders}
                       </span>
                     </td>
-                    <td className="px-6 py-4 text-center">
+                    <td className="px-6 py-4 text-center whitespace-nowrap sticky left-[300px] z-10 bg-white dark:bg-slate-900 border-r-2 border-slate-200 dark:border-slate-700 w-[150px] min-w-[150px] max-w-[150px] group-hover/row:bg-slate-50 dark:group-hover/row:bg-slate-800/80 transition-colors">
                       <div className="flex items-center justify-center gap-1.5 text-xs font-bold text-slate-600 dark:text-slate-300">
                         {row.lastOrderDate ? (
                           <>
@@ -582,17 +824,37 @@ export default function ScotKbPage() {
                         )}
                       </div>
                     </td>
-                    <td className="px-6 py-4 text-center">
-                      {row.frequencyDays ? (
-                        <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 text-[10px] font-black uppercase tracking-widest rounded-full border border-indigo-500/20 shadow-sm">
-                          <ArrowPathIcon className="w-3.5 h-3.5" />
-                          {row.frequencyDays} Days
-                        </span>
-                      ) : (
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">N/A</span>
-                      )}
+                    <td className="px-6 py-4 text-center whitespace-nowrap sticky left-[450px] z-10 bg-white dark:bg-slate-900 border-r-2 border-slate-200 dark:border-slate-700 w-[150px] min-w-[150px] max-w-[150px] group-hover/row:bg-slate-50 dark:group-hover/row:bg-slate-800/80 transition-colors">
+                      <div className="flex items-center justify-center gap-1.5 text-xs font-bold text-slate-600 dark:text-slate-300">
+                        {row.lastCallDate ? (
+                          <>
+                            <PhoneIcon className="w-4 h-4 text-emerald-500" />
+                            {row.lastCallDate.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' })}
+                          </>
+                        ) : (
+                          <span className="opacity-50 text-slate-400 italic">No Calls</span>
+                        )}
+                      </div>
                     </td>
-                    <td className="px-6 py-4 text-center">
+                    <td className="px-6 py-4 text-center whitespace-nowrap group sticky left-[600px] z-10 bg-white dark:bg-slate-900 border-r-2 border-slate-200 dark:border-slate-700 w-[160px] min-w-[160px] max-w-[160px] group-hover/row:bg-slate-50 dark:group-hover/row:bg-slate-800/80 transition-colors">
+                      <div className="flex items-center justify-center gap-2">
+                        {row.frequencyDays ? (
+                          <span className={`inline-flex items-center gap-1.5 px-3 py-1 text-[10px] font-black uppercase tracking-widest rounded-full border shadow-sm ${row.isManualFrequency ? 'bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/20' : 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/20'}`} title={row.isManualFrequency ? 'Manual Frequency' : 'Calculated Frequency'}>
+                            <ArrowPathIcon className="w-3.5 h-3.5" />
+                            {row.frequencyDays} Days
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">N/A</span>
+                        )}
+                        <button 
+                          onClick={() => { setFreqParty(row.toName); setFreqValue(row.isManualFrequency ? String(row.frequencyDays) : ""); setIsFreqModalOpen(true); }}
+                          className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-700 transition-opacity"
+                        >
+                          <PencilIcon className="w-3 h-3 text-slate-500" />
+                        </button>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 text-center whitespace-nowrap sticky left-[760px] z-10 bg-white dark:bg-slate-900 border-r-2 border-slate-200 dark:border-slate-700 shadow-[4px_0_10px_-4px_rgba(0,0,0,0.1)] w-[160px] min-w-[160px] max-w-[160px] group-hover/row:bg-slate-50 dark:group-hover/row:bg-slate-800/80 transition-colors">
                       {row.nextPlannedDate ? (
                         <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[10px] font-black uppercase tracking-widest rounded-full border border-emerald-500/20 shadow-sm">
                           <CalendarIcon className="w-3.5 h-3.5" />
@@ -605,11 +867,19 @@ export default function ScotKbPage() {
                     {scotMonthDates.map(dateStr => {
                       const cType = row.callsByDate[dateStr];
                       const hasOrder = row.ordersByDate[dateStr];
+                      const isScheduledDate = row.nextPlannedDate && 
+                        `${row.nextPlannedDate.getFullYear()}-${String(row.nextPlannedDate.getMonth() + 1).padStart(2, '0')}-${String(row.nextPlannedDate.getDate()).padStart(2, '0')}` === dateStr;
+
                       return (
-                        <td key={dateStr} className="px-4 py-4 text-center border-l border-slate-100 dark:border-slate-800/50">
+                        <td key={dateStr} className="px-4 py-4 text-center border-l-2 border-slate-200 dark:border-slate-700">
                           <div className="flex items-center justify-center gap-1">
+                            {isScheduledDate && (
+                              <span title="Scheduled Order Date" className="w-6 h-6 flex items-center justify-center rounded-full bg-teal-500 text-white shadow-md font-black text-[11px]">
+                                S
+                              </span>
+                            )}
                             {cType && (
-                              <span title={`Call Type: ${cType}`} className={`w-5 h-5 flex items-center justify-center rounded-full text-[10px] font-black text-white shadow-sm ${
+                              <span title={`Call Type: ${cType}`} className={`w-6 h-6 flex items-center justify-center rounded-full text-[11px] font-black text-white shadow-md ${
                                 cType.toUpperCase().includes('MISS') ? 'bg-rose-500' :
                                 cType.toUpperCase().includes('OUT') ? 'bg-emerald-500' :
                                 cType.toUpperCase().includes('REJ') ? 'bg-amber-500' :
@@ -620,11 +890,11 @@ export default function ScotKbPage() {
                               </span>
                             )}
                             {hasOrder && (
-                              <span title="Order Placed" className="w-5 h-5 flex items-center justify-center rounded-full bg-purple-500 text-white shadow-sm">
-                                <ShoppingCartIcon className="w-3 h-3" />
+                              <span title="Order Placed" className="w-6 h-6 flex items-center justify-center rounded-full bg-purple-500 text-white shadow-md">
+                                <ShoppingCartIcon className="w-3.5 h-3.5" />
                               </span>
                             )}
-                            {!cType && !hasOrder && (
+                            {!cType && !hasOrder && !isScheduledDate && (
                               <span className="text-slate-200 dark:text-slate-800">-</span>
                             )}
                           </div>
@@ -635,6 +905,47 @@ export default function ScotKbPage() {
                 ))}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* Manual Frequency Modal */}
+      {isFreqModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-xl w-full max-w-sm animate-in zoom-in-95 duration-200">
+            <h3 className="text-lg font-black text-slate-900 dark:text-white mb-1">Set Manual Frequency</h3>
+            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-6">Party: <span className="text-blue-500">{freqParty}</span></p>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Frequency (in Days)</label>
+                <input 
+                  type="number" 
+                  value={freqValue}
+                  onChange={(e) => setFreqValue(e.target.value)}
+                  placeholder="e.g. 15"
+                  className="w-full px-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-bold text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div className="flex justify-end gap-3 pt-4">
+                <button 
+                  onClick={() => setIsFreqModalOpen(false)}
+                  disabled={isSavingFreq}
+                  className="px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button 
+                  onClick={saveFrequency}
+                  disabled={isSavingFreq}
+                  className="px-6 py-2 rounded-xl text-xs font-black uppercase tracking-widest bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-500/20 disabled:opacity-50 transition-all flex items-center gap-2"
+                >
+                  {isSavingFreq ? <ArrowPathIcon className="w-4 h-4 animate-spin" /> : <CheckCircleIcon className="w-4 h-4" />}
+                  {isSavingFreq ? 'Saving...' : 'Save'}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

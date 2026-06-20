@@ -46,6 +46,8 @@ export const navigation = [
   // Sales & Field Section
   { name: 'Sales', id: 'sales', href: '/sales', icon: CurrencyDollarIcon, section: 'Sales & Field' },
   { name: 'Field Driver', id: 'field-driver', href: '/field-driver', icon: MapPinIcon, section: 'Sales & Field' },
+  { name: 'Scot', id: 'scot', href: '/scot', icon: PhoneIcon, section: 'Sales & Field' },
+  { name: 'Scot KB', id: 'scot-kb', href: '/scot-kb', icon: PhoneIcon, section: 'Sales & Field' },
 
   // Operations Section
   { name: 'O2D', id: 'o2d', href: '/o2d', icon: ShoppingBagIcon, section: 'Operations' },
@@ -65,6 +67,4 @@ export const navigation = [
 
   // Communication Section
   { name: 'Chat', id: 'chat', href: '/chat', icon: ChatBubbleLeftRightIcon, section: 'Communication' },
-  { name: 'Scot', id: 'scot', href: '/scot', icon: PhoneIcon, section: 'Communication' },
-  { name: 'Scot KB', id: 'scot-kb', href: '/scot-kb', icon: PhoneIcon, section: 'Communication' },
 ];
