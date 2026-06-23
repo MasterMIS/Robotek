@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { formatDateMMM } from "@/lib/dateUtils";
 import { leaveRequestService, leaveRemarkService, LeaveRequest, LeaveRemark } from "@/lib/leave-sheets";
+import { sendLeaveNotification } from "@/lib/leave-notifications";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -54,6 +55,10 @@ export async function POST(req: NextRequest) {
       if (!lv) throw new Error("Leave not found");
 
       await leaveRequestService.update(leaveId, { ...lv, status });
+      
+      // Fire notification in background
+      sendLeaveNotification('UPDATE_STATUS', { ...lv, status }, { status }).catch(console.error);
+      
       return NextResponse.json({ success: true });
 
     } else if (action === 'ACCEPT_RESPONSIBILITY') {
@@ -76,6 +81,10 @@ export async function POST(req: NextRequest) {
         }
 
         await leaveRequestService.update(leaveId, updated);
+        
+        // Fire notification in background
+        sendLeaveNotification('ACCEPT_RESPONSIBILITY', updated, { acceptedBy }).catch(console.error);
+        
         return NextResponse.json({ success: true });
 
     } else if (action === 'ADD_REMARK') {
@@ -88,6 +97,14 @@ export async function POST(req: NextRequest) {
         createdAt: new Date().toISOString()
       };
       await leaveRemarkService.add(newRemark);
+      
+      // Fire notification in background
+      const allLeaves = await leaveRequestService.getAll();
+      const lv = allLeaves.find(l => l.id === leaveId);
+      if (lv) {
+        sendLeaveNotification('ADD_REMARK', lv, { comment }).catch(console.error);
+      }
+      
       return NextResponse.json({ success: true });
 
     } else {
@@ -132,6 +149,9 @@ export async function POST(req: NextRequest) {
 
       await leaveRequestService.add(newLeave);
 
+      // Fire notification in background
+      sendLeaveNotification('CREATE', newLeave).catch(console.error);
+
       return NextResponse.json({ success: true, leave: newLeave });
     }
   } catch (error) {
@@ -152,6 +172,9 @@ export async function PUT(req: NextRequest) {
 
         const updated = { ...lv, ...updates };
         await leaveRequestService.update(leaveId, updated);
+
+        // Fire notification in background
+        sendLeaveNotification('UPDATE', updated).catch(console.error);
 
         return NextResponse.json({ success: true });
     } catch (error) {
@@ -178,6 +201,9 @@ export async function DELETE(req: NextRequest) {
         for (const rem of targetRemarks) {
             await leaveRemarkService.delete(rem.id);
         }
+
+        // Fire notification in background before deletion completes, so we still have the object
+        sendLeaveNotification('DELETE', lv).catch(console.error);
 
         return NextResponse.json({ success: true });
     } catch (error) {
