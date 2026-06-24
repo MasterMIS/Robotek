@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
 
     await Promise.all(matching.map(async (item) => {
       const updated = { ...item };
-      const maxStep = 5;
+      const maxStep = 7;
       const endStep = onlyThisStep ? startStep : maxStep;
       
       for (let i = startStep; i <= endStep; i++) {
@@ -33,8 +33,8 @@ export async function POST(req: NextRequest) {
         if (i === 1) {
           (updated as any).voucher_num_1 = "";
           (updated as any).attach_bill_1 = "";
-        } else if (i === 5) {
-          (updated as any).attach_billty_5 = "";
+        } else if (i === 7) {
+          (updated as any).attach_billty_7 = "";
         }
       }
       

@@ -35,7 +35,7 @@ function generateCSV(data: any[], selectedSteps: number[], includeDetails: boole
       if (stepIdx === 1) {
         headers.push(`${stepName} (Voucher Number)`);
         headers.push(`${stepName} (Attach Bill)`);
-      } else if (stepIdx === 5) {
+      } else if (stepIdx === 7) {
         headers.push(`${stepName} (Attach Billty)`);
       }
     });
@@ -84,8 +84,8 @@ function generateCSV(data: any[], selectedSteps: number[], includeDetails: boole
         if (stepIdx === 1) {
           row.push(`"${((item as any).voucher_num_1 || "").toString().replace(/"/g, '""')}"`);
           row.push(`"${((item as any).attach_bill_1 || "").toString().replace(/"/g, '""')}"`);
-        } else if (stepIdx === 5) {
-          row.push(`"${((item as any).attach_billty_5 || "").toString().replace(/"/g, '""')}"`);
+        } else if (stepIdx === 7) {
+          row.push(`"${((item as any).attach_billty_7 || "").toString().replace(/"/g, '""')}"`);
         }
       });
 

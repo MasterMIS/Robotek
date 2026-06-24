@@ -43,7 +43,7 @@ class O2DKBService extends BaseSheetsService<O2DKB> {
       hold: get("hold"),
     };
 
-    for (let i = 1; i <= 5; i++) {
+    for (let i = 1; i <= 7; i++) {
       (item as any)[`planned_${i}`] = get(`planned_${i}`);
       (item as any)[`actual_${i}`] = get(`actual_${i}`);
       (item as any)[`status_${i}`] = get(`status_${i}`);
@@ -51,7 +51,7 @@ class O2DKBService extends BaseSheetsService<O2DKB> {
 
     item.voucher_num_1 = get("voucher_num_1");
     item.attach_bill_1 = get("attach_bill_1");
-    item.attach_billty_5 = get("attech_billty_5") || get("attach_billty_5");
+    item.attach_billty_7 = get("attech_billty_7") || get("attach_billty_7") || get("attech_billty_5") || get("attach_billty_5");
 
     return item;
   }
@@ -86,7 +86,7 @@ class O2DKBService extends BaseSheetsService<O2DKB> {
     set("cancelled", o2dkb.cancelled || "");
     set("hold", o2dkb.hold || "");
 
-    for (let i = 1; i <= 5; i++) {
+    for (let i = 1; i <= 7; i++) {
       set(`planned_${i}`, (o2dkb as any)[`planned_${i}`]);
       set(`actual_${i}`, (o2dkb as any)[`actual_${i}`]);
       set(`status_${i}`, (o2dkb as any)[`status_${i}`]);
@@ -94,10 +94,12 @@ class O2DKBService extends BaseSheetsService<O2DKB> {
 
     set("voucher_num_1", o2dkb.voucher_num_1 || "");
     set("attach_bill_1", o2dkb.attach_bill_1 || "");
-    if (this.hMap["attach_billty_5"] !== undefined) {
-      set("attach_billty_5", o2dkb.attach_billty_5 || "");
+    if (this.hMap["attach_billty_7"] !== undefined) {
+      set("attach_billty_7", o2dkb.attach_billty_7 || "");
+    } else if (this.hMap["attach_billty_5"] !== undefined) {
+      set("attach_billty_5", o2dkb.attach_billty_7 || "");
     } else {
-      set("attech_billty_5", o2dkb.attach_billty_5 || "");
+      set("attech_billty_7", o2dkb.attach_billty_7 || "");
     }
 
     const maxIdx = Math.max(...Object.values(this.hMap));
@@ -333,7 +335,7 @@ class O2DKBService extends BaseSheetsService<O2DKB> {
       const rows = response.data.values;
       if (!rows) return false;
 
-      const endStep = onlyThisStep ? startStep : 5;
+      const endStep = onlyThisStep ? startStep : 7;
       const data = indicesToUpdate.map(index => {
         const row = [...rows[index]];
         const maxIdx = Math.max(...Object.values(this.hMap));
@@ -492,7 +494,7 @@ export const o2dkbService = new O2DKBService();
 export function getPendingStepIdx(orderItems: O2DKB[]): number {
   if (!orderItems || orderItems.length === 0) return -1;
   const firstItem = orderItems[0] as any;
-  for (let i = 1; i <= 5; i++) {
+  for (let i = 1; i <= 7; i++) {
     const pVal = (firstItem[`planned_${i}`] || "").toString().trim();
     const aVal = (firstItem[`actual_${i}`] || "").toString().trim();
     const sVal = (firstItem[`status_${i}`] || "").toString().trim();
@@ -688,7 +690,7 @@ export async function getO2DKBSummary(currentUser: string = "", userRole: string
     groupedByOrder[orderNo].push(item);
   });
 
-  const stepCounts = Array(5).fill(0);
+  const stepCounts = Array(7).fill(0);
 
   Object.values(groupedByOrder).forEach((orderItems) => {
     const firstItem = orderItems[0];

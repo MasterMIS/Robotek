@@ -1275,7 +1275,7 @@ export default function O2DPage() {
             const prevStatus = (updated as any)[`status_${i}`];
 
             // Skip logic: if Step 3 is Yes, skip Step 4 and go to Step 5
-            if (stepIdx === 4 && prevStatus === "Yes" && i === 3) {
+            if (stepIdx === 4 && (updated as any)[`status_3`] === "Yes") {
               (updated as any)[pKey] = ""; // Skip Step 4
               continue;
             }
@@ -1788,8 +1788,8 @@ export default function O2DPage() {
               if (i === 1) {
                 (newO as any).voucher_num_1 = "";
                 (newO as any).attach_bill_1 = "";
-              } else if (i === 5) {
-                (newO as any).attach_billty_5 = "";
+              } else if (i === 7) {
+                (newO as any).attach_billty_7 = "";
               }
             }
           }
@@ -1928,12 +1928,12 @@ export default function O2DPage() {
       let errorMsg = "";
       const existingAttachment =
         stepIdx === 1 ? first.attach_bill_1 :
-        stepIdx === 5 ? first.attach_billty_5 : "";
+        stepIdx === 7 ? first.attach_billty_7 : "";
 
       if (stepIdx === 1) {
         if (!fields.voucher_num_1) errorMsg = "Voucher Number is mandatory.";
         else if (!stepAttachment && !existingAttachment) errorMsg = "Bill Attachment is mandatory.";
-      } else if (stepIdx === 5) {
+      } else if (stepIdx === 7) {
         if (!stepAttachment && !existingAttachment) errorMsg = "Billty Attachment is mandatory.";
       }
 
@@ -1966,6 +1966,13 @@ export default function O2DPage() {
       ) {
         let nextStepIdx = stepIdx + 1;
 
+        // Skip logic: if Step 3 is Yes, jump to Step 5
+        if (stepIdx === 3 && stepUpdateFields.status === "Yes") {
+          nextStepIdx = 5;
+          (updated as any)[`planned_4`] = "";
+          (updated as any)[`actual_4`] = "";
+          (updated as any)[`status_4`] = "";
+        }
 
         const nextTat = globalConfigs[nextStepIdx - 1]?.tat || "24 Hrs";
         let baseForNext = timestamp;
@@ -2012,7 +2019,7 @@ export default function O2DPage() {
       if (fileUploaded && mergedOrder && uploadedFileId) {
         const fieldMap: any = {
           1: "attach_bill_1",
-          5: "attach_billty_5",
+          7: "attach_billty_7",
         };
         const targetField = fieldMap[currentStepToUpdate];
         if (targetField) {
@@ -4773,14 +4780,14 @@ function O2DDetailPanel({
                     })()}
                   </div>
 
-                  {/* Step 5: Share Billty */}
+                  {/* Step 7: Share Billty */}
                   <div className="space-y-4">
                     <div className="flex items-center gap-2 text-[11px] font-black text-[#003875] dark:text-[#FFD500] uppercase tracking-widest border-b border-gray-100 pb-2">
                       <HashtagIcon className="w-4 h-4" />{" "}
-                      Step 5: Share Billty
+                      Step 7: Share Billty
                     </div>
                     {(() => {
-                      const attachBillty = selectedOrder[0]?.attach_billty_5;
+                      const attachBillty = selectedOrder[0]?.attach_billty_7;
                       if (!attachBillty) return (
                         <div className="flex flex-col">
                           <span className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">
