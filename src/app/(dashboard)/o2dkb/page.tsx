@@ -3450,7 +3450,7 @@ export default function O2DPage() {
                   </div>
                 )}
 
-                {currentStepToUpdate === 5 && (
+                {currentStepToUpdate === 7 && (
                   <div className="space-y-4 pt-2 border-t border-gray-100 dark:border-white/5">
                     <div>
                       <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest block flex items-center gap-1.5 font-bold font-bold">
