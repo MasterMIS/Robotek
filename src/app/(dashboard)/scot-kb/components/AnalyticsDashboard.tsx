@@ -108,7 +108,7 @@ export default function AnalyticsDashboard({ feeders, scotRows = [] }: { feeders
 
           {/* Month */}
           <div>
-            <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3">Month</label>
+
             <select 
               value={filters.month}
               onChange={(e) => setFilters(f => ({ ...f, month: e.target.value }))}
@@ -121,7 +121,7 @@ export default function AnalyticsDashboard({ feeders, scotRows = [] }: { feeders
 
           {/* Week */}
           <div>
-            <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3">Week</label>
+
             <select 
               value={filters.week}
               onChange={(e) => setFilters(f => ({ ...f, week: e.target.value }))}
