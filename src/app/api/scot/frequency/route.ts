@@ -5,14 +5,17 @@ import { auth } from "@/auth";
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
     const session = await auth();
     if (!session) {
       return new NextResponse("Unauthorized", { status: 401 });
     }
 
-    const data = await getFrequencyData();
+    const { searchParams } = new URL(req.url);
+    const source = (searchParams.get('source') as "scot" | "scot-kb") || "scot-kb";
+
+    const data = await getFrequencyData(source);
     return NextResponse.json({ success: true, data });
   } catch (error: any) {
     console.error("GET /api/scot/frequency error:", error);
@@ -27,13 +30,14 @@ export async function POST(req: Request) {
       return new NextResponse("Unauthorized", { status: 401 });
     }
 
-    const { partyName, frequency } = await req.json();
+    const { partyName, frequency, source } = await req.json();
     
     if (!partyName || frequency === undefined) {
       return NextResponse.json({ success: false, error: "Missing partyName or frequency" }, { status: 400 });
     }
 
-    await updateFrequencyData(partyName, frequency.toString());
+    const sheetSource = source === "scot" ? "scot" : "scot-kb";
+    await updateFrequencyData(partyName, frequency.toString(), sheetSource);
     return NextResponse.json({ success: true });
   } catch (error: any) {
     console.error("POST /api/scot/frequency error:", error);

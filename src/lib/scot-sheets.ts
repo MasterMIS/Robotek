@@ -4,6 +4,7 @@ const SCOT_SPREADSHEET_ID = "1DUWUB_vySOgV3gWg_Vsz-jt4Ws_B4SBSj1pIfhqEfh0";
 const SCOT_SHEET_NAME = "Data Feeder";
 
 export interface ScotRecord {
+  id: string;
   employeeName: string;
   employeeNumber: string;
   toName: string;
@@ -13,9 +14,8 @@ export interface ScotRecord {
   duration: string;
   callDate: string;
   callTime: string;
-  notes: string;
-  uniqueId: string;
-  audioUrl: string;
+  timestamp: string;
+  updated_at: string;
 }
 
 export interface CallRecord {
@@ -59,18 +59,18 @@ export async function getScotData(): Promise<ScotRecord[]> {
 
     const rows = response.data.values || [];
     return rows.map((row) => ({
-      employeeName: row[0] || "",
-      employeeNumber: row[1] || "",
-      toName: row[2] || "",
-      countryCode: row[3] || "",
-      toNumber: row[4] || "",
-      callType: row[5] || "",
-      duration: row[6] || "",
-      callDate: row[7] || "",
-      callTime: row[8] || "",
-      notes: row[9] || "",
-      uniqueId: row[10] || "",
-      audioUrl: row[11] || "",
+      id: row[0] || "",
+      employeeName: row[1] || "",
+      employeeNumber: row[2] || "",
+      toName: row[3] || "",
+      countryCode: row[4] || "",
+      toNumber: row[5] || "",
+      callType: row[6] || "",
+      duration: row[7] || "",
+      callDate: row[8] || "",
+      callTime: row[9] || "",
+      timestamp: row[10] || "",
+      updated_at: row[11] || "",
     }));
   } catch (error) {
     console.error("Error fetching Scot data:", error);
@@ -279,29 +279,37 @@ export interface FrequencyRecord {
   frequency: string;
 }
 
-const FREQUENCY_SPREADSHEET_ID = "1IhvpIYKBojl3hn0SdV-gMp79ehNg5p4Ggp_Znjfzc-I";
+const SCOT_KB_SPREADSHEET_ID = "1IhvpIYKBojl3hn0SdV-gMp79ehNg5p4Ggp_Znjfzc-I";
 
-export async function getFrequencyData(): Promise<FrequencyRecord[]> {
+export async function getFrequencyData(source: "scot" | "scot-kb" = "scot-kb"): Promise<FrequencyRecord[]> {
+  const spreadsheetId = source === "scot" ? SCOT_SPREADSHEET_ID : SCOT_KB_SPREADSHEET_ID;
   try {
     const sheets = await getSheetsClient();
     let response;
     try {
       response = await sheets.spreadsheets.values.get({
-        spreadsheetId: FREQUENCY_SPREADSHEET_ID,
+        spreadsheetId,
         range: `'Frequency'!A:B`,
       });
     } catch (err: any) {
       if (err.message?.includes('Unable to parse range')) {
         // Sheet doesn't exist, try to create it
         await sheets.spreadsheets.batchUpdate({
-          spreadsheetId: FREQUENCY_SPREADSHEET_ID,
+          spreadsheetId,
           requestBody: {
             requests: [{ addSheet: { properties: { title: "Frequency" } } }]
           }
         });
+        // Add headers
+        await sheets.spreadsheets.values.append({
+          spreadsheetId,
+          range: `'Frequency'!A:B`,
+          valueInputOption: "USER_ENTERED",
+          requestBody: { values: [["Party Name", "Frequency (Days)"]] }
+        });
         // Try getting again (it will be empty but won't error)
         response = await sheets.spreadsheets.values.get({
-          spreadsheetId: FREQUENCY_SPREADSHEET_ID,
+          spreadsheetId,
           range: `'Frequency'!A:B`,
         });
       } else {
@@ -320,34 +328,35 @@ export async function getFrequencyData(): Promise<FrequencyRecord[]> {
   }
 }
 
-export async function updateFrequencyData(partyName: string, frequency: string): Promise<boolean> {
+export async function updateFrequencyData(partyName: string, frequency: string, source: "scot" | "scot-kb" = "scot-kb"): Promise<boolean> {
+  const spreadsheetId = source === "scot" ? SCOT_SPREADSHEET_ID : SCOT_KB_SPREADSHEET_ID;
   try {
     const sheets = await getSheetsClient();
     let response;
     try {
       response = await sheets.spreadsheets.values.get({
-        spreadsheetId: FREQUENCY_SPREADSHEET_ID,
+        spreadsheetId,
         range: `'Frequency'!A:B`,
       });
     } catch (err: any) {
       if (err.message?.includes('Unable to parse range')) {
         // Sheet doesn't exist, try to create it
         await sheets.spreadsheets.batchUpdate({
-          spreadsheetId: FREQUENCY_SPREADSHEET_ID,
+          spreadsheetId,
           requestBody: {
             requests: [{ addSheet: { properties: { title: "Frequency" } } }]
           }
         });
         // Add headers
         await sheets.spreadsheets.values.append({
-          spreadsheetId: FREQUENCY_SPREADSHEET_ID,
+          spreadsheetId,
           range: `'Frequency'!A:B`,
           valueInputOption: "USER_ENTERED",
           requestBody: { values: [["Party Name", "Frequency (Days)"]] }
         });
         // Try getting again
         response = await sheets.spreadsheets.values.get({
-          spreadsheetId: FREQUENCY_SPREADSHEET_ID,
+          spreadsheetId,
           range: `'Frequency'!A:B`,
         });
       } else {
@@ -362,7 +371,7 @@ export async function updateFrequencyData(partyName: string, frequency: string):
     if (rowIndex !== -1) {
       // Update existing
       await sheets.spreadsheets.values.update({
-        spreadsheetId: FREQUENCY_SPREADSHEET_ID,
+        spreadsheetId,
         range: `'Frequency'!A${rowIndex + 1}:B${rowIndex + 1}`,
         valueInputOption: "USER_ENTERED",
         requestBody: {
@@ -372,7 +381,7 @@ export async function updateFrequencyData(partyName: string, frequency: string):
     } else {
       // Append new
       await sheets.spreadsheets.values.append({
-        spreadsheetId: FREQUENCY_SPREADSHEET_ID,
+        spreadsheetId,
         range: `'Frequency'!A1:B`,
         valueInputOption: "USER_ENTERED",
         requestBody: {

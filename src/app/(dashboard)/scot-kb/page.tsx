@@ -63,7 +63,7 @@ export default function ScotKbPage() {
   );
 
   const { data: frequencyDataRes, mutate: mutateFrequency } = useSWR(
-    `/api/scot/frequency`,
+    `/api/scot/frequency?source=scot-kb`,
     fetcher
   );
 
@@ -110,7 +110,7 @@ export default function ScotKbPage() {
       const res = await fetch("/api/scot/frequency", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ partyName: freqParty, frequency: freqValue })
+        body: JSON.stringify({ partyName: freqParty, frequency: freqValue, source: 'scot-kb' })
       });
       if (!res.ok) {
         // If it failed, revalidate to get true state back

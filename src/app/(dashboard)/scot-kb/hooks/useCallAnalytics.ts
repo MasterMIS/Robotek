@@ -50,8 +50,25 @@ export const formatSecondsToDuration = (totalSeconds: number) => {
 
 const getExcelHour = (callTime: string | number | undefined): number | null => {
   if (!callTime) return null;
+  
+  if (typeof callTime === 'string') {
+    if (callTime.includes(':')) {
+      const parts = callTime.split(':');
+      let hour = parseInt(parts[0], 10);
+      if (!isNaN(hour)) {
+        if (callTime.toLowerCase().includes('pm') && hour < 12) hour += 12;
+        if (callTime.toLowerCase().includes('am') && hour === 12) hour = 0;
+        if (hour >= 0 && hour <= 23) return hour;
+      }
+    }
+  }
+
   const num = typeof callTime === 'string' ? parseFloat(callTime) : callTime;
-  if (isNaN(num) || num >= 1 || num < 0) return null; 
+  if (isNaN(num)) return null; 
+  if (num >= 1 || num < 0) {
+    if (num >= 0 && num <= 23 && !String(callTime).includes(':')) return Math.floor(num);
+    return null; 
+  }
   const totalMinutes = Math.round(num * 24 * 60);
   return Math.floor(totalMinutes / 60); // 0 to 23
 };

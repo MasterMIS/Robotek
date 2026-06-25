@@ -142,30 +142,33 @@ export async function POST(req: NextRequest) {
 
     const success = await appendScotData(records.map(r => {
       if (Array.isArray(r)) {
-        const employeeName = r[0] !== undefined ? String(r[0]) : "";
-        const employeeNumber = r[1] !== undefined ? String(r[1]) : "";
-        const toName = r[2] !== undefined ? String(r[2]) : "";
-        const countryCode = r[3] !== undefined ? String(r[3]) : "";
-        const toNumber = r[4] !== undefined ? String(r[4]) : "";
-        const callType = r[5] !== undefined ? String(r[5]) : "";
-        const duration = r[6] !== undefined ? String(r[6]) : "";
-        const callDate = r[7] !== undefined ? String(r[7]) : "";
-        const callTime = r[8] !== undefined ? String(r[8]) : "";
-        const notes = r[9] !== undefined ? String(r[9]) : "";
-        const uniqueId = (r[10] !== undefined && String(r[10]).trim()) 
-          ? String(r[10]) 
-          : `scot_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
-        const audioUrl = r[11] !== undefined ? String(r[11]) : "";
+        const id = (r[0] !== undefined && String(r[0]).trim()) 
+          ? String(r[0]) 
+          : `${Date.now()}`;
+        const employeeName = r[1] !== undefined ? String(r[1]) : "";
+        const employeeNumber = r[2] !== undefined ? String(r[2]) : "";
+        const toName = r[3] !== undefined ? String(r[3]) : "";
+        const countryCode = r[4] !== undefined ? String(r[4]) : "";
+        const toNumber = r[5] !== undefined ? String(r[5]) : "";
+        const callType = r[6] !== undefined ? String(r[6]) : "";
+        const duration = r[7] !== undefined ? String(r[7]) : "";
+        const callDate = r[8] !== undefined ? String(r[8]) : "";
+        const callTime = r[9] !== undefined ? String(r[9]) : "";
+        const timestamp = new Date().toISOString();
+        const created_at = r[10] !== undefined && String(r[10]).trim() ? String(r[10]) : timestamp;
+        const updated_at = r[11] !== undefined && String(r[11]).trim() ? String(r[11]) : timestamp;
 
         return [
-          employeeName, employeeNumber, toName, countryCode, toNumber,
-          callType, duration, callDate, callTime, notes, uniqueId, audioUrl
+          id, employeeName, employeeNumber, toName, countryCode, toNumber,
+          callType, duration, callDate, callTime, created_at, updated_at
         ];
       } else {
-        const uniqueId = (r.uniqueId && String(r.uniqueId).trim())
-          ? String(r.uniqueId)
-          : `scot_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
+        const id = (r.id && String(r.id).trim())
+          ? String(r.id)
+          : `${Date.now()}`;
+        const timestamp = new Date().toISOString();
         return [
+          id,
           r.employeeName !== undefined ? String(r.employeeName) : "",
           r.employeeNumber !== undefined ? String(r.employeeNumber) : "",
           r.toName !== undefined ? String(r.toName) : "",
@@ -175,9 +178,8 @@ export async function POST(req: NextRequest) {
           r.duration !== undefined ? String(r.duration) : "",
           r.callDate !== undefined ? String(r.callDate) : "",
           r.callTime !== undefined ? String(r.callTime) : "",
-          r.notes !== undefined ? String(r.notes) : "",
-          uniqueId,
-          r.audioUrl !== undefined ? String(r.audioUrl) : ""
+          r.created_at !== undefined && String(r.created_at).trim() ? String(r.created_at) : timestamp,
+          r.updated_at !== undefined && String(r.updated_at).trim() ? String(r.updated_at) : timestamp
         ];
       }
     }));

@@ -2,7 +2,7 @@ import { sendWhatsAppMessage } from "@/lib/maytapi";
 import { getUsers } from "@/lib/google-sheets";
 import { LeaveRequest } from "@/lib/leave-sheets";
 
-const HR_NUMBERS = ["9873441531", "8368998535"];
+const HR_NUMBERS = ["9873441531", "8368998535"];  
 
 export async function sendLeaveNotification(action: string, leave: LeaveRequest, extraData?: any) {
   try {
