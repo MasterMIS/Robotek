@@ -400,29 +400,28 @@ export default function LeavePage() {
                             </div>
                     </div>
 
-                    <div className="grid grid-cols-1 gap-3 flex-1 min-h-0">
-                        <div className="space-y-2 overflow-auto custom-scrollbar pr-1">
-                            {/* Status tabs */}
-                            <div className="flex items-end gap-4 mb-3 border-b border-transparent">
-                                {(['All','Pending','Approved','Rejected'] as const).map(tab => {
-                                    const count = tab === 'All' ? leaves.length : leaves.filter(l => l.status === tab).length;
-                                    const active = filterTab === tab;
-                                    const IconComp = tab === 'All' ? Square2StackIcon : tab === 'Pending' ? ClockIcon : tab === 'Approved' ? CheckCircleIcon : XMarkIcon;
-                                    return (
-                                        <button
-                                            key={tab}
-                                            onClick={() => { setFilterTab(tab); setLeavePage(1); }}
-                                            className={`flex items-center gap-2 px-3 py-2 text-sm font-black transition-all ${active ? 'border-b-2 border-[#003875] text-[#003875]' : 'text-gray-600 hover:text-gray-800'}`}
-                                        >
-                                            <IconComp className={`w-4 h-4 ${active ? 'text-[#003875]' : 'text-gray-500'}`} />
-                                            <span className="uppercase tracking-wider text-xs">{tab}</span>
-                                            <span className={`ml-1 inline-flex items-center justify-center w-5 h-5 text-[11px] font-black rounded-full ${active ? 'bg-[#003875] text-white' : 'bg-gray-100 text-gray-700'}`}>{count}</span>
-                                        </button>
-                                    );
-                                })}
-                            </div>
-                            
-
+                    <div className="flex flex-col gap-3 flex-1 min-h-0">
+                        {/* Status tabs */}
+                        <div className="flex items-end gap-4 shrink-0 border-b border-transparent">
+                            {(['All','Pending','Approved','Rejected'] as const).map(tab => {
+                                const count = tab === 'All' ? leaves.length : leaves.filter(l => l.status === tab).length;
+                                const active = filterTab === tab;
+                                const IconComp = tab === 'All' ? Square2StackIcon : tab === 'Pending' ? ClockIcon : tab === 'Approved' ? CheckCircleIcon : XMarkIcon;
+                                return (
+                                    <button
+                                        key={tab}
+                                        onClick={() => { setFilterTab(tab); setLeavePage(1); }}
+                                        className={`flex items-center gap-2 px-3 py-2 text-sm font-black transition-all ${active ? 'border-b-2 border-[#003875] text-[#003875]' : 'text-gray-600 hover:text-gray-800'}`}
+                                    >
+                                        <IconComp className={`w-4 h-4 ${active ? 'text-[#003875]' : 'text-gray-500'}`} />
+                                        <span className="uppercase tracking-wider text-xs">{tab}</span>
+                                        <span className={`ml-1 inline-flex items-center justify-center w-5 h-5 text-[11px] font-black rounded-full ${active ? 'bg-[#003875] text-white' : 'bg-gray-100 text-gray-700'}`}>{count}</span>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                        
+                        <div className="space-y-2 overflow-auto custom-scrollbar pr-1 flex-1 min-h-0">
                             {pagedLeaves.length === 0 ? (
                                 <div style={{backgroundColor:'var(--panel-card)',borderColor:'var(--panel-border)'}} className="border rounded-2xl p-10 text-center">
                                     <ClipboardDocumentListIcon className="w-10 h-10 text-gray-300 dark:text-slate-600 mx-auto mb-3" />
