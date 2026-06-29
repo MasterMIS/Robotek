@@ -43,6 +43,11 @@ export default function ScotPage() {
     fetcher
   );
 
+  const { data: followUpsData, mutate: mutateFollowUps } = useSWR(
+    `/api/scot?tab=followup&source=scot`,
+    fetcher
+  );
+
   const { data: freqData, mutate: mutateFreq } = useSWR(
     '/api/scot/frequency?source=scot',
     fetcher
@@ -50,6 +55,7 @@ export default function ScotPage() {
 
   const o2ds: O2D[] = o2dDataRes?.data || [];
   const feeders: DataFeeder[] = feederData || [];
+  const followUps = followUpsData || [];
   const frequencies = freqData?.data || [];
 
   const [isFreqModalOpen, setIsFreqModalOpen] = useState(false);
@@ -76,6 +82,50 @@ export default function ScotPage() {
       toast.error("An error occurred while saving frequency");
     } finally {
       setIsSavingFreq(false);
+    }
+  };
+
+  const [isFollowUpModalOpen, setIsFollowUpModalOpen] = useState(false);
+  const [followUpParty, setFollowUpParty] = useState("");
+  const [followUpDateValue, setFollowUpDateValue] = useState("");
+  const [isSavingFollowUp, setIsSavingFollowUp] = useState(false);
+
+  const saveFollowUp = async () => {
+    if (!followUpParty || !followUpDateValue) return;
+    setIsSavingFollowUp(true);
+
+    const payload = {
+      type: 'followup',
+      source: 'scot',
+      data: {
+        partyName: followUpParty,
+        status: "Pending",
+        nextFollowUpDate: followUpDateValue,
+        remarks: "Added manually from Scot",
+        createdBy: "Admin",
+        createdAt: new Date().toISOString(),
+        lastFollowUpDate: ""
+      }
+    };
+
+    try {
+      const res = await fetch("/api/scot", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      if (res.ok) {
+        mutateFollowUps();
+        setIsFollowUpModalOpen(false);
+        toast.success("Follow up saved successfully");
+      } else {
+        const d = await res.json();
+        toast.error(d.error || "Failed to save follow up");
+      }
+    } catch (e) {
+      toast.error("Error saving follow up");
+    } finally {
+      setIsSavingFollowUp(false);
     }
   };
 
@@ -358,15 +408,38 @@ export default function ScotPage() {
         }
       }
 
-      // Next Follow-up Date logic: whichever is latest between lastOrderDate and lastCallDate + frequency
+      // Check if there's a manual follow-up date for this party in the Follow Up sheet
+      let manualFollowUpDate: Date | null = null;
+      const partyFollowUps = followUps.filter((f: any) => f.partyName?.toLowerCase().trim() === toName.toLowerCase());
+      if (partyFollowUps.length > 0) {
+        // Sort to get latest manual follow-up entry if multiple exist
+        partyFollowUps.sort((a: any, b: any) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+        const latestManualFollowUp = partyFollowUps[0];
+        if (latestManualFollowUp.nextFollowUpDate) {
+           const parsedDate = new Date(latestManualFollowUp.nextFollowUpDate);
+           if (!isNaN(parsedDate.getTime())) {
+             manualFollowUpDate = parsedDate;
+           }
+        }
+      }
+
+      // Next Follow-up Date logic: calculated based on frequency
+      let freqNextPlannedDate: Date | null = null;
       if (frequencyDays > 0) {
         const baseDate = (lastCallDate && lastOrderDate) 
           ? (lastCallDate.getTime() > lastOrderDate.getTime() ? lastCallDate : lastOrderDate)
           : (lastCallDate || lastOrderDate);
           
         if (baseDate) {
-          nextPlannedDate = new Date(baseDate.getTime() + frequencyDays * 24 * 60 * 60 * 1000);
+          freqNextPlannedDate = new Date(baseDate.getTime() + frequencyDays * 24 * 60 * 60 * 1000);
         }
+      }
+
+      // Whichever is latest between frequency-based date and manual date
+      if (manualFollowUpDate && freqNextPlannedDate) {
+        nextPlannedDate = manualFollowUpDate.getTime() > freqNextPlannedDate.getTime() ? manualFollowUpDate : freqNextPlannedDate;
+      } else {
+        nextPlannedDate = manualFollowUpDate || freqNextPlannedDate;
       }
 
       return {
@@ -380,6 +453,7 @@ export default function ScotPage() {
         nextPlannedDate,
         frequencyDays,
         isManualFrequency,
+        manualFollowUpDate,
         rawOrders: orders
       };
     });
@@ -409,7 +483,7 @@ export default function ScotPage() {
     });
 
     return filteredRows;
-  }, [feeders, o2ds, searchScot, showTodayOnly]);
+  }, [feeders, o2ds, searchScot, showTodayOnly, followUps]);
 
   const paginatedScotRows = scotRows.slice((scotPage - 1) * itemsPerPage, scotPage * itemsPerPage);
 
@@ -436,6 +510,8 @@ export default function ScotPage() {
       "Total Orders",
       "Last Order Date",
       "Recent Follow Up",
+      "Order Frequency",
+      "Manual Follow Up",
       "Next Follow Up Date",
       ...scotMonthDates.map(dateStr => {
         const d = new Date(dateStr);
@@ -448,6 +524,8 @@ export default function ScotPage() {
     const dataRows = scotRows.map(row => {
       const lastOrderStr = row.lastOrderDate ? row.lastOrderDate.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' }) : "No Orders";
       const lastCallStr = row.lastCallDate ? row.lastCallDate.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' }) : "No Calls";
+      const freqStr = row.frequencyDays ? `${row.frequencyDays} Days` : "N/A";
+      const manualDateStr = row.manualFollowUpDate ? row.manualFollowUpDate.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' }) : "N/A";
       const nextDateStr = row.nextPlannedDate ? row.nextPlannedDate.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' }) : "N/A";
 
       const dailyData = scotMonthDates.map(dateStr => {
@@ -467,6 +545,8 @@ export default function ScotPage() {
         row.totalOrders,
         lastOrderStr,
         lastCallStr,
+        freqStr,
+        manualDateStr,
         nextDateStr,
         ...dailyData
       ];
@@ -771,12 +851,13 @@ export default function ScotPage() {
             <table className="w-full text-left border-collapse table-auto relative">
               <thead>
                 <tr className="bg-gradient-to-r from-emerald-600 to-teal-600 text-white">
-                  <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest whitespace-nowrap sticky top-0 left-0 z-30 bg-emerald-600 border-r-2 border-emerald-500/80 w-[200px] min-w-[200px] max-w-[200px]">Target Name</th>
-                  <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-center sticky top-0 left-[200px] z-30 bg-emerald-600 border-r-2 border-emerald-500/80 w-[100px] min-w-[100px] max-w-[100px]">Total Orders</th>
-                  <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-center sticky top-0 left-[300px] z-30 bg-emerald-600 border-r-2 border-emerald-500/80 w-[150px] min-w-[150px] max-w-[150px]">Last Order Date</th>
-                  <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-center sticky top-0 left-[450px] z-30 bg-emerald-600 border-r-2 border-emerald-500/80 w-[150px] min-w-[150px] max-w-[150px]">Recent Follow Up</th>
-                  <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-center sticky top-0 left-[600px] z-30 bg-emerald-600 border-r-2 border-emerald-500/80 w-[160px] min-w-[160px] max-w-[160px]">Order Frequency</th>
-                  <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-center sticky top-0 left-[760px] z-30 bg-emerald-600 border-r-2 border-emerald-700/80 shadow-[4px_0_10px_-4px_rgba(0,0,0,0.3)] w-[160px] min-w-[160px] max-w-[160px]">Next Planned Date</th>
+                  <th className="px-3 py-4 text-[10px] font-black uppercase tracking-widest whitespace-nowrap sticky top-0 left-0 z-30 bg-emerald-600 border-r-2 border-emerald-500/80 w-[180px] min-w-[180px] max-w-[180px]">Target Name</th>
+                  <th className="px-3 py-4 text-[10px] font-black uppercase tracking-widest text-center sticky top-0 left-[180px] z-30 bg-emerald-600 border-r-2 border-emerald-500/80 w-[90px] min-w-[90px] max-w-[90px]">Total Orders</th>
+                  <th className="px-3 py-4 text-[10px] font-black uppercase tracking-widest text-center sticky top-0 left-[270px] z-30 bg-emerald-600 border-r-2 border-emerald-500/80 w-[110px] min-w-[110px] max-w-[110px]">Last Order Date</th>
+                  <th className="px-3 py-4 text-[10px] font-black uppercase tracking-widest text-center sticky top-0 left-[380px] z-30 bg-emerald-600 border-r-2 border-emerald-500/80 w-[120px] min-w-[120px] max-w-[120px]">Recent Follow Up</th>
+                  <th className="px-3 py-4 text-[10px] font-black uppercase tracking-widest text-center sticky top-0 left-[500px] z-30 bg-emerald-600 border-r-2 border-emerald-500/80 w-[120px] min-w-[120px] max-w-[120px]">Order Frequency</th>
+                  <th className="px-3 py-4 text-[10px] font-black uppercase tracking-widest text-center sticky top-0 left-[620px] z-30 bg-emerald-600 border-r-2 border-emerald-500/80 w-[120px] min-w-[120px] max-w-[120px]">Manual Follow Up</th>
+                  <th className="px-3 py-4 text-[10px] font-black uppercase tracking-widest text-center sticky top-0 left-[740px] z-30 bg-emerald-600 border-r-2 border-emerald-700/80 shadow-[4px_0_10px_-4px_rgba(0,0,0,0.3)] w-[130px] min-w-[130px] max-w-[130px]">Next Planned Date</th>
                   {scotMonthDates.map(dateStr => {
                     const d = new Date(dateStr);
                     const day = d.getDate();
@@ -794,7 +875,7 @@ export default function ScotPage() {
                   <tr><td colSpan={5} className="px-6 py-10 text-center text-sm font-bold text-slate-400 uppercase tracking-widest">No target records found</td></tr>
                 ) : paginatedScotRows.map((row, idx) => (
                   <tr key={idx} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors group/row">
-                    <td className="px-6 py-4 whitespace-nowrap sticky left-0 z-10 bg-white dark:bg-slate-900 border-r-2 border-slate-200 dark:border-slate-700 w-[200px] min-w-[200px] max-w-[200px] truncate group-hover/row:bg-slate-50 dark:group-hover/row:bg-slate-800/80 transition-colors">
+                    <td className="px-3 py-4 whitespace-nowrap sticky left-0 z-10 bg-white dark:bg-slate-900 border-r-2 border-slate-200 dark:border-slate-700 w-[180px] min-w-[180px] max-w-[180px] truncate group-hover/row:bg-slate-50 dark:group-hover/row:bg-slate-800/80 transition-colors">
                       <div className="flex flex-col gap-1">
                         <p className="text-xs font-black text-slate-900 dark:text-white flex items-center gap-1.5" title={row.toName}>
                           <UserGroupIcon className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
@@ -803,13 +884,13 @@ export default function ScotPage() {
                         <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest truncate">{row.employeeName || "No Staff Assigned"}</p>
                       </div>
                     </td>
-                    <td className="px-6 py-4 text-center whitespace-nowrap sticky left-[200px] z-10 bg-white dark:bg-slate-900 border-r-2 border-slate-200 dark:border-slate-700 w-[100px] min-w-[100px] max-w-[100px] group-hover/row:bg-slate-50 dark:group-hover/row:bg-slate-800/80 transition-colors">
+                    <td className="px-3 py-4 text-center whitespace-nowrap sticky left-[180px] z-10 bg-white dark:bg-slate-900 border-r-2 border-slate-200 dark:border-slate-700 w-[90px] min-w-[90px] max-w-[90px] group-hover/row:bg-slate-50 dark:group-hover/row:bg-slate-800/80 transition-colors">
                       <span className={`inline-flex items-center gap-1 px-2.5 py-1 text-xs font-black rounded-xl ${row.totalOrders > 0 ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'bg-slate-100 text-slate-500 dark:bg-slate-800/50'}`}>
                         {row.totalOrders > 0 && <ShoppingBagIcon className="w-3.5 h-3.5" />}
                         {row.totalOrders}
                       </span>
                     </td>
-                    <td className="px-6 py-4 text-center whitespace-nowrap sticky left-[300px] z-10 bg-white dark:bg-slate-900 border-r-2 border-slate-200 dark:border-slate-700 w-[150px] min-w-[150px] max-w-[150px] group-hover/row:bg-slate-50 dark:group-hover/row:bg-slate-800/80 transition-colors">
+                    <td className="px-3 py-4 text-center whitespace-nowrap sticky left-[270px] z-10 bg-white dark:bg-slate-900 border-r-2 border-slate-200 dark:border-slate-700 w-[110px] min-w-[110px] max-w-[110px] group-hover/row:bg-slate-50 dark:group-hover/row:bg-slate-800/80 transition-colors">
                       {row.lastOrderDate ? (
                         <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300">
                           {row.lastOrderDate.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' })}
@@ -818,7 +899,7 @@ export default function ScotPage() {
                         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">N/A</span>
                       )}
                     </td>
-                    <td className="px-6 py-4 text-center whitespace-nowrap sticky left-[450px] z-10 bg-white dark:bg-slate-900 border-r-2 border-slate-200 dark:border-slate-700 w-[150px] min-w-[150px] max-w-[150px] group-hover/row:bg-slate-50 dark:group-hover/row:bg-slate-800/80 transition-colors">
+                    <td className="px-3 py-4 text-center whitespace-nowrap sticky left-[380px] z-10 bg-white dark:bg-slate-900 border-r-2 border-slate-200 dark:border-slate-700 w-[120px] min-w-[120px] max-w-[120px] group-hover/row:bg-slate-50 dark:group-hover/row:bg-slate-800/80 transition-colors">
                       {row.lastCallDate ? (
                         <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300">
                           {row.lastCallDate.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' })}
@@ -827,7 +908,7 @@ export default function ScotPage() {
                         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">N/A</span>
                       )}
                     </td>
-                    <td className="px-6 py-4 text-center whitespace-nowrap group sticky left-[600px] z-10 bg-white dark:bg-slate-900 border-r-2 border-slate-200 dark:border-slate-700 w-[160px] min-w-[160px] max-w-[160px] group-hover/row:bg-slate-50 dark:group-hover/row:bg-slate-800/80 transition-colors">
+                    <td className="px-3 py-4 text-center whitespace-nowrap group sticky left-[500px] z-10 bg-white dark:bg-slate-900 border-r-2 border-slate-200 dark:border-slate-700 w-[120px] min-w-[120px] max-w-[120px] group-hover/row:bg-slate-50 dark:group-hover/row:bg-slate-800/80 transition-colors">
                       <div className="flex items-center justify-center gap-2">
                         {row.frequencyDays ? (
                           <span className={`inline-flex items-center gap-1.5 px-3 py-1 text-[10px] font-black uppercase tracking-widest rounded-full border shadow-sm ${row.isManualFrequency ? 'bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/20' : 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/20'}`} title={row.isManualFrequency ? 'Manual Frequency' : 'Calculated Frequency'}>
@@ -845,7 +926,29 @@ export default function ScotPage() {
                         </button>
                       </div>
                     </td>
-                    <td className="px-6 py-4 text-center whitespace-nowrap sticky left-[760px] z-10 bg-white dark:bg-slate-900 border-r-2 border-slate-200 dark:border-slate-700 shadow-[4px_0_10px_-4px_rgba(0,0,0,0.1)] dark:shadow-[4px_0_10px_-4px_rgba(0,0,0,0.5)] w-[160px] min-w-[160px] max-w-[160px] group-hover/row:bg-slate-50 dark:group-hover/row:bg-slate-800/80 transition-colors">
+                    <td className="px-3 py-4 text-center whitespace-nowrap group sticky left-[620px] z-10 bg-white dark:bg-slate-900 border-r-2 border-slate-200 dark:border-slate-700 w-[120px] min-w-[120px] max-w-[120px] group-hover/row:bg-slate-50 dark:group-hover/row:bg-slate-800/80 transition-colors">
+                      <div className="flex items-center justify-center gap-2">
+                        {row.manualFollowUpDate ? (
+                          <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300">
+                            {row.manualFollowUpDate.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' })}
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">N/A</span>
+                        )}
+                        <button 
+                          onClick={() => { 
+                            setFollowUpParty(row.toName); 
+                            const isoDate = row.manualFollowUpDate ? new Date(row.manualFollowUpDate.getTime() - (row.manualFollowUpDate.getTimezoneOffset() * 60000)).toISOString().split('T')[0] : "";
+                            setFollowUpDateValue(isoDate); 
+                            setIsFollowUpModalOpen(true); 
+                          }}
+                          className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-700 transition-opacity"
+                        >
+                          <PencilIcon className="w-3 h-3 text-slate-500" />
+                        </button>
+                      </div>
+                    </td>
+                    <td className="px-3 py-4 text-center whitespace-nowrap sticky left-[740px] z-10 bg-white dark:bg-slate-900 border-r-2 border-slate-200 dark:border-slate-700 shadow-[4px_0_10px_-4px_rgba(0,0,0,0.1)] dark:shadow-[4px_0_10px_-4px_rgba(0,0,0,0.5)] w-[130px] min-w-[130px] max-w-[130px] group-hover/row:bg-slate-50 dark:group-hover/row:bg-slate-800/80 transition-colors">
                       {row.nextPlannedDate ? (
                         <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[10px] font-black uppercase tracking-widest rounded-full border border-emerald-500/20 shadow-sm">
                           <CalendarIcon className="w-3.5 h-3.5" />
@@ -860,8 +963,10 @@ export default function ScotPage() {
                     {scotMonthDates.map(dateStr => {
                       const cType = row.callsByDate[dateStr];
                       const hasOrder = row.ordersByDate[dateStr];
-                      const isScheduledDate = row.nextPlannedDate && 
-                        `${row.nextPlannedDate.getFullYear()}-${String(row.nextPlannedDate.getMonth() + 1).padStart(2, '0')}-${String(row.nextPlannedDate.getDate()).padStart(2, '0')}` === dateStr;
+                      const isScheduledDate = (row.nextPlannedDate && 
+                        `${row.nextPlannedDate.getFullYear()}-${String(row.nextPlannedDate.getMonth() + 1).padStart(2, '0')}-${String(row.nextPlannedDate.getDate()).padStart(2, '0')}` === dateStr) ||
+                        (row.manualFollowUpDate && 
+                        `${row.manualFollowUpDate.getFullYear()}-${String(row.manualFollowUpDate.getMonth() + 1).padStart(2, '0')}-${String(row.manualFollowUpDate.getDate()).padStart(2, '0')}` === dateStr);
 
                       return (
                         <td key={dateStr} className="px-4 py-4 text-center border-l-2 border-slate-200 dark:border-slate-700">
@@ -935,6 +1040,46 @@ export default function ScotPage() {
                 >
                   {isSavingFreq ? <ArrowPathIcon className="w-4 h-4 animate-spin" /> : <CheckCircleIcon className="w-4 h-4" />}
                   {isSavingFreq ? 'Saving...' : 'Save'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Manual Follow Up Modal */}
+      {isFollowUpModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-xl w-full max-w-sm animate-in zoom-in-95 duration-200">
+            <h3 className="text-lg font-black text-slate-900 dark:text-white mb-1">Set Manual Follow Up</h3>
+            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-6">Party: <span className="text-blue-500">{followUpParty}</span></p>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Next Follow Up Date</label>
+                <input 
+                  type="date" 
+                  value={followUpDateValue}
+                  onChange={(e) => setFollowUpDateValue(e.target.value)}
+                  className="w-full px-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-bold text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div className="flex justify-end gap-3 pt-4">
+                <button 
+                  onClick={() => setIsFollowUpModalOpen(false)}
+                  disabled={isSavingFollowUp}
+                  className="px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button 
+                  onClick={saveFollowUp}
+                  disabled={isSavingFollowUp}
+                  className="px-6 py-2 rounded-xl text-xs font-black uppercase tracking-widest bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-500/20 disabled:opacity-50 transition-all flex items-center gap-2"
+                >
+                  {isSavingFollowUp ? <ArrowPathIcon className="w-4 h-4 animate-spin" /> : <CheckCircleIcon className="w-4 h-4" />}
+                  {isSavingFollowUp ? 'Saving...' : 'Save'}
                 </button>
               </div>
             </div>

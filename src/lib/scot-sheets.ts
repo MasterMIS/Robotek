@@ -224,11 +224,12 @@ export async function appendScotData(records: any[][]): Promise<boolean> {
   }
 }
 
-export async function saveFollowUpData(record: FollowUpRecord): Promise<boolean> {
+export async function saveFollowUpData(record: FollowUpRecord, source: "scot" | "scot-kb" = "scot"): Promise<boolean> {
+  const spreadsheetId = source === "scot" ? SCOT_SPREADSHEET_ID : SCOT_KB_SPREADSHEET_ID;
   try {
     const sheets = await getSheetsClient();
     await sheets.spreadsheets.values.append({
-      spreadsheetId: SCOT_SPREADSHEET_ID,
+      spreadsheetId,
       range: `'Follow Up'!A:G`,
       valueInputOption: "USER_ENTERED",
       requestBody: {
@@ -244,17 +245,36 @@ export async function saveFollowUpData(record: FollowUpRecord): Promise<boolean>
       },
     });
     return true;
-  } catch (error) {
+  } catch (error: any) {
+    if (error.message?.includes('Unable to parse range')) {
+        const sheets = await getSheetsClient();
+        await sheets.spreadsheets.batchUpdate({
+          spreadsheetId,
+          requestBody: {
+            requests: [{ addSheet: { properties: { title: "Follow Up" } } }]
+          }
+        });
+        await sheets.spreadsheets.values.update({
+          spreadsheetId,
+          range: `'Follow Up'!A1:G1`,
+          valueInputOption: "USER_ENTERED",
+          requestBody: {
+            values: [["Party Name", "Status", "Next Follow Up Date", "Remarks", "Created By", "CreatedAt", "Last Follow Up Date"]]
+          }
+        });
+        return await saveFollowUpData(record, source);
+    }
     console.error("Error saving Follow Up data:", error);
     return false;
   }
 }
 
-export async function getFollowUpData(): Promise<FollowUpRecord[]> {
+export async function getFollowUpData(source: "scot" | "scot-kb" = "scot"): Promise<FollowUpRecord[]> {
+  const spreadsheetId = source === "scot" ? SCOT_SPREADSHEET_ID : SCOT_KB_SPREADSHEET_ID;
   try {
     const sheets = await getSheetsClient();
     const response = await sheets.spreadsheets.values.get({
-      spreadsheetId: SCOT_SPREADSHEET_ID,
+      spreadsheetId,
       range: `'Follow Up'!A2:G`,
     });
 
@@ -268,7 +288,25 @@ export async function getFollowUpData(): Promise<FollowUpRecord[]> {
       createdAt: row[5] || "",
       lastFollowUpDate: row[6] || "",
     }));
-  } catch (error) {
+  } catch (error: any) {
+    if (error.message?.includes('Unable to parse range')) {
+        const sheets = await getSheetsClient();
+        await sheets.spreadsheets.batchUpdate({
+          spreadsheetId,
+          requestBody: {
+            requests: [{ addSheet: { properties: { title: "Follow Up" } } }]
+          }
+        });
+        await sheets.spreadsheets.values.update({
+          spreadsheetId,
+          range: `'Follow Up'!A1:G1`,
+          valueInputOption: "USER_ENTERED",
+          requestBody: {
+            values: [["Party Name", "Status", "Next Follow Up Date", "Remarks", "Created By", "CreatedAt", "Last Follow Up Date"]]
+          }
+        });
+        return [];
+    }
     console.error("Error fetching Follow Up data:", error);
     return [];
   }

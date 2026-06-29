@@ -4,6 +4,7 @@ import {
   getScotData, 
   getCallData, 
   getFollowUpData, 
+  saveFollowUpData,
   addCallRecord, 
   updateCallData,
   appendScotData
@@ -20,6 +21,7 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const tab = searchParams.get('tab') || 'feeder';
   const skipO2D = searchParams.get('skipO2D') === 'true';
+  const source = (searchParams.get('source') as "scot" | "scot-kb") || "scot";
 
   try {
     if (tab === 'calls' || tab === 'lost') {
@@ -113,6 +115,11 @@ export async function GET(req: NextRequest) {
       return NextResponse.json(mergedData);
     }
 
+    if (tab === 'followup') {
+      const followUps = await getFollowUpData(source);
+      return NextResponse.json(followUps);
+    }
+
     const scotRecords = await getScotData();
     return NextResponse.json(scotRecords);
 
@@ -133,6 +140,13 @@ export async function POST(req: NextRequest) {
       const success = await addCallRecord(body.data);
       if (!success) return NextResponse.json({ error: "Failed to add party" }, { status: 500 });
       return NextResponse.json({ message: "Party added successfully" });
+    }
+
+    if (body.type === 'followup') {
+      const source = body.source || "scot";
+      const success = await saveFollowUpData(body.data, source);
+      if (!success) return NextResponse.json({ error: "Failed to add follow up" }, { status: 500 });
+      return NextResponse.json({ message: "Follow up added successfully" });
     }
 
     const { records } = body;
