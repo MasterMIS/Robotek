@@ -847,13 +847,13 @@ export default function ScotKbPage() {
             <table className="w-full text-left border-collapse table-auto relative">
               <thead>
                 <tr className="bg-gradient-to-r from-emerald-600 to-teal-600 text-white">
-                  <th className="px-3 py-4 text-[10px] font-black uppercase tracking-widest whitespace-nowrap sticky top-0 left-0 z-30 bg-emerald-600 border-r-2 border-emerald-500/80 w-[180px] min-w-[180px] max-w-[180px]">Target Name</th>
-                  <th className="px-3 py-4 text-[10px] font-black uppercase tracking-widest text-center sticky top-0 left-[180px] z-30 bg-emerald-600 border-r-2 border-emerald-500/80 w-[90px] min-w-[90px] max-w-[90px]">Total Orders</th>
-                  <th className="px-3 py-4 text-[10px] font-black uppercase tracking-widest text-center sticky top-0 left-[270px] z-30 bg-emerald-600 border-r-2 border-emerald-500/80 w-[110px] min-w-[110px] max-w-[110px]">Last Order Date</th>
-                  <th className="px-3 py-4 text-[10px] font-black uppercase tracking-widest text-center sticky top-0 left-[380px] z-30 bg-emerald-600 border-r-2 border-emerald-500/80 w-[120px] min-w-[120px] max-w-[120px]">Recent Follow Up</th>
-                  <th className="px-3 py-4 text-[10px] font-black uppercase tracking-widest text-center sticky top-0 left-[500px] z-30 bg-emerald-600 border-r-2 border-emerald-500/80 w-[120px] min-w-[120px] max-w-[120px]">Order Frequency</th>
-                  <th className="px-3 py-4 text-[10px] font-black uppercase tracking-widest text-center sticky top-0 left-[620px] z-30 bg-emerald-600 border-r-2 border-emerald-500/80 w-[120px] min-w-[120px] max-w-[120px]">Manual Follow Up</th>
-                  <th className="px-3 py-4 text-[10px] font-black uppercase tracking-widest text-center sticky top-0 left-[740px] z-30 bg-emerald-600 border-r-2 border-emerald-700/80 shadow-[4px_0_10px_-4px_rgba(0,0,0,0.3)] w-[130px] min-w-[130px] max-w-[130px]">Next Planned Date</th>
+                  <th className="px-2 py-4 text-[10px] font-black uppercase tracking-widest whitespace-nowrap sticky top-0 left-0 z-30 bg-emerald-600 border-r-2 border-emerald-700/80 shadow-[4px_0_10px_-4px_rgba(0,0,0,0.3)]">Target Name</th>
+                  <th className="px-2 py-4 text-[10px] font-black uppercase tracking-widest text-center whitespace-normal leading-tight sticky top-0 z-20 bg-emerald-600 border-r-2 border-emerald-500/80 min-w-[60px]">Total Orders</th>
+                  <th className="px-2 py-4 text-[10px] font-black uppercase tracking-widest text-center whitespace-normal leading-tight sticky top-0 z-20 bg-emerald-600 border-r-2 border-emerald-500/80 min-w-[70px]">Last Order Date</th>
+                  <th className="px-2 py-4 text-[10px] font-black uppercase tracking-widest text-center whitespace-normal leading-tight sticky top-0 z-20 bg-emerald-600 border-r-2 border-emerald-500/80 min-w-[70px]">Recent Follow Up</th>
+                  <th className="px-2 py-4 text-[10px] font-black uppercase tracking-widest text-center whitespace-normal leading-tight sticky top-0 z-20 bg-emerald-600 border-r-2 border-emerald-500/80 min-w-[75px]">Order Frequency</th>
+                  <th className="px-2 py-4 text-[10px] font-black uppercase tracking-widest text-center whitespace-normal leading-tight sticky top-0 z-20 bg-emerald-600 border-r-2 border-emerald-500/80 min-w-[70px]">Manual Follow Up</th>
+                  <th className="px-2 py-4 text-[10px] font-black uppercase tracking-widest text-center whitespace-normal leading-tight sticky top-0 z-20 bg-emerald-600 border-r-2 border-emerald-500/80 min-w-[80px]">Next Planned Date</th>
                   {scotMonthDates.map(dateStr => {
                     const d = new Date(dateStr);
                     const day = d.getDate();
@@ -871,7 +871,7 @@ export default function ScotKbPage() {
                   <tr><td colSpan={6} className="px-6 py-10 text-center text-sm font-bold text-slate-400 uppercase tracking-widest">No target records found</td></tr>
                 ) : paginatedScotRows.map((row, idx) => (
                   <tr key={idx} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors group/row">
-                    <td className="px-3 py-4 whitespace-nowrap sticky left-0 z-10 bg-white dark:bg-slate-900 border-r-2 border-slate-200 dark:border-slate-700 w-[180px] min-w-[180px] max-w-[180px] truncate group-hover/row:bg-slate-50 dark:group-hover/row:bg-slate-800/80 transition-colors">
+                    <td className="px-2 py-4 whitespace-nowrap sticky left-0 z-10 bg-white dark:bg-slate-900 border-r-2 border-slate-200 dark:border-slate-700 shadow-[4px_0_10px_-4px_rgba(0,0,0,0.1)] dark:shadow-[4px_0_10px_-4px_rgba(0,0,0,0.5)] truncate group-hover/row:bg-slate-50 dark:group-hover/row:bg-slate-800/80 transition-colors max-w-[250px]">
                       <div className="flex flex-col gap-1">
                         <p className="text-xs font-black text-slate-900 dark:text-white flex items-center gap-1.5">
                           <UserIcon className="w-4 h-4 text-emerald-500" />
@@ -883,12 +883,12 @@ export default function ScotKbPage() {
                         </p>
                       </div>
                     </td>
-                    <td className="px-3 py-4 text-center sticky left-[180px] z-10 bg-white dark:bg-slate-900 border-r-2 border-slate-200 dark:border-slate-700 w-[90px] min-w-[90px] max-w-[90px] group-hover/row:bg-slate-50 dark:group-hover/row:bg-slate-800/80 transition-colors">
+                    <td className="px-2 py-4 text-center whitespace-nowrap bg-white dark:bg-slate-900 border-r-2 border-slate-200 dark:border-slate-700 group-hover/row:bg-slate-50 dark:group-hover/row:bg-slate-800/80 transition-colors">
                       <span className="inline-flex items-center justify-center min-w-[2rem] px-2 py-1 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-black rounded-xl">
                         {row.totalOrders}
                       </span>
                     </td>
-                    <td className="px-3 py-4 text-center whitespace-nowrap sticky left-[270px] z-10 bg-white dark:bg-slate-900 border-r-2 border-slate-200 dark:border-slate-700 w-[110px] min-w-[110px] max-w-[110px] group-hover/row:bg-slate-50 dark:group-hover/row:bg-slate-800/80 transition-colors">
+                    <td className="px-2 py-4 text-center whitespace-nowrap bg-white dark:bg-slate-900 border-r-2 border-slate-200 dark:border-slate-700 group-hover/row:bg-slate-50 dark:group-hover/row:bg-slate-800/80 transition-colors">
                       <div className="flex items-center justify-center gap-1.5 text-xs font-bold text-slate-600 dark:text-slate-300">
                         {row.lastOrderDate ? (
                           <>
@@ -900,7 +900,7 @@ export default function ScotKbPage() {
                         )}
                       </div>
                     </td>
-                    <td className="px-3 py-4 text-center whitespace-nowrap sticky left-[380px] z-10 bg-white dark:bg-slate-900 border-r-2 border-slate-200 dark:border-slate-700 w-[120px] min-w-[120px] max-w-[120px] group-hover/row:bg-slate-50 dark:group-hover/row:bg-slate-800/80 transition-colors">
+                    <td className="px-2 py-4 text-center whitespace-nowrap bg-white dark:bg-slate-900 border-r-2 border-slate-200 dark:border-slate-700 group-hover/row:bg-slate-50 dark:group-hover/row:bg-slate-800/80 transition-colors">
                       <div className="flex items-center justify-center gap-1.5 text-xs font-bold text-slate-600 dark:text-slate-300">
                         {row.lastCallDate ? (
                           <>
@@ -912,7 +912,7 @@ export default function ScotKbPage() {
                         )}
                       </div>
                     </td>
-                    <td className="px-3 py-4 text-center whitespace-nowrap group sticky left-[500px] z-10 bg-white dark:bg-slate-900 border-r-2 border-slate-200 dark:border-slate-700 w-[120px] min-w-[120px] max-w-[120px] group-hover/row:bg-slate-50 dark:group-hover/row:bg-slate-800/80 transition-colors">
+                    <td className="px-2 py-4 text-center whitespace-nowrap group bg-white dark:bg-slate-900 border-r-2 border-slate-200 dark:border-slate-700 group-hover/row:bg-slate-50 dark:group-hover/row:bg-slate-800/80 transition-colors">
                       <div className="flex items-center justify-center gap-2">
                         {row.frequencyDays ? (
                           <span className={`inline-flex items-center gap-1.5 px-3 py-1 text-[10px] font-black uppercase tracking-widest rounded-full border shadow-sm ${row.isManualFrequency ? 'bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/20' : 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/20'}`} title={row.isManualFrequency ? 'Manual Frequency' : 'Calculated Frequency'}>
@@ -930,7 +930,7 @@ export default function ScotKbPage() {
                         </button>
                       </div>
                     </td>
-                    <td className="px-3 py-4 text-center whitespace-nowrap group sticky left-[620px] z-10 bg-white dark:bg-slate-900 border-r-2 border-slate-200 dark:border-slate-700 w-[120px] min-w-[120px] max-w-[120px] group-hover/row:bg-slate-50 dark:group-hover/row:bg-slate-800/80 transition-colors">
+                    <td className="px-2 py-4 text-center whitespace-nowrap group bg-white dark:bg-slate-900 border-r-2 border-slate-200 dark:border-slate-700 group-hover/row:bg-slate-50 dark:group-hover/row:bg-slate-800/80 transition-colors">
                       <div className="flex items-center justify-center gap-2">
                         {row.manualFollowUpDate ? (
                           <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300">
@@ -952,7 +952,7 @@ export default function ScotKbPage() {
                         </button>
                       </div>
                     </td>
-                    <td className="px-3 py-4 text-center whitespace-nowrap sticky left-[740px] z-10 bg-white dark:bg-slate-900 border-r-2 border-slate-200 dark:border-slate-700 shadow-[4px_0_10px_-4px_rgba(0,0,0,0.1)] w-[130px] min-w-[130px] max-w-[130px] group-hover/row:bg-slate-50 dark:group-hover/row:bg-slate-800/80 transition-colors">
+                    <td className="px-2 py-4 text-center whitespace-nowrap bg-white dark:bg-slate-900 border-r-2 border-slate-200 dark:border-slate-700 group-hover/row:bg-slate-50 dark:group-hover/row:bg-slate-800/80 transition-colors">
                       {row.nextPlannedDate ? (
                         <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[10px] font-black uppercase tracking-widest rounded-full border border-emerald-500/20 shadow-sm">
                           <CalendarIcon className="w-3.5 h-3.5" />
