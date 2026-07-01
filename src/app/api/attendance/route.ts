@@ -11,12 +11,7 @@ function normalizeDate(dateVal: string | undefined | null) {
   if (!dateVal) return '';
   let dateStr = dateVal.split('T')[0];
   if (/^\d{2}\/\d{2}\/\d{4}$/.test(dateStr)) {
-    const [p1, p2, yyyy] = dateStr.split('/');
-    let mm = p1, dd = p2;
-    if (parseInt(p1) > 12) {
-      dd = p1;
-      mm = p2;
-    }
+    const [dd, mm, yyyy] = dateStr.split('/');
     dateStr = `${yyyy}-${mm}-${dd}`;
   }
   return dateStr;
@@ -108,7 +103,7 @@ export async function POST(req: NextRequest) {
         id,
         userId: String(userId),
         userName,
-        date: dateStr,
+        date: timeStr,
         inTime: timeStr,
         outTime: "",
         status: "IN",

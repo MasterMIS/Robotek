@@ -7,6 +7,7 @@ export interface User {
   id: string; // Used as Employee Code
   username: string;
   email: string;
+  full_name?: string;
   password?: string;
   phone?: string;
   role_name?: string;

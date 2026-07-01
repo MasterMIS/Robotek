@@ -35,24 +35,14 @@ function normalizeDateStr(dStr: string | undefined): string {
     const trimmed = dStr.trim().split('T')[0];
     
     if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(trimmed)) {
-        const [p1, p2, yyyy] = trimmed.split('/');
-        let mm = p1, dd = p2;
-        if (parseInt(p1) > 12) {
-            dd = p1;
-            mm = p2;
-        }
+        const [dd, mm, yyyy] = trimmed.split('/');
         return `${yyyy}-${mm.padStart(2, '0')}-${dd.padStart(2, '0')}`;
     }
     
     if (trimmed.includes('/')) {
         const parts = trimmed.split('/');
         if (parts[2]?.length === 4) {
-           const p1 = parts[0], p2 = parts[1], yyyy = parts[2];
-           let mm = p1, dd = p2;
-           if (parseInt(p1) > 12) {
-               dd = p1;
-               mm = p2;
-           }
+           const [dd, mm, yyyy] = parts;
            return `${yyyy}-${mm.padStart(2, '0')}-${dd.padStart(2, '0')}`;
         }
     }

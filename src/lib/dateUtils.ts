@@ -22,10 +22,11 @@ export function parseSheetDate(val: any): string | null {
 }
 
 export function getIstDateString(): string {
-  // Returns ISO date string adjusted for IST context (though natively handled by server, 
-  // sometimes needed for client-side comparison)
+  // Returns ISO date string adjusted for IST context (UTC+5:30)
   const now = new Date();
-  return now.toISOString().split('T')[0];
+  const istOffset = 5.5 * 60 * 60 * 1000;
+  const istNow = new Date(now.getTime() + istOffset);
+  return istNow.toISOString().split('T')[0];
 }
 
 export function formatDate(dateStr: string | null): string {
