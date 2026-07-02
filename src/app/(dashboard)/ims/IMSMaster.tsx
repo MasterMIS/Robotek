@@ -29,6 +29,7 @@ import {
   RadarChart, PolarGrid, PolarAngleAxis, Radar
 } from "recharts";
 import { IMS } from "@/types/ims";
+import * as XLSX from "xlsx";
 
 const fetcher = (url: string) => fetch(url).then(res => res.json());
 
@@ -82,6 +83,87 @@ export default function IMSMaster({ onBack }: { onBack: () => void }) {
   const itemsPerPage = 50;
   const [legendFilter, setLegendFilter] = useState<number | null>(null);
   const { resolvedTheme } = useTheme();
+  
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setSubmitting(true);
+    showStatus("Parsing file...", "loading");
+
+    try {
+      const data = await file.arrayBuffer();
+      const workbook = XLSX.read(data, { type: "array" });
+      const firstSheetName = workbook.SheetNames[0];
+      const worksheet = workbook.Sheets[firstSheetName];
+      const jsonData = XLSX.utils.sheet_to_json<any[][]>(worksheet, { header: 1 });
+
+      if (jsonData.length <= 1) {
+        throw new Error("File is empty or contains only headers.");
+      }
+
+      const groupedData: any[] = [];
+      let currentGroup: any = null;
+
+      // Skip header row
+      for (let i = 1; i < jsonData.length; i++) {
+        const row = jsonData[i];
+        
+        const date = row[0];
+        const vchNo = row[1];
+        const particulars = row[2];
+        const description = row[3];
+        const qty = row[5];
+
+        if (vchNo) {
+          currentGroup = {
+            Date: date || "",
+            VchNo: vchNo || "",
+            Particulars: particulars || "",
+            Items: []
+          };
+          groupedData.push(currentGroup);
+        }
+
+        if (currentGroup && description) {
+          currentGroup.Items.push({
+            Description: description,
+            Qty: qty || 0
+          });
+        }
+      }
+
+      if (groupedData.length === 0) {
+        throw new Error("No valid data found in the file.");
+      }
+
+      showStatus("Importing to Out Form...", "loading");
+
+      const res = await fetch("/api/ims/import-out-form", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(groupedData)
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Failed to import");
+      }
+
+      showStatus(`Successfully imported ${groupedData.length} records!`, "success");
+      setTimeout(() => setIsStatusModalOpen(false), 2000);
+    } catch (error: any) {
+      console.error(error);
+      showStatus(error.message || "Error processing file", "error");
+    } finally {
+      setSubmitting(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    }
+  };
 
   // Modals state
   const [isLogsModalOpen, setLogsModalOpen] = useState(false);
@@ -375,6 +457,16 @@ export default function IMSMaster({ onBack }: { onBack: () => void }) {
           </div>
 
         <div className="flex items-center gap-2">
+          <input 
+            type="file" 
+            ref={fileInputRef} 
+            accept=".xlsx, .xls, .csv" 
+            onChange={handleFileUpload} 
+            className="hidden" 
+          />
+          <button onClick={() => fileInputRef.current?.click()} className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 dark:bg-white/5 dark:hover:bg-white/10 text-gray-700 dark:text-gray-300 rounded-lg text-[11px] font-black uppercase tracking-wider transition-all border border-gray-200 dark:border-white/10 shadow-sm">
+            <ArrowUpTrayIcon className="w-4 h-4" /> Import Out Form
+          </button>
           <button onClick={handleExport} className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 dark:bg-white/5 dark:hover:bg-white/10 text-gray-700 dark:text-gray-300 rounded-lg text-[11px] font-black uppercase tracking-wider transition-all border border-gray-200 dark:border-white/10 shadow-sm">
             <ArrowDownTrayIcon className="w-4 h-4" /> Export
           </button>

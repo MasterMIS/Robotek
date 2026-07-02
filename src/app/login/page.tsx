@@ -8,8 +8,6 @@ import {
   LockClosedIcon as LockClosedIconSolid
 } from "@heroicons/react/24/solid";
 import {
-  UserIcon,
-  LockClosedIcon,
   EyeIcon,
   EyeSlashIcon
 } from "@heroicons/react/24/outline";
@@ -61,133 +59,98 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#fcf9f0] flex items-center justify-center p-4 font-sans selection:bg-[#CE2029] selection:text-white">
-      {/* Container Card */}
-      <div className="w-full max-w-5xl h-auto lg:h-[640px] bg-white rounded-[30px] lg:rounded-[60px] shadow-[0_50px_120px_-30px_rgba(0,0,0,0.15)] overflow-hidden flex flex-col lg:flex-row relative">
+    <div 
+      className="min-h-screen bg-[length:100%_100%] bg-no-repeat flex items-stretch justify-center lg:justify-end font-sans relative overflow-hidden"
+      style={{ backgroundImage: "url('https://i.ibb.co/qLRjwyjf/1dfsd.png')" }}
+    >
+      {/* Dark overlay to ensure text/form readability if the image is too bright in some areas */}
+      <div className="absolute inset-0 bg-black/10 lg:bg-transparent z-0"></div>
 
-        {/* The Giant Brand Bubble (The Core of the Layout) */}
-        <div className="absolute top-1/2 left-[-35%] -translate-y-1/2 w-[110%] aspect-square max-w-[800px] bg-gradient-to-br from-[#FFD500] to-[#E6B100] rounded-full shadow-[20px_0_80px_rgba(0,0,0,0.1)] z-10 pointer-events-none hidden lg:block" />
+      <div className="w-full max-w-md lg:max-w-[500px] p-8 sm:p-12 lg:p-16 relative z-10 flex flex-col justify-center min-h-screen">
+        
+        <h2 className="text-3xl font-black text-white text-center mb-8 tracking-tight drop-shadow-lg">
+          Welcome Back
+        </h2>
 
-        {/* Left Pane - Content Wrapper (Mobile Friendly) */}
-        <div className="lg:w-[50%] h-auto lg:h-full relative z-20 flex flex-col justify-center p-6 sm:p-8 lg:p-20 text-white lg:bg-transparent bg-gradient-to-br from-[#FFD500] to-[#E6B100]">
-          {/* Internal 3D Spheres for Depth */}
-          <div className="absolute top-[10%] left-[20%] w-20 lg:w-32 h-20 lg:h-32 rounded-full bg-gradient-to-br from-white/20 to-transparent shadow-[inset_-10px_-10px_30px_rgba(0,0,0,0.1),inset_10px_10px_30px_rgba(255,255,255,0.2)] hidden sm:block" />
-
-          <div className="absolute bottom-[15%] left-[60%] w-40 lg:w-64 h-40 lg:h-64 rounded-full bg-gradient-to-br from-white/15 to-transparent shadow-[inset_-30px_-30px_60px_rgba(0,0,0,0.15),inset_30px_30px_60px_rgba(255,255,255,0.3)] backdrop-blur-[2px] hidden sm:block" />
-
-          <div className="space-y-8 relative z-30">
-            {/* Logo injected back to Left Pane */}
-            <div className="mb-2 relative z-50">
-              <div className="w-full max-w-[250px] lg:max-w-[350px] h-[70px] lg:h-[120px] mb-2 drop-shadow-md">
-                <img
-                  src="https://drive.google.com/uc?export=view&id=1h6ar3DDzgJM9-6jQhieVmDun02Ii_DV0"
-                  alt="Robotek Logo"
-                  className="w-full h-full object-contain object-left"
-                />
-              </div>
-              <p className="text-black/80 font-bold text-[10px] uppercase tracking-[0.4em] drop-shadow-sm w-full">Name of Confidence</p>
+        <form onSubmit={handleSubmit} className="space-y-6">
+          {error && (
+            <div className="bg-red-500/20 text-red-200 px-4 py-3 rounded-xl text-sm font-medium border border-red-500/50 flex items-start gap-3 backdrop-blur-sm">
+              <div className="w-2 h-2 mt-1.5 bg-red-400 rounded-full animate-pulse shrink-0" />
+              <span>{error}</span>
             </div>
+          )}
 
-            <div className="space-y-1">
-              <h1 className="text-4xl sm:text-5xl lg:text-7xl font-black tracking-tight leading-none uppercase drop-shadow-sm">
-                WELCOME
-              </h1>
-              <h2 className="text-xl sm:text-2xl lg:text-3xl font-black text-black/80 tracking-tight uppercase">
-                ROBOTEK ERP
-              </h2>
+          <div className="space-y-1.5">
+            <label htmlFor="identifier" className="text-white/90 text-sm font-medium ml-1 drop-shadow-md">
+              Employee ID or Email
+            </label>
+            <div className="relative group">
+              <UserIconSolid className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-white/70 group-focus-within:text-white transition-colors z-10" />
+              <input
+                type="text"
+                id="identifier"
+                value={identifier}
+                onChange={(e) => setIdentifier(e.target.value)}
+                placeholder="Enter ID / Email"
+                required
+                className="w-full pl-12 pr-4 py-4 bg-black/30 border border-white/20 rounded-xl focus:bg-black/50 focus:border-[#0070f3] transition-all outline-none text-white placeholder:text-white/50 backdrop-blur-sm shadow-inner"
+              />
             </div>
-
-            <p className="text-xs sm:text-sm font-bold text-black/60 leading-relaxed max-w-xs uppercase tracking-wide">
-              Elevate your business productivity with our state-of-the-art enterprise resource planning suite.
-            </p>
-
-            {/* Logo In Brand Pane removed as per user request */}
-            <div className="pt-4 lg:pt-10 h-8 lg:h-28" />
           </div>
-        </div>
 
-        {/* Right Pane - Form */}
-        <div className="flex-1 bg-white p-6 sm:p-8 md:p-14 lg:p-20 flex flex-col justify-start relative z-20 overflow-y-auto">
-          <div className="max-w-md w-full mx-auto relative z-30 flex-1 flex flex-col justify-center">
-            {/* Secondary Bubble in the form area (to match reference) */}
-            <div className="absolute bottom-[-100px] right-[-80px] w-72 h-72 rounded-full bg-gradient-to-tr from-[#FFD500] to-[#FFD500]/50 shadow-[inset_-20px_-20px_50px_rgba(0,0,0,0.1),inset_20px_20px_50px_rgba(255,255,255,0.2)] z-[-1] hidden sm:block" />
-
-            <form onSubmit={handleSubmit} className="space-y-6">
-              {error && (
-                <div className="bg-red-50 text-[#CE2029] px-5 py-4 rounded-2xl text-[13px] font-black border border-red-100 flex items-center gap-3">
-                  <div className="w-2 h-2 bg-[#CE2029] rounded-full animate-pulse" />
-                  {error}
-                </div>
-              )}
-
-              <div className="relative group">
-                <UserIconSolid className="absolute left-6 top-1/2 -translate-y-1/2 w-6 h-6 text-black group-focus-within:text-black transition-colors z-10" />
-                <input
-                  type="text"
-                  id="identifier"
-                  value={identifier}
-                  onChange={(e) => setIdentifier(e.target.value)}
-                  placeholder=" "
-                  required
-                  className="peer w-full pl-16 pr-6 pt-7 pb-3 bg-[#F8F9FA] border-2 border-transparent rounded-[24px] focus:bg-white focus:border-[#FFD500] transition-all outline-none text-[15px] font-bold text-gray-800"
-                />
-                <label
-                  htmlFor="identifier"
-                  className="absolute left-16 top-1/2 -translate-y-1/2 text-gray-400 font-bold transition-all peer-placeholder-shown:top-1/2 peer-placeholder-shown:text-base peer-focus:top-4 peer-focus:text-[10px] peer-focus:uppercase peer-focus:tracking-widest peer-[:not(:placeholder-shown)]:top-4 peer-[:not(:placeholder-shown)]:text-[10px] peer-[:not(:placeholder-shown)]:uppercase peer-[:not(:placeholder-shown)]:tracking-widest pointer-events-none"
-                >
-                  User Name
-                </label>
-              </div>
-
-              <div className="relative group">
-                <LockClosedIconSolid className="absolute left-6 top-1/2 -translate-y-1/2 w-6 h-6 text-black group-focus-within:text-black transition-colors z-10" />
-                <input
-                  type={showPassword ? "text" : "password"}
-                  id="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder=" "
-                  required
-                  className="peer w-full pl-16 pr-16 pt-7 pb-3 bg-[#F8F9FA] border-2 border-transparent rounded-[24px] focus:bg-white focus:border-[#FFD500] transition-all outline-none text-[15px] font-bold text-gray-800"
-                />
-                <label
-                  htmlFor="password"
-                  className="absolute left-16 top-1/2 -translate-y-1/2 text-gray-400 font-bold transition-all peer-placeholder-shown:top-1/2 peer-placeholder-shown:text-base peer-focus:top-4 peer-focus:text-[10px] peer-focus:uppercase peer-focus:tracking-widest peer-[:not(:placeholder-shown)]:top-4 peer-[:not(:placeholder-shown)]:text-[10px] peer-[:not(:placeholder-shown)]:uppercase peer-[:not(:placeholder-shown)]:tracking-widest pointer-events-none"
-                >
-                  Password
-                </label>
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-6 top-1/2 -translate-y-1/2 p-1 text-gray-300 hover:text-[#FFD500] transition-colors uppercase text-[10px] font-black tracking-widest z-10"
-                >
-                  {showPassword ? "Hide" : "Show"}
-                </button>
-              </div>
-
+          <div className="space-y-1.5">
+            <label htmlFor="password" className="text-white/90 text-sm font-medium ml-1 drop-shadow-md">
+              Password
+            </label>
+            <div className="relative group">
+              <LockClosedIconSolid className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-white/70 group-focus-within:text-white transition-colors z-10" />
+              <input
+                type={showPassword ? "text" : "password"}
+                id="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Enter Password"
+                required
+                className="w-full pl-12 pr-12 py-4 bg-black/30 border border-white/20 rounded-xl focus:bg-black/50 focus:border-[#0070f3] transition-all outline-none text-white placeholder:text-white/50 backdrop-blur-sm shadow-inner"
+              />
               <button
-                type="submit"
-                disabled={isLoading}
-                className="w-full bg-[#003875] hover:bg-[#002855] text-white font-black py-4 lg:py-5 rounded-[24px] shadow-2xl shadow-[#003875]/20 transition-all duration-300 disabled:opacity-50 active:scale-[0.98] uppercase tracking-[0.25em] text-[12px] lg:text-[13px] h-14 lg:h-16"
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-4 top-1/2 -translate-y-1/2 p-2 text-white/50 hover:text-white transition-colors z-10"
               >
-                {isLoading ? (
-                  <div className="w-6 h-6 border-3 border-white/30 border-t-white rounded-full animate-spin mx-auto" />
+                {showPassword ? (
+                  <EyeSlashIcon className="w-5 h-5" />
                 ) : (
-                  "Sign in"
+                  <EyeIcon className="w-5 h-5" />
                 )}
               </button>
-            </form>
-          </div>
-
-          {/* Footer Creds */}
-          <div className="mt-8 pt-4 flex flex-col items-center gap-3 z-30 shrink-0">
-            <div className="flex items-center gap-3 px-4 py-2 bg-[#F8F9FA] rounded-full border border-gray-100 shadow-sm">
-              <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Designed & managed by</span>
-              <span className="text-[11px] font-black text-[#CE2029] tracking-tight">Sohan</span>
             </div>
           </div>
-        </div>
+
+          <div className="flex justify-between items-center px-1 py-2">
+            <label className="flex items-center gap-2 cursor-pointer group">
+              <input type="checkbox" className="w-4 h-4 rounded bg-black/30 border-white/20 text-[#0070f3] focus:ring-[#0070f3] focus:ring-offset-0 cursor-pointer accent-[#0070f3]" />
+              <span className="text-sm text-white/80 group-hover:text-white transition-colors">Remember Me</span>
+            </label>
+            <a href="#" className="text-sm text-white/80 hover:text-white transition-colors">
+              Forgot Password?
+            </a>
+          </div>
+
+          <button
+            type="submit"
+            disabled={isLoading}
+            className="w-full bg-[#0052d4] hover:bg-[#4364f7] text-white font-bold py-4 rounded-xl shadow-[0_0_20px_rgba(0,112,243,0.4)] transition-all duration-300 disabled:opacity-50 active:scale-[0.98] uppercase tracking-wider text-sm mt-4 border border-white/10"
+          >
+            {isLoading ? (
+              <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin mx-auto" />
+            ) : (
+              "Login"
+            )}
+          </button>
+        </form>
       </div>
     </div>
   );
 }
+

@@ -979,15 +979,10 @@ export async function getOutFormData(): Promise<any[]> {
     for (let i = 1; i < rows.length; i++) {
       const row = rows[i];
       data.push({
-        o2dNo: row[0] || "",
+        date: row[0] || "",
         orderNo: row[1] || "",
-        date: row[2] || "",
-        partyName: row[3] || "",
-        description: row[4] || "", // Might be a JSON string or plain string
-        qty: row[5] || "",
-        price: row[6] || "",
-        amount: row[7] || "",
-        status: row[8] || "",
+        partyName: row[2] || "",
+        description: row[3] || "", // Items (JSON)
       });
     }
 
