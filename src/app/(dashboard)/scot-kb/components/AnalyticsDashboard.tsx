@@ -464,8 +464,8 @@ export default function AnalyticsDashboard({ feeders, scotRows = [], defaultEmpl
                 <thead className="sticky top-0 z-30 shadow-md ring-1 ring-slate-800">
                   <tr className="bg-slate-900 text-white">
                     <th rowSpan={2} className="px-6 py-4 text-[11px] font-black uppercase tracking-widest whitespace-nowrap border-r border-slate-700 w-[250px] sticky left-0 z-40 bg-slate-900">Client Name</th>
-                    <th colSpan={3} className="px-6 py-2 text-[11px] font-black uppercase tracking-widest text-center text-amber-400 border-b border-r border-slate-700 bg-slate-900">Month <span className="text-[9px] text-slate-400 ml-1 font-bold">({monthRangeStr})</span></th>
-                    <th colSpan={3} className="px-6 py-2 text-[11px] font-black uppercase tracking-widest text-center text-amber-400 border-b border-slate-700 bg-slate-900">Week <span className="text-[9px] text-slate-400 ml-1 font-bold">({weekRangeStr})</span></th>
+                    <th colSpan={3} className="px-6 py-2 text-[11px] font-black uppercase tracking-widest text-center text-amber-400 border-b border-r border-slate-700 bg-slate-900">Month <span className="text-[10px] text-amber-200 bg-amber-500/20 px-2 py-0.5 rounded ml-1 font-bold">({monthRangeStr})</span></th>
+                    <th colSpan={3} className="px-6 py-2 text-[11px] font-black uppercase tracking-widest text-center text-amber-400 border-b border-slate-700 bg-slate-900">Week <span className="text-[10px] text-amber-200 bg-amber-500/20 px-2 py-0.5 rounded ml-1 font-bold">({weekRangeStr})</span></th>
                   </tr>
                   <tr className="bg-slate-900 text-white">
                     <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-center border-r border-slate-700 bg-slate-900">No. of Orders / Month</th>
