@@ -257,18 +257,17 @@ export async function generateScotReportPDF(salesCoordinatorData: any, dateRange
   y += 38;
 
   // ── KPI Summary Cards ──
-  const wonCount = salesCoordinatorData.statusCounts?.["Order Won"] || 0;
-  const lostCount = salesCoordinatorData.statusCounts?.["Order Lost"] || 0;
-  const cbCount = salesCoordinatorData.statusCounts?.["Call Later"] || 0;
-  const naCount = salesCoordinatorData.statusCounts?.["Not Answered"] || 0;
+  const wonCount = salesCoordinatorData.totalWeeklyActual || 0;
+  const lostCount = Math.max(0, (salesCoordinatorData.totalWeeklyPlanned || 0) - wonCount);
+  const cbCount = salesCoordinatorData.directCallsIncoming || 0;
 
   const tiles = [
     { v: salesCoordinatorData.totalParties, l: "Parties Defined", s: "Calls Tab Portfolio", c: NAVY },
     { v: salesCoordinatorData.totalDirectCalls, l: "Feeder Attempts", s: "Inbound / Outbound", c: AMBER },
     { v: `${salesCoordinatorData.followUpScore}%`, l: "Follow-up Score", s: `Planned: ${salesCoordinatorData.plannedFollowUps} | Done: ${salesCoordinatorData.actualFollowUps}`, c: EMERALD },
-    { v: wonCount, l: "Orders Won", s: "Conversions", c: EMERALD },
-    { v: lostCount, l: "Orders Lost", s: "Unsuccessful", c: ROSE },
-    { v: cbCount + naCount, l: "Callback / NA", s: "Pending Actions", c: PURPLE }
+    { v: wonCount, l: "Orders Won", s: "Conversions (This Week)", c: EMERALD },
+    { v: lostCount, l: "Orders Lost", s: "Unsuccessful (This Week)", c: ROSE },
+    { v: cbCount, l: "Callback / Incoming", s: "Pending Actions", c: PURPLE }
   ];
 
   const tw = (CW - 5) / 6;
@@ -287,18 +286,20 @@ export async function generateScotReportPDF(salesCoordinatorData: any, dateRange
   const incCalls = salesCoordinatorData.directCallsIncoming || 0;
   const outCalls = salesCoordinatorData.directCallsOutgoing || 0;
   const misCalls = salesCoordinatorData.directCallsMissed || 0;
+  const rejCalls = salesCoordinatorData.directCallsRejected || 0;
 
   const incPct = totalCalls > 0 ? Math.round((incCalls / totalCalls) * 100) : 0;
   const outPct = totalCalls > 0 ? Math.round((outCalls / totalCalls) * 100) : 0;
-  const misPct = totalCalls > 0 ? Math.max(0, 100 - incPct - outPct) : 0;
+  const misPct = totalCalls > 0 ? Math.round((misCalls / totalCalls) * 100) : 0;
+  const rejPct = totalCalls > 0 ? Math.max(0, 100 - incPct - outPct - misPct) : 0;
 
   // Left Card Widget: Call types distribution (Pie/Donut Chart)
   doc.setFillColor(245, 247, 250); 
-  doc.roundedRect(M, y + 2.5, 88, 32, 1.5, 1.5, "F");
+  doc.roundedRect(M, y + 2.5, 88, 36, 1.5, 1.5, "F");
 
   // Draw Pie/Donut Chart
   const cx = M + 18;
-  const cy = y + 18.5;
+  const cy = y + 20.5;
   const radius = 10;
   
   if (totalCalls === 0) {
@@ -325,6 +326,12 @@ export async function generateScotReportPDF(salesCoordinatorData: any, dateRange
       drawSector(doc, cx, cy, radius, currentAngle, currentAngle + angle, ROSE);
       currentAngle += angle;
     }
+
+    if (rejCalls > 0) {
+      const angle = (rejCalls / totalCalls) * 2 * Math.PI;
+      drawSector(doc, cx, cy, radius, currentAngle, currentAngle + angle, AMBER);
+      currentAngle += angle;
+    }
   }
 
   // Draw a white circle in center to make it a donut chart
@@ -339,21 +346,27 @@ export async function generateScotReportPDF(salesCoordinatorData: any, dateRange
 
   // Incoming
   doc.setFillColor(...EMERALD);
-  doc.circle(legendX + 2, y + 10.5, 1.0, "F");
+  doc.circle(legendX + 2, y + 8.5, 1.0, "F");
   doc.setTextColor(...NAVY);
-  doc.text(`INCOMING CALLS: ${incCalls} (${incPct}%)`, legendX + 5, y + 11.5);
+  doc.text(`INCOMING CALLS: ${incCalls} (${incPct}%)`, legendX + 5, y + 9.5);
 
   // Outgoing
   doc.setFillColor(...NAVY);
-  doc.circle(legendX + 2, y + 17.5, 1.0, "F");
+  doc.circle(legendX + 2, y + 15.5, 1.0, "F");
   doc.setTextColor(...NAVY);
-  doc.text(`OUTGOING CALLS: ${outCalls} (${outPct}%)`, legendX + 5, y + 18.5);
+  doc.text(`OUTGOING CALLS: ${outCalls} (${outPct}%)`, legendX + 5, y + 16.5);
 
   // Missed
   doc.setFillColor(...ROSE);
-  doc.circle(legendX + 2, y + 24.5, 1.0, "F");
+  doc.circle(legendX + 2, y + 22.5, 1.0, "F");
   doc.setTextColor(...NAVY);
-  doc.text(`MISSED CALLS:     ${misCalls} (${misPct}%)`, legendX + 5, y + 25.5);
+  doc.text(`MISSED CALLS:     ${misCalls} (${misPct}%)`, legendX + 5, y + 23.5);
+
+  // Rejected
+  doc.setFillColor(...AMBER);
+  doc.circle(legendX + 2, y + 29.5, 1.0, "F");
+  doc.setTextColor(...NAVY);
+  doc.text(`REJECTED CALLS:   ${rejCalls} (${rejPct}%)`, legendX + 5, y + 30.5);
 
   // Right Card Widget: Custom-drawn targets table comparing orders vs follow-ups
   doc.setFillColor(245, 247, 250); 
@@ -447,7 +460,7 @@ export async function generateScotReportPDF(salesCoordinatorData: any, dateRange
       db.weeklyPlanned || "0",
       db.actualWeek || "0",
       String(remWeek),
-      `${p.followUpAttemptsCount || 0} / ${p.isPlanned ? 1 : 0}`,
+      `${(p.followUpAttemptsCount || 0) + (p.feederCallAttemptsCount || 0)} / ${p.isPlanned ? 1 : 0}`,
       p.feederCallAttemptsCount || "0",
       p.latestStatus || "Pending"
     ];

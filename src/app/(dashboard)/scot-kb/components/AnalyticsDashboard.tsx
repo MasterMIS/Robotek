@@ -26,7 +26,7 @@ import {
   LineChart, Line, PieChart, Pie, Cell, AreaChart, Area, Legend, LabelList
 } from "recharts";
 
-export default function AnalyticsDashboard({ feeders, scotRows = [] }: { feeders: DataFeeder[], scotRows?: any[] }) {
+export default function AnalyticsDashboard({ feeders, scotRows = [], defaultEmployeeName = "UZEFA (SC)" }: { feeders: DataFeeder[], scotRows?: any[], defaultEmployeeName?: string }) {
   const [filters, setFilters] = useState<AnalyticsFilters>({
     dateRange: 'all',
     customStart: '',
@@ -42,29 +42,177 @@ export default function AnalyticsDashboard({ feeders, scotRows = [] }: { feeders
   const uniqueEmployees = useMemo(() => Array.from(new Set(feeders.map(f => f.employeeName).filter(Boolean))), [feeders]);
   
   const uniqueMonths = useMemo(() => {
-    const set = new Set<string>();
-    feeders.forEach(f => {
-      const d = excelSerialToDate(f.callDate);
-      if (d) set.add(`${d.toLocaleString('default', { month: 'short' })} ${d.getFullYear().toString().substring(2)}`);
-    });
-    return Array.from(set);
-  }, [feeders]);
+    const months = [];
+    const now = new Date();
+    for (let i = 0; i < 12; i++) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      months.push(`${d.toLocaleString('default', { month: 'short' })} ${d.getFullYear().toString().substring(2)}`);
+    }
+    return months;
+  }, []);
 
   const uniqueWeeks = useMemo(() => {
-    const set = new Set<string>();
-    feeders.forEach(f => {
-      const d = excelSerialToDate(f.callDate);
-      if (d) {
+    const weeks = new Set<string>();
+    
+    if (filters.month !== 'all') {
+      const parts = filters.month.split(' ');
+      const monthIdx = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].indexOf(parts[0]);
+      const year = 2000 + parseInt(parts[1], 10);
+      
+      if (monthIdx !== -1 && !isNaN(year)) {
+        const daysInMonth = new Date(year, monthIdx + 1, 0).getDate();
+        for (let i = 1; i <= daysInMonth; i++) {
+          const d = new Date(year, monthIdx, i);
+          const d0 = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+          const dayNum = d0.getUTCDay() || 7;
+          d0.setUTCDate(d0.getUTCDate() + 4 - dayNum);
+          const yearStart = new Date(Date.UTC(d0.getUTCFullYear(), 0, 1));
+          const w = Math.ceil((((d0.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+          weeks.add(`Week ${w} ${d.getFullYear().toString().substring(2)}`);
+        }
+      }
+    } else {
+      const now = new Date();
+      for (let i = 0; i < 120; i += 7) { // Generate last ~17 weeks
+        const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i);
         const d0 = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
         const dayNum = d0.getUTCDay() || 7;
         d0.setUTCDate(d0.getUTCDate() + 4 - dayNum);
-        const yearStart = new Date(Date.UTC(d0.getUTCFullYear(),0,1));
-        const w = Math.ceil((((d0.getTime() - yearStart.getTime()) / 86400000) + 1)/7);
-        set.add(`Week ${w} ${d.getFullYear().toString().substring(2)}`);
+        const yearStart = new Date(Date.UTC(d0.getUTCFullYear(), 0, 1));
+        const w = Math.ceil((((d0.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+        weeks.add(`Week ${w} ${d.getFullYear().toString().substring(2)}`);
       }
+    }
+    
+    return Array.from(weeks).sort((a, b) => {
+      const numA = parseInt(a.split(' ')[1] || '0');
+      const numB = parseInt(b.split(' ')[1] || '0');
+      return numB - numA; // Sort descending (latest week first)
     });
-    return Array.from(set);
-  }, [feeders]);
+  }, [filters.month]);
+
+  // Date Calculations for Table Headers and Logic
+  let currentMonth = new Date().getMonth();
+  let currentYear = new Date().getFullYear();
+  
+  if (filters.month !== 'all') {
+    const parts = filters.month.split(' ');
+    if (parts.length === 2) {
+      const monthIdx = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].indexOf(parts[0]);
+      const year = 2000 + parseInt(parts[1], 10);
+      if (monthIdx !== -1 && !isNaN(year)) {
+        currentMonth = monthIdx;
+        currentYear = year;
+      }
+    }
+  }
+
+  const startOfMonth = new Date(currentYear, currentMonth, 1);
+  const endOfMonth = new Date(currentYear, currentMonth + 1, 0);
+
+  let startOfWeek = new Date();
+  const day = startOfWeek.getDay();
+  const diff = startOfWeek.getDate() - day + (day === 0 ? -6 : 1); // Monday is the first day of the week
+  startOfWeek = new Date(startOfWeek.getFullYear(), startOfWeek.getMonth(), diff);
+  startOfWeek.setHours(0,0,0,0);
+
+  if (filters.week !== 'all') {
+    const parts = filters.week.split(' ');
+    if (parts.length === 3) {
+      const w = parseInt(parts[1], 10);
+      const y = 2000 + parseInt(parts[2], 10);
+      if (!isNaN(w) && !isNaN(y)) {
+        // Approximate the date for this week number
+        const simpleDate = new Date(y, 0, 1 + (w - 1) * 7);
+        const simpleDay = simpleDate.getDay();
+        const simpleDiff = simpleDate.getDate() - simpleDay + (simpleDay === 0 ? -6 : 1);
+        startOfWeek = new Date(simpleDate.getFullYear(), simpleDate.getMonth(), simpleDiff);
+        startOfWeek.setHours(0,0,0,0);
+      }
+    }
+  }
+  
+  const endOfWeek = new Date(startOfWeek);
+  endOfWeek.setDate(endOfWeek.getDate() + 6);
+  
+  const formatDate = (d: Date) => d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+  const monthRangeStr = `${formatDate(startOfMonth)} - ${formatDate(endOfMonth)}`;
+  const weekRangeStr = `${formatDate(startOfWeek)} - ${formatDate(endOfWeek)}`;
+
+  const o2dPartiesOnly = useMemo(() => scotRows ? scotRows.filter(r => r.rawOrders && r.rawOrders.length > 0) : [], [scotRows]);
+  
+  const computedOrderRows = useMemo(() => {
+    const computedRows = o2dPartiesOnly.map(row => {
+      let monthlyTarget: number | null = null;
+      let weeklyTarget: number | null = null;
+      let actualMonth = 0;
+      let actualWeek = 0;
+
+      if (row.rawOrders && row.rawOrders.length > 0) {
+        const activeMonthsSet = new Set<string>();
+        
+        // Deduplicate orders by order_no to count unique orders, not individual line items
+        const uniqueOrders = new Map<string, any>();
+        row.rawOrders.forEach((order: any) => {
+          const orderNo = order.order_no?.toString().trim();
+          if (orderNo && !uniqueOrders.has(orderNo)) {
+            uniqueOrders.set(orderNo, order);
+          }
+        });
+
+        const dedupedOrders = Array.from(uniqueOrders.values());
+        
+        dedupedOrders.forEach((order: any) => {
+          const orderDate = new Date(order.created_at);
+          const time = orderDate.getTime();
+          
+          if (!isNaN(time)) {
+            const monthKey = `${orderDate.getFullYear()}-${orderDate.getMonth()}`;
+            activeMonthsSet.add(monthKey);
+          }
+          
+          if (orderDate.getMonth() === currentMonth && orderDate.getFullYear() === currentYear) {
+            actualMonth++;
+          }
+          
+          // Move week check OUTSIDE of month check because weeks can cross month boundaries
+          if (orderDate >= startOfWeek && orderDate <= endOfWeek) {
+            actualWeek++;
+          }
+        });
+
+        const activeMonths = activeMonthsSet.size;
+        monthlyTarget = activeMonths > 0 ? Math.max(1, Math.round(dedupedOrders.length / activeMonths)) : 1;
+        weeklyTarget = Math.round(monthlyTarget / 4);
+      }
+
+      return {
+        ...row,
+        monthlyTarget,
+        weeklyTarget,
+        actualMonth,
+        actualWeek,
+        hasTarget: monthlyTarget !== null && monthlyTarget > 0
+      };
+    });
+
+    return computedRows.sort((a, b) => {
+      if (a.hasTarget && !b.hasTarget) return -1;
+      if (!a.hasTarget && b.hasTarget) return 1;
+      if (a.hasTarget && b.hasTarget) {
+        return (b.monthlyTarget as number) - (a.monthlyTarget as number);
+      }
+      return 0;
+    });
+  }, [o2dPartiesOnly, currentMonth, currentYear, startOfWeek, endOfWeek]);
+
+  const totalMonthlyTarget = useMemo(() => computedOrderRows.reduce((sum, row) => sum + (row.hasTarget ? (row.monthlyTarget as number) : 0), 0), [computedOrderRows]);
+  const totalMonthOrders = useMemo(() => computedOrderRows.reduce((sum, row) => sum + row.actualMonth, 0), [computedOrderRows]);
+  const totalRemainingMonth = totalMonthlyTarget - totalMonthOrders;
+
+  const totalWeeklyTarget = useMemo(() => computedOrderRows.reduce((sum, row) => sum + (row.hasTarget ? (row.weeklyTarget as number) : 0), 0), [computedOrderRows]);
+  const totalWeekOrders = useMemo(() => computedOrderRows.reduce((sum, row) => sum + row.actualWeek, 0), [computedOrderRows]);
+  const totalRemainingWeek = totalWeeklyTarget - totalWeekOrders;
 
   return (
     <div className="flex flex-col xl:flex-row gap-6 items-start">
@@ -111,8 +259,8 @@ export default function AnalyticsDashboard({ feeders, scotRows = [] }: { feeders
 
             <select 
               value={filters.month}
-              onChange={(e) => setFilters(f => ({ ...f, month: e.target.value }))}
-              className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-xs font-bold text-slate-700 dark:text-slate-200 outline-none focus:ring-2 focus:ring-blue-500"
+              onChange={(e) => setFilters(f => ({ ...f, month: e.target.value, week: 'all' }))}
+              className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-xs font-bold text-slate-700 dark:text-slate-200 outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
             >
               <option value="all">All Months</option>
               {uniqueMonths.map((m, i) => <option key={i} value={m}>{m}</option>)}
@@ -277,17 +425,47 @@ export default function AnalyticsDashboard({ feeders, scotRows = [] }: { feeders
         {/* 3.5 Order Behaviour Content Table */}
         <div className="col-span-12 xl:col-span-8">
           <div className="p-6 rounded-[2rem] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm relative overflow-hidden h-full flex flex-col">
-            <h3 className="font-black text-slate-900 dark:text-white text-sm uppercase tracking-widest flex items-center gap-2 mb-6 relative z-10">
-              <ShoppingBagIcon className="w-5 h-5 text-blue-500" />
-              Order Behaviour Content
-            </h3>
+            <div className="flex justify-between items-center mb-6 relative z-10 flex-wrap gap-4">
+              <h3 className="font-black text-slate-900 dark:text-white text-sm uppercase tracking-widest flex items-center gap-2">
+                <ShoppingBagIcon className="w-5 h-5 text-blue-500" />
+                Order Behaviour Content
+              </h3>
+              <div className="flex gap-3 flex-wrap items-center">
+                <div className="flex gap-2 mr-2">
+                  <div className="bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 px-3 py-1.5 rounded-lg border border-emerald-200 dark:border-emerald-800/50 flex items-center gap-2 shadow-sm">
+                    <span className="text-[10px] font-bold uppercase tracking-widest">Total Month:</span>
+                    <span className="text-sm font-black">{totalMonthOrders}</span>
+                  </div>
+                  <div className="bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 px-3 py-1.5 rounded-lg border border-blue-200 dark:border-blue-800/50 flex items-center gap-2 shadow-sm">
+                    <span className="text-[10px] font-bold uppercase tracking-widest">Total Week:</span>
+                    <span className="text-sm font-black">{totalWeekOrders}</span>
+                  </div>
+                </div>
+                <select 
+                  value={filters.month}
+                  onChange={(e) => setFilters(f => ({ ...f, month: e.target.value, week: 'all' }))}
+                  className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 text-xs font-bold text-slate-700 dark:text-slate-200 outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                >
+                  <option value="all">All Months</option>
+                  {uniqueMonths.map((m, i) => <option key={i} value={m}>{m}</option>)}
+                </select>
+                <select 
+                  value={filters.week}
+                  onChange={(e) => setFilters(f => ({ ...f, week: e.target.value }))}
+                  className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 text-xs font-bold text-slate-700 dark:text-slate-200 outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                >
+                  <option value="all">All Weeks</option>
+                  {uniqueWeeks.map((w, i) => <option key={i} value={w}>{w}</option>)}
+                </select>
+              </div>
+            </div>
             <div className="overflow-x-auto overflow-y-auto custom-scrollbar relative z-10 rounded-2xl border border-slate-200 dark:border-slate-800 max-h-[500px]">
               <table className="w-full text-left border-collapse table-auto relative min-w-[1000px]">
                 <thead className="sticky top-0 z-30 shadow-md ring-1 ring-slate-800">
                   <tr className="bg-slate-900 text-white">
                     <th rowSpan={2} className="px-6 py-4 text-[11px] font-black uppercase tracking-widest whitespace-nowrap border-r border-slate-700 w-[250px] sticky left-0 z-40 bg-slate-900">Client Name</th>
-                    <th colSpan={3} className="px-6 py-2 text-[11px] font-black uppercase tracking-widest text-center text-amber-400 border-b border-r border-slate-700 bg-slate-900">Month</th>
-                    <th colSpan={3} className="px-6 py-2 text-[11px] font-black uppercase tracking-widest text-center text-amber-400 border-b border-slate-700 bg-slate-900">Week</th>
+                    <th colSpan={3} className="px-6 py-2 text-[11px] font-black uppercase tracking-widest text-center text-amber-400 border-b border-r border-slate-700 bg-slate-900">Month <span className="text-[9px] text-slate-400 ml-1 font-bold">({monthRangeStr})</span></th>
+                    <th colSpan={3} className="px-6 py-2 text-[11px] font-black uppercase tracking-widest text-center text-amber-400 border-b border-slate-700 bg-slate-900">Week <span className="text-[9px] text-slate-400 ml-1 font-bold">({weekRangeStr})</span></th>
                   </tr>
                   <tr className="bg-slate-900 text-white">
                     <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-center border-r border-slate-700 bg-slate-900">No. of Orders / Month</th>
@@ -299,74 +477,41 @@ export default function AnalyticsDashboard({ feeders, scotRows = [] }: { feeders
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {(() => {
-                    const now = new Date();
-                    const currentMonth = now.getMonth();
-                    const currentYear = now.getFullYear();
-                    
-                    const day = now.getDay();
-                    const diff = now.getDate() - day + (day === 0 ? -6 : 1);
-                    const startOfWeek = new Date(now.getFullYear(), now.getMonth(), diff);
-                    startOfWeek.setHours(0,0,0,0);
-
-                    // Filter to strictly O2D KB parties (those with > 0 orders)
-                    const o2dPartiesOnly = scotRows.filter(r => r.rawOrders && r.rawOrders.length > 0);
-
-                    if (o2dPartiesOnly.length === 0) {
-                      return <tr><td colSpan={7} className="px-6 py-10 text-center text-xs font-bold text-slate-400 uppercase tracking-widest">No target data available</td></tr>;
-                    }
-
-                    const computedRows = o2dPartiesOnly.map(row => {
-                      let monthlyTarget: number | null = null;
-                      let weeklyTarget: number | null = null;
-                      let actualMonth = 0;
-                      let actualWeek = 0;
-
-                      if (row.rawOrders && row.rawOrders.length > 0) {
-                        const activeMonthsSet = new Set<string>();
-                        
-                        row.rawOrders.forEach((order: any) => {
-                          const orderDate = new Date(order.created_at);
-                          const time = orderDate.getTime();
-                          
-                          if (!isNaN(time)) {
-                            const monthKey = `${orderDate.getFullYear()}-${orderDate.getMonth()}`;
-                            activeMonthsSet.add(monthKey);
-                          }
-                          
-                          if (orderDate.getMonth() === currentMonth && orderDate.getFullYear() === currentYear) {
-                            actualMonth++;
-                            if (orderDate >= startOfWeek) {
-                              actualWeek++;
-                            }
-                          }
-                        });
-
-                        const activeMonths = activeMonthsSet.size;
-                        monthlyTarget = activeMonths > 0 ? Math.max(1, Math.round(row.rawOrders.length / activeMonths)) : 1;
-                        weeklyTarget = Math.round(monthlyTarget / 4);
-                      }
-
-                      return {
-                        ...row,
-                        monthlyTarget,
-                        weeklyTarget,
-                        actualMonth,
-                        actualWeek,
-                        hasTarget: monthlyTarget !== null && monthlyTarget > 0
-                      };
-                    });
-
-                    const sortedRows = computedRows.sort((a, b) => {
-                      if (a.hasTarget && !b.hasTarget) return -1;
-                      if (!a.hasTarget && b.hasTarget) return 1;
-                      if (a.hasTarget && b.hasTarget) {
-                        return (b.monthlyTarget as number) - (a.monthlyTarget as number);
-                      }
-                      return 0;
-                    });
-
-                    return sortedRows.map((row, idx) => {
+                  {computedOrderRows.length === 0 ? (
+                    <tr><td colSpan={7} className="px-6 py-10 text-center text-xs font-bold text-slate-400 uppercase tracking-widest">No target data available</td></tr>
+                  ) : (
+                    <>
+                      <tr className="bg-slate-100/50 dark:bg-slate-800/80 border-b-2 border-slate-200 dark:border-slate-700">
+                        <td className="px-6 py-4 sticky left-0 z-10 bg-slate-100/50 dark:bg-slate-800/80 border-r border-slate-200 dark:border-slate-700">
+                          <p className="text-[11px] font-black text-slate-900 dark:text-white uppercase">Overall Totals</p>
+                          <p className="text-[9px] font-bold text-slate-500 italic mt-0.5">All Clients Combined</p>
+                        </td>
+                        <td className="px-4 py-4 text-center border-r border-slate-200 dark:border-slate-700">
+                          <span className="text-sm font-black text-blue-900 dark:text-blue-400">{totalMonthlyTarget}</span>
+                        </td>
+                        <td className="px-4 py-4 text-center border-r border-slate-200 dark:border-slate-700">
+                          <span className="text-sm font-black text-emerald-600 dark:text-emerald-400">{totalMonthOrders}</span>
+                        </td>
+                        <td className="px-4 py-4 text-center border-r border-slate-200 dark:border-slate-700">
+                          <span className={`inline-flex items-center gap-1 px-3 py-1.5 text-[11px] font-black rounded-full ${totalRemainingMonth <= 0 ? 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30' : 'bg-red-100 text-red-600 dark:bg-red-900/30'}`}>
+                            {totalRemainingMonth <= 0 ? <ArrowTrendingUpIcon className="w-3.5 h-3.5" /> : <ArrowTrendingDownIcon className="w-3.5 h-3.5" />}
+                            {totalRemainingMonth <= 0 ? `+${Math.abs(totalRemainingMonth)}` : `-${totalRemainingMonth}`}
+                          </span>
+                        </td>
+                        <td className="px-4 py-4 text-center border-r border-slate-200 dark:border-slate-700">
+                          <span className="text-sm font-black text-blue-900 dark:text-blue-400">{totalWeeklyTarget}</span>
+                        </td>
+                        <td className="px-4 py-4 text-center border-r border-slate-200 dark:border-slate-700">
+                          <span className="text-sm font-black text-emerald-600 dark:text-emerald-400">{totalWeekOrders}</span>
+                        </td>
+                        <td className="px-4 py-4 text-center">
+                          <span className={`inline-flex items-center gap-1 px-3 py-1.5 text-[11px] font-black rounded-full ${totalRemainingWeek <= 0 ? 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30' : 'bg-red-100 text-red-600 dark:bg-red-900/30'}`}>
+                            {totalRemainingWeek <= 0 ? <ArrowTrendingUpIcon className="w-3.5 h-3.5" /> : <ArrowTrendingDownIcon className="w-3.5 h-3.5" />}
+                            {totalRemainingWeek <= 0 ? `+${Math.abs(totalRemainingWeek)}` : `-${totalRemainingWeek}`}
+                          </span>
+                        </td>
+                      </tr>
+                      {computedOrderRows.map((row, idx) => {
                       const hasTarget = row.hasTarget;
                       const remainingMonth = hasTarget ? (row.monthlyTarget as number) - row.actualMonth : null;
                       const remainingWeek = hasTarget ? (row.weeklyTarget as number) - row.actualWeek : null;
@@ -374,8 +519,12 @@ export default function AnalyticsDashboard({ feeders, scotRows = [] }: { feeders
                       return (
                         <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
                           <td className="px-6 py-4 sticky left-0 z-10 bg-white dark:bg-slate-900 border-r border-slate-100 dark:border-slate-800 group-hover:bg-slate-50 dark:group-hover:bg-slate-800/50 transition-colors">
-                            <p className="text-[11px] font-black text-slate-900 dark:text-white uppercase truncate" title={row.toName}>{row.toName}</p>
-                            <p className="text-[9px] font-bold text-slate-500 italic mt-0.5 truncate">{row.employeeName || "No employee"}</p>
+                            <div className="flex flex-col gap-1">
+                              <span className="text-xs font-black text-slate-900 dark:text-white uppercase tracking-widest">{row.toName}</span>
+                              <p className="text-[10px] font-bold text-slate-500 italic mt-0.5">
+                                {row.employeeName || defaultEmployeeName}
+                              </p>
+                            </div>
                           </td>
                           <td className="px-4 py-4 text-center border-r border-slate-100 dark:border-slate-800">
                             {hasTarget ? (
@@ -419,8 +568,9 @@ export default function AnalyticsDashboard({ feeders, scotRows = [] }: { feeders
                           </td>
                         </tr>
                       );
-                    });
-                  })()}
+                    })}
+                    </>
+                  )}
                 </tbody>
               </table>
             </div>

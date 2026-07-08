@@ -22,7 +22,8 @@ import {
   NoSymbolIcon,
   InformationCircleIcon,
   ShoppingCartIcon,
-  PencilIcon
+  PencilIcon,
+  DocumentTextIcon
 } from "@heroicons/react/24/outline";
 
 import {
@@ -44,6 +45,7 @@ import {
 import { O2DKB } from "@/types/o2dkb";
 import { DataFeeder } from "@/types/data-feeder";
 import AnalyticsDashboard from "./components/AnalyticsDashboard";
+import { generateScotReportPDF } from "@/lib/utils/scotReportPdf";
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
@@ -99,6 +101,38 @@ export default function ScotKbPage() {
   const [followUpParty, setFollowUpParty] = useState("");
   const [followUpDateValue, setFollowUpDateValue] = useState("");
   const [isSavingFollowUp, setIsSavingFollowUp] = useState(false);
+
+  const [isReportLoading, setIsReportLoading] = useState(false);
+
+  const handleGenerateWeeklyReports = async () => {
+    setIsReportLoading(true);
+    // Since scot-kb is a specialized view, we use source=scot-kb to fetch from the KB specific sheets
+    alert("Aggregating spreadsheet metrics for last week...");
+    try {
+      const res = await fetch('/api/scot/report?source=scot-kb');
+      if (res.ok) {
+        const data = await res.json();
+        const coordinators = data.report || [];
+        if (coordinators.length === 0) {
+          alert("No active sales coordinator records found for last week.");
+          return;
+        }
+        
+        for (const coordinator of coordinators) {
+          await generateScotReportPDF(coordinator, data.dateRange);
+        }
+        
+        alert(`Successfully exported and downloaded ${coordinators.length} Coordinator PDF report(s)!`);
+      } else {
+        alert("Failed to load weekly report data from server");
+      }
+    } catch (err) {
+      console.error("Error generating weekly reports:", err);
+      alert("Error connecting to server while generating reports");
+    } finally {
+      setIsReportLoading(false);
+    }
+  };
 
   const saveFrequency = async () => {
     if (!freqParty || !freqValue) return;
@@ -654,7 +688,7 @@ export default function ScotKbPage() {
 
       {/* Dashboard Tab */}
       {activeTab === "dashboard" && (
-        <AnalyticsDashboard feeders={feeders} scotRows={scotRows} />
+        <AnalyticsDashboard feeders={feeders} scotRows={scotRows} defaultEmployeeName="charanpreet kaur (SC)" />
       )}
 
       {/* Data Feeder Tab */}
@@ -797,6 +831,20 @@ export default function ScotKbPage() {
               Party Call Cross-Reference
             </h2>
             <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
+              <button
+                onClick={handleGenerateWeeklyReports}
+                disabled={isReportLoading}
+                className="px-4 py-1.5 bg-rose-50 dark:bg-rose-900/30 border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-400 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-rose-100 dark:hover:bg-rose-900/50 transition-colors shadow-sm flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Download Sales Coordinator Reports"
+              >
+                {isReportLoading ? (
+                  <ArrowPathIcon className="w-4 h-4 animate-spin" />
+                ) : (
+                  <DocumentTextIcon className="w-4 h-4" />
+                )}
+                {isReportLoading ? "Generating..." : "Weekly Report"}
+              </button>
+
               {/* Pagination Actions */}
               <div className="flex gap-1.5">
                 <button onClick={() => setScotPage(p => Math.max(1, p - 1))} disabled={scotPage === 1} className="px-3 py-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-[10px] font-black uppercase tracking-widest rounded-xl disabled:opacity-50 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors shadow-sm text-slate-700 dark:text-slate-300">Prev</button>

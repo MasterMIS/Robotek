@@ -6,6 +6,8 @@ import {
   getFollowUpData 
 } from "@/lib/scot-sheets";
 import { o2dService } from "@/lib/o2d-sheets";
+import { o2dkbService } from "@/lib/o2dkb-sheets";
+import { getDataFeeder } from "@/lib/data-feeder-sheets";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -46,6 +48,7 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const startDateStr = searchParams.get("startDate");
   const endDateStr = searchParams.get("endDate");
+  const source = searchParams.get("source") || "scot";
 
   // Determine last completed calendar week Monday to Sunday by default
   const today = new Date();
@@ -64,12 +67,79 @@ export async function GET(req: NextRequest) {
   const end = endDateStr ? new Date(endDateStr) : defaultEnd;
 
   try {
-    const [scotFeeder, callsData, followUpData, allO2Ds] = await Promise.all([
-      getScotData(),
-      getCallData(),
-      getFollowUpData(),
-      o2dService.getAll()
-    ]);
+    let scotFeeder, callsData, followUpData, allO2Ds;
+
+    if (source === "scot-kb") {
+      [scotFeeder, followUpData, allO2Ds] = await Promise.all([
+        getDataFeeder(),
+        getFollowUpData("scot-kb"),
+        o2dkbService.getAll()
+      ]);
+
+      // Mock callsData for scot-kb to act as the master party list since it lacks a Target sheet
+      const uniqueParties = new Map<string, any>();
+      
+      allO2Ds.forEach(o => {
+        const name = (o.party_name || "").trim();
+        if (name && !uniqueParties.has(name.toLowerCase())) {
+          uniqueParties.set(name.toLowerCase(), { partyName: name, mobileNum: o.party_number || "", salesCoordinator: "charanpreet kaur" });
+        }
+      });
+      
+      scotFeeder.forEach(f => {
+        const name = (f.toName || "").trim();
+        if (name && !uniqueParties.has(name.toLowerCase())) {
+          uniqueParties.set(name.toLowerCase(), { partyName: name, mobileNum: f.toNumber || "", salesCoordinator: f.employeeName || "charanpreet kaur" });
+        } else if (name) {
+          const existing = uniqueParties.get(name.toLowerCase());
+          if (existing && !existing.salesCoordinator && f.employeeName) {
+            existing.salesCoordinator = f.employeeName;
+          }
+        }
+      });
+
+      callsData = Array.from(uniqueParties.values());
+
+    } else {
+      [scotFeeder, followUpData, allO2Ds] = await Promise.all([
+        getScotData(),
+        getFollowUpData("scot"),
+        o2dService.getAll()
+      ]);
+
+      // Mock callsData for scot to act as the master party list since we are ignoring the Target sheet
+      const uniqueParties = new Map<string, any>();
+      
+      allO2Ds.forEach(o => {
+        const name = (o.party_name || "").trim();
+        if (name && !uniqueParties.has(name.toLowerCase())) {
+          uniqueParties.set(name.toLowerCase(), { partyName: name, mobileNum: (o as any).party_number || "", salesCoordinator: "UZEFA" });
+        }
+      });
+      
+      scotFeeder.forEach(f => {
+        const name = (f.toName || "").trim();
+        let empName = (f.employeeName || "UZEFA").trim();
+        if (empName.toLowerCase() === "uzefa (sc)") empName = "UZEFA";
+        
+        if (name && !uniqueParties.has(name.toLowerCase())) {
+          uniqueParties.set(name.toLowerCase(), { partyName: name, mobileNum: f.toNumber || "", salesCoordinator: empName });
+        } else if (name) {
+          const existing = uniqueParties.get(name.toLowerCase());
+          if (existing) {
+            let currentSc = (existing.salesCoordinator || "UZEFA").trim();
+            if (currentSc.toLowerCase() === "uzefa (sc)") currentSc = "UZEFA";
+            if (currentSc === "UZEFA" && empName !== "UZEFA") {
+              existing.salesCoordinator = empName;
+            } else {
+              existing.salesCoordinator = currentSc;
+            }
+          }
+        }
+      });
+
+      callsData = Array.from(uniqueParties.values());
+    }
 
     // 1. Filter calls & follow-ups in the requested date range
     const rangeCalls = scotFeeder.filter(call => {
@@ -141,15 +211,22 @@ export async function GET(req: NextRequest) {
 
       const currentMonthCount = monthOrderSets[currentMonthStr]?.size || 0;
       const monthlyUniqueCounts = Object.values(monthOrderSets).map(s => s.size);
-      const calcMonthly = monthlyUniqueCounts.length > 0
-        ? monthlyUniqueCounts.reduce((a, b) => a + b, 0) / monthlyUniqueCounts.length
-        : 0;
-
-      const monthlyPlanned = Math.round(calcMonthly);
+      
+      const activeMonths = monthlyUniqueCounts.length;
+      const totalDedupedOrders = monthlyUniqueCounts.reduce((a, b) => a + b, 0);
+      
+      const monthlyPlanned = activeMonths > 0 ? Math.max(1, Math.round(totalDedupedOrders / activeMonths)) : 1;
       const actualMonth = currentMonthCount;
       const remainingMonth = Math.max(0, monthlyPlanned - actualMonth);
-      const weeklyPlanned = monthlyPlanned > 0 ? Math.ceil(monthlyPlanned / 4) : 0;
-      const actualWeek = Math.round(actualMonth / 4);
+      const weeklyPlanned = Math.round(monthlyPlanned / 4);
+      
+      let actualWeek = 0;
+      orderFirstDates.forEach(d => {
+        if (d >= start && d <= end) {
+          actualWeek++;
+        }
+      });
+      
       const remainingWeek = Math.max(0, weeklyPlanned - actualWeek);
 
       // Latest follow up next date
@@ -167,11 +244,17 @@ export async function GET(req: NextRequest) {
       };
     });
 
-    // 3. Find unique sales coordinator names from Calls data
+    // 3. Normalize empty sales coordinators to 'UZEFA'
+    callsData.forEach(c => {
+      if (!c.salesCoordinator || !c.salesCoordinator.trim()) {
+        c.salesCoordinator = "UZEFA";
+      }
+    });
+
     const salesCoordinatorNames = Array.from(
       new Set(
         callsData
-          .map(c => (c.salesCoordinator || "").trim())
+          .map(c => c.salesCoordinator.trim())
           .filter(name => name.length > 0)
       )
     );
@@ -291,12 +374,13 @@ export async function GET(req: NextRequest) {
       const directCallsIncoming = personFeederCalls.filter(c => (c.callType || "").toLowerCase() === "incoming").length;
       const directCallsOutgoing = personFeederCalls.filter(c => (c.callType || "").toLowerCase() === "outgoing").length;
       const directCallsMissed = personFeederCalls.filter(c => (c.callType || "").toLowerCase() === "missed").length;
+      const directCallsRejected = personFeederCalls.filter(c => (c.callType || "").toLowerCase() === "rejected").length;
 
       const totalFollowUpAttempts = partiesMetrics.reduce((sum, p) => sum + p.followUpAttemptsCount, 0);
 
       // Score Metrics
       const plannedFollowUps = partiesMetrics.filter(p => p.isPlanned).length;
-      const actualFollowUps = partiesMetrics.filter(p => p.followUpAttemptsCount > 0).length;
+      const actualFollowUps = partiesMetrics.filter(p => p.followUpAttemptsCount > 0 || p.feederCallAttemptsCount > 0).length;
       const followUpScore = plannedFollowUps > 0 
         ? Math.min(100, Math.round((actualFollowUps / plannedFollowUps) * 100)) 
         : 100;
@@ -326,6 +410,7 @@ export async function GET(req: NextRequest) {
         directCallsIncoming,
         directCallsOutgoing,
         directCallsMissed,
+        directCallsRejected,
         feederCalls: personFeederCalls,
         totalFollowUpAttempts,
         plannedFollowUps,
