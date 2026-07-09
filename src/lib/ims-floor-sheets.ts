@@ -6,7 +6,7 @@ const SPREADSHEET_ID = "12lk8GV7ZBpm6J-bA5TBWfHQ1qY0eEHIrwOICSnsuceE";
 class FloorIMSService extends BaseSheetsService<FloorIMS> {
   protected spreadsheetId = SPREADSHEET_ID;
   protected sheetName: string;
-  protected range = "A:F";
+  protected range = "A:G";
   protected idColumnIndex = 0;
 
   constructor(sheetName: string) {
@@ -25,12 +25,13 @@ class FloorIMSService extends BaseSheetsService<FloorIMS> {
       category: get("category", 2),
       in_qty: get("in qty", 3),
       out_qty: get("out qty", 4),
-      updated_at: get("updated_at", 5),
+      date: get("date", 5),
+      updated_at: get("updated_at", 6),
     };
   }
 
   mapItemToRow(ims: FloorIMS): any[] {
-    const row: any[] = ["", "", "", "", "", ""];
+    const row: any[] = ["", "", "", "", "", "", ""];
     const set = (h: string, fallbackIdx: number, val: any) => {
       const idx = this.hMap[h.toLowerCase()];
       row[idx !== undefined ? idx : fallbackIdx] = val ?? "";
@@ -41,7 +42,8 @@ class FloorIMSService extends BaseSheetsService<FloorIMS> {
     set("category", 2, ims.category);
     set("in qty", 3, ims.in_qty);
     set("out qty", 4, ims.out_qty);
-    set("updated_at", 5, ims.updated_at);
+    set("date", 5, ims.date);
+    set("updated_at", 6, ims.updated_at);
 
     return row;
   }

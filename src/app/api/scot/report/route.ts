@@ -88,9 +88,7 @@ export async function GET(req: NextRequest) {
       
       scotFeeder.forEach(f => {
         const name = (f.toName || "").trim();
-        if (name && !uniqueParties.has(name.toLowerCase())) {
-          uniqueParties.set(name.toLowerCase(), { partyName: name, mobileNum: f.toNumber || "", salesCoordinator: f.employeeName || "charanpreet kaur" });
-        } else if (name) {
+        if (name && uniqueParties.has(name.toLowerCase())) {
           const existing = uniqueParties.get(name.toLowerCase());
           if (existing && !existing.salesCoordinator && f.employeeName) {
             existing.salesCoordinator = f.employeeName;
@@ -122,9 +120,7 @@ export async function GET(req: NextRequest) {
         let empName = (f.employeeName || "UZEFA").trim();
         if (empName.toLowerCase() === "uzefa (sc)") empName = "UZEFA";
         
-        if (name && !uniqueParties.has(name.toLowerCase())) {
-          uniqueParties.set(name.toLowerCase(), { partyName: name, mobileNum: f.toNumber || "", salesCoordinator: empName });
-        } else if (name) {
+        if (name && uniqueParties.has(name.toLowerCase())) {
           const existing = uniqueParties.get(name.toLowerCase());
           if (existing) {
             let currentSc = (existing.salesCoordinator || "UZEFA").trim();

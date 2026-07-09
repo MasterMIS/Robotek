@@ -412,8 +412,7 @@ export default function ScotKbPage() {
     });
 
     const allNormalizedNames = new Set<string>([
-      ...Array.from(o2dGroup.keys()),
-      ...Array.from(feederGroup.keys())
+      ...Array.from(o2dGroup.keys())
     ]);
 
     const rows = Array.from(allNormalizedNames).map(normalizedToName => {

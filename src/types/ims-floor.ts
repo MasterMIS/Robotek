@@ -4,6 +4,7 @@ export interface FloorIMS {
   category: string;
   in_qty: string;
   out_qty: string;
+  date?: string;
   updated_at?: string;
   // Computed in frontend/API
   live_stock?: number;

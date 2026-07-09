@@ -13,11 +13,24 @@ import {
   MagnifyingGlassIcon,
   XMarkIcon,
   ArrowLeftIcon,
-  EyeIcon
+  EyeIcon,
+  TableCellsIcon,
+  ChartBarIcon
 } from "@heroicons/react/24/outline";
 import { FloorIMS } from "@/types/ims-floor";
+import TimeSeriesTable, { TimeBucket } from "@/components/TimeSeriesTable";
 
 const fetcher = (url: string) => fetch(url).then(res => res.json());
+
+const formatDate = (dateString?: string) => {
+  if (!dateString) return 'N/A';
+  const date = new Date(dateString);
+  if (isNaN(date.getTime())) return dateString;
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = date.toLocaleString('en-US', { month: 'short' });
+  const year = String(date.getFullYear()).slice(-2);
+  return `${day} ${month} ${year}`;
+};
 
 const FloatingInput = ({
   label, value, onChange, type = "text", step, disabled, name, list
@@ -52,6 +65,9 @@ export default function IMSFloor({ location, onBack }: { location: "1st" | "g", 
   const [statusMessage, setStatusMessage] = useState("");
   const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
   const [statusType, setStatusType] = useState<'loading' | 'success' | 'error'>('loading');
+
+  const [viewMode, setViewMode] = useState<'default' | 'timeseries'>('default');
+  const [timeBucket, setTimeBucket] = useState<TimeBucket>('Daily');
 
   const showStatus = (msg: string, type: 'loading' | 'success' | 'error' = 'loading') => {
     setStatusMessage(msg);
@@ -186,7 +202,8 @@ export default function IMSFloor({ location, onBack }: { location: "1st" | "g", 
           category: row.category,
           in_qty: row.type === 'IN' ? qty.toString() : "0",
           out_qty: row.type === 'OUT' ? qty.toString() : "0",
-          updated_at: today
+          date: today,
+          updated_at: new Date().toISOString()
         };
         await fetch(`/api/ims/floor?location=${location}`, {
           method: 'POST',
@@ -292,33 +309,84 @@ export default function IMSFloor({ location, onBack }: { location: "1st" | "g", 
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          <button onClick={handleExport} className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 dark:bg-white/5 dark:hover:bg-white/10 text-gray-700 dark:text-gray-300 rounded-lg text-[11px] font-black uppercase tracking-wider transition-all border border-gray-200 dark:border-white/10 shadow-sm">
+        <div className="flex items-center gap-2 bg-gray-100 dark:bg-white/5 p-1 rounded-xl shrink-0 self-start lg:self-auto">
+          <button
+            onClick={() => setViewMode('default')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wider transition-all ${
+              viewMode === 'default' 
+                ? 'bg-white dark:bg-[#111827] text-[#003875] dark:text-[#FFD500] shadow-sm' 
+                : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+            }`}
+          >
+            <TableCellsIcon className="w-4 h-4" /> Default
+          </button>
+          <button
+            onClick={() => setViewMode('timeseries')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wider transition-all ${
+              viewMode === 'timeseries' 
+                ? 'bg-white dark:bg-[#111827] text-[#003875] dark:text-[#FFD500] shadow-sm' 
+                : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+            }`}
+          >
+            <ChartBarIcon className="w-4 h-4" /> Time Series
+          </button>
+        </div>
+
+        <div className="flex items-center gap-3 w-full lg:w-auto">
+          <div className="relative shrink-0 flex-1 lg:flex-none">
+            <MagnifyingGlassIcon className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input
+              type="text"
+              placeholder="SEARCH ITEM..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-9 pr-4 py-2 bg-white dark:bg-[#111827] border border-gray-200 dark:border-white/10 rounded-xl text-[11px] font-black uppercase tracking-wider outline-none focus:ring-2 focus:ring-[#003875] dark:text-white w-full lg:w-64 transition-all shadow-sm h-full"
+            />
+          </div>
+          <button onClick={handleExport} className="flex items-center gap-1.5 px-3 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-white/5 dark:hover:bg-white/10 text-gray-700 dark:text-gray-300 rounded-lg text-[11px] font-black uppercase tracking-wider transition-all border border-gray-200 dark:border-white/10 shadow-sm whitespace-nowrap">
             <ArrowDownTrayIcon className="w-4 h-4" /> Export
           </button>
           <button onClick={() => {
             setBulkRows([{ id: Date.now().toString(), item_name: '', category: '', type: 'IN', qty: '' }]);
             setItemModalOpen(true);
-          }} className="flex items-center gap-1.5 px-4 py-1.5 bg-[#003875] dark:bg-[#FFD500] text-white dark:text-[#003875] hover:brightness-110 rounded-lg text-[11px] font-black uppercase tracking-wider transition-all shadow-sm">
+          }} className="flex items-center gap-1.5 px-4 py-2 bg-[#003875] dark:bg-[#FFD500] text-white dark:text-[#003875] hover:brightness-110 rounded-lg text-[11px] font-black uppercase tracking-wider transition-all shadow-sm whitespace-nowrap">
             <PlusIcon className="w-4 h-4" /> Add Item
           </button>
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2 shrink-0">
-        <div className="relative shrink-0 flex-1 lg:flex-none">
-          <MagnifyingGlassIcon className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-          <input
-            type="text"
-            placeholder="SEARCH ITEM..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-9 pr-4 py-2.5 bg-white dark:bg-[#111827] border border-gray-200 dark:border-white/10 rounded-xl text-[11px] font-black uppercase tracking-wider outline-none focus:ring-2 focus:ring-[#003875] dark:text-white w-full lg:w-64 transition-all shadow-sm h-full"
+      {viewMode === 'timeseries' ? (
+        <div className="flex flex-col gap-2 shrink-0 mb-2">
+          <div className="flex gap-2">
+            {(['Daily', 'Weekly', 'Monthly', 'Quarterly'] as TimeBucket[]).map(bucket => (
+              <button
+                key={bucket}
+                onClick={() => setTimeBucket(bucket)}
+                className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
+                  timeBucket === bucket
+                    ? 'bg-[#003875] text-white dark:bg-[#FFD500] dark:text-[#003875] shadow-sm'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-white/5 dark:text-gray-400 dark:hover:bg-white/10'
+                }`}
+              >
+                {bucket}
+              </button>
+            ))}
+          </div>
+          <TimeSeriesTable 
+            transactions={rawItems.map(item => ({ 
+              item_name: item.item_name, 
+              category: item.category, 
+              date: item.date || item.updated_at || '', 
+              in_qty: parseFloat(item.in_qty) || 0, 
+              out_qty: parseFloat(item.out_qty) || 0 
+            }))}
+            bucket={timeBucket}
+            isLoading={isLoading}
+            searchQuery={searchQuery}
           />
         </div>
-      </div>
-
-      <div className="flex-1 bg-white dark:bg-[#111827] border border-gray-200 dark:border-white/5 rounded-xl overflow-hidden flex flex-col shadow-sm min-h-0">
+      ) : (
+        <div className="flex-1 bg-white dark:bg-[#111827] border border-gray-200 dark:border-white/5 rounded-xl overflow-hidden flex flex-col shadow-sm min-h-0 mt-2">
         {filteredItems.length > 0 && !isLoading && (
           <div className="py-2 px-4 border-b border-gray-200 dark:border-white/5 flex items-center justify-between bg-gray-50/50 dark:bg-[#1f2937]/50 shrink-0">
             <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">
@@ -410,6 +478,7 @@ export default function IMSFloor({ location, onBack }: { location: "1st" | "g", 
           )}
         </div>
       </div>
+      )}
 
       <datalist id="category-list">
         {masterCategories.map(cat => (
@@ -456,7 +525,7 @@ export default function IMSFloor({ location, onBack }: { location: "1st" | "g", 
                   <tbody className="divide-y divide-gray-100 dark:divide-white/5">
                     {transactionLogs.map((log) => (
                       <tr key={log.id} className="hover:bg-gray-50 dark:hover:bg-white/[0.02]">
-                        <td className="py-2 px-4 text-[11px] font-bold text-gray-500">{log.updated_at || 'N/A'}</td>
+                        <td className="py-2 px-4 text-[11px] font-bold text-gray-500">{formatDate(log.date || log.updated_at)}</td>
                         <td className="py-2 px-4 text-[11px] font-black text-emerald-600 dark:text-emerald-400 text-right">{log.in_qty !== "0" && log.in_qty !== "" ? `+${log.in_qty}` : "-"}</td>
                         <td className="py-2 px-4 text-[11px] font-black text-rose-600 dark:text-rose-400 text-right">{log.out_qty !== "0" && log.out_qty !== "" ? `-${log.out_qty}` : "-"}</td>
                         <td className="py-2 px-4 text-center">

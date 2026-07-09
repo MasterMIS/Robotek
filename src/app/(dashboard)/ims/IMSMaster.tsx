@@ -21,7 +21,9 @@ import {
   CurrencyRupeeIcon,
   EyeIcon,
   ArrowUpTrayIcon,
-  ArrowLeftIcon
+  ArrowLeftIcon,
+  TableCellsIcon,
+  ChartBarIcon
 } from "@heroicons/react/24/outline";
 import {
   PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis,
@@ -30,8 +32,20 @@ import {
 } from "recharts";
 import { IMS } from "@/types/ims";
 import * as XLSX from "xlsx";
+import TimeSeriesTable, { TimeBucket, Transaction } from "@/components/TimeSeriesTable";
 
 const fetcher = (url: string) => fetch(url).then(res => res.json());
+
+const formatDate = (dateString?: string) => {
+  if (!dateString) return 'N/A';
+  const date = new Date(dateString);
+  if (isNaN(date.getTime())) return dateString;
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const d = date.getDate().toString().padStart(2, '0');
+  const m = months[date.getMonth()];
+  const y = date.getFullYear().toString().slice(-2);
+  return `${d} ${m} ${y}`;
+};
 
 const FloatingInput = ({
   label, value, onChange, type = "text", step, disabled, name, list
@@ -181,6 +195,14 @@ export default function IMSMaster({ onBack }: { onBack: () => void }) {
 
   // Form states
   const [itemForm, setItemForm] = useState<Partial<IMS>>({});
+
+  const [viewMode, setViewMode] = useState<'default' | 'timeseries'>('default');
+  const [timeBucket, setTimeBucket] = useState<TimeBucket>('Daily');
+
+  const { data: timeSeriesData = [], isValidating: isTimeSeriesLoading } = useSWR<Transaction[]>(
+    viewMode === 'timeseries' ? '/api/ims/time-series' : null,
+    fetcher
+  );
 
   const { data: rawItems = [], mutate: mutateMaster, isLoading: masterLoading } = useSWR<IMS[]>("/api/ims", fetcher);
 
@@ -457,6 +479,16 @@ export default function IMSMaster({ onBack }: { onBack: () => void }) {
           </div>
 
         <div className="flex items-center gap-2">
+          <div className="relative shrink-0">
+            <MagnifyingGlassIcon className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input
+              type="text"
+              placeholder="SEARCH ID / ITEM..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-9 pr-4 py-2 bg-white dark:bg-[#111827] border border-gray-200 dark:border-white/10 rounded-lg text-[11px] font-black uppercase tracking-wider outline-none focus:ring-2 focus:ring-[#003875] dark:text-white w-64 transition-all shadow-sm h-[32px]"
+            />
+          </div>
           <input 
             type="file" 
             ref={fileInputRef} 
@@ -480,6 +512,55 @@ export default function IMSMaster({ onBack }: { onBack: () => void }) {
         </div>
       </div>
 
+      <div className="flex items-center gap-2 bg-gray-100 dark:bg-white/5 p-1 rounded-xl shrink-0 self-start lg:self-auto mb-2">
+        <button
+          onClick={() => setViewMode('default')}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wider transition-all ${
+            viewMode === 'default' 
+              ? 'bg-white dark:bg-[#111827] text-[#003875] dark:text-[#FFD500] shadow-sm' 
+              : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+          }`}
+        >
+          <TableCellsIcon className="w-4 h-4" /> Default
+        </button>
+        <button
+          onClick={() => setViewMode('timeseries')}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wider transition-all ${
+            viewMode === 'timeseries' 
+              ? 'bg-white dark:bg-[#111827] text-[#003875] dark:text-[#FFD500] shadow-sm' 
+              : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+          }`}
+        >
+          <ChartBarIcon className="w-4 h-4" /> Time Series
+        </button>
+      </div>
+
+      {viewMode === 'timeseries' ? (
+        <div className="flex flex-col gap-2 shrink-0 mb-2">
+          <div className="flex gap-2">
+            {(['Daily', 'Weekly', 'Monthly', 'Quarterly'] as TimeBucket[]).map(bucket => (
+              <button
+                key={bucket}
+                onClick={() => setTimeBucket(bucket)}
+                className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
+                  timeBucket === bucket
+                    ? 'bg-[#003875] text-white dark:bg-[#FFD500] dark:text-[#003875] shadow-sm'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-white/5 dark:text-gray-400 dark:hover:bg-white/10'
+                }`}
+              >
+                {bucket}
+              </button>
+            ))}
+          </div>
+          <TimeSeriesTable 
+            transactions={timeSeriesData}
+            bucket={timeBucket}
+            isLoading={isTimeSeriesLoading}
+            searchQuery={searchQuery}
+          />
+        </div>
+      ) : (
+      <>
       <div className="flex flex-wrap items-center gap-2 shrink-0">
         <div className="flex items-center gap-2 overflow-x-auto bg-white dark:bg-[#111827] p-2 rounded-xl border border-gray-200 dark:border-white/5 flex-1 min-w-0">
           <div className="flex items-center gap-1 px-2 shrink-0">
@@ -499,16 +580,6 @@ export default function IMSMaster({ onBack }: { onBack: () => void }) {
           )}
         </div>
 
-        <div className="relative shrink-0">
-          <MagnifyingGlassIcon className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-          <input
-            type="text"
-            placeholder="SEARCH ID / ITEM..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-9 pr-4 py-2.5 bg-white dark:bg-[#111827] border border-gray-200 dark:border-white/10 rounded-xl text-[11px] font-black uppercase tracking-wider outline-none focus:ring-2 focus:ring-[#003875] dark:text-white w-64 transition-all shadow-sm h-full"
-          />
-        </div>
       </div>
 
       <div className="flex-1 bg-white dark:bg-[#111827] border border-gray-200 dark:border-white/5 rounded-xl overflow-hidden flex flex-col shadow-sm min-h-0">
@@ -683,7 +754,7 @@ export default function IMSMaster({ onBack }: { onBack: () => void }) {
                       <tbody className="divide-y divide-gray-100 dark:divide-white/5 font-mono text-[11px]">
                         {logsData.map((log: any, idx: number) => (
                           <tr key={idx} className="hover:bg-gray-50 dark:hover:bg-white/[0.02] transition-colors group">
-                            <td className="py-3 px-6 text-gray-500 font-bold whitespace-nowrap">{log.date}</td>
+                            <td className="py-3 px-6 text-gray-500 font-bold whitespace-nowrap">{formatDate(log.date)}</td>
                             <td className="py-3 px-6 whitespace-nowrap">
                               <span className={`flex items-center gap-1.5 w-max px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider ${log.type === 'IN' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400' : 'bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-400'}`}>
                                 {log.type === 'IN' ? <ArrowDownTrayIcon className="w-3.5 h-3.5" /> : <ArrowUpTrayIcon className="w-3.5 h-3.5" />}
@@ -708,6 +779,8 @@ export default function IMSMaster({ onBack }: { onBack: () => void }) {
               </div>
             )}
           </div>
+        </>
+      )}
 
       <datalist id="category-list">
         {uniqueCategories.map(cat => (
