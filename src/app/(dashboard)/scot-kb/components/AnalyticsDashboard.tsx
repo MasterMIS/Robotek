@@ -18,7 +18,8 @@ import {
   ExclamationTriangleIcon,
   ArrowTrendingUpIcon,
   ArrowTrendingDownIcon,
-  ShoppingBagIcon
+  ShoppingBagIcon,
+  MagnifyingGlassIcon
 } from "@heroicons/react/24/outline";
 
 import {
@@ -37,9 +38,22 @@ export default function AnalyticsDashboard({ feeders, scotRows = [], defaultEmpl
     callType: 'all'
   });
 
-  const { kpi, leaderboard, charts, heatMap, insights } = useCallAnalytics(feeders, filters);
+  const [searchQuery, setSearchQuery] = useState("");
 
-  const uniqueEmployees = useMemo(() => Array.from(new Set(feeders.map(f => f.employeeName).filter(Boolean))), [feeders]);
+  const filteredFeeders = useMemo(() => {
+    if (!searchQuery.trim()) return feeders;
+    const lowerQuery = searchQuery.toLowerCase().trim();
+    return feeders.filter(f => 
+      f.employeeName?.toLowerCase().includes(lowerQuery) ||
+      f.toName?.toLowerCase().includes(lowerQuery) ||
+      f.toNumber?.includes(lowerQuery) ||
+      f.callType?.toLowerCase().includes(lowerQuery)
+    );
+  }, [feeders, searchQuery]);
+
+  const { kpi, leaderboard, charts, heatMap, insights } = useCallAnalytics(filteredFeeders, filters);
+
+  const uniqueEmployees = useMemo(() => Array.from(new Set(filteredFeeders.map(f => f.employeeName).filter(Boolean))), [filteredFeeders]);
   
   const uniqueMonths = useMemo(() => {
     const months = [];
@@ -225,6 +239,18 @@ export default function AnalyticsDashboard({ feeders, scotRows = [], defaultEmpl
         </h3>
 
         <div className="space-y-6">
+          {/* Global Search */}
+          <div className="relative shrink-0">
+            <MagnifyingGlassIcon className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              placeholder="SEARCH DASHBOARD..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-9 pr-4 py-2.5 w-full bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl text-[11px] font-black uppercase tracking-wider outline-none focus:ring-2 focus:ring-blue-500 dark:text-white transition-all shadow-sm"
+            />
+          </div>
+
           {/* Date Range */}
           <div>
             <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3">Date Range</label>
