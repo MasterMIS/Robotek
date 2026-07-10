@@ -6,9 +6,12 @@ import {
   ClipboardDocumentListIcon,
   ArrowDownTrayIcon,
   MagnifyingGlassIcon,
-  ArrowLeftIcon
+  ArrowLeftIcon,
+  TableCellsIcon,
+  ChartBarIcon
 } from "@heroicons/react/24/outline";
 import * as XLSX from "xlsx";
+import TimeSeriesTable, { TimeBucket, Transaction } from "@/components/TimeSeriesTable";
 
 const fetcher = (url: string) => fetch(url).then(res => res.json());
 
@@ -23,9 +26,17 @@ export default function IMSFinal({ onBack }: { onBack: () => void }) {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 50;
 
+  const [viewMode, setViewMode] = useState<'default' | 'timeseries'>('default');
+  const [timeBucket, setTimeBucket] = useState<TimeBucket>('Daily');
+
   const { data: masterItems = [], isLoading: isLoadingMaster } = useSWR("/api/ims", fetcher);
   const { data: firstItems = [], isLoading: isLoadingFirst } = useSWR("/api/ims/floor?location=1st", fetcher);
   const { data: gItems = [], isLoading: isLoadingG } = useSWR("/api/ims/floor?location=g", fetcher);
+
+  const { data: timeSeriesData = [], isValidating: isTimeSeriesLoading } = useSWR<Transaction[]>(
+    viewMode === 'timeseries' ? '/api/ims/time-series' : null,
+    fetcher
+  );
 
   const isLoading = isLoadingMaster || isLoadingFirst || isLoadingG;
 
@@ -95,6 +106,23 @@ export default function IMSFinal({ onBack }: { onBack: () => void }) {
     setCurrentPage(1);
   }, [searchQuery]);
 
+  const combinedTransactions = useMemo(() => {
+    const masterTxs = timeSeriesData || [];
+    
+    const floorMapper = (item: any): Transaction => ({
+      item_name: item.item_name || '',
+      category: item.category || 'Uncategorized',
+      date: item.date || item.updated_at || '',
+      in_qty: parseFloat(item.in_qty) || 0,
+      out_qty: parseFloat(item.out_qty) || 0
+    });
+
+    const firstTxs = (firstItems || []).map(floorMapper);
+    const gTxs = (gItems || []).map(floorMapper);
+
+    return [...masterTxs, ...firstTxs, ...gTxs];
+  }, [timeSeriesData, firstItems, gItems]);
+
   return (
     <div className="flex flex-col h-[calc(100vh-2rem)]">
       <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 p-5 bg-white dark:bg-[#111827] rounded-xl shadow-sm border border-gray-200 dark:border-white/5 shrink-0">
@@ -116,6 +144,29 @@ export default function IMSFinal({ onBack }: { onBack: () => void }) {
           </div>
         </div>
 
+        <div className="flex items-center gap-2 bg-gray-100 dark:bg-white/5 p-1 rounded-xl shrink-0 self-start lg:self-auto">
+          <button
+            onClick={() => setViewMode('default')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wider transition-all ${
+              viewMode === 'default' 
+                ? 'bg-white dark:bg-[#111827] text-orange-600 dark:text-[#FFD500] shadow-sm' 
+                : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+            }`}
+          >
+            <TableCellsIcon className="w-4 h-4" /> Default
+          </button>
+          <button
+            onClick={() => setViewMode('timeseries')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wider transition-all ${
+              viewMode === 'timeseries' 
+                ? 'bg-white dark:bg-[#111827] text-orange-600 dark:text-[#FFD500] shadow-sm' 
+                : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+            }`}
+          >
+            <ChartBarIcon className="w-4 h-4" /> Time Series
+          </button>
+        </div>
+
         <div className="flex items-center gap-3 w-full lg:w-auto">
           <div className="relative shrink-0 flex-1 lg:flex-none">
             <MagnifyingGlassIcon className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -133,101 +184,127 @@ export default function IMSFinal({ onBack }: { onBack: () => void }) {
         </div>
       </div>
 
-      <div className="flex-1 bg-white dark:bg-[#111827] border border-gray-200 dark:border-white/5 rounded-xl overflow-hidden flex flex-col shadow-sm min-h-0 mt-2">
-        {filteredItems.length > 0 && !isLoading && (
-          <div className="py-2 px-4 border-b border-gray-200 dark:border-white/5 flex items-center justify-between bg-gray-50/50 dark:bg-[#1f2937]/50 shrink-0">
-            <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">
-              Showing {Math.min((currentPage - 1) * itemsPerPage + 1, filteredItems.length)} to {Math.min(currentPage * itemsPerPage, filteredItems.length)} of {filteredItems.length} unique items
-            </p>
-            <div className="flex gap-1">
+      {viewMode === 'timeseries' ? (
+        <div className="flex flex-col gap-2 shrink-0 mb-2 mt-4">
+          <div className="flex gap-2">
+            {(['Daily', 'Weekly', 'Monthly', 'Quarterly'] as TimeBucket[]).map(bucket => (
               <button
-                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                disabled={currentPage === 1}
-                className="px-3 py-1.5 rounded bg-white dark:bg-[#111827] border border-gray-200 dark:border-white/10 text-[10px] font-black text-gray-500 uppercase tracking-widest hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm"
+                key={bucket}
+                onClick={() => setTimeBucket(bucket)}
+                className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
+                  timeBucket === bucket
+                    ? 'bg-orange-500 text-white dark:bg-[#FFD500] dark:text-[#003875] shadow-sm'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-white/5 dark:text-gray-400 dark:hover:bg-white/10'
+                }`}
               >
-                Prev
+                {bucket}
               </button>
-              <button
-                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                disabled={currentPage === totalPages || totalPages === 0}
-                className="px-3 py-1.5 rounded bg-white dark:bg-[#111827] border border-gray-200 dark:border-white/10 text-[10px] font-black text-gray-500 uppercase tracking-widest hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm"
-              >
-                Next
-              </button>
-            </div>
+            ))}
           </div>
-        )}
-        
-        <div className="flex-1 overflow-auto custom-scrollbar relative">
-          {isLoading ? (
-            <div className="p-4 space-y-3">
-              {[1, 2, 3, 4, 5, 6, 7, 8].map(i => (
-                <div key={i} className="animate-pulse flex items-center gap-4">
-                  <div className="h-4 w-4 bg-gray-200 dark:bg-gray-700 rounded"></div>
-                  <div className="h-6 flex-1 bg-gray-200 dark:bg-gray-700 rounded"></div>
-                  <div className="h-6 w-32 bg-gray-200 dark:bg-gray-700 rounded"></div>
-                  <div className="h-6 w-24 bg-gray-200 dark:bg-gray-700 rounded"></div>
-                  <div className="h-6 w-48 bg-gray-200 dark:bg-gray-700 rounded"></div>
-                </div>
-              ))}
+          <TimeSeriesTable 
+            transactions={combinedTransactions}
+            bucket={timeBucket}
+            isLoading={isTimeSeriesLoading || isLoading}
+            searchQuery={searchQuery}
+          />
+        </div>
+      ) : (
+        <div className="flex-1 bg-white dark:bg-[#111827] border border-gray-200 dark:border-white/5 rounded-xl overflow-hidden flex flex-col shadow-sm min-h-0 mt-2">
+          {filteredItems.length > 0 && !isLoading && (
+            <div className="py-2 px-4 border-b border-gray-200 dark:border-white/5 flex items-center justify-between bg-gray-50/50 dark:bg-[#1f2937]/50 shrink-0">
+              <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">
+                Showing {Math.min((currentPage - 1) * itemsPerPage + 1, filteredItems.length)} to {Math.min(currentPage * itemsPerPage, filteredItems.length)} of {filteredItems.length} unique items
+              </p>
+              <div className="flex gap-1">
+                <button
+                  onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                  disabled={currentPage === 1}
+                  className="px-3 py-1.5 rounded bg-white dark:bg-[#111827] border border-gray-200 dark:border-white/10 text-[10px] font-black text-gray-500 uppercase tracking-widest hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm"
+                >
+                  Prev
+                </button>
+                <button
+                  onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                  disabled={currentPage === totalPages || totalPages === 0}
+                  className="px-3 py-1.5 rounded bg-white dark:bg-[#111827] border border-gray-200 dark:border-white/10 text-[10px] font-black text-gray-500 uppercase tracking-widest hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm"
+                >
+                  Next
+                </button>
+              </div>
             </div>
-          ) : (
-            <table className="w-full text-left border-collapse relative">
-              <thead className="bg-gray-100 dark:bg-[#1f2937] sticky top-0 z-20 shadow-sm">
-                <tr>
-                  <th className="py-2.5 px-3 border-b border-gray-200 dark:border-white/10 text-center sticky left-0 bg-gray-100 dark:bg-[#1f2937] z-30 shadow-[1px_0_0_0_#e5e7eb] dark:shadow-[1px_0_0_0_rgba(255,255,255,0.05)] w-12">
-                    <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">#</span>
-                  </th>
-                  <th className="py-2.5 px-3 text-[10px] font-black text-gray-500 uppercase tracking-widest border-b border-gray-200 dark:border-white/10 whitespace-nowrap">Category</th>
-                  <th className="py-2.5 px-3 text-[10px] font-black text-gray-500 uppercase tracking-widest border-b border-gray-200 dark:border-white/10 whitespace-nowrap">Item Name</th>
-                  <th className="py-2.5 px-3 text-[10px] font-black text-gray-500 uppercase tracking-widest border-b border-gray-200 dark:border-white/10 text-right">Total In</th>
-                  <th className="py-2.5 px-3 text-[10px] font-black text-gray-500 uppercase tracking-widest border-b border-gray-200 dark:border-white/10 text-right">Total Out</th>
-                  <th className="py-2.5 px-4 text-[10px] font-black text-gray-900 dark:text-white uppercase tracking-widest border-b border-gray-200 dark:border-white/10 text-right bg-gray-50 dark:bg-white/5 w-32">Live Stock</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100 dark:divide-white/5">
-                {paginatedItems.map((item, idx) => {
-                  const health = getHealthColors(item.live_stock || 0);
-                  return (
-                    <tr
-                      key={item.item_name}
-                      className="hover:bg-orange-50/30 dark:hover:bg-white/[0.03] even:bg-gray-50/50 dark:even:bg-[#1f2937]/30 transition-colors group"
-                    >
-                      <td className="py-1 px-2 text-center sticky left-0 z-10 transition-colors border-r shadow-[1px_0_0_0_#e5e7eb] dark:shadow-[1px_0_0_0_rgba(255,255,255,0.05)] bg-white group-even:bg-gray-50/50 dark:bg-[#111827] dark:group-even:bg-[#182031] group-hover:bg-orange-50/30 dark:group-hover:bg-[#1a2335] border-gray-100 dark:border-white/5">
-                        <span className="text-[10px] font-bold text-gray-400">{(currentPage - 1) * itemsPerPage + idx + 1}</span>
-                      </td>
-                      <td className="py-1 px-3">
-                        <span className="inline-block px-2 py-0.5 rounded border border-gray-200 dark:border-white/10 bg-gray-100 dark:bg-white/5 text-[10px] font-black text-gray-600 dark:text-gray-300 uppercase tracking-wider">
-                          {item.category}
-                        </span>
-                      </td>
-                      <td className="py-1 px-3 text-[11px] font-black text-[#003875] dark:text-[#FFD500] uppercase tracking-wide">
-                        {item.item_name}
-                      </td>
-                      <td className="py-1 px-3 text-[11px] font-black text-emerald-600 dark:text-emerald-400 text-right">
-                        {item.in_qty !== 0 ? item.in_qty.toLocaleString() : "-"}
-                      </td>
-                      <td className="py-1 px-3 text-[11px] font-black text-rose-600 dark:text-rose-400 text-right">
-                        {item.out_qty !== 0 ? item.out_qty.toLocaleString() : "-"}
-                      </td>
-                      <td className={`py-1 px-4 text-[12px] font-black text-right transition-colors bg-gray-50/50 dark:bg-white/[0.02] ${health}`}>
-                        {item.live_stock.toLocaleString()}
+          )}
+          
+          <div className="flex-1 overflow-auto custom-scrollbar relative">
+            {isLoading ? (
+              <div className="p-4 space-y-3">
+                {[1, 2, 3, 4, 5, 6, 7, 8].map(i => (
+                  <div key={i} className="animate-pulse flex items-center gap-4">
+                    <div className="h-4 w-4 bg-gray-200 dark:bg-gray-700 rounded"></div>
+                    <div className="h-6 flex-1 bg-gray-200 dark:bg-gray-700 rounded"></div>
+                    <div className="h-6 w-32 bg-gray-200 dark:bg-gray-700 rounded"></div>
+                    <div className="h-6 w-24 bg-gray-200 dark:bg-gray-700 rounded"></div>
+                    <div className="h-6 w-48 bg-gray-200 dark:bg-gray-700 rounded"></div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <table className="w-full text-left border-collapse relative">
+                <thead className="bg-gray-100 dark:bg-[#1f2937] sticky top-0 z-20 shadow-sm">
+                  <tr>
+                    <th className="py-2.5 px-3 border-b border-gray-200 dark:border-white/10 text-center sticky left-0 bg-gray-100 dark:bg-[#1f2937] z-30 shadow-[1px_0_0_0_#e5e7eb] dark:shadow-[1px_0_0_0_rgba(255,255,255,0.05)] w-12">
+                      <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">#</span>
+                    </th>
+                    <th className="py-2.5 px-3 text-[10px] font-black text-gray-500 uppercase tracking-widest border-b border-gray-200 dark:border-white/10 whitespace-nowrap">Category</th>
+                    <th className="py-2.5 px-3 text-[10px] font-black text-gray-500 uppercase tracking-widest border-b border-gray-200 dark:border-white/10 whitespace-nowrap">Item Name</th>
+                    <th className="py-2.5 px-3 text-[10px] font-black text-gray-500 uppercase tracking-widest border-b border-gray-200 dark:border-white/10 text-right">Total In</th>
+                    <th className="py-2.5 px-3 text-[10px] font-black text-gray-500 uppercase tracking-widest border-b border-gray-200 dark:border-white/10 text-right">Total Out</th>
+                    <th className="py-2.5 px-4 text-[10px] font-black text-gray-900 dark:text-white uppercase tracking-widest border-b border-gray-200 dark:border-white/10 text-right bg-gray-50 dark:bg-white/5 w-32">Live Stock</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100 dark:divide-white/5">
+                  {paginatedItems.map((item, idx) => {
+                    const health = getHealthColors(item.live_stock || 0);
+                    return (
+                      <tr
+                        key={item.item_name}
+                        className="hover:bg-orange-50/30 dark:hover:bg-white/[0.03] even:bg-gray-50/50 dark:even:bg-[#1f2937]/30 transition-colors group"
+                      >
+                        <td className="py-1 px-2 text-center sticky left-0 z-10 transition-colors border-r shadow-[1px_0_0_0_#e5e7eb] dark:shadow-[1px_0_0_0_rgba(255,255,255,0.05)] bg-white group-even:bg-gray-50/50 dark:bg-[#111827] dark:group-even:bg-[#182031] group-hover:bg-orange-50/30 dark:group-hover:bg-[#1a2335] border-gray-100 dark:border-white/5">
+                          <span className="text-[10px] font-bold text-gray-400">{(currentPage - 1) * itemsPerPage + idx + 1}</span>
+                        </td>
+                        <td className="py-1 px-3">
+                          <span className="inline-block px-2 py-0.5 rounded border border-gray-200 dark:border-white/10 bg-gray-100 dark:bg-white/5 text-[10px] font-black text-gray-600 dark:text-gray-300 uppercase tracking-wider">
+                            {item.category}
+                          </span>
+                        </td>
+                        <td className="py-1 px-3 text-[11px] font-black text-[#003875] dark:text-[#FFD500] uppercase tracking-wide">
+                          {item.item_name}
+                        </td>
+                        <td className="py-1 px-3 text-[11px] font-black text-emerald-600 dark:text-emerald-400 text-right">
+                          {item.in_qty !== 0 ? item.in_qty.toLocaleString() : "-"}
+                        </td>
+                        <td className="py-1 px-3 text-[11px] font-black text-rose-600 dark:text-rose-400 text-right">
+                          {item.out_qty !== 0 ? item.out_qty.toLocaleString() : "-"}
+                        </td>
+                        <td className={`py-1 px-4 text-[12px] font-black text-right transition-colors bg-gray-50/50 dark:bg-white/[0.02] ${health}`}>
+                          {item.live_stock.toLocaleString()}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {paginatedItems.length === 0 && (
+                    <tr>
+                      <td colSpan={6} className="py-12 text-center text-gray-400 text-[11px] font-black uppercase tracking-widest">
+                        {searchQuery ? "No items found matching search" : "No items available"}
                       </td>
                     </tr>
-                  );
-                })}
-                {paginatedItems.length === 0 && (
-                  <tr>
-                    <td colSpan={6} className="py-12 text-center text-gray-400 text-[11px] font-black uppercase tracking-widest">
-                      {searchQuery ? "No items found matching search" : "No items available"}
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          )}
+                  )}
+                </tbody>
+              </table>
+            )}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

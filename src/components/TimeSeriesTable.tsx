@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { 
   subDays, subWeeks, subMonths, subQuarters, 
   endOfDay, endOfWeek, endOfMonth, endOfQuarter,
@@ -133,6 +133,19 @@ export default function TimeSeriesTable({ transactions, bucket, isLoading, searc
     return "text-emerald-600 dark:text-emerald-400 font-black";
   };
 
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 50;
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, bucket]);
+
+  const totalPages = Math.ceil(aggregatedData.length / itemsPerPage);
+  const paginatedData = useMemo(() => {
+    const start = (currentPage - 1) * itemsPerPage;
+    return aggregatedData.slice(start, start + itemsPerPage);
+  }, [aggregatedData, currentPage]);
+
   if (isLoading) {
     return (
       <div className="p-4 space-y-3 w-full h-full bg-white dark:bg-[#111827]">
@@ -149,7 +162,32 @@ export default function TimeSeriesTable({ transactions, bucket, isLoading, searc
   }
 
   return (
-    <div className="flex-1 overflow-auto custom-scrollbar relative bg-white dark:bg-[#111827] min-h-0 h-full">
+    <div className="flex flex-col h-full bg-white dark:bg-[#111827] border border-gray-200 dark:border-white/5 rounded-xl overflow-hidden min-h-0 relative">
+      {aggregatedData.length > 0 && (
+        <div className="py-2 px-4 border-b border-gray-200 dark:border-white/5 flex items-center justify-between bg-gray-50/50 dark:bg-[#1f2937]/50 shrink-0">
+          <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">
+            Showing {Math.min((currentPage - 1) * itemsPerPage + 1, aggregatedData.length)} to {Math.min(currentPage * itemsPerPage, aggregatedData.length)} of {aggregatedData.length} items
+          </p>
+          <div className="flex gap-1">
+            <button
+              onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+              disabled={currentPage === 1}
+              className="px-3 py-1.5 rounded bg-white dark:bg-[#111827] border border-gray-200 dark:border-white/10 text-[10px] font-black text-gray-500 uppercase tracking-widest hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm"
+            >
+              Prev
+            </button>
+            <button
+              onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+              disabled={currentPage === totalPages || totalPages === 0}
+              className="px-3 py-1.5 rounded bg-white dark:bg-[#111827] border border-gray-200 dark:border-white/10 text-[10px] font-black text-gray-500 uppercase tracking-widest hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm"
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      )}
+      
+      <div className="flex-1 overflow-auto custom-scrollbar relative">
       <table className="w-full text-left border-collapse relative min-w-max">
         <thead className="bg-gray-100 dark:bg-[#1f2937] sticky top-0 z-20 shadow-sm">
           <tr>
@@ -167,7 +205,7 @@ export default function TimeSeriesTable({ transactions, bucket, isLoading, searc
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-100 dark:divide-white/5">
-          {aggregatedData.map((item, idx) => (
+          {paginatedData.map((item, idx) => (
             <tr key={idx} className="hover:bg-blue-50/30 dark:hover:bg-white/[0.03] even:bg-gray-50/50 dark:even:bg-[#1f2937]/30 transition-colors group">
               <td className="py-2 px-3 text-[11px] font-black text-gray-900 dark:text-white uppercase truncate sticky left-0 z-20 transition-colors border-r shadow-[1px_0_0_0_#e5e7eb] dark:shadow-[1px_0_0_0_rgba(255,255,255,0.05)] bg-white group-even:bg-gray-50/50 dark:bg-[#111827] dark:group-even:bg-[#182031] group-hover:bg-blue-50/30 dark:group-hover:bg-[#1a2335] border-gray-100 dark:border-white/5 min-w-[200px] max-w-[200px]" title={item.item_name}>
                 {item.item_name}
@@ -184,7 +222,7 @@ export default function TimeSeriesTable({ transactions, bucket, isLoading, searc
               ))}
             </tr>
           ))}
-          {aggregatedData.length === 0 && (
+          {paginatedData.length === 0 && (
             <tr>
               <td colSpan={buckets.length + 2} className="py-8 text-center text-gray-400 text-[11px] font-black uppercase">
                 No items found
@@ -193,6 +231,7 @@ export default function TimeSeriesTable({ transactions, bucket, isLoading, searc
           )}
         </tbody>
       </table>
+      </div>
     </div>
   );
 }

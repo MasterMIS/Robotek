@@ -15,6 +15,7 @@ import {
   ArrowTrendingUpIcon,
   UserGroupIcon,
   ArchiveBoxIcon,
+  ChevronLeftIcon,
   ChevronRightIcon,
   ExclamationCircleIcon,
   CheckCircleIcon,
@@ -32,7 +33,8 @@ import {
   ArrowLeftIcon,
   ArrowDownCircleIcon,
   ArrowUpCircleIcon,
-  SparklesIcon
+  SparklesIcon,
+  DocumentArrowDownIcon
 } from "@heroicons/react/24/outline";
 import {
   PieChart,
@@ -53,8 +55,9 @@ import {
   BarChart,
   ReferenceLine,
 } from "recharts";
-
-
+import * as htmlToImage from 'html-to-image';
+import { jsPDF } from 'jspdf';
+import { format } from 'date-fns';
 const fetcher = (url: string) => fetch(url).then(res => res.json());
 
 // --- Icons for Steps ---
@@ -122,10 +125,117 @@ export default function MetrixPage() {
   const [forecastType, setForecastType] = useState("category");
   const [forecastTarget, setForecastTarget] = useState("");
   const [granularity, setGranularity] = useState("month");
+  const [dateOffset, setDateOffset] = useState(0);
+  const [isManualDate, setIsManualDate] = useState(false);
+  const [isExportingPDF, setIsExportingPDF] = useState(false);
   const { resolvedTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => { setMounted(true); }, []);
+
+  const exportToPDF = async () => {
+    setIsExportingPDF(true);
+    try {
+      const element = document.getElementById('department-performance-report');
+      if (!element) return;
+      
+      const imgData = await htmlToImage.toPng(element, {
+        pixelRatio: 2,
+        backgroundColor: resolvedTheme === 'dark' ? '#0b1120' : '#f8fafc',
+        filter: (node) => {
+          if (node.hasAttribute && node.hasAttribute('data-html2canvas-ignore')) {
+            return false;
+          }
+          return true;
+        }
+      });
+      
+      const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+      
+      const img = new Image();
+      img.src = imgData;
+      await new Promise((resolve) => { img.onload = resolve; });
+      
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = (img.height * pdfWidth) / img.width;
+      
+      let heightLeft = pdfHeight;
+      let position = 0;
+      const pageHeight = pdf.internal.pageSize.getHeight();
+
+      pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, pdfHeight);
+      heightLeft -= pageHeight;
+
+      while (heightLeft >= 0) {
+        position = heightLeft - pdfHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, pdfHeight);
+        heightLeft -= pageHeight;
+      }
+      
+      pdf.save(`Department_Performance_${format(new Date(), 'dd-MMM-yyyy')}.pdf`);
+    } catch (err) {
+      console.error('Error generating PDF', err);
+    } finally {
+      setIsExportingPDF(false);
+    }
+  };
+
+  // Compute date range when granularity or offset changes
+  useEffect(() => {
+    if (isManualDate) return;
+
+    let start = new Date();
+    start.setHours(0, 0, 0, 0);
+    let end = new Date();
+    end.setHours(23, 59, 59, 999);
+
+    if (granularity === 'day') {
+      start.setDate(start.getDate() + dateOffset);
+      end = new Date(start);
+      end.setHours(23, 59, 59, 999);
+    } else if (granularity === 'week') {
+      const day = start.getDay();
+      const diff = start.getDate() - day + (day === 0 ? -6 : 1) + (dateOffset * 7);
+      start = new Date(start.setDate(diff));
+      end = new Date(start);
+      end.setDate(end.getDate() + 6);
+      end.setHours(23, 59, 59, 999);
+    } else if (granularity === 'month') {
+      start.setMonth(start.getMonth() + dateOffset, 1);
+      end = new Date(start.getFullYear(), start.getMonth() + 1, 0, 23, 59, 59, 999);
+    } else if (granularity === 'quarter') {
+      const quarter = Math.floor(start.getMonth() / 3) + dateOffset;
+      start.setMonth(quarter * 3, 1);
+      end = new Date(start.getFullYear(), start.getMonth() + 3, 0, 23, 59, 59, 999);
+    } else if (granularity === 'year') {
+      start.setFullYear(start.getFullYear() + dateOffset, 0, 1);
+      end = new Date(start.getFullYear(), 11, 31, 23, 59, 59, 999);
+    }
+
+    const pad = (n: number) => n.toString().padStart(2, '0');
+    const fmt = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+
+    setDateRange({ startDate: fmt(start), endDate: fmt(end) });
+  }, [granularity, dateOffset, isManualDate]);
+
+  const getGranularityLabel = () => {
+    if (isManualDate || !dateRange.startDate) return "Custom";
+    const d = new Date(dateRange.startDate);
+    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    if (granularity === 'day') return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
+    if (granularity === 'week') {
+      const endD = dateRange.endDate ? new Date(dateRange.endDate) : d;
+      return `${d.getDate()} ${months[d.getMonth()]} - ${endD.getDate()} ${months[endD.getMonth()]} ${endD.getFullYear()}`;
+    }
+    if (granularity === 'month') return `${months[d.getMonth()]} ${d.getFullYear()}`;
+    if (granularity === 'quarter') {
+      const q = Math.floor(d.getMonth() / 3) + 1;
+      return `Q${q} ${d.getFullYear()}`;
+    }
+    if (granularity === 'year') return `${d.getFullYear()}`;
+    return "Custom";
+  };
 
   const isDark = mounted && resolvedTheme === "dark";
   const chartTextColor = isDark ? "#ffffff" : "#9ca3af";
@@ -151,6 +261,14 @@ export default function MetrixPage() {
   const { data: funnelData, isLoading: funnelLoading } = useSWR(
     activeTab === "sales-funnel"
       ? `/api/metrix/sales-funnel?startDate=${dateRange.startDate}&endDate=${dateRange.endDate}&granularity=${granularity}`
+      : null,
+    fetcher,
+    { keepPreviousData: true }
+  );
+
+  const { data: deptData, isLoading: deptLoading } = useSWR(
+    activeTab === "department"
+      ? `/api/metrix/department?startDate=${dateRange.startDate}&endDate=${dateRange.endDate}&granularity=${granularity}`
       : null,
     fetcher,
     { keepPreviousData: true }
@@ -229,26 +347,28 @@ export default function MetrixPage() {
           </div>
 
           <div className="flex flex-col gap-3 lg:items-end">
-            <div className="flex items-center gap-1 bg-gray-50 dark:bg-navy-900 p-1 rounded-xl w-fit">
+            <div className="flex flex-wrap gap-2 lg:items-end w-full lg:w-auto">
               {([
                 { key: "overview", label: "Overview" },
                 { key: "roadmap", label: "Roadmap" },
                 { key: "parties", label: "Parties" },
                 { key: "categories", label: "Categories" },
                 { key: "sales-funnel", label: "Sales Funnel" },
+                { key: "department", label: "Department Performance" },
                 { key: "forecast", label: "⚡ COO Report" },
               ]).map(({ key, label }) => (
                 <button
                   key={key}
                   onClick={() => { setActiveTab(key); setDrillDownParty(null); setDrillDownCategory(null); }}
-                  className={`px-4 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${activeTab === key
-                    ? key === "forecast"
-                      ? 'bg-[#003875] text-white shadow-sm'
-                      : 'bg-white dark:bg-navy-800 text-[#003875] dark:text-[#FFD500] shadow-sm'
-                    : key === "forecast"
-                      ? 'text-[#003875] dark:text-amber-400 hover:text-[#003875]'
-                      : 'text-gray-400 hover:text-gray-600'
-                    }`}
+                  className={`px-4 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-sm ${
+                    activeTab === key
+                      ? key === "forecast"
+                        ? 'bg-gradient-to-r from-[#003875] to-blue-800 text-white shadow-md shadow-blue-900/20 scale-105'
+                        : 'bg-gradient-to-r from-orange-500 to-orange-600 text-white shadow-md shadow-orange-900/20 scale-105'
+                      : key === "forecast"
+                        ? 'bg-blue-50 dark:bg-[#003875]/20 text-[#003875] dark:text-[#FFD500] hover:bg-blue-100 hover:scale-105'
+                        : 'bg-white dark:bg-navy-800 text-gray-600 dark:text-gray-300 hover:bg-gray-100 hover:text-gray-900 dark:hover:bg-navy-700 hover:scale-105'
+                  }`}
                 >
                   {label}
                 </button>
@@ -257,20 +377,20 @@ export default function MetrixPage() {
             </div>
 
             <div className="flex flex-wrap items-center gap-3">
-              <div className="flex items-center gap-1 bg-gray-50 dark:bg-navy-900 p-1 rounded-xl border border-gray-100 dark:border-white/5">
+            <div className="flex flex-wrap items-center gap-2">
               {[
-                { id: 'day', label: 'Day', color: 'text-rose-500 bg-rose-50 dark:bg-rose-500/10' },
-                { id: 'week', label: 'Week', color: 'text-amber-500 bg-amber-50 dark:bg-amber-500/10' },
-                { id: 'month', label: 'Month', color: 'text-emerald-500 bg-emerald-50 dark:bg-emerald-500/10' },
-                { id: 'quarter', label: 'Quarterly', color: 'text-indigo-500 bg-indigo-50 dark:bg-indigo-500/10' },
-                { id: 'year', label: 'Yearly', color: 'text-violet-500 bg-violet-50 dark:bg-violet-500/10' }
+                { id: 'day', label: 'Day', activeClass: 'bg-gradient-to-r from-rose-500 to-rose-600 text-white shadow-md shadow-rose-900/20 scale-105' },
+                { id: 'week', label: 'Week', activeClass: 'bg-gradient-to-r from-amber-500 to-amber-600 text-white shadow-md shadow-amber-900/20 scale-105' },
+                { id: 'month', label: 'Month', activeClass: 'bg-gradient-to-r from-emerald-500 to-emerald-600 text-white shadow-md shadow-emerald-900/20 scale-105' },
+                { id: 'quarter', label: 'Quarterly', activeClass: 'bg-gradient-to-r from-indigo-500 to-indigo-600 text-white shadow-md shadow-indigo-900/20 scale-105' },
+                { id: 'year', label: 'Yearly', activeClass: 'bg-gradient-to-r from-violet-500 to-violet-600 text-white shadow-md shadow-violet-900/20 scale-105' }
               ].map(g => (
                 <button
                   key={g.id}
-                  onClick={() => setGranularity(g.id)}
-                  className={`px-3 py-1 rounded-lg text-[8px] font-black uppercase tracking-widest transition-all ${granularity === g.id
-                    ? `${g.color} shadow-sm ring-1 ring-black/5`
-                    : 'text-gray-400 hover:text-gray-600'
+                  onClick={() => { setGranularity(g.id); setDateOffset(0); setIsManualDate(false); }}
+                  className={`px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all shadow-sm ${granularity === g.id && !isManualDate
+                    ? g.activeClass
+                    : 'bg-white dark:bg-navy-800 text-gray-600 dark:text-gray-300 hover:bg-gray-100 hover:text-gray-900 dark:hover:bg-navy-700 hover:scale-105'
                     }`}
                 >
                   {g.label}
@@ -278,19 +398,31 @@ export default function MetrixPage() {
               ))}
             </div>
 
+            <div className="flex items-center gap-1 bg-white dark:bg-navy-800 rounded-xl p-1 shadow-sm border border-gray-100 dark:border-white/5">
+              <button onClick={() => { setDateOffset(prev => prev - 1); setIsManualDate(false); }} className="p-1.5 hover:bg-gray-100 dark:hover:bg-white/10 rounded-lg">
+                <ChevronLeftIcon className="w-4 h-4 text-gray-600 dark:text-gray-300" />
+              </button>
+              <div className="px-3 text-[10px] font-black text-[#003875] dark:text-[#FFD500] uppercase tracking-widest min-w-[140px] text-center">
+                {getGranularityLabel()}
+              </div>
+              <button onClick={() => { setDateOffset(prev => prev + 1); setIsManualDate(false); }} className="p-1.5 hover:bg-gray-100 dark:hover:bg-white/10 rounded-lg">
+                <ChevronRightIcon className="w-4 h-4 text-gray-600 dark:text-gray-300" />
+              </button>
+            </div>
+
             <div className="flex items-center gap-2 bg-gray-50 dark:bg-navy-900 p-1.5 rounded-xl border border-gray-100 dark:border-white/5">
               <CalendarIcon className="w-3.5 h-3.5 text-gray-400" />
               <input
                 type="date"
                 value={dateRange.startDate}
-                onChange={(e) => setDateRange(prev => ({ ...prev, startDate: e.target.value }))}
+                onChange={(e) => { setDateRange(prev => ({ ...prev, startDate: e.target.value })); setIsManualDate(true); }}
                 className="bg-transparent border-none text-[9px] font-black text-gray-600 dark:text-gray-300 outline-none w-24"
               />
               <span className="text-gray-300 text-[9px] font-black">TO</span>
               <input
                 type="date"
                 value={dateRange.endDate}
-                onChange={(e) => setDateRange(prev => ({ ...prev, endDate: e.target.value }))}
+                onChange={(e) => { setDateRange(prev => ({ ...prev, endDate: e.target.value })); setIsManualDate(true); }}
                 className="bg-transparent border-none text-[9px] font-black text-gray-600 dark:text-gray-300 outline-none w-24"
               />
               {(dateRange.startDate || dateRange.endDate) && (
@@ -737,6 +869,209 @@ export default function MetrixPage() {
                     </div>
                   </div>
                 </>
+              ) : null}
+            </motion.div>
+          )}
+
+          {activeTab === "department" && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
+              {!deptData && deptLoading ? (
+                <div className="flex flex-col items-center justify-center p-20 bg-white dark:bg-navy-800 rounded-[2rem] border border-gray-100 dark:border-white/5 shadow-2xl">
+                  <div className="w-8 h-8 border-4 border-gray-200 dark:border-gray-700 border-t-[#003875] dark:border-t-[#FFD500] rounded-full animate-spin mb-4" />
+                  <p className="text-gray-400 font-bold uppercase tracking-widest text-[10px]">Analyzing Department Performance...</p>
+                </div>
+              ) : deptData ? (
+                <div className="flex flex-col gap-6 w-full items-start" id="department-performance-report">
+                  
+                  {/* Export Header */}
+                  <div className="flex items-center justify-between w-full bg-white dark:bg-navy-800 p-4 rounded-3xl shadow-sm border border-gray-100 dark:border-white/5">
+                    <div>
+                      <h2 className="text-xl font-black text-gray-900 dark:text-white uppercase tracking-tight">Department Performance</h2>
+                      <p className="text-gray-500 text-[10px] font-bold mt-1 uppercase tracking-widest">
+                        {granularity} Report • {dateRange.startDate ? format(new Date(dateRange.startDate), 'dd MMM yyyy') : ''} to {dateRange.endDate ? format(new Date(dateRange.endDate), 'dd MMM yyyy') : ''}
+                      </p>
+                    </div>
+                    <button 
+                      onClick={exportToPDF}
+                      disabled={isExportingPDF}
+                      data-html2canvas-ignore
+                      className="flex items-center gap-2 bg-[#003875] dark:bg-[#FFD500] text-white dark:text-navy-900 px-5 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest hover:scale-105 transition-transform disabled:opacity-50 disabled:scale-100 shadow-md"
+                    >
+                      {isExportingPDF ? (
+                        <>
+                           <ArrowPathIcon className="w-4 h-4 animate-spin" />
+                           Exporting...
+                        </>
+                      ) : (
+                        <>
+                           <DocumentArrowDownIcon className="w-4 h-4" />
+                           Export PDF
+                        </>
+                      )}
+                    </button>
+                  </div>
+
+                  <div className="flex flex-col gap-8 w-full items-start">
+                  {[
+                    { 
+                      key: 'i2r', 
+                      title: 'I2R (Purchase)', 
+                      icon: DocumentTextIcon, 
+                      color: 'text-blue-500', 
+                      bg: 'bg-blue-50 dark:bg-blue-500/10', 
+                      cardBg: 'bg-gradient-to-br from-blue-50/80 to-white dark:from-blue-900/20 dark:to-navy-800 border-blue-100 dark:border-blue-900/30', 
+                      rowBg: 'bg-white hover:bg-blue-50/50 dark:bg-navy-900 dark:hover:bg-navy-800 border-blue-100/50 dark:border-blue-900/30',
+                      metrics: [
+                        'Total PO Raised', 'Total PO Closed', 'Pending POs', 'Delivery Overdue', 
+                        'Payment Overdue', 'Avg I2R time (IND)', 'Avg I2R time (CHN)', 
+                        'Material Rejected', 'On Time Material Received', 'Bottleneck'
+                      ]
+                    },
+                    { 
+                      key: 'i2rPacking', 
+                      title: 'I2R Packing', 
+                      icon: ArchiveBoxIcon, 
+                      color: 'text-emerald-500', 
+                      bg: 'bg-emerald-50 dark:bg-emerald-500/10', 
+                      cardBg: 'bg-gradient-to-br from-emerald-50/80 to-white dark:from-emerald-900/20 dark:to-navy-800 border-emerald-100 dark:border-emerald-900/30', 
+                      rowBg: 'bg-white hover:bg-emerald-50/50 dark:bg-navy-900 dark:hover:bg-navy-800 border-emerald-100/50 dark:border-emerald-900/30',
+                      metrics: [
+                        'Total PO Raised', 'Total PO Closed', 'Pending POs', 'Payment Overdue', 
+                        'Avg I2R time (IND)', 'Material Rejected', 'On Time Material Received', 
+                        'Bottleneck'
+                      ]
+                    },
+                    { 
+                      key: 'replace', 
+                      title: 'Replacement', 
+                      icon: ArrowPathRoundedSquareIcon, 
+                      color: 'text-amber-500', 
+                      bg: 'bg-amber-50 dark:bg-amber-500/10', 
+                      cardBg: 'bg-gradient-to-br from-amber-50/80 to-white dark:from-amber-900/20 dark:to-navy-800 border-amber-100 dark:border-amber-900/30', 
+                      rowBg: 'bg-white hover:bg-amber-50/50 dark:bg-navy-900 dark:hover:bg-navy-800 border-amber-100/50 dark:border-amber-900/30',
+                      metrics: [
+                        'Total Rep. Raised', 'Total Rep. Closed', 'Pending REPs', 
+                        'Avg Rep Process time', 'Bottleneck'
+                      ]
+                    }
+                  ].map((module, mIdx) => {
+                    const mData = deptData[module.key];
+                    if (!mData) return null;
+                    return (
+                      <div key={module.key} className={`${module.cardBg} p-4 lg:p-5 rounded-3xl border shadow-2xl ring-1 ring-black/5 flex flex-col xl:flex-row gap-6 w-full items-start`}>
+                        
+                        {/* Header Column */}
+                        <div className="flex flex-col gap-6 w-full xl:w-[260px] flex-shrink-0 border-b xl:border-b-0 xl:border-r border-gray-900/5 dark:border-white/5 pb-4 xl:pb-0 xl:pr-6">
+                          <div className="flex items-center gap-4 min-w-0">
+                            <div className={`p-3 rounded-xl flex-shrink-0 ${module.bg}`}>
+                              <module.icon className={`w-7 h-7 ${module.color}`} />
+                            </div>
+                            <div className="min-w-0">
+                              <h3 className="text-lg font-black text-gray-900 dark:text-white tracking-tight uppercase truncate" title={module.title}>{module.title}</h3>
+                              <p className="text-gray-500 text-[10px] font-bold uppercase tracking-widest mt-1">FMS Dashboard</p>
+                            </div>
+                          </div>
+                          <div className="flex flex-col bg-white/60 dark:bg-navy-900/60 p-4 rounded-2xl border border-gray-900/5 dark:border-white/5 shadow-sm">
+                            <span className="text-gray-500 text-[10px] font-black uppercase tracking-widest">Total Entries</span>
+                            <span className="text-3xl font-black text-[#003875] dark:text-[#FFD500] leading-none mt-2">{mData.total}</span>
+                          </div>
+                        </div>
+
+                        {/* Metrics and Stages */}
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 lg:gap-8 flex-1 w-full">
+                          
+                          {/* Middle Column: Metrics */}
+                          <div className="flex flex-col gap-1 bg-white/40 dark:bg-black/10 p-3 rounded-2xl border border-gray-900/5 dark:border-white/5 shadow-inner">
+                            
+                            {/* Table Header */}
+                            <div className="flex items-center px-2 pb-1 border-b border-gray-900/10 dark:border-white/10 mb-1">
+                              <span className="text-[9px] font-black text-gray-600 dark:text-gray-400 uppercase tracking-widest flex-1">Metric</span>
+                              <span className="text-[9px] font-black text-blue-600 dark:text-blue-500 uppercase tracking-widest w-11 text-center flex-shrink-0">Value</span>
+                            </div>
+
+                            {module.metrics.map((mLabel, idx) => {
+                              const MetricIcon = STEP_ICONS[idx % STEP_ICONS.length];
+                              const mColor = [
+                                'text-blue-600 dark:text-blue-400',
+                                'text-emerald-600 dark:text-emerald-400',
+                                'text-purple-600 dark:text-purple-400',
+                                'text-rose-600 dark:text-rose-400',
+                                'text-amber-600 dark:text-amber-400',
+                                'text-cyan-600 dark:text-cyan-400',
+                                'text-indigo-600 dark:text-indigo-400'
+                              ][idx % 7];
+                              
+                              return (
+                                <div key={idx} className={`flex items-center ${module.rowBg} py-1 px-2 rounded-lg shadow-sm hover:shadow-md transition-all border group`}>
+                                  
+                                  {/* Icon + Text */}
+                                  <div className="flex items-center gap-3 flex-1 min-w-0 pr-2">
+                                    <div className={`p-1.5 rounded-lg flex-shrink-0 bg-gray-50 dark:bg-navy-800 text-gray-400 group-hover:text-[#003875] dark:group-hover:text-[#FFD500] group-hover:bg-blue-50 dark:group-hover:bg-blue-900/30 transition-colors`}>
+                                      <MetricIcon className={`w-4 h-4 ${mColor}`} />
+                                    </div>
+                                    <div className="min-w-0 flex-1">
+                                      <p className={`text-[11px] font-bold ${mColor} leading-snug uppercase tracking-wide truncate`} title={mLabel}>{mLabel}</p>
+                                    </div>
+                                  </div>
+                                  
+                                  {/* Value */}
+                                  <div className="flex-shrink-0 w-11 flex justify-center">
+                                    <span className="bg-gray-100/80 dark:bg-gray-800/40 text-gray-700 dark:text-gray-300 w-full py-1.5 rounded-lg text-xs font-black border border-gray-200/50 dark:border-gray-700/20 text-center shadow-sm">
+                                      0
+                                    </span>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+
+                          {/* Right Column: Stage Table */}
+                          <div className="flex flex-col gap-1 bg-white/40 dark:bg-black/10 p-3 rounded-2xl border border-gray-900/5 dark:border-white/5 shadow-inner">
+                          
+                          {/* Table Header */}
+                          <div className="flex items-center px-2 pb-1 border-b border-gray-900/10 dark:border-white/10 mb-1">
+                            <span className="text-[9px] font-black text-gray-600 dark:text-gray-400 uppercase tracking-widest flex-1">Stage</span>
+                            <span className="text-[9px] font-black text-amber-600 dark:text-amber-500 uppercase tracking-widest w-11 text-center flex-shrink-0">Pend</span>
+                            <span className="text-[9px] font-black text-emerald-600 dark:text-emerald-500 uppercase tracking-widest w-11 text-center flex-shrink-0 ml-2">Comp</span>
+                          </div>
+                          
+                          {/* Table Rows */}
+                          {mData.steps.map((step: any, i: number) => {
+                            const StepIcon = STEP_ICONS[i % STEP_ICONS.length];
+                            return (
+                              <div key={i} className={`flex items-center ${module.rowBg} py-1 px-2 rounded-lg shadow-sm hover:shadow-md transition-all border group`}>
+                                
+                                {/* Icon + Text */}
+                                <div className="flex items-center gap-3 flex-1 min-w-0 pr-2">
+                                  <div className={`p-1.5 rounded-lg flex-shrink-0 bg-gray-50 dark:bg-navy-800 text-gray-400 group-hover:text-[#003875] dark:group-hover:text-[#FFD500] group-hover:bg-blue-50 dark:group-hover:bg-blue-900/30 transition-colors`}>
+                                    <StepIcon className="w-4 h-4" />
+                                  </div>
+                                  <div className="min-w-0 flex-1">
+                                    <p className="text-[11px] font-bold text-gray-800 dark:text-gray-200 leading-snug line-clamp-2" title={step.name}>{step.name}</p>
+                                  </div>
+                                </div>
+                                
+                                {/* Counts */}
+                                <div className="flex-shrink-0 w-11 flex justify-center">
+                                  <span className="bg-amber-100/80 dark:bg-amber-900/40 text-amber-700 dark:text-amber-400 w-full py-1.5 rounded-lg text-xs font-black border border-amber-200/50 dark:border-amber-500/20 text-center shadow-sm">
+                                    {step.pending}
+                                  </span>
+                                </div>
+                                <div className="flex-shrink-0 w-11 flex justify-center ml-2">
+                                  <span className="bg-emerald-100/80 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400 w-full py-1.5 rounded-lg text-xs font-black border border-emerald-200/50 dark:border-emerald-500/20 text-center shadow-sm">
+                                    {step.completed}
+                                  </span>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
               ) : null}
             </motion.div>
           )}
