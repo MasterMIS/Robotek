@@ -1038,16 +1038,26 @@ export default function MetrixPage() {
                           {/* Table Rows */}
                           {mData.steps.map((step: any, i: number) => {
                             const StepIcon = STEP_ICONS[i % STEP_ICONS.length];
+                            const sColor = [
+                              'text-blue-600 dark:text-blue-400',
+                              'text-emerald-600 dark:text-emerald-400',
+                              'text-purple-600 dark:text-purple-400',
+                              'text-rose-600 dark:text-rose-400',
+                              'text-amber-600 dark:text-amber-400',
+                              'text-cyan-600 dark:text-cyan-400',
+                              'text-indigo-600 dark:text-indigo-400'
+                            ][i % 7];
+                            
                             return (
                               <div key={i} className={`flex items-center ${module.rowBg} py-1 px-2 rounded-lg shadow-sm hover:shadow-md transition-all border group`}>
                                 
                                 {/* Icon + Text */}
                                 <div className="flex items-center gap-3 flex-1 min-w-0 pr-2">
                                   <div className={`p-1.5 rounded-lg flex-shrink-0 bg-gray-50 dark:bg-navy-800 text-gray-400 group-hover:text-[#003875] dark:group-hover:text-[#FFD500] group-hover:bg-blue-50 dark:group-hover:bg-blue-900/30 transition-colors`}>
-                                    <StepIcon className="w-4 h-4" />
+                                    <StepIcon className={`w-4 h-4 ${sColor}`} />
                                   </div>
                                   <div className="min-w-0 flex-1">
-                                    <p className="text-[11px] font-bold text-gray-800 dark:text-gray-200 leading-snug line-clamp-2" title={step.name}>{step.name}</p>
+                                    <p className={`text-[11px] font-bold ${sColor} leading-snug line-clamp-2 uppercase tracking-wide`} title={step.name}>{step.name}</p>
                                   </div>
                                 </div>
                                 
