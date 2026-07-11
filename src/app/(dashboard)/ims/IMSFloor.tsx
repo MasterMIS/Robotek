@@ -89,7 +89,7 @@ export default function IMSFloor({ location, onBack }: { location: "1st" | "g", 
   const [statusType, setStatusType] = useState<'loading' | 'success' | 'error'>('loading');
 
   const [viewMode, setViewMode] = useState<'default' | 'timeseries' | 'datewise'>('default');
-  const [filterPeriod, setFilterPeriod] = useState<FilterPeriod>('MONTH');
+  const [filterPeriod, setFilterPeriod] = useState<FilterPeriod>('ALL');
   const [filterDate, setFilterDate] = useState<Date>(new Date());
   const [filterStartDate, setFilterStartDate] = useState<Date | null>(null);
   const [filterEndDate, setFilterEndDate] = useState<Date | null>(null);
@@ -137,6 +137,8 @@ export default function IMSFloor({ location, onBack }: { location: "1st" | "g", 
       end = endOfDay(filterEndDate);
     } else {
       switch (filterPeriod) {
+        case 'ALL':
+          return null;
         case 'DAY':
           start = startOfDay(filterDate);
           end = endOfDay(filterDate);
@@ -162,9 +164,28 @@ export default function IMSFloor({ location, onBack }: { location: "1st" | "g", 
     return { start, end };
   }, [filterPeriod, filterDate, filterStartDate, filterEndDate]);
 
+function parseDateStr(dStr: string) {
+  if (!dStr) return 0;
+  let ts = Date.parse(dStr);
+  if (!isNaN(ts)) return ts;
+  const parts = dStr.split(/[-/]/);
+  if (parts.length === 3) {
+    const [d, m, y] = parts;
+    if (y.length === 4) {
+      ts = Date.parse(`${y}-${m}-${d}`);
+      if (!isNaN(ts)) return ts;
+    }
+  }
+  return 0;
+}
+
   const filteredRawItems = useMemo(() => {
     // First calculate running stock for all rawItems
-    const sortedAll = [...rawItems].sort((a, b) => new Date(a.date || a.updated_at || 0).getTime() - new Date(b.date || b.updated_at || 0).getTime());
+    const sortedAll = [...rawItems].sort((a, b) => {
+      const timeA = parseDateStr(a.date || a.updated_at || "");
+      const timeB = parseDateStr(b.date || b.updated_at || "");
+      return timeA - timeB;
+    });
     const stockMap = new Map<string, number>();
     
     const itemsWithRunningStock = sortedAll.map(item => {
@@ -181,10 +202,24 @@ export default function IMSFloor({ location, onBack }: { location: "1st" | "g", 
 
     if (!dateRange) return itemsWithRunningStock;
     return itemsWithRunningStock.filter(item => {
-      const itemDate = new Date(item.date || item.updated_at || 0);
+      const ts = parseDateStr(item.date || item.updated_at || "");
+      if (!ts) return false;
+      const itemDate = new Date(ts);
       return isWithinInterval(itemDate, { start: dateRange.start, end: dateRange.end });
     });
   }, [rawItems, dateRange]);
+
+  const allTimeStockMap = useMemo(() => {
+    const map = new Map<string, number>();
+    rawItems.forEach(item => {
+      const key = item.item_name?.toLowerCase().trim();
+      if (!key) return;
+      const inVal = parseFloat(item.in_qty) || 0;
+      const outVal = parseFloat(item.out_qty) || 0;
+      map.set(key, (map.get(key) || 0) + inVal - outVal);
+    });
+    return map;
+  }, [rawItems]);
 
   // AGGREGATION LOGIC
   const aggregatedItems = useMemo(() => {
@@ -193,21 +228,22 @@ export default function IMSFloor({ location, onBack }: { location: "1st" | "g", 
       const key = item.item_name?.toLowerCase().trim();
       if (!key) return;
       if (!map.has(key)) {
-        map.set(key, { ...item, in_qty: "0", out_qty: "0", live_stock: 0 });
+        map.set(key, { ...item, in_qty: "0", out_qty: "0", live_stock: allTimeStockMap.get(key) || 0 });
       }
       const agg = map.get(key)!;
       const inVal = parseFloat(item.in_qty) || 0;
       const outVal = parseFloat(item.out_qty) || 0;
       agg.in_qty = (parseFloat(agg.in_qty) + inVal).toString();
       agg.out_qty = (parseFloat(agg.out_qty) + outVal).toString();
-      agg.live_stock = parseFloat(agg.in_qty) - parseFloat(agg.out_qty);
-      // keep the latest date
-      if (item.updated_at && (!agg.updated_at || new Date(item.updated_at) > new Date(agg.updated_at))) {
+      
+      const ts = parseDateStr(item.updated_at || "");
+      const aggTs = parseDateStr(agg.updated_at || "");
+      if (ts > aggTs) {
         agg.updated_at = item.updated_at;
       }
     });
     return Array.from(map.values()).sort((a, b) => a.item_name.localeCompare(b.item_name));
-  }, [rawItems]);
+  }, [filteredRawItems, allTimeStockMap]);
 
   const uniqueCategories = useMemo(() => {
     return Array.from(new Set(aggregatedItems.map(i => i.category))).filter(Boolean);
@@ -819,9 +855,11 @@ export default function IMSFloor({ location, onBack }: { location: "1st" | "g", 
                         <td className="py-2 px-4 text-[11px] font-black text-emerald-600 dark:text-emerald-400 text-right">{log.in_qty !== "0" && log.in_qty !== "" ? `+${log.in_qty}` : "-"}</td>
                         <td className="py-2 px-4 text-[11px] font-black text-rose-600 dark:text-rose-400 text-right">{log.out_qty !== "0" && log.out_qty !== "" ? `-${log.out_qty}` : "-"}</td>
                         <td className="py-2 px-4 text-center">
-                          <button onClick={() => confirmDelete(log.id.toString())} className="text-rose-400 hover:text-rose-600 transition-colors">
-                            <TrashIcon className="w-4 h-4 mx-auto" />
-                          </button>
+                          {!String(log.id).startsWith("outform-") && (
+                            <button onClick={() => confirmDelete(log.id.toString())} className="text-rose-400 hover:text-rose-600 transition-colors">
+                              <TrashIcon className="w-4 h-4 mx-auto" />
+                            </button>
+                          )}
                         </td>
                       </tr>
                     ))}

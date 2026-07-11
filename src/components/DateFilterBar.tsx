@@ -2,7 +2,7 @@ import React from 'react';
 import { ChevronLeftIcon, ChevronRightIcon, CalendarDaysIcon, XMarkIcon } from '@heroicons/react/24/outline';
 import { format, add, sub, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfQuarter, endOfQuarter, startOfYear, endOfYear, startOfDay, endOfDay } from 'date-fns';
 
-export type FilterPeriod = 'DAY' | 'WEEK' | 'MONTH' | 'QUARTERLY' | 'YEARLY' | 'CUSTOM';
+export type FilterPeriod = 'ALL' | 'DAY' | 'WEEK' | 'MONTH' | 'QUARTERLY' | 'YEARLY' | 'CUSTOM';
 
 interface DateFilterBarProps {
   period: FilterPeriod;
@@ -28,7 +28,7 @@ export default function DateFilterBar({
   theme = 'blue'
 }: DateFilterBarProps) {
   
-  const periods: FilterPeriod[] = ['DAY', 'WEEK', 'MONTH', 'QUARTERLY', 'YEARLY'];
+  const periods: FilterPeriod[] = ['ALL', 'DAY', 'WEEK', 'MONTH', 'QUARTERLY', 'YEARLY'];
 
   const handlePrev = () => {
     switch (period) {
@@ -52,6 +52,7 @@ export default function DateFilterBar({
 
   const getPeriodLabel = () => {
     switch (period) {
+      case 'ALL': return 'ALL TIME';
       case 'DAY': return format(currentDate, 'dd MMM yyyy').toUpperCase();
       case 'WEEK': {
         const start = startOfWeek(currentDate, { weekStartsOn: 1 });
@@ -80,7 +81,7 @@ export default function DateFilterBar({
   };
 
   const clearCustom = () => {
-    setPeriod('MONTH');
+    setPeriod('ALL');
     setStartDate(null);
     setEndDate(null);
   };
@@ -118,8 +119,8 @@ export default function DateFilterBar({
         ))}
       </div>
 
-      {/* Navigation Controls (Hidden in Custom Mode) */}
-      {period !== 'CUSTOM' && (
+      {/* Navigation Controls (Hidden in Custom Mode and ALL Mode) */}
+      {period !== 'CUSTOM' && period !== 'ALL' && (
         <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-full px-2 py-1 shrink-0 min-w-[200px] justify-between">
           <button 
             onClick={handlePrev}

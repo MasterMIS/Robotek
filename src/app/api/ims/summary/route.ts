@@ -61,10 +61,11 @@ async function getMainIMSData() {
 
 export async function GET() {
   try {
-    const [main, first, g] = await Promise.all([
+    const [main, first, g, outForm] = await Promise.all([
       getMainIMSData(),
       getFloorIMSItems("1st"),
-      getFloorIMSItems("g")
+      getFloorIMSItems("g"),
+      require("@/lib/o2d-sheets").getOutFormData()
     ]);
 
     const summarizeFloor = (items: any[]) => {
@@ -81,10 +82,29 @@ export async function GET() {
       return { totalIn, totalOut, liveStock };
     };
 
+    const gSummary = summarizeFloor(g);
+    
+    // Append Out Form totals to G Floor
+    let gOutFromO2D = 0;
+    outForm.forEach((row: any) => {
+      if (row.description && row.description.trim().startsWith("[") && row.description.trim().endsWith("]")) {
+        try {
+          const lineItems = JSON.parse(row.description);
+          lineItems.forEach((item: any) => {
+            const qty = parseFloat(item.Qty || item.qty) || 0;
+            gOutFromO2D += qty;
+          });
+        } catch (e) {}
+      }
+    });
+
+    gSummary.totalOut += gOutFromO2D;
+    gSummary.liveStock -= gOutFromO2D;
+
     return NextResponse.json({
       main,
       first: summarizeFloor(first),
-      g: summarizeFloor(g)
+      g: gSummary
     }, {
       headers: { 'Cache-Control': 'no-store, max-age=0' },
     });

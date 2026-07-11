@@ -15,6 +15,36 @@ export async function GET(request: NextRequest) {
 
     const items = await getFloorIMSItems(location);
 
+    if (location === "g") {
+      const { getOutFormData } = await import("@/lib/o2d-sheets");
+      const outForm = await getOutFormData();
+      
+      outForm.forEach((row, index) => {
+        if (row.description && row.description.trim().startsWith("[") && row.description.trim().endsWith("]")) {
+          try {
+            const lineItems = JSON.parse(row.description);
+            lineItems.forEach((item: any, lineIdx: number) => {
+              const desc = (item.Description || item.description || "").trim();
+              const qty = parseFloat(item.Qty || item.qty) || 0;
+              if (desc && qty > 0) {
+                items.push({
+                  id: `outform-${index}-${lineIdx}`,
+                  item_name: desc,
+                  category: "Auto-Out (O2D)",
+                  in_qty: "0",
+                  out_qty: qty.toString(),
+                  date: row.date,
+                  updated_at: row.date || new Date().toISOString()
+                });
+              }
+            });
+          } catch (e) {
+            // Ignore parse errors
+          }
+        }
+      });
+    }
+
     return NextResponse.json(items, {
       headers: { 'Cache-Control': 'no-store, max-age=0' },
     });

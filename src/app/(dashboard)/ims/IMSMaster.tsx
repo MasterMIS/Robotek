@@ -200,7 +200,7 @@ export default function IMSMaster({ onBack }: { onBack: () => void }) {
   const [itemForm, setItemForm] = useState<Partial<IMS>>({});
 
   const [viewMode, setViewMode] = useState<'default' | 'timeseries' | 'datewise'>('default');
-  const [filterPeriod, setFilterPeriod] = useState<FilterPeriod>('MONTH');
+  const [filterPeriod, setFilterPeriod] = useState<FilterPeriod>('ALL');
   const [filterDate, setFilterDate] = useState<Date>(new Date());
   const [filterStartDate, setFilterStartDate] = useState<Date | null>(null);
   const [filterEndDate, setFilterEndDate] = useState<Date | null>(null);
@@ -225,6 +225,8 @@ export default function IMSMaster({ onBack }: { onBack: () => void }) {
       end = endOfDay(filterEndDate);
     } else {
       switch (filterPeriod) {
+        case 'ALL':
+          return null;
         case 'DAY':
           start = startOfDay(filterDate);
           end = endOfDay(filterDate);
