@@ -23,7 +23,8 @@ import {
   ArrowUpTrayIcon,
   ArrowLeftIcon,
   TableCellsIcon,
-  ChartBarIcon
+  ChartBarIcon,
+  CalendarIcon
 } from "@heroicons/react/24/outline";
 import {
   PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis,
@@ -33,6 +34,8 @@ import {
 import { IMS } from "@/types/ims";
 import * as XLSX from "xlsx";
 import TimeSeriesTable, { TimeBucket, Transaction } from "@/components/TimeSeriesTable";
+import DateFilterBar, { FilterPeriod } from "@/components/DateFilterBar";
+import { startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfQuarter, endOfQuarter, startOfYear, endOfYear, isWithinInterval } from "date-fns";
 
 const fetcher = (url: string) => fetch(url).then(res => res.json());
 
@@ -196,13 +199,78 @@ export default function IMSMaster({ onBack }: { onBack: () => void }) {
   // Form states
   const [itemForm, setItemForm] = useState<Partial<IMS>>({});
 
-  const [viewMode, setViewMode] = useState<'default' | 'timeseries'>('default');
-  const [timeBucket, setTimeBucket] = useState<TimeBucket>('Daily');
+  const [viewMode, setViewMode] = useState<'default' | 'timeseries' | 'datewise'>('default');
+  const [filterPeriod, setFilterPeriod] = useState<FilterPeriod>('MONTH');
+  const [filterDate, setFilterDate] = useState<Date>(new Date());
+  const [filterStartDate, setFilterStartDate] = useState<Date | null>(null);
+  const [filterEndDate, setFilterEndDate] = useState<Date | null>(null);
+
+  const mappedTimeBucket: TimeBucket = useMemo(() => {
+    if (filterPeriod === 'WEEK') return 'Weekly';
+    if (filterPeriod === 'MONTH') return 'Monthly';
+    if (filterPeriod === 'QUARTERLY' || filterPeriod === 'YEARLY') return 'Quarterly';
+    return 'Daily';
+  }, [filterPeriod]);
 
   const { data: timeSeriesData = [], isValidating: isTimeSeriesLoading } = useSWR<Transaction[]>(
-    viewMode === 'timeseries' ? '/api/ims/time-series' : null,
+    viewMode === 'timeseries' || viewMode === 'datewise' ? '/api/ims/time-series' : null,
     fetcher
   );
+
+  const dateRange = useMemo(() => {
+    let start, end;
+    if (filterPeriod === 'CUSTOM') {
+      if (!filterStartDate || !filterEndDate) return null;
+      start = startOfDay(filterStartDate);
+      end = endOfDay(filterEndDate);
+    } else {
+      switch (filterPeriod) {
+        case 'DAY':
+          start = startOfDay(filterDate);
+          end = endOfDay(filterDate);
+          break;
+        case 'WEEK':
+          start = startOfWeek(filterDate, { weekStartsOn: 1 });
+          end = endOfWeek(filterDate, { weekStartsOn: 1 });
+          break;
+        case 'MONTH':
+          start = startOfMonth(filterDate);
+          end = endOfMonth(filterDate);
+          break;
+        case 'QUARTERLY':
+          start = startOfQuarter(filterDate);
+          end = endOfQuarter(filterDate);
+          break;
+        case 'YEARLY':
+          start = startOfYear(filterDate);
+          end = endOfYear(filterDate);
+          break;
+      }
+    }
+    return { start, end };
+  }, [filterPeriod, filterDate, filterStartDate, filterEndDate]);
+
+  const datewiseTransactions = useMemo(() => {
+    const sortedAll = [...timeSeriesData].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    const stockMap = new Map<string, number>();
+    
+    const itemsWithRunningStock = sortedAll.map(item => {
+      const key = item.item_name.toLowerCase().trim();
+      const inVal = item.in_qty || 0;
+      const outVal = item.out_qty || 0;
+      const current = (stockMap.get(key) || 0) + (inVal - outVal);
+      stockMap.set(key, current);
+      return { ...item, running_stock: current };
+    });
+
+    itemsWithRunningStock.reverse();
+
+    if (!dateRange) return itemsWithRunningStock;
+    return itemsWithRunningStock.filter(item => {
+      const itemDate = new Date(item.date);
+      return isWithinInterval(itemDate, { start: dateRange.start, end: dateRange.end });
+    });
+  }, [timeSeriesData, dateRange]);
 
   const { data: rawItems = [], mutate: mutateMaster, isLoading: masterLoading } = useSWR<IMS[]>("/api/ims", fetcher);
 
@@ -376,23 +444,38 @@ export default function IMSMaster({ onBack }: { onBack: () => void }) {
 
 
   const handleExport = () => {
-    const headers = ["ID", "Item Name", "Est. Amount/Item", "GST", "Final Amount", "Category", "In Qty", "Out Qty", "Live Stock", "Sale %", "Avg Daily Con. (60d)", "Lead Time", "Safety Factor", "Max Level"];
-    const rows = filteredItems.map((item) => [
-      item.id,
-      item.item_name,
-      item.est_amount_item,
-      item.gst,
-      item.final_amount,
-      item.category,
-      item.in_qty,
-      item.out_qty,
-      item.live_stock,
-      item.sale_percent,
-      item.avg_daily_con,
-      item.lead_time,
-      item.safety_factor,
-      item.max_level,
-    ]);
+    let headers: string[];
+    let rows: any[][];
+
+    if (viewMode === 'datewise') {
+      headers = ["Date", "Category", "Item Name", "In Qty", "Out Qty", "Live Stock"];
+      rows = datewiseTransactions.map((log: any) => [
+        new Date(log.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' }),
+        log.category,
+        log.item_name,
+        log.in_qty > 0 ? `+${log.in_qty}` : "-",
+        log.out_qty > 0 ? `-${log.out_qty}` : "-",
+        log.running_stock
+      ]);
+    } else {
+      headers = ["ID", "Item Name", "Est. Amount/Item", "GST", "Final Amount", "Category", "In Qty", "Out Qty", "Live Stock", "Sale %", "Avg Daily Con. (60d)", "Lead Time", "Safety Factor", "Max Level"];
+      rows = filteredItems.map((item) => [
+        item.id,
+        item.item_name,
+        item.est_amount_item,
+        item.gst,
+        item.final_amount,
+        item.category,
+        item.in_qty,
+        item.out_qty,
+        item.live_stock,
+        item.sale_percent,
+        item.avg_daily_con,
+        item.lead_time,
+        item.safety_factor,
+        item.max_level,
+      ]);
+    }
 
     const csvContent = [
       headers.join(","),
@@ -468,12 +551,12 @@ export default function IMSMaster({ onBack }: { onBack: () => void }) {
               <ArrowLeftIcon className="w-6 h-6 text-gray-700 dark:text-gray-300" />
             </button>
             <div className="flex items-center gap-3">
-              <div className="p-2.5 bg-[#003875] dark:bg-[#FFD500] rounded-xl shadow-lg shadow-[#003875]/20 dark:shadow-[#FFD500]/20">
-                <ClipboardDocumentListIcon className="w-7 h-7 text-white dark:text-[#003875]" />
+              <div className="p-2.5 bg-gradient-to-br from-blue-600 to-indigo-800 shadow-lg shadow-blue-900/20 rounded-xl">
+                <ClipboardDocumentListIcon className="w-7 h-7 text-white" />
               </div>
               <div>
-                <h1 className="text-2xl font-black text-gray-900 dark:text-white uppercase tracking-tight leading-none mb-1">IMSMaster</h1>
-                <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Inventory Management System</p>
+                <h1 className="text-2xl font-black text-blue-800 dark:text-blue-400 uppercase tracking-tight leading-none mb-1">Master IMS</h1>
+                <p className="text-[10px] font-black text-blue-600/70 dark:text-blue-400/70 uppercase tracking-widest">Main Warehouse & Operations</p>
               </div>
             </div>
           </div>
@@ -496,28 +579,40 @@ export default function IMSMaster({ onBack }: { onBack: () => void }) {
             onChange={handleFileUpload} 
             className="hidden" 
           />
-          <button onClick={() => fileInputRef.current?.click()} className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 dark:bg-white/5 dark:hover:bg-white/10 text-gray-700 dark:text-gray-300 rounded-lg text-[11px] font-black uppercase tracking-wider transition-all border border-gray-200 dark:border-white/10 shadow-sm">
+          <button onClick={() => fileInputRef.current?.click()} className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 hover:bg-blue-100 dark:bg-blue-500/10 dark:hover:bg-blue-500/20 text-blue-700 dark:text-blue-400 rounded-lg text-[11px] font-black uppercase tracking-wider transition-all border border-blue-200 dark:border-blue-500/20 shadow-sm">
             <ArrowUpTrayIcon className="w-4 h-4" /> Import Out Form
           </button>
-          <button onClick={handleExport} className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 dark:bg-white/5 dark:hover:bg-white/10 text-gray-700 dark:text-gray-300 rounded-lg text-[11px] font-black uppercase tracking-wider transition-all border border-gray-200 dark:border-white/10 shadow-sm">
+          <button onClick={handleExport} className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 hover:bg-blue-100 dark:bg-blue-500/10 dark:hover:bg-blue-500/20 text-blue-700 dark:text-blue-400 rounded-lg text-[11px] font-black uppercase tracking-wider transition-all border border-blue-200 dark:border-blue-500/20 shadow-sm">
             <ArrowDownTrayIcon className="w-4 h-4" /> Export
           </button>
           <button onClick={() => {
             setEditingItem(null);
             setItemForm({ item_name: "", est_amount_item: "", gst: "", final_amount: "", category: "" });
             setItemModalOpen(true);
-          }} className="flex items-center gap-1.5 px-4 py-1.5 bg-[#003875] dark:bg-[#FFD500] text-white dark:text-[#003875] hover:brightness-110 rounded-lg text-[11px] font-black uppercase tracking-wider transition-all shadow-sm">
-            <PlusIcon className="w-4 h-4" /> Add Item
+          }} className="flex items-center gap-1.5 px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-[11px] font-black uppercase tracking-wider transition-all shadow-sm">
+            <PlusIcon className="w-4 h-4 stroke-2" /> Add Item
           </button>
         </div>
       </div>
+
+      <DateFilterBar 
+        period={filterPeriod}
+        setPeriod={setFilterPeriod}
+        currentDate={filterDate}
+        setCurrentDate={setFilterDate}
+        startDate={filterStartDate}
+        setStartDate={setFilterStartDate}
+        endDate={filterEndDate}
+        setEndDate={setFilterEndDate}
+        theme="blue"
+      />
 
       <div className="flex items-center gap-2 bg-gray-100 dark:bg-white/5 p-1 rounded-xl shrink-0 self-start lg:self-auto mb-2">
         <button
           onClick={() => setViewMode('default')}
           className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wider transition-all ${
             viewMode === 'default' 
-              ? 'bg-white dark:bg-[#111827] text-[#003875] dark:text-[#FFD500] shadow-sm' 
+              ? 'bg-white dark:bg-[#111827] text-blue-700 dark:text-blue-400 shadow-sm' 
               : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
           }`}
         >
@@ -527,37 +622,83 @@ export default function IMSMaster({ onBack }: { onBack: () => void }) {
           onClick={() => setViewMode('timeseries')}
           className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wider transition-all ${
             viewMode === 'timeseries' 
-              ? 'bg-white dark:bg-[#111827] text-[#003875] dark:text-[#FFD500] shadow-sm' 
+              ? 'bg-white dark:bg-[#111827] text-blue-700 dark:text-blue-400 shadow-sm' 
               : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
           }`}
         >
           <ChartBarIcon className="w-4 h-4" /> Time Series
         </button>
+        <button
+          onClick={() => setViewMode('datewise')}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wider transition-all ${
+            viewMode === 'datewise' 
+              ? 'bg-white dark:bg-[#111827] text-blue-700 dark:text-blue-400 shadow-sm' 
+              : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+          }`}
+        >
+          <CalendarIcon className="w-4 h-4" /> Date-Wise
+        </button>
       </div>
 
       {viewMode === 'timeseries' ? (
         <div className="flex flex-col gap-2 shrink-0 mb-2">
-          <div className="flex gap-2">
-            {(['Daily', 'Weekly', 'Monthly', 'Quarterly'] as TimeBucket[]).map(bucket => (
-              <button
-                key={bucket}
-                onClick={() => setTimeBucket(bucket)}
-                className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
-                  timeBucket === bucket
-                    ? 'bg-[#003875] text-white dark:bg-[#FFD500] dark:text-[#003875] shadow-sm'
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-white/5 dark:text-gray-400 dark:hover:bg-white/10'
-                }`}
-              >
-                {bucket}
-              </button>
-            ))}
-          </div>
           <TimeSeriesTable 
             transactions={timeSeriesData}
-            bucket={timeBucket}
+            bucket={mappedTimeBucket}
             isLoading={isTimeSeriesLoading}
             searchQuery={searchQuery}
           />
+        </div>
+      ) : viewMode === 'datewise' ? (
+        <div className="flex-1 bg-white dark:bg-[#111827] border border-gray-200 dark:border-white/5 rounded-xl overflow-hidden flex flex-col shadow-sm min-h-0 mt-2">
+          {datewiseTransactions.length > 0 && !isTimeSeriesLoading && (
+            <div className="py-2 px-4 border-b border-blue-200/50 dark:border-blue-500/10 flex items-center justify-between bg-blue-50/50 dark:bg-[#1f2937]/50 shrink-0">
+              <p className="text-[10px] font-black text-blue-700 dark:text-blue-400 uppercase tracking-widest">
+                Showing {datewiseTransactions.length} transactions
+              </p>
+            </div>
+          )}
+          <div className="flex-1 overflow-auto custom-scrollbar relative">
+            {isTimeSeriesLoading ? (
+              <div className="p-4 space-y-3">
+                {[1, 2, 3, 4].map(i => (
+                  <div key={i} className="animate-pulse h-8 bg-gray-200 dark:bg-gray-700 rounded"></div>
+                ))}
+              </div>
+            ) : (
+              <table className="w-full text-left border-collapse relative">
+                <thead className="bg-gray-100 dark:bg-[#1f2937] sticky top-0 z-20 shadow-sm">
+                  <tr>
+                    <th className="py-2.5 px-4 text-[10px] font-black text-blue-700 dark:text-blue-400 uppercase tracking-widest border-b border-gray-200 dark:border-white/10">Date</th>
+                    <th className="py-2.5 px-3 text-[10px] font-black text-blue-700 dark:text-blue-400 uppercase tracking-widest border-b border-gray-200 dark:border-white/10">Category</th>
+                    <th className="py-2.5 px-3 text-[10px] font-black text-blue-700 dark:text-blue-400 uppercase tracking-widest border-b border-gray-200 dark:border-white/10">Item Name</th>
+                    <th className="py-2.5 px-3 text-[10px] font-black text-blue-700 dark:text-blue-400 uppercase tracking-widest border-b border-gray-200 dark:border-white/10 text-right">In</th>
+                    <th className="py-2.5 px-3 text-[10px] font-black text-blue-700 dark:text-blue-400 uppercase tracking-widest border-b border-gray-200 dark:border-white/10 text-right">Out</th>
+                    <th className="py-2.5 px-4 text-[10px] font-black text-blue-700 dark:text-blue-400 uppercase tracking-widest border-b border-gray-200 dark:border-white/10 text-right">Live Stock</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100 dark:divide-white/5">
+                  {datewiseTransactions.map((log, index) => (
+                    <tr key={index} className="hover:bg-blue-50/30 dark:hover:bg-white/[0.03] even:bg-gray-50/50 dark:even:bg-[#1f2937]/30 transition-colors group">
+                      <td className="py-2 px-4 text-[11px] font-bold text-gray-500">
+                        {new Date(log.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' })}
+                      </td>
+                      <td className="py-2 px-3 text-[11px] font-bold text-gray-500 uppercase">{log.category}</td>
+                      <td className="py-2 px-3 text-[11px] font-black text-gray-900 dark:text-white uppercase">{log.item_name}</td>
+                      <td className="py-2 px-3 text-[11px] font-black text-emerald-600 dark:text-emerald-400 text-right">{log.in_qty > 0 ? `+${log.in_qty}` : "-"}</td>
+                      <td className="py-2 px-3 text-[11px] font-black text-rose-600 dark:text-rose-400 text-right">{log.out_qty > 0 ? `-${log.out_qty}` : "-"}</td>
+                      <td className="py-2 px-4 text-[11px] font-black text-[#003875] dark:text-[#FFD500] text-right">{(log as any).running_stock}</td>
+                    </tr>
+                  ))}
+                  {datewiseTransactions.length === 0 && (
+                    <tr>
+                      <td colSpan={6} className="py-8 text-center text-gray-400 text-[11px] font-black uppercase">No items found</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            )}
+          </div>
         </div>
       ) : (
       <>
@@ -586,22 +727,22 @@ export default function IMSMaster({ onBack }: { onBack: () => void }) {
         {!logsItem && (
           <>
             {filteredItems.length > 0 && !masterLoading && (
-              <div className="py-2 px-4 border-b border-gray-200 dark:border-white/5 flex items-center justify-between bg-gray-50/50 dark:bg-[#1f2937]/50 shrink-0">
-                <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">
+              <div className="py-2 px-4 border-b border-blue-200/50 dark:border-blue-500/10 flex items-center justify-between bg-blue-50/50 dark:bg-[#1f2937]/50 shrink-0">
+                <p className="text-[10px] font-black text-blue-700 dark:text-blue-400 uppercase tracking-widest">
                   Showing {Math.min((currentPage - 1) * itemsPerPage + 1, filteredItems.length)} to {Math.min(currentPage * itemsPerPage, filteredItems.length)} of {filteredItems.length} entries
                 </p>
                 <div className="flex gap-1">
                   <button
                     onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
                     disabled={currentPage === 1}
-                    className="px-3 py-1.5 rounded bg-white dark:bg-[#111827] border border-gray-200 dark:border-white/10 text-[10px] font-black text-gray-500 uppercase tracking-widest hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm"
+                    className="px-3 py-1.5 rounded bg-white dark:bg-[#111827] border border-blue-200 dark:border-blue-500/20 text-[10px] font-black text-blue-700 dark:text-blue-400 uppercase tracking-widest hover:bg-blue-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm"
                   >
                     Prev
                   </button>
                   <button
                     onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
                     disabled={currentPage === totalPages || totalPages === 0}
-                    className="px-3 py-1.5 rounded bg-white dark:bg-[#111827] border border-gray-200 dark:border-white/10 text-[10px] font-black text-gray-500 uppercase tracking-widest hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm"
+                    className="px-3 py-1.5 rounded bg-white dark:bg-[#111827] border border-blue-200 dark:border-blue-500/20 text-[10px] font-black text-blue-700 dark:text-blue-400 uppercase tracking-widest hover:bg-blue-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm"
                   >
                     Next
                   </button>
@@ -623,36 +764,36 @@ export default function IMSMaster({ onBack }: { onBack: () => void }) {
                   </div>
                 ) : (
                   <table className="w-full text-left border-collapse relative">
-                    <thead className="bg-gray-100 dark:bg-[#1f2937] sticky top-0 z-20 shadow-sm">
+                    <thead className="bg-blue-50 dark:bg-blue-900/20 sticky top-0 z-20 shadow-sm">
                       <tr>
-                        <th className="py-2.5 px-3 border-b border-gray-200 dark:border-white/10 text-center sticky left-0 bg-gray-100 dark:bg-[#1f2937] z-30 shadow-[1px_0_0_0_#e5e7eb] dark:shadow-[1px_0_0_0_rgba(255,255,255,0.05)] w-24">
-                          <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Acts</span>
+                        <th className="py-2.5 px-3 border-b border-blue-200 dark:border-blue-500/20 text-center sticky left-0 bg-blue-50 dark:bg-blue-900/20 z-30 shadow-[1px_0_0_0_#bfdbfe] dark:shadow-[1px_0_0_0_rgba(59,130,246,0.2)] w-24">
+                          <span className="text-[10px] font-black text-blue-700 dark:text-blue-400 uppercase tracking-widest">Acts</span>
                         </th>
-                        <th className="py-2.5 px-3 text-[10px] font-black text-gray-500 uppercase tracking-widest border-b border-gray-200 dark:border-white/10 whitespace-nowrap">ID</th>
-                        <th className="py-2.5 px-3 text-[10px] font-black text-gray-500 uppercase tracking-widest border-b border-gray-200 dark:border-white/10 whitespace-nowrap">Category</th>
-                        <th className="py-2.5 px-3 text-[10px] font-black text-gray-500 uppercase tracking-widest border-b border-gray-200 dark:border-white/10 whitespace-nowrap">Item Name</th>
-                        <th className="py-2.5 px-3 text-[10px] font-black text-gray-500 uppercase tracking-widest border-b border-gray-200 dark:border-white/10 text-right">Est. Amt</th>
-                        <th className="py-2.5 px-3 text-[10px] font-black text-gray-500 uppercase tracking-widest border-b border-gray-200 dark:border-white/10 text-right">GST</th>
-                        <th className="py-2.5 px-3 text-[10px] font-black text-gray-500 uppercase tracking-widest border-b border-gray-200 dark:border-white/10 text-right">Final Amt</th>
-                        <th className="py-2.5 px-3 text-[10px] font-black text-gray-500 uppercase tracking-widest border-b border-gray-200 dark:border-white/10 text-right">In Qty</th>
-                        <th className="py-2.5 px-3 text-[10px] font-black text-gray-500 uppercase tracking-widest border-b border-gray-200 dark:border-white/10 text-right">Out Qty</th>
-                        <th className="py-2.5 px-3 text-[10px] font-black text-gray-500 uppercase tracking-widest border-b border-gray-200 dark:border-white/10 text-right">Sale %</th>
-                        <th className="py-2.5 px-3 text-[10px] font-black text-gray-500 uppercase tracking-widest border-b border-gray-200 dark:border-white/10 text-right">Avg Con</th>
-                        <th className="py-2.5 px-3 text-[10px] font-black text-gray-500 uppercase tracking-widest border-b border-gray-200 dark:border-white/10 text-right">Lead</th>
-                        <th className="py-2.5 px-3 text-[10px] font-black text-gray-500 uppercase tracking-widest border-b border-gray-200 dark:border-white/10 text-right">SF</th>
-                        <th className="py-2.5 px-3 text-[10px] font-black text-gray-500 uppercase tracking-widest border-b border-gray-200 dark:border-white/10 text-right">Max</th>
-                        <th className="py-2.5 px-4 text-[10px] font-black text-gray-900 dark:text-white uppercase tracking-widest border-b border-gray-200 dark:border-white/10 text-left bg-gray-50 dark:bg-white/5 w-56">Stock Health</th>
+                        <th className="py-2.5 px-3 text-[10px] font-black text-blue-700 dark:text-blue-400 uppercase tracking-widest border-b border-blue-200 dark:border-blue-500/20 whitespace-nowrap">ID</th>
+                        <th className="py-2.5 px-3 text-[10px] font-black text-blue-700 dark:text-blue-400 uppercase tracking-widest border-b border-blue-200 dark:border-blue-500/20 whitespace-nowrap">Category</th>
+                        <th className="py-2.5 px-3 text-[10px] font-black text-blue-700 dark:text-blue-400 uppercase tracking-widest border-b border-blue-200 dark:border-blue-500/20 whitespace-nowrap">Item Name</th>
+                        <th className="py-2.5 px-3 text-[10px] font-black text-blue-700 dark:text-blue-400 uppercase tracking-widest border-b border-blue-200 dark:border-blue-500/20 text-right">Est. Amt</th>
+                        <th className="py-2.5 px-3 text-[10px] font-black text-blue-700 dark:text-blue-400 uppercase tracking-widest border-b border-blue-200 dark:border-blue-500/20 text-right">GST</th>
+                        <th className="py-2.5 px-3 text-[10px] font-black text-blue-700 dark:text-blue-400 uppercase tracking-widest border-b border-blue-200 dark:border-blue-500/20 text-right">Final Amt</th>
+                        <th className="py-2.5 px-3 text-[10px] font-black text-blue-700 dark:text-blue-400 uppercase tracking-widest border-b border-blue-200 dark:border-blue-500/20 text-right">In Qty</th>
+                        <th className="py-2.5 px-3 text-[10px] font-black text-blue-700 dark:text-blue-400 uppercase tracking-widest border-b border-blue-200 dark:border-blue-500/20 text-right">Out Qty</th>
+                        <th className="py-2.5 px-3 text-[10px] font-black text-blue-700 dark:text-blue-400 uppercase tracking-widest border-b border-blue-200 dark:border-blue-500/20 text-right">Sale %</th>
+                        <th className="py-2.5 px-3 text-[10px] font-black text-blue-700 dark:text-blue-400 uppercase tracking-widest border-b border-blue-200 dark:border-blue-500/20 text-right">Avg Con</th>
+                        <th className="py-2.5 px-3 text-[10px] font-black text-blue-700 dark:text-blue-400 uppercase tracking-widest border-b border-blue-200 dark:border-blue-500/20 text-right">Lead</th>
+                        <th className="py-2.5 px-3 text-[10px] font-black text-blue-700 dark:text-blue-400 uppercase tracking-widest border-b border-blue-200 dark:border-blue-500/20 text-right">SF</th>
+                        <th className="py-2.5 px-3 text-[10px] font-black text-blue-700 dark:text-blue-400 uppercase tracking-widest border-b border-blue-200 dark:border-blue-500/20 text-right">Max</th>
+                        <th className="py-2.5 px-4 text-[10px] font-black text-blue-700 dark:text-blue-400 uppercase tracking-widest border-b border-blue-200 dark:border-blue-500/20 text-left bg-blue-100/50 dark:bg-blue-500/10 w-56">Stock Health</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-gray-100 dark:divide-white/5">
+                    <tbody className="divide-y divide-blue-100 dark:divide-blue-500/10">
                       {paginatedItems.map((item, idx) => {
                         const health = getHealth(item.live_stock, item.max_level || 0);
                         return (
                           <tr
                             key={item.id}
-                            className="hover:bg-blue-50/30 dark:hover:bg-white/[0.03] even:bg-gray-50/50 dark:even:bg-[#1f2937]/30 transition-colors group"
+                            className="hover:bg-blue-50/50 dark:hover:bg-white/[0.03] transition-colors group"
                           >
-                            <td className="py-1 px-2 text-center sticky left-0 z-20 transition-colors border-r shadow-[1px_0_0_0_#e5e7eb] dark:shadow-[1px_0_0_0_rgba(255,255,255,0.05)] bg-white group-even:bg-gray-50/50 dark:bg-[#111827] dark:group-even:bg-[#182031] group-hover:bg-blue-50/30 dark:group-hover:bg-[#1a2335] border-gray-100 dark:border-white/5">
+                            <td className="py-1 px-2 text-center sticky left-0 z-20 transition-colors border-r shadow-[1px_0_0_0_#bfdbfe] dark:shadow-[1px_0_0_0_rgba(59,130,246,0.2)] bg-white group-even:bg-blue-50/30 dark:bg-[#111827] dark:group-even:bg-[#182031] group-hover:bg-blue-50/50 dark:group-hover:bg-[#1a2335] border-blue-100 dark:border-blue-500/10">
                               <div className="flex items-center justify-center gap-2">
                                 <button onClick={() => { setLogsItem(item); setLogsModalOpen(true); }} className="text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:scale-110 transition-all" title="View Transaction Logs">
                                   <EyeIcon className="w-4 h-4" />
@@ -745,10 +886,10 @@ export default function IMSMaster({ onBack }: { onBack: () => void }) {
                     <table className="w-full text-left border-collapse">
                       <thead className="bg-gray-100 dark:bg-[#1f2937] sticky top-0 shadow-sm z-10">
                         <tr>
-                          <th className="py-2.5 px-6 text-[10px] font-black text-gray-500 uppercase tracking-widest border-b border-gray-200 dark:border-white/10 w-40">Date</th>
-                          <th className="py-2.5 px-6 text-[10px] font-black text-gray-500 uppercase tracking-widest border-b border-gray-200 dark:border-white/10 w-32">Type</th>
-                          <th className="py-2.5 px-6 text-[10px] font-black text-gray-500 uppercase tracking-widest border-b border-gray-200 dark:border-white/10 text-right w-32">Quantity</th>
-                          <th className="py-2.5 px-6 text-[10px] font-black text-gray-500 uppercase tracking-widest border-b border-gray-200 dark:border-white/10">Remarks</th>
+                          <th className="py-2.5 px-6 text-[10px] font-black text-blue-700 dark:text-blue-400 uppercase tracking-widest border-b border-gray-200 dark:border-white/10 w-40">Date</th>
+                          <th className="py-2.5 px-6 text-[10px] font-black text-blue-700 dark:text-blue-400 uppercase tracking-widest border-b border-gray-200 dark:border-white/10 w-32">Type</th>
+                          <th className="py-2.5 px-6 text-[10px] font-black text-blue-700 dark:text-blue-400 uppercase tracking-widest border-b border-gray-200 dark:border-white/10 text-right w-32">Quantity</th>
+                          <th className="py-2.5 px-6 text-[10px] font-black text-blue-700 dark:text-blue-400 uppercase tracking-widest border-b border-gray-200 dark:border-white/10">Remarks</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100 dark:divide-white/5 font-mono text-[11px]">

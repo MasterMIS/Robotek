@@ -8,10 +8,13 @@ import {
   MagnifyingGlassIcon,
   ArrowLeftIcon,
   TableCellsIcon,
-  ChartBarIcon
+  ChartBarIcon,
+  CalendarIcon
 } from "@heroicons/react/24/outline";
 import * as XLSX from "xlsx";
 import TimeSeriesTable, { TimeBucket, Transaction } from "@/components/TimeSeriesTable";
+import DateFilterBar, { FilterPeriod } from "@/components/DateFilterBar";
+import { startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfQuarter, endOfQuarter, startOfYear, endOfYear, isWithinInterval } from "date-fns";
 
 const fetcher = (url: string) => fetch(url).then(res => res.json());
 
@@ -26,8 +29,18 @@ export default function IMSFinal({ onBack }: { onBack: () => void }) {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 50;
 
-  const [viewMode, setViewMode] = useState<'default' | 'timeseries'>('default');
-  const [timeBucket, setTimeBucket] = useState<TimeBucket>('Daily');
+  const [viewMode, setViewMode] = useState<'default' | 'timeseries' | 'datewise'>('default');
+  const [filterPeriod, setFilterPeriod] = useState<FilterPeriod>('MONTH');
+  const [filterDate, setFilterDate] = useState<Date>(new Date());
+  const [filterStartDate, setFilterStartDate] = useState<Date | null>(null);
+  const [filterEndDate, setFilterEndDate] = useState<Date | null>(null);
+
+  const mappedTimeBucket: TimeBucket = useMemo(() => {
+    if (filterPeriod === 'WEEK') return 'Weekly';
+    if (filterPeriod === 'MONTH') return 'Monthly';
+    if (filterPeriod === 'QUARTERLY' || filterPeriod === 'YEARLY') return 'Quarterly';
+    return 'Daily';
+  }, [filterPeriod]);
 
   const { data: masterItems = [], isLoading: isLoadingMaster } = useSWR("/api/ims", fetcher);
   const { data: firstItems = [], isLoading: isLoadingFirst } = useSWR("/api/ims/floor?location=1st", fetcher);
@@ -43,13 +56,15 @@ export default function IMSFinal({ onBack }: { onBack: () => void }) {
   const aggregatedItems = useMemo(() => {
     const map = new Map<string, any>();
     
-    const addToMap = (item: any) => {
-      const key = item.item_name?.toLowerCase().trim();
-      if (!key) return;
+    const addToMap = (sourceName: string) => (item: any) => {
+      const name = item.item_name?.toLowerCase().trim();
+      if (!name) return;
+      const key = `${name}-${sourceName}`;
       if (!map.has(key)) {
-        map.set(key, { 
+        map.set(key, {
           item_name: item.item_name, 
           category: item.category || 'Uncategorized', 
+          source: sourceName,
           in_qty: 0, 
           out_qty: 0, 
           live_stock: 0 
@@ -67,9 +82,9 @@ export default function IMSFinal({ onBack }: { onBack: () => void }) {
       }
     };
 
-    masterItems.forEach(addToMap);
-    firstItems.forEach(addToMap);
-    gItems.forEach(addToMap);
+    masterItems.forEach(addToMap('Master IMS'));
+    firstItems.forEach(addToMap('1st Floor IMS'));
+    gItems.forEach(addToMap('G Floor IMS'));
 
     return Array.from(map.values()).sort((a, b) => a.item_name.localeCompare(b.item_name));
   }, [masterItems, firstItems, gItems]);
@@ -88,18 +103,35 @@ export default function IMSFinal({ onBack }: { onBack: () => void }) {
   }, [filteredItems, currentPage]);
 
   const handleExport = () => {
-    const exportData = filteredItems.map(item => ({
-      Category: item.category,
-      "Item Name": item.item_name,
-      "Total In": item.in_qty,
-      "Total Out": item.out_qty,
-      "Live Stock": item.live_stock
-    }));
+    if (viewMode === 'datewise') {
+      const exportData = datewiseTransactions.map((log: any) => ({
+        "Date": new Date(log.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' }),
+        "Source": log.source,
+        "Category": log.category,
+        "Item Name": log.item_name,
+        "In Qty": log.in_qty > 0 ? `+${log.in_qty}` : "-",
+        "Out Qty": log.out_qty > 0 ? `-${log.out_qty}` : "-",
+        "Live Stock": log.running_stock
+      }));
+      const ws = XLSX.utils.json_to_sheet(exportData);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Final_IMS_Datewise");
+      XLSX.writeFile(wb, `Final_IMS_Datewise_${new Date().toISOString().split("T")[0]}.xlsx`);
+    } else {
+      const exportData = filteredItems.map(item => ({
+        "Source": item.source,
+        Category: item.category,
+        "Item Name": item.item_name,
+        "Total In": item.in_qty,
+        "Total Out": item.out_qty,
+        "Live Stock": item.live_stock
+      }));
 
-    const ws = XLSX.utils.json_to_sheet(exportData);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Final_IMS");
-    XLSX.writeFile(wb, `Final_IMS_${new Date().toISOString().split("T")[0]}.xlsx`);
+      const ws = XLSX.utils.json_to_sheet(exportData);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Final_IMS");
+      XLSX.writeFile(wb, `Final_IMS_${new Date().toISOString().split("T")[0]}.xlsx`);
+    }
   };
 
   React.useEffect(() => {
@@ -107,21 +139,80 @@ export default function IMSFinal({ onBack }: { onBack: () => void }) {
   }, [searchQuery]);
 
   const combinedTransactions = useMemo(() => {
-    const masterTxs = timeSeriesData || [];
+    const masterTxs = (timeSeriesData || []).map((item: any) => ({
+      ...item,
+      source: 'Master IMS'
+    }));
     
-    const floorMapper = (item: any): Transaction => ({
+    const floorMapper = (sourceName: string) => (item: any): Transaction & { source: string } => ({
       item_name: item.item_name || '',
       category: item.category || 'Uncategorized',
       date: item.date || item.updated_at || '',
       in_qty: parseFloat(item.in_qty) || 0,
-      out_qty: parseFloat(item.out_qty) || 0
+      out_qty: parseFloat(item.out_qty) || 0,
+      source: sourceName
     });
 
-    const firstTxs = (firstItems || []).map(floorMapper);
-    const gTxs = (gItems || []).map(floorMapper);
+    const firstTxs = (firstItems || []).map(floorMapper('1st Floor IMS'));
+    const gTxs = (gItems || []).map(floorMapper('G Floor IMS'));
 
     return [...masterTxs, ...firstTxs, ...gTxs];
   }, [timeSeriesData, firstItems, gItems]);
+
+  const dateRange = useMemo(() => {
+    let start, end;
+    if (filterPeriod === 'CUSTOM') {
+      if (!filterStartDate || !filterEndDate) return null;
+      start = startOfDay(filterStartDate);
+      end = endOfDay(filterEndDate);
+    } else {
+      switch (filterPeriod) {
+        case 'DAY':
+          start = startOfDay(filterDate);
+          end = endOfDay(filterDate);
+          break;
+        case 'WEEK':
+          start = startOfWeek(filterDate, { weekStartsOn: 1 });
+          end = endOfWeek(filterDate, { weekStartsOn: 1 });
+          break;
+        case 'MONTH':
+          start = startOfMonth(filterDate);
+          end = endOfMonth(filterDate);
+          break;
+        case 'QUARTERLY':
+          start = startOfQuarter(filterDate);
+          end = endOfQuarter(filterDate);
+          break;
+        case 'YEARLY':
+          start = startOfYear(filterDate);
+          end = endOfYear(filterDate);
+          break;
+      }
+    }
+    return { start, end };
+  }, [filterPeriod, filterDate, filterStartDate, filterEndDate]);
+
+  const datewiseTransactions = useMemo(() => {
+    const sortedAll = [...combinedTransactions].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    const stockMap = new Map<string, number>();
+    
+    const itemsWithRunningStock = sortedAll.map(item => {
+      const key = item.item_name.toLowerCase().trim();
+      const inVal = item.in_qty || 0;
+      const outVal = item.out_qty || 0;
+      const current = (stockMap.get(key) || 0) + (inVal - outVal);
+      stockMap.set(key, current);
+      return { ...item, running_stock: current };
+    });
+
+    itemsWithRunningStock.reverse();
+
+    if (!dateRange) return itemsWithRunningStock;
+    return itemsWithRunningStock.filter(item => {
+      const itemDate = new Date(item.date);
+      return isWithinInterval(itemDate, { start: dateRange.start, end: dateRange.end });
+    });
+  }, [combinedTransactions, dateRange]);
 
   return (
     <div className="flex flex-col h-[calc(100vh-2rem)]">
@@ -138,8 +229,8 @@ export default function IMSFinal({ onBack }: { onBack: () => void }) {
               <ClipboardDocumentListIcon className="w-7 h-7 text-white" />
             </div>
             <div>
-              <h1 className="text-2xl font-black text-gray-900 dark:text-white uppercase tracking-tight leading-none mb-1">Final IMS</h1>
-              <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Total Storage Overview</p>
+              <h1 className="text-2xl font-black text-orange-600 dark:text-orange-500 uppercase tracking-tight leading-none mb-1">Final IMS</h1>
+              <p className="text-[10px] font-black text-orange-600/70 dark:text-orange-500/70 uppercase tracking-widest">Total Storage Overview</p>
             </div>
           </div>
         </div>
@@ -165,6 +256,16 @@ export default function IMSFinal({ onBack }: { onBack: () => void }) {
           >
             <ChartBarIcon className="w-4 h-4" /> Time Series
           </button>
+          <button
+            onClick={() => setViewMode('datewise')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wider transition-all ${
+              viewMode === 'datewise' 
+                ? 'bg-white dark:bg-[#111827] text-orange-600 dark:text-[#FFD500] shadow-sm' 
+                : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+            }`}
+          >
+            <CalendarIcon className="w-4 h-4" /> Date-Wise
+          </button>
         </div>
 
         <div className="flex items-center gap-3 w-full lg:w-auto">
@@ -178,32 +279,90 @@ export default function IMSFinal({ onBack }: { onBack: () => void }) {
               className="pl-9 pr-4 py-2 bg-white dark:bg-[#111827] border border-gray-200 dark:border-white/10 rounded-xl text-[11px] font-black uppercase tracking-wider outline-none focus:ring-2 focus:ring-[#003875] dark:text-white w-full lg:w-64 transition-all shadow-sm h-full"
             />
           </div>
-          <button onClick={handleExport} className="flex items-center gap-1.5 px-3 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-white/5 dark:hover:bg-white/10 text-gray-700 dark:text-gray-300 rounded-lg text-[11px] font-black uppercase tracking-wider transition-all border border-gray-200 dark:border-white/10 shadow-sm whitespace-nowrap">
+          <button onClick={handleExport} className="flex items-center gap-1.5 px-3 py-2 bg-orange-50 hover:bg-orange-100 dark:bg-orange-500/10 dark:hover:bg-orange-500/20 text-orange-600 dark:text-orange-500 rounded-lg text-[11px] font-black uppercase tracking-wider transition-all border border-orange-200 dark:border-orange-500/20 shadow-sm whitespace-nowrap">
             <ArrowDownTrayIcon className="w-4 h-4" /> Export
           </button>
         </div>
       </div>
 
-      {viewMode === 'timeseries' ? (
-        <div className="flex flex-col gap-2 shrink-0 mb-2 mt-4">
-          <div className="flex gap-2">
-            {(['Daily', 'Weekly', 'Monthly', 'Quarterly'] as TimeBucket[]).map(bucket => (
-              <button
-                key={bucket}
-                onClick={() => setTimeBucket(bucket)}
-                className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
-                  timeBucket === bucket
-                    ? 'bg-orange-500 text-white dark:bg-[#FFD500] dark:text-[#003875] shadow-sm'
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-white/5 dark:text-gray-400 dark:hover:bg-white/10'
-                }`}
-              >
-                {bucket}
-              </button>
-            ))}
+      <DateFilterBar 
+        period={filterPeriod}
+        setPeriod={setFilterPeriod}
+        currentDate={filterDate}
+        setCurrentDate={setFilterDate}
+        startDate={filterStartDate}
+        setStartDate={setFilterStartDate}
+        endDate={filterEndDate}
+        setEndDate={setFilterEndDate}
+        theme="orange"
+      />
+
+      {viewMode === 'datewise' ? (
+        <div className="flex-1 bg-white dark:bg-[#111827] border border-gray-200 dark:border-white/5 rounded-xl overflow-hidden flex flex-col shadow-sm min-h-0 mt-2">
+          {datewiseTransactions.length > 0 && !isLoading && (
+            <div className="py-2 px-4 border-b border-orange-200/50 dark:border-orange-500/10 flex items-center justify-between bg-orange-50/50 dark:bg-orange-500/5 shrink-0">
+              <p className="text-[10px] font-black text-orange-600 dark:text-orange-500 uppercase tracking-widest">
+                Showing {datewiseTransactions.length} transactions
+              </p>
+            </div>
+          )}
+          <div className="flex-1 overflow-auto custom-scrollbar relative">
+            {isLoading ? (
+              <div className="p-4 space-y-3">
+                {[1, 2, 3, 4].map(i => (
+                  <div key={i} className="animate-pulse h-8 bg-gray-200 dark:bg-gray-700 rounded"></div>
+                ))}
+              </div>
+            ) : (
+              <table className="w-full text-left border-collapse relative">
+                <thead className="bg-orange-50 dark:bg-orange-900/20 sticky top-0 z-20 shadow-sm">
+                  <tr>
+                    <th className="py-2.5 px-4 text-[10px] font-black text-orange-600 dark:text-orange-500 uppercase tracking-widest border-b border-orange-200 dark:border-orange-500/20">Date</th>
+                    <th className="py-2.5 px-3 text-[10px] font-black text-orange-600 dark:text-orange-500 uppercase tracking-widest border-b border-orange-200 dark:border-orange-500/20">Source</th>
+                    <th className="py-2.5 px-3 text-[10px] font-black text-orange-600 dark:text-orange-500 uppercase tracking-widest border-b border-orange-200 dark:border-orange-500/20">Category</th>
+                    <th className="py-2.5 px-3 text-[10px] font-black text-orange-600 dark:text-orange-500 uppercase tracking-widest border-b border-orange-200 dark:border-orange-500/20">Item Name</th>
+                    <th className="py-2.5 px-3 text-[10px] font-black text-orange-600 dark:text-orange-500 uppercase tracking-widest border-b border-orange-200 dark:border-orange-500/20 text-right">In</th>
+                    <th className="py-2.5 px-3 text-[10px] font-black text-orange-600 dark:text-orange-500 uppercase tracking-widest border-b border-orange-200 dark:border-orange-500/20 text-right">Out</th>
+                    <th className="py-2.5 px-4 text-[10px] font-black text-orange-600 dark:text-orange-500 uppercase tracking-widest border-b border-orange-200 dark:border-orange-500/20 text-right">Live Stock</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-orange-100 dark:divide-orange-500/10">
+                  {datewiseTransactions.map((log, index) => (
+                    <tr key={index} className="hover:bg-orange-50/50 dark:hover:bg-orange-500/[0.03] even:bg-orange-50/30 dark:even:bg-orange-900/10 transition-colors group">
+                      <td className="py-2 px-4 text-[11px] font-bold text-gray-500">
+                        {new Date(log.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' })}
+                      </td>
+                      <td className="py-2 px-3 text-[11px] font-black uppercase">
+                        <span className={`inline-block px-2 py-0.5 rounded border text-[10px] font-black uppercase tracking-wider ${
+                          log.source === 'Master IMS' ? 'border-blue-200 dark:border-blue-500/20 bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400' :
+                          log.source === '1st Floor IMS' ? 'border-purple-200 dark:border-purple-500/20 bg-purple-50 dark:bg-purple-500/10 text-purple-600 dark:text-purple-400' :
+                          'border-emerald-200 dark:border-emerald-500/20 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                        }`}>
+                          {log.source}
+                        </span>
+                      </td>
+                      <td className="py-2 px-3 text-[11px] font-bold text-gray-500 uppercase">{log.category}</td>
+                      <td className="py-2 px-3 text-[11px] font-black text-gray-900 dark:text-white uppercase">{log.item_name}</td>
+                      <td className="py-2 px-3 text-[11px] font-black text-emerald-600 dark:text-emerald-400 text-right">{log.in_qty > 0 ? `+${log.in_qty}` : "-"}</td>
+                      <td className="py-2 px-3 text-[11px] font-black text-rose-600 dark:text-rose-400 text-right">{log.out_qty > 0 ? `-${log.out_qty}` : "-"}</td>
+                      <td className="py-2 px-4 text-[11px] font-black text-orange-600 dark:text-[#FFD500] text-right">{(log as any).running_stock}</td>
+                    </tr>
+                  ))}
+                  {datewiseTransactions.length === 0 && (
+                    <tr>
+                      <td colSpan={6} className="py-8 text-center text-gray-400 text-[11px] font-black uppercase">No items found</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            )}
           </div>
+        </div>
+      ) : viewMode === 'timeseries' ? (
+        <div className="flex flex-col gap-2 shrink-0 mb-2 mt-4">
           <TimeSeriesTable 
             transactions={combinedTransactions}
-            bucket={timeBucket}
+            bucket={mappedTimeBucket}
             isLoading={isTimeSeriesLoading || isLoading}
             searchQuery={searchQuery}
           />
@@ -211,8 +370,8 @@ export default function IMSFinal({ onBack }: { onBack: () => void }) {
       ) : (
         <div className="flex-1 bg-white dark:bg-[#111827] border border-gray-200 dark:border-white/5 rounded-xl overflow-hidden flex flex-col shadow-sm min-h-0 mt-2">
           {filteredItems.length > 0 && !isLoading && (
-            <div className="py-2 px-4 border-b border-gray-200 dark:border-white/5 flex items-center justify-between bg-gray-50/50 dark:bg-[#1f2937]/50 shrink-0">
-              <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">
+            <div className="py-2 px-4 border-b border-orange-200/50 dark:border-orange-500/10 flex items-center justify-between bg-orange-50/50 dark:bg-orange-500/5 shrink-0">
+              <p className="text-[10px] font-black text-orange-600 dark:text-orange-500 uppercase tracking-widest">
                 Showing {Math.min((currentPage - 1) * itemsPerPage + 1, filteredItems.length)} to {Math.min(currentPage * itemsPerPage, filteredItems.length)} of {filteredItems.length} unique items
               </p>
               <div className="flex gap-1">
@@ -249,19 +408,20 @@ export default function IMSFinal({ onBack }: { onBack: () => void }) {
               </div>
             ) : (
               <table className="w-full text-left border-collapse relative">
-                <thead className="bg-gray-100 dark:bg-[#1f2937] sticky top-0 z-20 shadow-sm">
+                <thead className="bg-orange-50 dark:bg-orange-900/20 sticky top-0 z-20 shadow-sm">
                   <tr>
-                    <th className="py-2.5 px-3 border-b border-gray-200 dark:border-white/10 text-center sticky left-0 bg-gray-100 dark:bg-[#1f2937] z-30 shadow-[1px_0_0_0_#e5e7eb] dark:shadow-[1px_0_0_0_rgba(255,255,255,0.05)] w-12">
-                      <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">#</span>
+                    <th className="py-2.5 px-3 border-b border-orange-200 dark:border-orange-500/20 text-center sticky left-0 bg-orange-50 dark:bg-orange-900/20 z-30 shadow-[1px_0_0_0_#fed7aa] dark:shadow-[1px_0_0_0_rgba(249,115,22,0.2)] w-12">
+                      <span className="text-[10px] font-black text-orange-600 dark:text-orange-500 uppercase tracking-widest">#</span>
                     </th>
-                    <th className="py-2.5 px-3 text-[10px] font-black text-gray-500 uppercase tracking-widest border-b border-gray-200 dark:border-white/10 whitespace-nowrap">Category</th>
-                    <th className="py-2.5 px-3 text-[10px] font-black text-gray-500 uppercase tracking-widest border-b border-gray-200 dark:border-white/10 whitespace-nowrap">Item Name</th>
-                    <th className="py-2.5 px-3 text-[10px] font-black text-gray-500 uppercase tracking-widest border-b border-gray-200 dark:border-white/10 text-right">Total In</th>
-                    <th className="py-2.5 px-3 text-[10px] font-black text-gray-500 uppercase tracking-widest border-b border-gray-200 dark:border-white/10 text-right">Total Out</th>
-                    <th className="py-2.5 px-4 text-[10px] font-black text-gray-900 dark:text-white uppercase tracking-widest border-b border-gray-200 dark:border-white/10 text-right bg-gray-50 dark:bg-white/5 w-32">Live Stock</th>
+                    <th className="py-2.5 px-3 text-[10px] font-black text-orange-600 dark:text-orange-500 uppercase tracking-widest border-b border-orange-200 dark:border-orange-500/20 whitespace-nowrap">Source</th>
+                    <th className="py-2.5 px-3 text-[10px] font-black text-orange-600 dark:text-orange-500 uppercase tracking-widest border-b border-orange-200 dark:border-orange-500/20 whitespace-nowrap">Category</th>
+                    <th className="py-2.5 px-3 text-[10px] font-black text-orange-600 dark:text-orange-500 uppercase tracking-widest border-b border-orange-200 dark:border-orange-500/20 whitespace-nowrap">Item Name</th>
+                    <th className="py-2.5 px-3 text-[10px] font-black text-orange-600 dark:text-orange-500 uppercase tracking-widest border-b border-orange-200 dark:border-orange-500/20 text-right">Total In</th>
+                    <th className="py-2.5 px-3 text-[10px] font-black text-orange-600 dark:text-orange-500 uppercase tracking-widest border-b border-orange-200 dark:border-orange-500/20 text-right">Total Out</th>
+                    <th className="py-2.5 px-4 text-[10px] font-black text-orange-700 dark:text-orange-400 uppercase tracking-widest border-b border-orange-200 dark:border-orange-500/20 text-right bg-orange-100/50 dark:bg-orange-500/10 w-32">Live Stock</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100 dark:divide-white/5">
+                <tbody className="divide-y divide-orange-100 dark:divide-orange-500/10">
                   {paginatedItems.map((item, idx) => {
                     const health = getHealthColors(item.live_stock || 0);
                     return (
@@ -269,8 +429,17 @@ export default function IMSFinal({ onBack }: { onBack: () => void }) {
                         key={item.item_name}
                         className="hover:bg-orange-50/30 dark:hover:bg-white/[0.03] even:bg-gray-50/50 dark:even:bg-[#1f2937]/30 transition-colors group"
                       >
-                        <td className="py-1 px-2 text-center sticky left-0 z-10 transition-colors border-r shadow-[1px_0_0_0_#e5e7eb] dark:shadow-[1px_0_0_0_rgba(255,255,255,0.05)] bg-white group-even:bg-gray-50/50 dark:bg-[#111827] dark:group-even:bg-[#182031] group-hover:bg-orange-50/30 dark:group-hover:bg-[#1a2335] border-gray-100 dark:border-white/5">
+                        <td className="py-1 px-2 text-center sticky left-0 z-10 transition-colors border-r shadow-[1px_0_0_0_#fed7aa] dark:shadow-[1px_0_0_0_rgba(249,115,22,0.2)] bg-white group-even:bg-orange-50/30 dark:bg-[#111827] dark:group-even:bg-[#182031] group-hover:bg-orange-50/50 dark:group-hover:bg-[#1a2335] border-orange-100 dark:border-orange-500/10">
                           <span className="text-[10px] font-bold text-gray-400">{(currentPage - 1) * itemsPerPage + idx + 1}</span>
+                        </td>
+                        <td className="py-1 px-3">
+                          <span className={`inline-block px-2 py-0.5 rounded border text-[10px] font-black uppercase tracking-wider ${
+                            item.source === 'Master IMS' ? 'border-blue-200 dark:border-blue-500/20 bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400' :
+                            item.source === '1st Floor IMS' ? 'border-purple-200 dark:border-purple-500/20 bg-purple-50 dark:bg-purple-500/10 text-purple-600 dark:text-purple-400' :
+                            'border-emerald-200 dark:border-emerald-500/20 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                          }`}>
+                            {item.source}
+                          </span>
                         </td>
                         <td className="py-1 px-3">
                           <span className="inline-block px-2 py-0.5 rounded border border-gray-200 dark:border-white/10 bg-gray-100 dark:bg-white/5 text-[10px] font-black text-gray-600 dark:text-gray-300 uppercase tracking-wider">
