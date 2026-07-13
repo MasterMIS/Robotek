@@ -34,7 +34,8 @@ import {
   ArrowDownCircleIcon,
   ArrowUpCircleIcon,
   SparklesIcon,
-  DocumentArrowDownIcon
+  DocumentArrowDownIcon,
+  InformationCircleIcon
 } from "@heroicons/react/24/outline";
 import {
   PieChart,
@@ -65,6 +66,24 @@ const STEP_ICONS = [
   ClipboardIcon, MagnifyingGlassIcon, HandThumbUpIcon, CheckBadgeIcon, ArchiveBoxIcon,
   ShareIcon, DocumentTextIcon, ArrowPathRoundedSquareIcon, TruckIcon, InboxArrowDownIcon, CurrencyDollarIcon
 ];
+
+// --- Metric Explanations ---
+const METRIC_DESCRIPTIONS: Record<string, string> = {
+  'Total PO Raised': 'Calculation: Count entries where `po_number_6` is present.\nDate Filter: PO Date (`actual_6`) is within the selected range.',
+  'Total PO Closed': 'Calculation: Count raised POs where `received_qty_9` >= `quantity`.\nDate Filter: PO Date (`actual_6`) is within the selected range.',
+  'Pending POs': 'Calculation: Count raised POs where `received_qty_9` < `quantity`.\nDate Filter: PO Date (`actual_6`) is within the selected range.',
+  'Delivery Overdue': 'Calculation: Count Pending POs where today > Expected Delivery (PO Date `actual_6` + `lead_time_acc_to_vendor_4`).\nDate Filter: PO Date (`actual_6`) is within the selected range.',
+  'Payment Overdue': 'Calculation: Count mapped GRNs where Actual Payment (`actual_9`) > Planned (`planned_9`), OR if pending and today > Planned.\nDate Filter: PO Date (`actual_6` in I2R) is within the selected range.',
+  'Avg I2R time (IND)': 'Calculation: Avg days from PO Date (`actual_6`) to Full Receipt (`actual_9`) for closed POs mapped to IND GRNs.\nDate Filter: PO Date (`actual_6`) is within the selected range.',
+  'Avg I2R time (CHN)': 'Calculation: Avg days from PO Date (`actual_6`) to Full Receipt (`actual_9`) for closed POs mapped to CHN GRNs.\nDate Filter: PO Date (`actual_6`) is within the selected range.',
+  'Material Rejected': 'Calculation: Count all GRNs where Quality Check (`status_3`) = "Rejected".\nDate Filter: Quality Check Date (`actual_3` in GRN) is within the selected range.',
+  'On Time Material Received': 'Calculation: Count Closed POs where Full Receipt (`actual_9`) <= Expected Delivery (`actual_6` + lead time).\nDate Filter: PO Date (`actual_6`) is within the selected range.',
+  'Bottleneck': 'Calculation: Stage with highest total aggregate delay (Actual Date - Planned Date).\nDate Filter: PO Date (`actual_6`) is within the selected range.',
+  'Total Rep. Raised': 'Calculation: Count all replacement entries.\nDate Filter: Created Date is within the selected range.',
+  'Total Rep. Closed': 'Calculation: Count fully resolved replacements.\nDate Filter: Created Date is within the selected range.',
+  'Pending REPs': 'Calculation: Count ongoing replacement entries.\nDate Filter: Created Date is within the selected range.',
+  'Avg Rep Process time': 'Calculation: Avg time to resolve replacements.\nDate Filter: Created Date is within the selected range.'
+};
 
 // --- Helper Components ---
 
@@ -1005,20 +1024,40 @@ export default function MetrixPage() {
                                 <div key={idx} className={`flex items-center ${module.rowBg} py-1 px-2 rounded-lg shadow-sm hover:shadow-md transition-all border group`}>
                                   
                                   {/* Icon + Text */}
-                                  <div className="flex items-center gap-3 flex-1 min-w-0 pr-2">
+                                  <div className="flex items-center gap-3 flex-1 min-w-0 pr-2 group/label">
                                     <div className={`p-1.5 rounded-lg flex-shrink-0 bg-gray-50 dark:bg-navy-800 text-gray-400 group-hover:text-[#003875] dark:group-hover:text-[#FFD500] group-hover:bg-blue-50 dark:group-hover:bg-blue-900/30 transition-colors`}>
                                       <MetricIcon className={`w-4 h-4 ${mColor}`} />
                                     </div>
-                                    <div className="min-w-0 flex-1">
+                                    <div className="min-w-0 flex-1 flex items-center gap-1.5 relative">
                                       <p className={`text-[11px] font-bold ${mColor} leading-snug uppercase tracking-wide truncate`} title={mLabel}>{mLabel}</p>
+                                      {METRIC_DESCRIPTIONS[mLabel] && (
+                                        <div className="relative flex items-center z-10">
+                                          <InformationCircleIcon className={`w-3.5 h-3.5 ${mColor} opacity-40 hover:opacity-100 cursor-help transition-opacity`} />
+                                          <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 hidden group-hover/label:block w-72 p-3 bg-gray-900 dark:bg-black text-white text-[9px] font-medium leading-relaxed rounded-lg shadow-xl pointer-events-none normal-case whitespace-pre-wrap">
+                                            {METRIC_DESCRIPTIONS[mLabel]}
+                                            <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-900 dark:border-t-black"></div>
+                                          </div>
+                                        </div>
+                                      )}
                                     </div>
                                   </div>
                                   
                                   {/* Value */}
-                                  <div className="flex-shrink-0 w-11 flex justify-center">
-                                    <span className="bg-gray-100/80 dark:bg-gray-800/40 text-gray-700 dark:text-gray-300 w-full py-1.5 rounded-lg text-xs font-black border border-gray-200/50 dark:border-gray-700/20 text-center shadow-sm">
-                                      0
-                                    </span>
+                                  <div className={`flex-shrink-0 flex justify-end ${mLabel === 'Bottleneck' ? 'w-auto max-w-[65%]' : 'w-11 justify-center'}`}>
+                                    {mLabel === 'Bottleneck' && typeof mData.metrics?.[mLabel] === 'string' && (mData.metrics?.[mLabel] as string).includes('|') ? (
+                                      <div className="flex flex-col items-end gap-0.5 text-right w-full">
+                                        <span className="text-[9px] font-black text-rose-600 bg-rose-50 dark:bg-rose-900/30 px-2 py-1 rounded-md leading-tight w-full text-right shadow-sm border border-rose-100 dark:border-rose-900/50">
+                                          {(mData.metrics?.[mLabel] as string).split('|')[0]}
+                                        </span>
+                                        <span className="text-[9px] font-black text-gray-500 uppercase tracking-widest mr-1">
+                                          {(mData.metrics?.[mLabel] as string).split('|')[1]}
+                                        </span>
+                                      </div>
+                                    ) : (
+                                      <span className={`bg-gray-100/80 dark:bg-gray-800/40 text-gray-700 dark:text-gray-300 w-full py-1.5 rounded-lg text-xs font-black border border-gray-200/50 dark:border-gray-700/20 text-center shadow-sm ${mLabel === 'Bottleneck' ? 'px-3 text-[10px]' : ''}`}>
+                                        {mData.metrics?.[mLabel] || 0}
+                                      </span>
+                                    )}
                                   </div>
                                 </div>
                               );
