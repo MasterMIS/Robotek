@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getI2RItems } from "@/lib/i2r-sheets";
 import { getI2RPackingItems } from "@/lib/i2r-packing-sheets";
 import { getReplaceItems } from "@/lib/replace-sheets";
+import { getItemReceivePackingItems } from "@/lib/item-receive-packing-sheets";
 import { getGRNItems } from "@/lib/grn-sheets";
 import { auth } from "@/auth";
 import { I2R_STEPS } from "@/types/i2r";
@@ -23,11 +24,12 @@ export async function GET(req: NextRequest) {
     const endDateParam = searchParams.get("endDate");
     const granularity = searchParams.get("granularity") || "month";
 
-    const [allI2R, allI2RPacking, allReplace, allGRN] = await Promise.all([
+    const [allI2R, allI2RPacking, allReplace, allGRN, allItemReceivePacking] = await Promise.all([
       getI2RItems().catch(() => []),
       getI2RPackingItems().catch(() => []),
       getReplaceItems().catch(() => []),
-      getGRNItems().catch(() => [])
+      getGRNItems().catch(() => []),
+      getItemReceivePackingItems().catch(() => [])
     ]);
 
     let start: Date;
@@ -81,10 +83,12 @@ export async function GET(req: NextRequest) {
     };
 
     const i2rFiltered = filterByDate(allI2R, "actual_6");
-    const packingFiltered = filterByDate(allI2RPacking, "created_at");
+    const packingFiltered = filterByDate(allI2RPacking, "actual_4");
     const replaceFiltered = filterByDate(allReplace, "created_at");
 
-    const calculateFMS = (items: any[], steps: string[], type: string, grnItems: any[] = []) => {
+    const itemReceivePackingFiltered = filterByDate(allItemReceivePacking, "created_at");
+
+    const calculateFMS = (items: any[], steps: string[], type: string, grnItems: any[] = [], irpItems: any[] = []) => {
       const stepData = steps.map((stepName, i) => {
         const index = i + 1;
         let pending = 0;
@@ -141,6 +145,10 @@ export async function GET(req: NextRequest) {
           return !isNaN(d.getTime()) && d >= start && d <= end;
         });
         metrics['Material Rejected'] = rejectedGRNs.length;
+      }
+
+      if (type === 'i2rPacking') {
+        metrics['Total PO Closed'] = irpItems.length;
       }
 
       items.forEach(item => {
@@ -242,11 +250,13 @@ export async function GET(req: NextRequest) {
           const hasPO = item.po_num_4 && item.po_num_4.toString().trim() !== '';
           if (hasPO) {
             (metrics['Total PO Raised'] as number)++;
-            // Basic assumption for packing, as no received quantity exists
+            // Pending PO logic: if it's raised but not closed (for the same period, we might just look at status_4 or something)
+            // Wait, previously we relied on status_4 to say it was closed.
+            // If they want closed to just be the total number of Item Receive Packing created in this month, 
+            // then Pending POs is roughly Total PO Raised - Total PO Closed, though mathematically this might be negative if received in different months.
+            // Let's just calculate Pending POs based on status_4 not being COMPLETED.
             const status4 = (item.status_4 || "").toString().toUpperCase();
-            if (status4 === "COMPLETED" || status4 === "DONE") {
-              (metrics['Total PO Closed'] as number)++;
-            } else {
+            if (status4 !== "COMPLETED" && status4 !== "DONE") {
               (metrics['Pending POs'] as number)++;
             }
           }
@@ -282,7 +292,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({
       i2r: calculateFMS(i2rFiltered, I2R_STEPS, 'i2r', allGRN),
-      i2rPacking: calculateFMS(packingFiltered, I2R_PACKING_STEPS, 'i2rPacking', allGRN),
+      i2rPacking: calculateFMS(packingFiltered, I2R_PACKING_STEPS, 'i2rPacking', allGRN, itemReceivePackingFiltered),
       replace: calculateFMS(replaceFiltered, REPLACE_STEPS, 'replace')
     });
 

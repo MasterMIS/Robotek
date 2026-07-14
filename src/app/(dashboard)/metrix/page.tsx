@@ -85,6 +85,12 @@ const METRIC_DESCRIPTIONS: Record<string, string> = {
   'Avg Rep Process time': 'Calculation: Avg time to resolve replacements.\nDate Filter: Created Date is within the selected range.'
 };
 
+const METRIC_DESCRIPTIONS_PACKING: Record<string, string> = {
+  'Total PO Raised': 'Calculation: Count entries where `po_num_4` is present.\nDate Filter: PO Generate Date (`actual_4`) is within the selected range.',
+  'Total PO Closed': 'Calculation: Count Item Receive (PACKING) entries.\nDate Filter: Created Date is within the selected range.',
+  'Pending POs': 'Calculation: Count raised POs where `status_4` is not COMPLETED.\nDate Filter: PO Generate Date (`actual_4`) is within the selected range.',
+};
+
 // --- Helper Components ---
 
 const CompactTile = ({ label, value, icon: Icon, color, onClick, isClickable }: any) => (
@@ -1020,6 +1026,10 @@ export default function MetrixPage() {
                                 'text-indigo-600 dark:text-indigo-400'
                               ][idx % 7];
                               
+                              const desc = module.key === 'i2rPacking' && METRIC_DESCRIPTIONS_PACKING[mLabel] 
+                                ? METRIC_DESCRIPTIONS_PACKING[mLabel] 
+                                : METRIC_DESCRIPTIONS[mLabel];
+
                               return (
                                 <div key={idx} className={`flex items-center ${module.rowBg} py-1 px-2 rounded-lg shadow-sm hover:shadow-md transition-all border group`}>
                                   
@@ -1030,11 +1040,11 @@ export default function MetrixPage() {
                                     </div>
                                     <div className="min-w-0 flex-1 flex items-center gap-1.5 relative">
                                       <p className={`text-[11px] font-bold ${mColor} leading-snug uppercase tracking-wide truncate`} title={mLabel}>{mLabel}</p>
-                                      {METRIC_DESCRIPTIONS[mLabel] && (
+                                      {desc && (
                                         <div className="relative flex items-center z-10">
                                           <InformationCircleIcon className={`w-3.5 h-3.5 ${mColor} opacity-40 hover:opacity-100 cursor-help transition-opacity`} />
                                           <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 hidden group-hover/label:block w-72 p-3 bg-gray-900 dark:bg-black text-white text-[9px] font-medium leading-relaxed rounded-lg shadow-xl pointer-events-none normal-case whitespace-pre-wrap">
-                                            {METRIC_DESCRIPTIONS[mLabel]}
+                                            {desc}
                                             <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-900 dark:border-t-black"></div>
                                           </div>
                                         </div>

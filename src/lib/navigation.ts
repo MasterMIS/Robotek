@@ -59,6 +59,7 @@ export const navigation = [
   { name: 'GRN', id: 'grn', href: '/grn', icon: ArrowDownTrayIcon, section: 'Operations' },
   { name: 'IMS', id: 'ims', href: '/ims', icon: InboxIcon, section: 'Operations' },
   { name: 'Party Management', id: 'party-management', href: '/party-management', icon: UserGroupIcon, section: 'Operations' },
+  { name: 'Payment Vendor Approval', id: 'payment-vendor-approval', href: '/payment-vendor-approval', icon: DocumentTextIcon, section: 'Operations' },
 
   // Assets & Inventory Section
   { name: 'Stationary', id: 'stationary', href: '/inventory/stationary', icon: ClipboardDocumentListIcon, section: 'Inventory & Assets' },
