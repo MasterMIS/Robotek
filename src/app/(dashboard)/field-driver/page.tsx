@@ -270,9 +270,9 @@ export default function FieldDriverPage() {
         <div className="space-y-6">
             {/* Header */}
             <div className="flex flex-col lg:flex-row items-center gap-4 px-1">
-                <div className="text-center lg:text-left shrink-0 min-w-0 font-serif">
-                    <h1 className="text-2xl font-bold text-gray-900 dark:text-white tracking-tight truncate uppercase">Field Driver Tracking</h1>
-                    <p className="text-sm font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wider">Live GPS & Route Management</p>
+                <div className="flex items-center gap-4">
+                    <h1 className="text-2xl font-bold text-gray-900 dark:text-white tracking-tight truncate uppercase">Field Tracking</h1>
+                    <span className="text-xs font-black text-gray-400 uppercase tracking-widest hidden md:block">Live GPS & Route Management</span>
                 </div>
 
                 {isAdmin && (

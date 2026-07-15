@@ -176,6 +176,7 @@ export default function AdminTable() {
                         <thead className="bg-white dark:bg-slate-900 sticky top-0 z-10 shadow-sm">
                             <tr>
                                 <th className="p-4 text-[10px] font-black uppercase tracking-widest text-gray-400 border-b border-gray-200 dark:border-white/10">Driver</th>
+                                <th className="p-4 text-[10px] font-black uppercase tracking-widest text-gray-400 border-b border-gray-200 dark:border-white/10">Date</th>
                                 <th className="p-4 text-[10px] font-black uppercase tracking-widest text-gray-400 border-b border-gray-200 dark:border-white/10">Timeline</th>
                                 <th className="p-4 text-[10px] font-black uppercase tracking-widest text-gray-400 border-b border-gray-200 dark:border-white/10">Odometer Proof</th>
                                 <th className="p-4 text-[10px] font-black uppercase tracking-widest text-[#003875] dark:text-[#FFD500] border-b border-gray-200 dark:border-white/10 text-right">Odometer KM</th>
@@ -189,6 +190,11 @@ export default function AdminTable() {
                                     <td className="p-4 align-top">
                                         <div className="font-black text-sm uppercase text-gray-900 dark:text-white">{r.userName}</div>
                                         <div className="text-[10px] font-bold text-gray-400">{r.userId}</div>
+                                    </td>
+                                    <td className="p-4 align-top">
+                                        <div className="text-xs font-bold text-gray-500">
+                                            {r.date}
+                                        </div>
                                     </td>
                                     <td className="p-4 align-top min-w-[200px]">
                                         <div className="flex flex-col gap-3">

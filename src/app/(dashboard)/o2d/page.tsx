@@ -119,6 +119,7 @@ interface SearchableDropdownProps {
   hideLabel?: boolean;
   isMulti?: boolean;
   onFocus?: (e: React.FocusEvent) => void;
+  error?: boolean;
 }
 
 function SearchableDropdown({
@@ -134,6 +135,7 @@ function SearchableDropdown({
   hideLabel = false,
   isMulti = false,
   onFocus,
+  error = false,
 }: SearchableDropdownProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -251,7 +253,7 @@ function SearchableDropdown({
         }}
         onFocus={handleFocus}
         onKeyDown={handleTriggerKeyDown}
-        className={`w-full ${isMulti ? "min-h-[34px] py-1" : "h-[34px]"} bg-[#FEF6DB] dark:bg-black px-3 rounded-lg border border-orange-100 dark:border-navy-700 focus:border-[#FFD500] focus:ring-1 focus:ring-[#FFD500] outline-none cursor-pointer flex items-center justify-between shadow-sm transition-all`}
+        className={`w-full ${isMulti ? "min-h-[34px] py-1" : "h-[34px]"} ${error ? "bg-red-50 dark:bg-red-900/20 border-red-500 ring-1 ring-red-500 text-red-700 dark:text-red-400" : "bg-[#FEF6DB] dark:bg-black border-orange-100 dark:border-navy-700 focus:border-[#FFD500] focus:ring-1 focus:ring-[#FFD500]"} px-3 rounded-lg border outline-none cursor-pointer flex items-center justify-between shadow-sm transition-all`}
       >
         <div className="flex flex-wrap gap-1 items-center min-w-0 flex-1">
           {isMulti && selectedValues.length > 0 ? (
@@ -270,7 +272,7 @@ function SearchableDropdown({
             ))
           ) : (
             <span
-              className={`text-[11px] font-bold truncate pr-2 ${value ? "text-gray-800 dark:text-zinc-100" : "text-gray-400"}`}
+              className={`text-[11px] font-bold truncate pr-2 ${error ? "text-red-700 dark:text-red-400" : value ? "text-gray-800 dark:text-zinc-100" : "text-gray-400"}`}
             >
               {value || placeholder || `Select...`}
             </span>
@@ -845,11 +847,10 @@ export default function O2DPage() {
     }
   };
 
-  const generateOrderNo = (existing: O2D[]) => {
-    const orderNos = Array.from(new Set(existing.map((o) => o.order_no)));
-    if (orderNos.length === 0) return "OR-01";
+  const generateOrderNo = (orderNos: string[]) => {
+    if (!orderNos || orderNos.length === 0) return "OR-01";
     const maxNum = orderNos.reduce((max, no) => {
-      const num = parseInt(no.replace("OR-", ""));
+      const num = parseInt(no?.replace("OR-", "") || "0");
       return !isNaN(num) && num > max ? num : max;
     }, 0);
     return `OR-${(maxNum + 1).toString().padStart(2, "0")}`;
@@ -1376,15 +1377,15 @@ export default function O2DPage() {
         if (!res.ok) throw new Error("Update failed");
       } else {
         const tat1 = globalConfigs[0]?.tat || "24 Hrs";
-        const finalOrderNo = generateOrderNo(allO2DsRaw);
+        const finalOrderNo = generateOrderNo(allOrderNumbers || []);
         let initRecord: any = { planned_1: calculatePlannedDate(now, tat1) };
         for (let i = 2; i <= 11; i++) initRecord[`planned_${i}`] = "";
 
         const { item_name, item_qty, est_amount, item_specification } = mergeItems(items);
-        currentMaxId++;
+        const newId = Date.now().toString();
         const newItems = [{
           ...initRecord,
-          id: currentMaxId.toString(),
+          id: newId,
           order_no: finalOrderNo,
           party_name: commonData.party_name,
           item_name,
@@ -3178,6 +3179,7 @@ export default function O2DPage() {
                                   label="Nomenclature *"
                                   icon={ArchiveBoxIcon}
                                   value={item.item_name}
+                                  error={Boolean(item.item_name && items.findIndex(i => i.item_name === item.item_name) < index)}
                                   data-nomenclature-trigger={index}
                                   onFocus={centerOnFocus}
                                   onChange={(val) => {

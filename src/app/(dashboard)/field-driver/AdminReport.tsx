@@ -186,8 +186,17 @@ export default function AdminReport() {
                                             cellBg = 'bg-red-500/5';
                                         } else if (record?.inTime) {
                                             cellContent = (
-                                                <div className="flex flex-col items-center">
-                                                    <span className="text-green-600 dark:text-green-400 font-black text-[10px]">{formatTime(record.inTime)}</span>
+                                                <div className="flex flex-col items-center gap-1">
+                                                    <div className="flex flex-col items-center">
+                                                        <span className="text-[7px] font-black uppercase text-gray-400 leading-none">IN</span>
+                                                        <span className="text-green-600 dark:text-green-400 font-black text-[10px] leading-none">{formatTime(record.inTime)}</span>
+                                                    </div>
+                                                    {record.outTime && (
+                                                        <div className="flex flex-col items-center">
+                                                            <span className="text-[7px] font-black uppercase text-gray-400 leading-none">OUT</span>
+                                                            <span className="text-red-600 dark:text-red-400 font-black text-[9px] leading-none">{formatTime(record.outTime)}</span>
+                                                        </div>
+                                                    )}
                                                 </div>
                                             );
                                             cellBg = 'bg-green-500/10';

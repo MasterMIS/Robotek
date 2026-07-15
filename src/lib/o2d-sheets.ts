@@ -161,53 +161,54 @@ class O2DService extends BaseSheetsService<O2D> {
 
       if (indices.length === 0) return await this.addMany(o2ds);
 
-      const startRowIdx = Math.min(...indices);
-      const oldCount = indices.length;
-      const newCount = o2ds.length;
-
       const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId: this.spreadsheetId });
       const sheetId = spreadsheet.data.sheets?.find(s => s.properties?.title === this.sheetName)?.properties?.sheetId;
       if (sheetId === undefined) return false;
 
-      const requests: any[] = [];
+      const maxColIdx = Math.max(...Object.values(this.hMap));
+      const lastCol = getColumnLetter(maxColIdx);
 
-      // 2. Adjust row count at the exact position to maintain order's place
-      if (newCount > oldCount) {
-        // Insert rows after the existing block
-        requests.push({
-          insertDimension: {
-            range: { sheetId, dimension: "ROWS", startIndex: startRowIdx + oldCount, endIndex: startRowIdx + newCount },
-            inheritFromBefore: true
-          }
+      // 1. Update existing indices up to newCount
+      const updateData = [];
+      for (let i = 0; i < Math.min(indices.length, o2ds.length); i++) {
+        const rowIdx = indices[i];
+        updateData.push({
+          range: `${this.sheetName}!A${rowIdx + 1}:${lastCol}${rowIdx + 1}`,
+          values: [this.mapItemToRow(o2ds[i])]
         });
-      } else if (newCount < oldCount) {
-        // Delete extra rows from the block
-        requests.push({
-          deleteDimension: {
-            range: { sheetId, dimension: "ROWS", startIndex: startRowIdx + newCount, endIndex: startRowIdx + oldCount }
-          }
+      }
+      
+      if (updateData.length > 0) {
+        await sheets.spreadsheets.values.batchUpdate({
+          spreadsheetId: this.spreadsheetId,
+          requestBody: { valueInputOption: "USER_ENTERED", data: updateData }
         });
       }
 
-      if (requests.length > 0) {
+      // 2. Add extra new items if newCount > oldCount
+      if (o2ds.length > indices.length) {
+        const extraItems = o2ds.slice(indices.length);
+        await sheets.spreadsheets.values.append({
+          spreadsheetId: this.spreadsheetId,
+          range: `${this.sheetName}!A:${lastCol}`,
+          valueInputOption: "USER_ENTERED",
+          requestBody: { values: extraItems.map(o => this.mapItemToRow(o)) }
+        });
+      }
+
+      // 3. Delete extra old rows if newCount < oldCount
+      if (o2ds.length < indices.length) {
+        const extraIndices = indices.slice(o2ds.length).reverse(); // delete from bottom to top
+        const requests = extraIndices.map(idx => ({
+          deleteDimension: {
+            range: { sheetId, dimension: "ROWS", startIndex: idx, endIndex: idx + 1 }
+          }
+        }));
         await sheets.spreadsheets.batchUpdate({
           spreadsheetId: this.spreadsheetId,
           requestBody: { requests }
         });
       }
-
-      const maxColIdx = Math.max(...Object.values(this.hMap));
-      const lastCol = getColumnLetter(maxColIdx);
-
-      // 3. Overwrite the resulting range with the new data
-      await sheets.spreadsheets.values.update({
-        spreadsheetId: this.spreadsheetId,
-        range: `${this.sheetName}!A${startRowIdx + 1}:${lastCol}${startRowIdx + newCount}`,
-        valueInputOption: "USER_ENTERED",
-        requestBody: {
-          values: o2ds.map(o => this.mapItemToRow(o))
-        }
-      });
 
       this.invalidateCache();
       return true;

@@ -6,7 +6,7 @@ const SPREADSHEET_ID = "12lk8GV7ZBpm6J-bA5TBWfHQ1qY0eEHIrwOICSnsuceE";
 class FloorIMSService extends BaseSheetsService<FloorIMS> {
   protected spreadsheetId = SPREADSHEET_ID;
   protected sheetName: string;
-  protected range = "A:G";
+  protected range = "A:Z";
   protected idColumnIndex = 0;
 
   constructor(sheetName: string) {
@@ -26,12 +26,13 @@ class FloorIMSService extends BaseSheetsService<FloorIMS> {
       in_qty: get("in qty", 3),
       out_qty: get("out qty", 4),
       date: get("date", 5),
+      packed_status: get("packed status", -1), // dynamic based on header
       updated_at: get("updated_at", 6),
     };
   }
 
   mapItemToRow(ims: FloorIMS): any[] {
-    const row: any[] = ["", "", "", "", "", "", ""];
+    const row: any[] = [];
     const set = (h: string, fallbackIdx: number, val: any) => {
       const idx = this.hMap[h.toLowerCase()];
       row[idx !== undefined ? idx : fallbackIdx] = val ?? "";
@@ -43,7 +44,14 @@ class FloorIMSService extends BaseSheetsService<FloorIMS> {
     set("in qty", 3, ims.in_qty);
     set("out qty", 4, ims.out_qty);
     set("date", 5, ims.date);
-    set("updated_at", 6, ims.updated_at);
+    
+    // Only set if we know where it goes, otherwise rely on header map
+    if (this.hMap["packed status"] !== undefined) {
+      set("packed status", -1, ims.packed_status || "");
+    }
+    
+    // If updated_at is mapped dynamically, use that, else assume index 6 (which might shift if packed status is inserted before it, but hMap solves this)
+    set("updated_at", this.hMap["updated_at"] !== undefined ? this.hMap["updated_at"] : (this.hMap["packed status"] !== undefined ? 7 : 6), ims.updated_at);
 
     return row;
   }

@@ -70,6 +70,7 @@ interface BulkRow {
   type: 'IN' | 'OUT';
   qty: string;
   date?: string;
+  packed_status?: string;
 }
 
 interface AuditRow {
@@ -93,6 +94,8 @@ export default function IMSFloor({ location, onBack }: { location: "1st" | "g", 
   const [filterDate, setFilterDate] = useState<Date>(new Date());
   const [filterStartDate, setFilterStartDate] = useState<Date | null>(null);
   const [filterEndDate, setFilterEndDate] = useState<Date | null>(null);
+
+  const [packedFilter, setPackedFilter] = useState<'ALL' | 'PACKED' | 'UNPACKED'>('ALL');
 
   const mappedTimeBucket: TimeBucket = useMemo(() => {
     if (filterPeriod === 'WEEK') return 'Weekly';
@@ -240,6 +243,7 @@ function parseDateStr(dStr: string) {
       const aggTs = parseDateStr(agg.updated_at || "");
       if (ts > aggTs) {
         agg.updated_at = item.updated_at;
+        agg.packed_status = item.packed_status || agg.packed_status;
       }
     });
     return Array.from(map.values()).sort((a, b) => a.item_name.localeCompare(b.item_name));
@@ -254,11 +258,15 @@ function parseDateStr(dStr: string) {
   }, [masterItems]);
 
   const filteredItems = useMemo(() => {
-    return aggregatedItems.filter(item =>
-      item.item_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.category?.toLowerCase().includes(searchQuery.toLowerCase())
-    );
-  }, [aggregatedItems, searchQuery]);
+    return aggregatedItems.filter(item => {
+      const matchesSearch = item.item_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                            item.category?.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesPacked = packedFilter === 'ALL' || 
+                            (packedFilter === 'PACKED' && item.packed_status === 'PACKED') ||
+                            (packedFilter === 'UNPACKED' && item.packed_status === 'UNPACKED');
+      return matchesSearch && matchesPacked;
+    });
+  }, [aggregatedItems, searchQuery, packedFilter]);
 
   const totalPages = Math.ceil(filteredItems.length / itemsPerPage);
   const paginatedItems = useMemo(() => {
@@ -300,7 +308,7 @@ function parseDateStr(dStr: string) {
   };
 
   const addBulkRow = () => {
-    setBulkRows(prev => [...prev, { id: Date.now().toString(), item_name: '', category: '', type: 'IN', qty: '', date: '' }]);
+    setBulkRows(prev => [...prev, { id: Date.now().toString(), item_name: '', category: '', type: 'IN', qty: '', date: '', packed_status: '' }]);
   };
 
   const removeBulkRow = (id: string) => {
@@ -330,6 +338,7 @@ function parseDateStr(dStr: string) {
           in_qty: row.type === 'IN' ? qty.toString() : "0",
           out_qty: row.type === 'OUT' ? qty.toString() : "0",
           date: row.date || today,
+          packed_status: row.packed_status || "",
           updated_at: new Date().toISOString()
         };
         await fetch(`/api/ims/floor?location=${location}`, {
@@ -583,16 +592,7 @@ function parseDateStr(dStr: string) {
         </div>
 
         <div className="flex items-center gap-3 w-full lg:w-auto">
-          <div className="relative shrink-0 flex-1 lg:flex-none">
-            <MagnifyingGlassIcon className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-            <input
-              type="text"
-              placeholder="SEARCH ITEM..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9 pr-4 py-2 bg-white dark:bg-[#111827] border border-gray-200 dark:border-white/10 rounded-xl text-[11px] font-black uppercase tracking-wider outline-none focus:ring-2 focus:ring-[#003875] dark:text-white w-full lg:w-64 transition-all shadow-sm h-full"
-            />
-          </div>
+
           <button onClick={handleExport} className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-[11px] font-black uppercase tracking-wider transition-all border shadow-sm whitespace-nowrap ${
             location === '1st' 
               ? 'bg-purple-50 hover:bg-purple-100 dark:bg-purple-500/10 dark:hover:bg-purple-500/20 text-purple-600 dark:text-purple-400 border-purple-200 dark:border-purple-500/20'
@@ -613,7 +613,7 @@ function parseDateStr(dStr: string) {
           </button>
           <button
             onClick={() => {
-              setBulkRows([{ id: Date.now().toString(), item_name: '', category: '', type: 'IN', qty: '', date: '' }]);
+              setBulkRows([{ id: Date.now().toString(), item_name: '', category: '', type: 'IN', qty: '', date: '', packed_status: '' }]);
               setItemModalOpen(true);
             }}
             className={`flex items-center gap-2 px-4 py-2 text-white rounded-lg text-[11px] font-black uppercase tracking-widest transition-all shadow-md hover:-translate-y-0.5 whitespace-nowrap ${
@@ -625,17 +625,43 @@ function parseDateStr(dStr: string) {
         </div>
       </div>
 
-      <DateFilterBar 
-        period={filterPeriod}
-        setPeriod={setFilterPeriod}
-        currentDate={filterDate}
-        setCurrentDate={setFilterDate}
-        startDate={filterStartDate}
-        setStartDate={setFilterStartDate}
-        endDate={filterEndDate}
-        setEndDate={setFilterEndDate}
-        theme={location === '1st' ? 'purple' : 'emerald'}
-      />
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-2 shrink-0">
+        <DateFilterBar 
+          period={filterPeriod}
+          setPeriod={setFilterPeriod}
+          currentDate={filterDate}
+          setCurrentDate={setFilterDate}
+          startDate={filterStartDate}
+          setStartDate={setFilterStartDate}
+          endDate={filterEndDate}
+          setEndDate={setFilterEndDate}
+          theme={location === '1st' ? 'purple' : 'emerald'}
+        />
+
+        <div className="flex items-center gap-2">
+          <div className="relative shrink-0 flex-1 lg:flex-none">
+            <MagnifyingGlassIcon className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input
+              type="text"
+              placeholder="SEARCH ITEM..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-9 pr-4 py-2 bg-white dark:bg-[#111827] border border-gray-200 dark:border-white/10 rounded-xl text-[11px] font-black uppercase tracking-wider outline-none focus:ring-2 focus:ring-[#003875] dark:text-white w-full lg:w-64 transition-all shadow-sm h-[38px]"
+            />
+          </div>
+          {location === '1st' && (
+            <select
+              value={packedFilter}
+              onChange={(e) => setPackedFilter(e.target.value as 'ALL' | 'PACKED' | 'UNPACKED')}
+              className="px-3 py-2 bg-white dark:bg-[#111827] border border-gray-200 dark:border-white/10 rounded-xl text-[11px] font-black uppercase tracking-wider outline-none focus:ring-2 focus:ring-purple-500 dark:text-white shadow-sm h-[38px] cursor-pointer"
+            >
+              <option value="ALL">ALL STATUS</option>
+              <option value="PACKED">PACKED</option>
+              <option value="UNPACKED">UNPACKED</option>
+            </select>
+          )}
+        </div>
+      </div>
 
       {viewMode === 'datewise' ? (
         <div className="flex-1 bg-white dark:bg-[#111827] border border-gray-200 dark:border-white/5 rounded-xl overflow-hidden flex flex-col shadow-sm min-h-0 mt-2">
@@ -663,6 +689,9 @@ function parseDateStr(dStr: string) {
                     <th className={`py-2.5 px-3 text-[10px] font-black uppercase tracking-widest border-b text-right ${location === '1st' ? 'text-purple-600 dark:text-purple-400 border-purple-200 dark:border-purple-500/20' : 'text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-500/20'}`}>In</th>
                     <th className={`py-2.5 px-3 text-[10px] font-black uppercase tracking-widest border-b text-right ${location === '1st' ? 'text-purple-600 dark:text-purple-400 border-purple-200 dark:border-purple-500/20' : 'text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-500/20'}`}>Out</th>
                     <th className={`py-2.5 px-3 text-[10px] font-black uppercase tracking-widest border-b text-right ${location === '1st' ? 'text-purple-600 dark:text-purple-400 border-purple-200 dark:border-purple-500/20' : 'text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-500/20'}`}>Live Stock</th>
+                    {location === '1st' && (
+                      <th className="py-2.5 px-3 text-[10px] font-black uppercase tracking-widest border-b text-center text-purple-600 dark:text-purple-400 border-purple-200 dark:border-purple-500/20">Status</th>
+                    )}
                     <th className={`py-2.5 px-4 text-[10px] font-black uppercase tracking-widest border-b text-center w-20 ${location === '1st' ? 'text-purple-600 dark:text-purple-400 border-purple-200 dark:border-purple-500/20' : 'text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-500/20'}`}>Act</th>
                   </tr>
                 </thead>
@@ -675,6 +704,15 @@ function parseDateStr(dStr: string) {
                       <td className="py-2 px-3 text-[11px] font-black text-emerald-600 dark:text-emerald-400 text-right">{log.in_qty !== "0" && log.in_qty !== "" ? `+${log.in_qty}` : "-"}</td>
                       <td className="py-2 px-3 text-[11px] font-black text-rose-600 dark:text-rose-400 text-right">{log.out_qty !== "0" && log.out_qty !== "" ? `-${log.out_qty}` : "-"}</td>
                       <td className="py-2 px-3 text-[11px] font-black text-[#003875] dark:text-[#FFD500] text-right">{(log as any).running_stock}</td>
+                      {location === '1st' && (
+                        <td className="py-2 px-3 text-center">
+                          {log.packed_status === 'PACKED' ? (
+                            <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400 rounded-md text-[9px] font-black uppercase">Packed</span>
+                          ) : log.packed_status === 'UNPACKED' ? (
+                            <span className="px-2 py-0.5 bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400 rounded-md text-[9px] font-black uppercase">Unpacked</span>
+                          ) : <span className="text-gray-300">-</span>}
+                        </td>
+                      )}
                       <td className="py-2 px-4 text-center">
                         <button onClick={() => confirmDelete(log.id.toString())} className="text-rose-400 hover:text-rose-600 transition-colors">
                           <TrashIcon className="w-4 h-4 mx-auto" />
@@ -757,6 +795,9 @@ function parseDateStr(dStr: string) {
                   <th className={`py-2.5 px-3 text-[10px] font-black uppercase tracking-widest border-b text-right ${location === '1st' ? 'text-purple-600 dark:text-purple-400 border-purple-200 dark:border-purple-500/20' : 'text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-500/20'}`}>Total In</th>
                   <th className={`py-2.5 px-3 text-[10px] font-black uppercase tracking-widest border-b text-right ${location === '1st' ? 'text-purple-600 dark:text-purple-400 border-purple-200 dark:border-purple-500/20' : 'text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-500/20'}`}>Total Out</th>
                   <th className={`py-2.5 px-4 text-[10px] font-black uppercase tracking-widest border-b text-right w-32 ${location === '1st' ? 'text-purple-700 dark:text-purple-400 border-purple-200 dark:border-purple-500/20 bg-purple-100/50 dark:bg-purple-500/10' : 'text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-500/20 bg-emerald-100/50 dark:bg-emerald-500/10'}`}>Live Stock</th>
+                  {location === '1st' && (
+                    <th className="py-2.5 px-4 text-[10px] font-black uppercase tracking-widest border-b text-center text-purple-600 dark:text-purple-400 border-purple-200 dark:border-purple-500/20 w-24">Status</th>
+                  )}
                 </tr>
               </thead>
               <tbody className={`divide-y ${location === '1st' ? 'divide-purple-100 dark:divide-purple-500/10' : 'divide-emerald-100 dark:divide-emerald-500/10'}`}>
@@ -791,6 +832,15 @@ function parseDateStr(dStr: string) {
                           <span className="text-[9px] font-bold text-gray-400 uppercase">{health.label}</span>
                         </div>
                       </td>
+                      {location === '1st' && (
+                        <td className="py-2 px-4 text-center">
+                          {item.packed_status === 'PACKED' ? (
+                            <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400 rounded-md text-[9px] font-black uppercase">Packed</span>
+                          ) : item.packed_status === 'UNPACKED' ? (
+                            <span className="px-2 py-0.5 bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400 rounded-md text-[9px] font-black uppercase">Unpacked</span>
+                          ) : <span className="text-gray-300">-</span>}
+                        </td>
+                      )}
                     </tr>
                   );
                 })}
@@ -941,6 +991,22 @@ function parseDateStr(dStr: string) {
                             OUT
                           </button>
                         </div>
+                        {location === '1st' && (
+                          <div className="flex bg-gray-200 dark:bg-gray-800 p-1 rounded-lg shrink-0">
+                            <button 
+                              onClick={() => handleBulkRowChange(row.id, "packed_status", "PACKED")}
+                              className={`px-2 py-1.5 rounded-md text-[10px] font-black uppercase tracking-wider transition-all ${row.packed_status === 'PACKED' ? 'bg-purple-500 text-white shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}
+                            >
+                              PACKED
+                            </button>
+                            <button 
+                              onClick={() => handleBulkRowChange(row.id, "packed_status", "UNPACKED")}
+                              className={`px-2 py-1.5 rounded-md text-[10px] font-black uppercase tracking-wider transition-all ${row.packed_status === 'UNPACKED' ? 'bg-gray-400 text-white shadow-sm dark:bg-gray-600' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}
+                            >
+                              UNPACKED
+                            </button>
+                          </div>
+                        )}
                         <div className="w-24">
                           <FloatingInput 
                             label="Qty *" 
