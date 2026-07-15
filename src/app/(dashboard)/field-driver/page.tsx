@@ -468,14 +468,14 @@ export default function FieldDriverPage() {
                                 </div>
                             ) : liveLocation ? (
                                 <div className="w-full relative">
-                                    <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-green-500/20 via-transparent to-transparent opacity-50 blur-xl rounded-full"></div>
-                                    <div className="relative p-8 bg-gray-50 dark:bg-slate-900/80 rounded-[24px] border border-green-500/30 text-center shadow-inner flex flex-col items-center gap-4">
-                                        <div className="w-16 h-16 bg-green-500/10 rounded-full flex items-center justify-center border-4 border-green-500/20">
-                                            <MapPinIcon className="w-8 h-8 text-green-500 animate-bounce" />
+                                    <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-red-500/20 via-transparent to-transparent opacity-50 blur-xl rounded-full"></div>
+                                    <div className="relative p-8 bg-gray-50 dark:bg-slate-900/80 rounded-[24px] border border-red-500/30 text-center shadow-inner flex flex-col items-center gap-4">
+                                        <div className="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center border-4 border-red-500/20">
+                                            <MapPinIcon className="w-8 h-8 text-red-500 animate-bounce" />
                                         </div>
                                         
                                         <div>
-                                            <div className="inline-flex items-center gap-2 mb-3 bg-green-500 text-white px-4 py-1.5 rounded-full shadow-lg shadow-green-500/30">
+                                            <div className="inline-flex items-center gap-2 mb-3 bg-red-500 text-white px-4 py-1.5 rounded-full shadow-lg shadow-red-500/30">
                                                 <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
                                                 <span className="text-[10px] font-black uppercase tracking-widest">Locked In</span>
                                             </div>
