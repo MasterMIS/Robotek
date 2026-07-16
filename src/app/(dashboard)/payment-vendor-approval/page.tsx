@@ -222,7 +222,7 @@ Thank you.`;
           await fetch('/api/send-whatsapp', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ phone: '7217685179', message })
+            body: JSON.stringify({ phone: '9899444530', message })
           });
         }
       } else {
@@ -378,19 +378,19 @@ Thank you.`;
             <div className="overflow-x-auto overflow-y-auto flex-1 no-scrollbar min-h-0 relative bg-white dark:bg-[#0B101E]">
               <table className="w-full text-left border-collapse table-auto">
                 <thead className="sticky top-0 z-10">
-                  <tr className="bg-gray-100 dark:bg-navy-800 text-gray-600 dark:text-slate-300">
-                    <th className="px-2 py-3 md:py-4 text-[10px] md:text-xs font-black uppercase tracking-wider border-b border-gray-200 dark:border-navy-700">GRN / PO Details</th>
-                    <th className="px-2 py-3 md:py-4 text-[10px] md:text-xs font-black uppercase tracking-wider border-b border-gray-200 dark:border-navy-700">Created At</th>
-                    <th className="px-2 py-3 md:py-4 text-[10px] md:text-xs font-black uppercase tracking-wider border-b border-gray-200 dark:border-navy-700">Item & Category</th>
-                    <th className="px-2 py-3 md:py-4 text-[10px] md:text-xs font-black uppercase tracking-wider border-b border-gray-200 dark:border-navy-700">Qty</th>
-                    <th className="px-2 py-3 md:py-4 text-[10px] md:text-xs font-black uppercase tracking-wider border-b border-gray-200 dark:border-navy-700">Country</th>
-                    <th className="px-2 py-3 md:py-4 text-[10px] md:text-xs font-black uppercase tracking-wider border-b border-gray-200 dark:border-navy-700">Payment Terms</th>
-                    <th className="px-2 py-3 md:py-4 text-[10px] md:text-xs font-black uppercase tracking-wider border-b border-gray-200 dark:border-navy-700">Planned Date</th>
-                    <th className="px-2 py-3 md:py-4 text-[10px] md:text-xs font-black uppercase tracking-wider border-b border-gray-200 dark:border-navy-700">Attach Bill</th>
-                    <th className="px-2 py-3 md:py-4 text-[10px] md:text-xs font-black uppercase tracking-wider border-b border-gray-200 dark:border-navy-700 text-center">User Action</th>
-                    <th className="px-2 py-3 md:py-4 text-[10px] md:text-xs font-black uppercase tracking-wider border-b border-gray-200 dark:border-navy-700 text-center">User Remarks</th>
-                    <th className="px-2 py-3 md:py-4 text-[10px] md:text-xs font-black uppercase tracking-wider border-b border-gray-200 dark:border-navy-700 text-center bg-emerald-50 dark:bg-emerald-900/20 text-emerald-800 dark:text-emerald-400">Payment Approved</th>
-                    <th className="px-2 py-3 md:py-4 text-[10px] md:text-xs font-black uppercase tracking-wider border-b border-gray-200 dark:border-navy-700 text-center bg-emerald-50 dark:bg-emerald-900/20 text-emerald-800 dark:text-emerald-400">Admin Remarks</th>
+                  <tr className="bg-[#003875] text-white">
+                    <th className="px-2 py-3 md:py-4 text-[10px] md:text-xs font-black uppercase tracking-wider border-b border-[#002a5c] dark:border-navy-700">GRN / PO Details</th>
+                    <th className="px-2 py-3 md:py-4 text-[10px] md:text-xs font-black uppercase tracking-wider border-b border-[#002a5c] dark:border-navy-700">Created At</th>
+                    <th className="px-2 py-3 md:py-4 text-[10px] md:text-xs font-black uppercase tracking-wider border-b border-[#002a5c] dark:border-navy-700">Item & Category</th>
+                    <th className="px-2 py-3 md:py-4 text-[10px] md:text-xs font-black uppercase tracking-wider border-b border-[#002a5c] dark:border-navy-700">Qty</th>
+                    <th className="px-2 py-3 md:py-4 text-[10px] md:text-xs font-black uppercase tracking-wider border-b border-[#002a5c] dark:border-navy-700">Country</th>
+                    <th className="px-2 py-3 md:py-4 text-[10px] md:text-xs font-black uppercase tracking-wider border-b border-[#002a5c] dark:border-navy-700">Payment Terms</th>
+                    <th className="px-2 py-3 md:py-4 text-[10px] md:text-xs font-black uppercase tracking-wider border-b border-[#002a5c] dark:border-navy-700">Planned Date</th>
+                    <th className="px-2 py-3 md:py-4 text-[10px] md:text-xs font-black uppercase tracking-wider border-b border-[#002a5c] dark:border-navy-700">Attach Bill</th>
+                    <th className="px-2 py-3 md:py-4 text-[10px] md:text-xs font-black uppercase tracking-wider border-b border-[#002a5c] dark:border-navy-700 text-center">User Action</th>
+                    <th className="px-2 py-3 md:py-4 text-[10px] md:text-xs font-black uppercase tracking-wider border-b border-[#002a5c] dark:border-navy-700 text-center">User Remarks</th>
+                    <th className="px-2 py-3 md:py-4 text-[10px] md:text-xs font-black uppercase tracking-wider border-b border-[#002a5c] dark:border-navy-700 text-center">Payment Approved</th>
+                    <th className="px-2 py-3 md:py-4 text-[10px] md:text-xs font-black uppercase tracking-wider border-b border-[#002a5c] dark:border-navy-700 text-center">Admin Remarks</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 dark:divide-navy-800/50">
