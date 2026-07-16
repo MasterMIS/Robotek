@@ -13,7 +13,7 @@ interface DateFilterBarProps {
   setStartDate: (d: Date | null) => void;
   endDate: Date | null;
   setEndDate: (d: Date | null) => void;
-  theme?: 'blue' | 'orange' | 'purple' | 'emerald';
+  theme?: 'blue' | 'orange' | 'purple' | 'emerald' | 'black';
 }
 
 export default function DateFilterBar({
@@ -105,11 +105,13 @@ export default function DateFilterBar({
                 ? (theme === 'orange' ? 'bg-orange-500 text-white shadow-md' : 
                    theme === 'purple' ? 'bg-purple-600 text-white shadow-md' :
                    theme === 'emerald' ? 'bg-emerald-600 text-white shadow-md' :
+                   theme === 'black' ? 'bg-black text-white shadow-md dark:bg-white dark:text-black' :
                    theme === 'blue' ? 'bg-blue-600 text-white shadow-md' :
                    'bg-[#00a86b] text-white shadow-md')
                 : (theme === 'orange' ? 'bg-white text-orange-600 border border-gray-200 hover:bg-orange-50' : 
                    theme === 'purple' ? 'bg-white text-purple-600 border border-gray-200 hover:bg-purple-50' :
                    theme === 'emerald' ? 'bg-white text-emerald-600 border border-gray-200 hover:bg-emerald-50' :
+                   theme === 'black' ? 'bg-white text-gray-900 border border-gray-200 hover:bg-gray-100 dark:bg-transparent dark:text-gray-300 dark:border-gray-700 dark:hover:bg-gray-800' :
                    theme === 'blue' ? 'bg-white text-blue-600 border border-gray-200 hover:bg-blue-50' :
                    'bg-white text-[#003875] border border-gray-200 hover:bg-gray-50')
             }`}
@@ -128,6 +130,7 @@ export default function DateFilterBar({
               theme === 'orange' ? 'text-orange-600' : 
               theme === 'purple' ? 'text-purple-600' :
               theme === 'emerald' ? 'text-emerald-600' :
+              theme === 'black' ? 'text-gray-900 dark:text-gray-300' :
               'text-[#003875]'
             }`}
           >
@@ -138,6 +141,7 @@ export default function DateFilterBar({
             theme === 'orange' ? 'text-orange-600' : 
             theme === 'purple' ? 'text-purple-600' :
             theme === 'emerald' ? 'text-emerald-600' :
+            theme === 'black' ? 'text-gray-900 dark:text-gray-300' :
             theme === 'blue' ? 'text-blue-600' :
             'text-[#003875]'
           }`}>
@@ -150,6 +154,7 @@ export default function DateFilterBar({
               theme === 'orange' ? 'text-orange-600' : 
               theme === 'purple' ? 'text-purple-600' :
               theme === 'emerald' ? 'text-emerald-600' :
+              theme === 'black' ? 'text-gray-900 dark:text-gray-300' :
               'text-[#003875]'
             }`}
           >
@@ -164,6 +169,7 @@ export default function DateFilterBar({
           ? (theme === 'orange' ? 'border-orange-500 bg-orange-50' : 
              theme === 'purple' ? 'border-purple-600 bg-purple-50' :
              theme === 'emerald' ? 'border-emerald-600 bg-emerald-50' :
+             theme === 'black' ? 'border-gray-900 bg-gray-100 dark:bg-gray-800 dark:border-gray-700' :
              theme === 'blue' ? 'border-blue-600 bg-blue-50' :
              'border-[#00a86b] bg-[#00a86b]/5')
           : 'border-gray-200 bg-white'
@@ -172,6 +178,7 @@ export default function DateFilterBar({
           theme === 'orange' ? 'text-orange-600' : 
           theme === 'purple' ? 'text-purple-600' :
           theme === 'emerald' ? 'text-emerald-600' :
+          theme === 'black' ? 'text-gray-900 dark:text-gray-300' :
           'text-[#003875]'
         }`}>
           <CalendarDaysIcon className="w-4 h-4" />
@@ -187,6 +194,7 @@ export default function DateFilterBar({
           theme === 'orange' ? 'text-orange-600' : 
           theme === 'purple' ? 'text-purple-600' :
           theme === 'emerald' ? 'text-emerald-600' :
+          theme === 'black' ? 'text-gray-900 dark:text-gray-300' :
           'text-[#003875]'
         }`}>
           <input 

@@ -364,7 +364,7 @@ Thank you.`;
                 setStartDate={(d) => { setStartDate(d); setCurrentPage(1); }}
                 endDate={endDate}
                 setEndDate={(d) => { setEndDate(d); setCurrentPage(1); }}
-                theme="emerald"
+                theme="black"
               />
             </div>
           </div>
