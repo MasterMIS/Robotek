@@ -21,6 +21,7 @@ import {
   TagIcon,
   ArrowDownTrayIcon
 } from "@heroicons/react/24/outline";
+
 import DateFilterBar, { FilterPeriod } from "@/components/DateFilterBar";
 import { startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfQuarter, endOfQuarter, startOfYear, endOfYear } from "date-fns";
 
@@ -197,6 +198,33 @@ export default function PaymentVendorApprovalPage() {
 
       if (res.ok) {
         mutateVendorData();
+        if (modalActionType === 'Payed') {
+          // Send WhatsApp notification to MD
+          const entry = mergedItems.find(item => item.GRN_No === modalGrnNo);
+          const itemName = entry?.Item_Name || '';
+          const qty = entry?.Qty || '';
+          const message = `📌 Payment Approval Request
+
+Dear Sir,
+
+The following material has been successfully received and verified.
+
+Item Details:
+
+* *Item Name:* ${itemName}
+* Received Quantity: ${qty}
+
+Kindly review the above details and provide your approval to process the payment for this received material.
+
+Approval Required: ✅
+
+Thank you.`;
+          await fetch('/api/send-whatsapp', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ phone: '7217685179', message })
+          });
+        }
       } else {
         alert("Failed to update status.");
       }
