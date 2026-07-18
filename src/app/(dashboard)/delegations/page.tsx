@@ -1146,28 +1146,26 @@ const fetcher = (url: string) => fetch(url).then((res) => res.json());
                 />
               </div>
 
-              {userRole !== 'USER' && (
-                <div className="flex items-center bg-gray-50 dark:bg-navy-900 p-0.5 rounded-xl border border-gray-100 dark:border-white/5 shadow-sm shrink-0">
-                  <button
-                    onClick={() => { setAssignmentFilter(assignmentFilter === 'ToMe' ? 'All' : 'ToMe'); setCurrentPage(1); }}
-                    className={`px-2 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all flex items-center gap-1 ${assignmentFilter === 'ToMe' ? 'bg-[#003875] text-white shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-                    title="To Me"
-                  >
-                    <span className="hidden xs:inline">To Me</span>
-                    <span className="xs:hidden">To</span>
-                    <span className="text-[8px] opacity-70">{baseDelegations.filter(d => d.assigned_to === ((session?.user as any)?.username || "")).length}</span>
-                  </button>
-                  <button 
-                    onClick={() => { setAssignmentFilter(assignmentFilter === 'ByMe' ? 'All' : 'ByMe'); setCurrentPage(1); }}
-                    className={`px-2 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all flex items-center gap-1 ${assignmentFilter === 'ByMe' ? 'bg-[#003875] text-white shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-                    title="By Me"
-                  >
-                    <span className="hidden xs:inline">By Me</span>
-                    <span className="xs:hidden">By</span>
-                    <span className="text-[8px] opacity-70">{baseDelegations.filter(d => d.assigned_by === ((session?.user as any)?.username || "")).length}</span>
-                  </button>
-                </div>
-              )}
+              <div className="flex items-center bg-gray-50 dark:bg-navy-900 p-0.5 rounded-xl border border-gray-100 dark:border-white/5 shadow-sm shrink-0">
+                <button
+                  onClick={() => { setAssignmentFilter(assignmentFilter === 'ToMe' ? 'All' : 'ToMe'); setCurrentPage(1); }}
+                  className={`px-2 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all flex items-center gap-1 ${assignmentFilter === 'ToMe' ? 'bg-[#003875] text-white shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                  title="To Me"
+                >
+                  <span className="hidden xs:inline">To Me</span>
+                  <span className="xs:hidden">To</span>
+                  <span className="text-[8px] opacity-70">{baseDelegations.filter(d => d.assigned_to === ((session?.user as any)?.username || "")).length}</span>
+                </button>
+                <button 
+                  onClick={() => { setAssignmentFilter(assignmentFilter === 'ByMe' ? 'All' : 'ByMe'); setCurrentPage(1); }}
+                  className={`px-2 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all flex items-center gap-1 ${assignmentFilter === 'ByMe' ? 'bg-[#003875] text-white shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                  title="By Me"
+                >
+                  <span className="hidden xs:inline">By Me</span>
+                  <span className="xs:hidden">By</span>
+                  <span className="text-[8px] opacity-70">{baseDelegations.filter(d => d.assigned_by === ((session?.user as any)?.username || "")).length}</span>
+                </button>
+              </div>
             </div>
 
             {/* Date Filters Row */}

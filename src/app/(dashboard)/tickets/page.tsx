@@ -793,12 +793,16 @@ export default function TicketsPage() {
             <form onSubmit={editingTicket ? handleUpdateTicket : handleCreateTicket} className="p-6 overflow-y-auto space-y-6 custom-scrollbar bg-white dark:bg-navy-800/50">
               <div className="space-y-4">
                 <div>
-                  <label className="block text-[10px] font-black text-[#FFD500] uppercase tracking-widest mb-1.5 px-1">Title</label>
-                  <input required type="text" value={editingTicket ? editingTicket.title : newTicket.title} onChange={e => editingTicket ? setEditingTicket({ ...editingTicket, title: e.target.value }) : setNewTicket({ ...newTicket, title: e.target.value })} className="w-full bg-[#FFFBF0] dark:bg-navy-900 px-3 py-2.5 rounded-xl border border-orange-100 dark:border-navy-700 focus:border-[#FFD500] focus:bg-white dark:focus:bg-navy-900 outline-none font-black text-xs text-gray-900 dark:text-white transition-all shadow-sm" placeholder="Issue summary" />
+                  <label className="block text-[10px] font-black text-[#FFD500] uppercase tracking-widest mb-1.5 px-1">
+                    Title <span className="text-red-500 ml-1" aria-hidden="true">*</span>
+                  </label>
+                  <input required aria-required="true" type="text" value={editingTicket ? editingTicket.title : newTicket.title} onChange={e => editingTicket ? setEditingTicket({ ...editingTicket, title: e.target.value }) : setNewTicket({ ...newTicket, title: e.target.value })} className="w-full bg-[#FFFBF0] dark:bg-navy-900 px-3 py-2.5 rounded-xl border border-orange-100 dark:border-navy-700 focus:border-[#FFD500] focus:bg-white dark:focus:bg-navy-900 outline-none font-black text-xs text-gray-900 dark:text-white transition-all shadow-sm" placeholder="Issue summary" />
                 </div>
                 <div>
-                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 px-1">Description</label>
-                  <textarea required rows={3} value={editingTicket ? editingTicket.description : newTicket.description} onChange={e => editingTicket ? setEditingTicket({ ...editingTicket, description: e.target.value }) : setNewTicket({ ...newTicket, description: e.target.value })} className="w-full bg-[#FFFBF0] dark:bg-navy-900 px-3 py-2.5 rounded-xl border border-orange-100 dark:border-navy-700 focus:border-[#FFD500] focus:bg-white dark:focus:bg-navy-900 outline-none font-bold text-xs text-gray-800 dark:text-zinc-100 transition-all shadow-sm resize-none min-h-[80px]" placeholder="Provide details..." />
+                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 px-1">
+                    Description <span className="text-red-500 ml-1" aria-hidden="true">*</span>
+                  </label>
+                  <textarea required aria-required="true" rows={3} value={editingTicket ? editingTicket.description : newTicket.description} onChange={e => editingTicket ? setEditingTicket({ ...editingTicket, description: e.target.value }) : setNewTicket({ ...newTicket, description: e.target.value })} className="w-full bg-[#FFFBF0] dark:bg-navy-900 px-3 py-2.5 rounded-xl border border-orange-100 dark:border-navy-700 focus:border-[#FFD500] focus:bg-white dark:focus:bg-navy-900 outline-none font-bold text-xs text-gray-800 dark:text-zinc-100 transition-all shadow-sm resize-none min-h-[80px]" placeholder="Provide details..." />
                 </div>
               </div>
 

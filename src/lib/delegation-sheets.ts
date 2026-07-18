@@ -1,5 +1,6 @@
 import { BaseSheetsService } from "./sheets/base-service";
 import { Delegation } from "@/types/delegation";
+import { getUsers } from "./google-sheets";
 
 const GOOGLE_SHEET_ID = "1kqX1fWoTyk2Y7IUCpO5PrrcF0fvGSj0n3xZaNdmm3Iw";
 const SHEET_NAME = "delegation";
@@ -70,7 +71,20 @@ class DelegationService extends BaseSheetsService<Delegation> {
  export const delegationService = new DelegationService();
  
  export async function getDelegations(): Promise<Delegation[]> {
-   return delegationService.getAll();
+  const all = await delegationService.getAll();
+  try {
+    const users = await getUsers();
+    const activeUsernames = new Set(users.filter(u => u.isActive !== false).map(u => String(u.username).trim()).filter(Boolean));
+    // Exclude delegations assigned to users who are not active or deleted (no matching user)
+    return all.filter(d => {
+      if (!d.assigned_to) return true;
+      return activeUsernames.has(String(d.assigned_to).trim());
+    });
+  } catch (err) {
+    // If users can't be fetched for any reason, fallback to returning all delegations
+    console.error("Error filtering delegations by active users:", err);
+    return all;
+  }
  }
  
  let delegationLock: Promise<any> = Promise.resolve();

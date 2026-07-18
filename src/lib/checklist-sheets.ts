@@ -1,5 +1,6 @@
 import { BaseSheetsService } from "./sheets/base-service";
 import { Checklist } from "@/types/checklist";
+import { getUsers } from "./google-sheets";
 
 const GOOGLE_SHEET_ID = "1RG5I4QET9WLjKmSeGCzsbmgraMDH-HXZHfWcOprPBA0";
 const SHEET_NAME = "checklists";
@@ -271,12 +272,29 @@ export async function getChecklistsPaginated(
   sortDir: string = 'desc'
 ) {
   const allChecklists = await checklistService.getAll();
+  // Filter out checklist items that belong to users who are inactive or deleted.
+  let allItems = allChecklists;
+  try {
+    const users = await getUsers();
+    const activeUsernames = new Set(users.filter(u => u.isActive !== false).map(u => String(u.username).trim()).filter(Boolean));
+    allItems = allChecklists.filter(c => {
+      const at = c.assigned_to ? String(c.assigned_to).trim() : "";
+      const ab = c.assigned_by ? String(c.assigned_by).trim() : "";
+      if (at && !activeUsernames.has(at)) return false;
+      if (ab && !activeUsernames.has(ab)) return false;
+      return true;
+    });
+  } catch (err) {
+    console.error("Error fetching users for checklist filtering:", err);
+    allItems = allChecklists;
+  }
 
   // Base filter: USER/SALES/CRM role sees only items assigned to them
   const isRegularUser = userRole.toUpperCase() === 'USER' || userRole.toUpperCase() === 'SALES' || userRole.toUpperCase() === 'CRM';
+  const baseSource = typeof allItems !== 'undefined' ? allItems : allChecklists;
   const baseChecklists = isRegularUser
-    ? allChecklists.filter(c => c.assigned_to === currentUser)
-    : allChecklists;
+    ? baseSource.filter(c => c.assigned_to === currentUser)
+    : baseSource;
 
   // Assignment-filtered set for counts (role + assignment filter, no other filters)
   let assignmentFiltered = baseChecklists;

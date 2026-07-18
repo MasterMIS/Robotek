@@ -32,8 +32,9 @@ export async function GET(req: NextRequest) {
 
   // If no pagination params provided, return all (legacy fallback)
   if (!searchParams.has('page') && !searchParams.has('limit')) {
-    const checklists = await getChecklists();
-    return NextResponse.json(checklists);
+    // Use the paginated helper with a large limit so that filtering by active users is applied
+    const result = await getChecklistsPaginated(1, 100000, '', [], 'All', '', 'USER', [], '', '', [], [], [], [], [], 'id', 'desc');
+    return NextResponse.json(result.data || []);
   }
 
   try {
