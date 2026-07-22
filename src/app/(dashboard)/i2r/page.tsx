@@ -46,6 +46,13 @@ import IMSFormModal from "@/components/IMSFormModal";
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
+function fileLinkUrl(val?: string): string {
+  if (!val || !String(val).trim()) return "";
+  const s = String(val).trim();
+  if (s.startsWith("http")) return s;
+  return `https://drive.google.com/uc?id=${s}`;
+}
+
 const I2R_STEP_SHORT = [
   "Get Quotation",
   "Approval",
@@ -54,6 +61,7 @@ const I2R_STEP_SHORT = [
   "Check Sample",
   "Make PO",
   "Check Packing",
+  "Ask For Photo/Video of Ready Stock From Vendor",
   "Deliver to Cargo",
   "Receive Form",
   "Follow Up",
@@ -72,7 +80,8 @@ const EMPTY_FORM: Partial<I2R> = {
   planned_8: "", actual_8: "", status_8: "",
   planned_9: "", actual_9: "", status_9: "",
   planned_10: "", actual_10: "", status_10: "",
-  supplier_name_3: "", lead_time_acc_to_vendor_4: "", sample_pic_5: "", sample_qty_5: "", po_number_6: "", cargo_8: "", received_qty_9: "",
+  planned_11: "", actual_11: "", status_11: "",
+  supplier_name_3: "", lead_time_acc_to_vendor_4: "", sample_pic_5: "", sample_qty_5: "", po_number_6: "", photo_video_8: "", cargo_9: "", received_qty_10: "",
 };
 
 function UserMultiCombobox({
@@ -217,6 +226,7 @@ export default function I2RPage() {
   const [bulkSampleQtyInputs, setBulkSampleQtyInputs] = useState<Record<string, string>>({});
   const [bulkCargoInputs, setBulkCargoInputs] = useState<Record<string, string>>({});
   const [bulkReceivedQtyInputs, setBulkReceivedQtyInputs] = useState<Record<string, string>>({});
+  const [bulkPhotoPicInputs, setBulkPhotoPicInputs] = useState<Record<string, string>>({});
 
   const [cancelTargetId, setCancelTargetId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<"active" | "cancelled">("active");
@@ -319,9 +329,30 @@ export default function I2RPage() {
 
   const getActiveStep = (item: I2R): number => {
     if (item.cancelled) return -1;
-    for (let i = 1; i <= 10; i++) {
-      const val = (item as any)[`actual_${i}`];
-      if (!val || val.trim() === "") return i;
+    const totalSteps = 11;
+
+    // 1) If all actuals present => completed
+    let maxCompleted = 0;
+    for (let i = 1; i <= totalSteps; i++) {
+      const actual = (item as any)[`actual_${i}`];
+      if (actual && String(actual).trim() !== "") maxCompleted = i;
+    }
+    if (maxCompleted >= totalSteps) return 0;
+
+    // 2) Prefer earliest step where planned exists but actual is empty
+    for (let i = 1; i <= totalSteps; i++) {
+      const planned = (item as any)[`planned_${i}`];
+      const actual = (item as any)[`actual_${i}`];
+      if (planned && String(planned).trim() !== "" && (!actual || String(actual).trim() === "")) return i;
+    }
+
+    // 3) If no planned exists but some steps completed, return next step after last completed
+    if (maxCompleted > 0) return Math.min(maxCompleted + 1, totalSteps);
+
+    // 4) Fallback: first step with empty actual (or 1)
+    for (let i = 1; i <= totalSteps; i++) {
+      const actual = (item as any)[`actual_${i}`];
+      if (!actual || String(actual).trim() === "") return i;
     }
     return 0;
   };
@@ -366,7 +397,7 @@ export default function I2RPage() {
 
   const stepCounts = useMemo(() => {
     const counts: Record<string, number> = { all: 0, completed: 0 };
-    for (let i = 1; i <= 10; i++) counts[i] = 0;
+    for (let i = 1; i <= 11; i++) counts[i] = 0;
     items.forEach(it => {
       if (it.cancelled) return; counts.all++;
       const s = getActiveStep(it);
@@ -447,13 +478,24 @@ export default function I2RPage() {
     setTimeout(() => { setIsStatusModalOpen(false); mutateItems(); }, 1500);
   };
 
+  const [bulkPhotoFiles, setBulkPhotoFiles] = useState<Record<string, File>>({});
+
   const openBulkModal = () => {
-    const ts: Record<string, boolean> = {}; const ss: Record<string, string> = {}; const ls: Record<string, string> = {}; const ps: Record<string, string> = {}; const qs: Record<string, string> = {}; const os: Record<string, string> = {}; const cs: Record<string, string> = {}; const rs: Record<string, string> = {};
+    const ts: Record<string, boolean> = {}; const ss: Record<string, string> = {}; const ls: Record<string, string> = {}; const ps: Record<string, string> = {}; const qs: Record<string, string> = {}; const os: Record<string, string> = {}; const cs: Record<string, string> = {}; const rs: Record<string, string> = {}; const pvs: Record<string, string> = {};
     selectedIds.forEach(id => {
       const it = items.find(r => r.id === id); if (!it) return;
-      ts[id] = true; ss[id] = it.supplier_name_3 || ""; ls[id] = it.lead_time_acc_to_vendor_4 || ""; ps[id] = it.sample_pic_5 || ""; qs[id] = it.sample_qty_5 || ""; os[id] = it.po_number_6 || ""; cs[id] = it.cargo_8 || ""; rs[id] = it.received_qty_9 || "";
+      ts[id] = true;
+      ss[id] = it.supplier_name_3 || "";
+      ls[id] = it.lead_time_acc_to_vendor_4 || "";
+      ps[id] = it.sample_pic_5 || "";
+      qs[id] = it.sample_qty_5 || "";
+      os[id] = it.po_number_6 || "";
+      pvs[id] = (it as any).photo_video_8 || "";
+      cs[id] = (it as any).cargo_9 || "";
+      rs[id] = (it as any).received_qty_10 || "";
     });
-    setBulkToggles(ts); setBulkSupplierInputs(ss); setBulkLeadTimeInputs(ls); setBulkSamplePicInputs(ps); setBulkSampleQtyInputs(qs); setBulkPOInputs(os); setBulkCargoInputs(cs); setBulkReceivedQtyInputs(rs);
+    setBulkToggles(ts); setBulkSupplierInputs(ss); setBulkLeadTimeInputs(ls); setBulkSamplePicInputs(ps); setBulkSampleQtyInputs(qs); setBulkPOInputs(os); setBulkCargoInputs(cs); setBulkReceivedQtyInputs(rs); setBulkPhotoPicInputs(pvs);
+    setBulkPhotoFiles({});
     setBulkSampleFiles({});
     setIsBulkModalOpen(true);
   };
@@ -464,7 +506,8 @@ export default function I2RPage() {
     setActionStatus("loading"); setActionMessage("Uploading attachments..."); setIsStatusModalOpen(true); setIsBulkModalOpen(false);
     const now = new Date().toISOString(); let errors = 0;
     
-    const uploadedUrls: Record<string, string> = {};
+    const uploadedSampleUrls: Record<string, string> = {};
+    const uploadedPhotoUrls: Record<string, string> = {};
     for (const id of toProc) {
       const it = items.find(r => r.id === id); if (!it) continue;
       const n = getActiveStep(it);
@@ -474,9 +517,21 @@ export default function I2RPage() {
         try {
           const res = await fetch("/api/i2r/upload", { method: "POST", body: fd });
           const data = await res.json();
-          if (data.fileId) uploadedUrls[id] = `https://drive.google.com/uc?id=${data.fileId}`;
+          if (data.fileId) uploadedSampleUrls[id] = `https://drive.google.com/uc?id=${data.fileId}`;
         } catch (err) {
           console.error(`Upload failed for ID ${id}`, err);
+          errors++;
+        }
+      }
+      if (n === 8 && bulkPhotoFiles[id]) {
+        const fd = new FormData();
+        fd.append("file", bulkPhotoFiles[id]);
+        try {
+          const res = await fetch("/api/i2r/upload", { method: "POST", body: fd });
+          const data = await res.json();
+          if (data.fileId) uploadedPhotoUrls[id] = `https://drive.google.com/uc?id=${data.fileId}`;
+        } catch (err) {
+          console.error(`Upload failed for Photo/Video ID ${id}`, err);
           errors++;
         }
       }
@@ -489,7 +544,7 @@ export default function I2RPage() {
       const upd = { ...it } as any; upd[`actual_${n}`] = now; upd[`status_${n}`] = "Done"; upd.updated_at = now;
       if (n === 3) upd.supplier_name_3 = bulkSupplierInputs[id]; if (n === 4) upd.lead_time_acc_to_vendor_4 = bulkLeadTimeInputs[id];
       if (n === 5) {
-        upd.sample_pic_5 = uploadedUrls[id] || bulkSamplePicInputs[id];
+        upd.sample_pic_5 = uploadedSampleUrls[id] || bulkSamplePicInputs[id];
         upd.sample_qty_5 = bulkSampleQtyInputs[id];
       }
       if (n === 6) upd.po_number_6 = bulkPOInputs[id];
@@ -499,23 +554,27 @@ export default function I2RPage() {
         const leadTimeTat = ltStr ? (/^\d+(\.\d+)?$/.test(ltStr) ? `${ltStr} Days` : ltStr) : "24 Hrs";
         upd.planned_8 = calculatePlannedDate(now, leadTimeTat);
       }
-      if (n === 8) upd.cargo_8 = bulkCargoInputs[id];
-      if (n === 9) upd.received_qty_9 = bulkReceivedQtyInputs[id];
-      if (n < 10) {
+      if (n === 8) {
+        upd.photo_video_8 = uploadedPhotoUrls[id] || bulkPhotoPicInputs[id] || "";
+      }
+      if (n === 9) upd.cargo_9 = bulkCargoInputs[id];
+      if (n === 10) upd.received_qty_10 = bulkReceivedQtyInputs[id];
+      if (n < 11) {
         if (n !== 7) {
-          upd[`planned_${n+1}`] = calculatePlannedDate(now, globalConfigs[n-1].tat || "24 Hrs");
+          // Use the next step's TAT (globalConfigs[n]) when scheduling planned_{n+1}
+          upd[`planned_${n+1}`] = calculatePlannedDate(now, globalConfigs[n]?.tat || "24 Hrs");
         }
       }
       try { const r = await fetch("/api/i2r", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(upd) }); if (!r.ok) errors++; } catch { errors++; }
     }
     setActionStatus(errors ? "error" : "success"); setActionMessage(errors ? `Failed ${errors} updates` : "All updated!");
-    setTimeout(() => { setIsStatusModalOpen(false); setSelectedIds(new Set()); setBulkSampleFiles({}); setBulkSampleQtyInputs({}); mutateItems(); }, 2000);
+    setTimeout(() => { setIsStatusModalOpen(false); setSelectedIds(new Set()); setBulkSampleFiles({}); setBulkSampleQtyInputs({}); setBulkPhotoFiles({}); setBulkPhotoPicInputs({}); mutateItems(); }, 2000);
   };
 
   const handleExport = () => {
     const headers = [
       "ID", "Indent Num", "Item Name", "Quantity", "Category", "Filled By", "Created At", "Updated At",
-      "Supplier (ST3)", "Lead Time (ST4)", "Sample Pic (ST5)", "Sample Qty (ST5)", "PO Number (ST6)", "Cargo (ST8)", "Received Qty (ST9)",
+      "Supplier (ST3)", "Lead Time (ST4)", "Sample Pic (ST5)", "Sample Qty (ST5)", "PO Number (ST6)", "Photo/Video (ST8)", "Cargo (ST9)", "Received Qty (ST10)",
       "Country (GRN)", "Total Received (GRN)", "Remaining Qty",
       ...I2R_STEP_SHORT.flatMap((s, i) => [`ST${i+1} Planned`, `ST${i+1} Actual`, `ST${i+1} Status`]),
       "Cancelled"
@@ -534,9 +593,9 @@ export default function I2RPage() {
       
       const row = [
         i.id, i.indend_num, i.item_name, i.quantity, i.category, i.filled_by, fmtCsvDt(i.created_at), fmtCsvDt(i.updated_at),
-        i.supplier_name_3, i.lead_time_acc_to_vendor_4, i.sample_pic_5, i.sample_qty_5, i.po_number_6, i.cargo_8, i.received_qty_9,
+        i.supplier_name_3, i.lead_time_acc_to_vendor_4, i.sample_pic_5, i.sample_qty_5, i.po_number_6, (i as any).photo_video_8, (i as any).cargo_9, (i as any).received_qty_10,
         stats?.country || "—", stats?.totalRec || 0, rem,
-        ...Array.from({length: 10}, (_, idx) => {
+        ...Array.from({length: 11}, (_, idx) => {
           const n = idx + 1;
           return [fmtCsvDt((i as any)[`planned_${n}`]), fmtCsvDt((i as any)[`actual_${n}`]), (i as any)[`status_${n}`]];
         }).flat(),
@@ -561,7 +620,7 @@ export default function I2RPage() {
     setActionStatus("loading"); setActionMessage("Saving..."); setIsStatusModalOpen(true);
     const now = new Date().toISOString();
     const payload = { ...formData, updated_at: now };
-    if (!editingItem) { payload.created_at = now; payload.planned_1 = calculatePlannedDate(now, globalConfigs[0].tat); }
+    if (!editingItem) { payload.created_at = now; payload.planned_1 = calculatePlannedDate(now, stepConfigs[0]?.tat || globalConfigs[0]?.tat || "24 Hrs"); }
     try {
       const res = await fetch("/api/i2r", { method: editingItem ? "PUT" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
       if (res.ok) setActionStatus("success"); else setActionStatus("error");
@@ -601,10 +660,11 @@ export default function I2RPage() {
       if (startStep === 4) upd.lead_time_acc_to_vendor_4 = "";
       if (startStep === 5) { upd.sample_pic_5 = ""; upd.sample_qty_5 = ""; }
       if (startStep === 6) upd.po_number_6 = "";
-      if (startStep === 8) upd.cargo_8 = "";
-      if (startStep === 9) upd.received_qty_9 = "";
+      if (startStep === 8) upd.photo_video_8 = "";
+      if (startStep === 9) upd.cargo_9 = "";
+      if (startStep === 10) upd.received_qty_10 = "";
     } else {
-      for (let s = startStep; s <= 10; s++) {
+      for (let s = startStep; s <= 11; s++) {
         upd[`actual_${s}`] = "";
         upd[`status_${s}`] = "";
         if (s > startStep) upd[`planned_${s}`] = "";
@@ -612,8 +672,9 @@ export default function I2RPage() {
         if (s === 4) upd.lead_time_acc_to_vendor_4 = "";
         if (s === 5) { upd.sample_pic_5 = ""; upd.sample_qty_5 = ""; }
         if (s === 6) upd.po_number_6 = "";
-        if (s === 8) upd.cargo_8 = "";
-        if (s === 9) upd.received_qty_9 = "";
+        if (s === 8) upd.photo_video_8 = "";
+        if (s === 9) upd.cargo_9 = "";
+        if (s === 10) upd.received_qty_10 = "";
       }
     }
     upd.updated_at = now;
@@ -749,7 +810,7 @@ export default function I2RPage() {
             <div className="space-y-1">
               {I2R_STEP_SHORT.map((name, i) => {
                 const n = i + 1; const active = selectedStepFilter === n;
-                const STEP_ICONS = [DocumentTextIcon, CheckCircleIcon, UserIcon, ArrowDownTrayIcon, PhotoIcon, PlusIcon, CubeIcon, BuildingOfficeIcon, DocumentTextIcon, ClockIcon];
+                const STEP_ICONS = [DocumentTextIcon, CheckCircleIcon, UserIcon, ArrowDownTrayIcon, PhotoIcon, PlusIcon, CubeIcon, PhotoIcon, BuildingOfficeIcon, DocumentTextIcon, ClockIcon];
                 const Icon = STEP_ICONS[i];
                 return (
                   <div key={n} className="px-1">
@@ -890,7 +951,7 @@ export default function I2RPage() {
                         </div>
 
                         {/* Card Bottom Grid */}
-                        <div className="grid grid-cols-9 gap-1.5 py-2 border-t border-slate-50 dark:border-navy-700 mt-1.5">
+                        <div className="grid grid-cols-10 gap-1.5 py-2 border-t border-slate-50 dark:border-navy-700 mt-1.5">
                           <div className="col-span-2 space-y-0.5">
                             <div className="flex items-center gap-1.5 text-emerald-500 dark:text-emerald-400"><BuildingOfficeIcon className="w-3.5 h-3.5" /><p className="text-[9px] font-black uppercase tracking-widest">SUPPLIER</p></div>
                             <p className="text-[13px] font-black text-slate-800 dark:text-white ml-5 line-clamp-1">{item.supplier_name_3 || "—"}</p>
@@ -913,6 +974,18 @@ export default function I2RPage() {
                             )}
                           </div>
                           <div className="space-y-0.5">
+                            <div className="flex items-center gap-1.5 text-violet-500 dark:text-violet-400"><PhotoIcon className="w-3.5 h-3.5" /><p className="text-[9px] font-black uppercase tracking-widest">READY STOCK</p></div>
+                            {item.photo_video_8 ? (
+                              <div className="ml-5">
+                                <a href={fileLinkUrl(item.photo_video_8)} target="_blank" rel="noopener noreferrer" className="text-[12px] font-black text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 uppercase whitespace-nowrap">
+                                  <LinkIcon className="w-3 h-3" /> View Media
+                                </a>
+                              </div>
+                            ) : (
+                              <p className="text-[12px] font-black text-slate-300 dark:text-navy-600 ml-5">Pending</p>
+                            )}
+                          </div>
+                          <div className="space-y-0.5">
                             <div className="flex items-center gap-1.5 text-blue-500 dark:text-blue-400"><GlobeAltIcon className="w-3.5 h-3.5" /><p className="text-[9px] font-black uppercase tracking-widest">COUNTRY</p></div>
                             <div className="ml-5">
                               {(() => {
@@ -929,12 +1002,12 @@ export default function I2RPage() {
 
                           <div className="space-y-0.5">
                             <div className="flex items-center gap-1.5 text-indigo-500 dark:text-indigo-400"><CubeIcon className="w-3.5 h-3.5" /><p className="text-[9px] font-black uppercase tracking-widest">CARGO</p></div>
-                            <p className="text-[13px] font-black text-slate-800 dark:text-white ml-5 truncate">{item.cargo_8 || "—"}</p>
+                            <p className="text-[13px] font-black text-slate-800 dark:text-white ml-5 truncate">{(item as any).cargo_9 || "—"}</p>
                           </div>
 
                           <div className="space-y-0.5">
                             <div className="flex items-center gap-1.5 text-emerald-500 dark:text-emerald-400"><HashtagIcon className="w-3.5 h-3.5" /><p className="text-[9px] font-black uppercase tracking-widest">REC QTY</p></div>
-                            <p className="text-[13px] font-black text-slate-800 dark:text-white ml-5 truncate">{item.received_qty_9 || "—"}</p>
+                            <p className="text-[13px] font-black text-slate-800 dark:text-white ml-5 truncate">{(item as any).received_qty_10 || "—"}</p>
                           </div>
 
                           <div className="space-y-0.5">
@@ -964,7 +1037,7 @@ export default function I2RPage() {
 
                         {exp && (
                           <div className="mt-3 grid grid-cols-5 gap-2 animate-in slide-in-from-top-2 duration-300">
-                            {Array.from({ length: 10 }, (_, i) => {
+                            {Array.from({ length: I2R_STEP_SHORT.length }, (_, i) => {
                               const n = i + 1; const act = (item as any)[`actual_${n}`]; const pl = (item as any)[`planned_${n}`]; 
                               const done = !!act;
                               const isPending = !done && n === getActiveStep(item);
@@ -1025,8 +1098,9 @@ export default function I2RPage() {
                       <th className="p-3 whitespace-nowrap bg-blue-900/40 dark:bg-navy-900/50">LEAD TIME (ST-4)</th>
                       <th className="p-3 whitespace-nowrap bg-blue-900/40 dark:bg-navy-900/50">SAMPLE PIC (ST-5)</th>
                       <th className="p-3 whitespace-nowrap bg-blue-900/40 dark:bg-navy-900/50">PO NUMBER (ST-6)</th>
-                      <th className="p-3 whitespace-nowrap bg-blue-900/40 dark:bg-navy-900/50">CARGO (ST-8)</th>
-                      <th className="p-3 whitespace-nowrap bg-blue-900/40 dark:bg-navy-900/50">REC QTY (ST-9)</th>
+                      <th className="p-3 whitespace-nowrap bg-blue-900/40 dark:bg-navy-900/50">PHOTO/VIDEO (ST-8)</th>
+                      <th className="p-3 whitespace-nowrap bg-blue-900/40 dark:bg-navy-900/50">CARGO (ST-9)</th>
+                      <th className="p-3 whitespace-nowrap bg-blue-900/40 dark:bg-navy-900/50">REC QTY (ST-10)</th>
                       <th className="p-3 whitespace-nowrap bg-emerald-900/40 dark:bg-emerald-900/50">COUNTRY</th>
                       <th className="p-3 whitespace-nowrap bg-emerald-900/40 dark:bg-emerald-900/50 text-center">GRN REC</th>
                       <th className="p-3 whitespace-nowrap bg-emerald-900/40 dark:bg-emerald-900/50 text-center">REMAINING</th>
@@ -1070,8 +1144,17 @@ export default function I2RPage() {
                           ) : <span className="text-slate-300 dark:text-navy-700 font-bold uppercase text-[9px]">NO PIC</span>}
                         </td>
                         <td className="p-3 font-black text-rose-600 dark:text-rose-400 uppercase">{it.po_number_6 || "—"}</td>
-                        <td className="p-3 font-black text-indigo-600 dark:text-indigo-400 uppercase">{it.cargo_8 || "—"}</td>
-                        <td className="p-3 font-black text-emerald-600 dark:text-emerald-400 uppercase">{it.received_qty_9 || "—"}</td>
+                        <td className="p-3">
+                          {it.photo_video_8 ? (
+                            <a href={fileLinkUrl(it.photo_video_8)} target="_blank" rel="noopener noreferrer" className="text-blue-500 dark:text-blue-400 hover:underline font-black uppercase text-[9px] flex items-center gap-1">
+                              <LinkIcon className="w-3 h-3" /> VIEW MEDIA
+                            </a>
+                          ) : (
+                            <span className="text-slate-300 dark:text-navy-700 font-bold uppercase text-[9px]">NO MEDIA</span>
+                          )}
+                        </td>
+                        <td className="p-3 font-black text-indigo-600 dark:text-indigo-400 uppercase">{(it as any).cargo_9 || "—"}</td>
+                        <td className="p-3 font-black text-emerald-600 dark:text-emerald-400 uppercase">{(it as any).received_qty_10 || "—"}</td>
                         {(() => {
                           const stats = getGRNStats(it.po_number_6 || "");
                           const rem = (parseFloat(it.quantity) || 0) - (stats?.totalRec || 0);
@@ -1255,7 +1338,45 @@ export default function I2RPage() {
                             <input type="text" value={bulkSampleQtyInputs[id]||""} onChange={e => setBulkSampleQtyInputs(p=>({...p,[id]:e.target.value}))} className="w-full px-4 py-2 bg-slate-50 dark:bg-navy-900 border border-slate-100 dark:border-navy-800 rounded-xl font-bold text-xs text-gray-900 dark:text-white outline-none focus:border-[#003875] dark:focus:border-[#FFD500]" placeholder="Qty..." />
                           </div>
                         </div>
-                      )}{n === 6 && (<div className="space-y-1"><label className="text-[9px] font-black uppercase text-slate-400 dark:text-navy-600 tracking-widest px-1">PO Number</label><input type="text" value={bulkPOInputs[id]||""} onChange={e => setBulkPOInputs(p=>({...p,[id]:e.target.value}))} className="w-full px-4 py-2 bg-slate-50 dark:bg-navy-900 border border-slate-100 dark:border-navy-800 rounded-xl font-bold text-xs text-gray-900 dark:text-white outline-none focus:border-[#003875] dark:focus:border-[#FFD500]" placeholder="Enter PO#..." /></div>)}{n === 8 && (<div className="space-y-1"><label className="text-[9px] font-black uppercase text-slate-400 dark:text-navy-600 tracking-widest px-1">Cargo</label><select value={bulkCargoInputs[id]||""} onChange={e => setBulkCargoInputs(p=>({...p,[id]:e.target.value}))} className="w-full px-4 py-2 bg-slate-50 dark:bg-navy-900 border border-slate-100 dark:border-navy-800 rounded-xl font-bold text-xs text-gray-900 dark:text-white outline-none focus:border-[#003875] dark:focus:border-[#FFD500]"><option value="">Select Cargo</option><option value="Navy">Navy</option><option value="By Air">By Air</option><option value="Neelkanth">Neelkanth</option><option value="Self">Self</option></select></div>)}{n === 9 && (<div className="space-y-1"><label className="text-[9px] font-black uppercase text-slate-400 dark:text-navy-600 tracking-widest px-1">Received Qty</label><input type="text" value={bulkReceivedQtyInputs[id]||""} onChange={e => setBulkReceivedQtyInputs(p=>({...p,[id]:e.target.value}))} className="w-full px-4 py-2 bg-slate-50 dark:bg-navy-900 border border-slate-100 dark:border-navy-800 rounded-xl font-bold text-xs text-gray-900 dark:text-white outline-none focus:border-[#003875] dark:focus:border-[#FFD500]" placeholder="Enter qty..." /></div>)}{![3,4,5,6,8,9].includes(n) && (<p className="text-[10px] font-black text-slate-300 dark:text-navy-700 uppercase tracking-widest italic">Standard status update only</p>)}</div>)}</div>
+                      )}{n === 6 && (<div className="space-y-1"><label className="text-[9px] font-black uppercase text-slate-400 dark:text-navy-600 tracking-widest px-1">PO Number</label><input type="text" value={bulkPOInputs[id]||""} onChange={e => setBulkPOInputs(p=>({...p,[id]:e.target.value}))} className="w-full px-4 py-2 bg-slate-50 dark:bg-navy-900 border border-slate-100 dark:border-navy-800 rounded-xl font-bold text-xs text-gray-900 dark:text-white outline-none focus:border-[#003875] dark:focus:border-[#FFD500]" placeholder="Enter PO#..." /></div>)}
+                      {n === 8 && (
+                        <div className="grid grid-cols-[1fr_120px] gap-3">
+                          <div className="space-y-1">
+                            <label className="text-[9px] font-black uppercase text-slate-400 dark:text-navy-600 tracking-widest px-1">Photo / Video</label>
+                            <div
+                              onDragOver={e => { e.preventDefault(); e.currentTarget.classList.add('border-[#FFD500]', 'bg-yellow-50/30'); }}
+                              onDragLeave={e => { e.currentTarget.classList.remove('border-[#FFD500]', 'bg-yellow-50/30'); }}
+                              onDrop={e => {
+                                e.preventDefault();
+                                e.currentTarget.classList.remove('border-[#FFD500]', 'bg-yellow-50/30');
+                                const f = e.dataTransfer.files?.[0];
+                                if (f) setBulkPhotoFiles(p => ({ ...p, [id]: f }));
+                              }}
+                              className={`relative flex items-center gap-3 w-full px-4 py-2 bg-slate-50 dark:bg-navy-900 border-2 border-dashed rounded-xl transition-all ${bulkPhotoFiles[id] ? "border-emerald-500 bg-emerald-50/20" : "border-slate-100 dark:border-navy-800"}`}
+                            >
+                              <div className="flex-1 min-w-0">
+                                {bulkPhotoFiles[id] ? (
+                                  <p className="text-[11px] font-black text-emerald-600 truncate flex items-center gap-1.5"><CheckCircleIcon className="w-3.5 h-3.5" /> {bulkPhotoFiles[id].name}</p>
+                                ) : (
+                                  <input type="text" value={bulkPhotoPicInputs[id] || ""} onChange={e => setBulkPhotoPicInputs(p => ({ ...p, [id]: e.target.value }))} className="w-full bg-transparent border-none p-0 font-bold text-xs text-gray-900 dark:text-white outline-none placeholder:text-slate-300" placeholder="Paste URL or Drag Photo/Video here..." />
+                                )}
+                              </div>
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                <input type="file" id={`bulk-photo-${id}`} hidden onChange={e => { const f = e.target.files?.[0]; if (f) setBulkPhotoFiles(p => ({ ...p, [id]: f })); }} />
+                                <label htmlFor={`bulk-photo-${id}`} className="p-1.5 bg-white dark:bg-navy-800 rounded-lg shadow-sm border border-slate-100 dark:border-navy-700 cursor-pointer hover:scale-105 active:scale-95 transition-all">
+                                  <PhotoIcon className={`w-4 h-4 ${bulkPhotoFiles[id] ? "text-emerald-500" : "text-slate-400"}`} />
+                                </label>
+                                {bulkPhotoFiles[id] && (
+                                  <button onClick={() => setBulkPhotoFiles(p => { const n = {...p}; delete n[id]; return n; })} className="p-1.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all"><XMarkIcon className="w-4 h-4" /></button>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                      {n === 9 && (<div className="space-y-1"><label className="text-[9px] font-black uppercase text-slate-400 dark:text-navy-600 tracking-widest px-1">Cargo</label><select value={bulkCargoInputs[id]||""} onChange={e => setBulkCargoInputs(p=>({...p,[id]:e.target.value}))} className="w-full px-4 py-2 bg-slate-50 dark:bg-navy-900 border border-slate-100 dark:border-navy-800 rounded-xl font-bold text-xs text-gray-900 dark:text-white outline-none focus:border-[#003875] dark:focus:border-[#FFD500]"><option value="">Select Cargo</option><option value="Navy">Navy</option><option value="By Air">By Air</option><option value="Neelkanth">Neelkanth</option><option value="Self">Self</option></select></div>)}
+                      {n === 10 && (<div className="space-y-1"><label className="text-[9px] font-black uppercase text-slate-400 dark:text-navy-600 tracking-widest px-1">Received Qty</label><input type="text" value={bulkReceivedQtyInputs[id]||""} onChange={e => setBulkReceivedQtyInputs(p=>({...p,[id]:e.target.value}))} className="w-full px-4 py-2 bg-slate-50 dark:bg-navy-900 border border-slate-100 dark:border-navy-800 rounded-xl font-bold text-xs text-gray-900 dark:text-white outline-none focus:border-[#003875] dark:focus:border-[#FFD500]" placeholder="Enter qty..." /></div>)}
+                      {![3,4,5,6,8,9,10].includes(n) && (<p className="text-[10px] font-black text-slate-300 dark:text-navy-700 uppercase tracking-widest italic">Standard status update only</p>)}</div>)}</div>
                       <div className="flex items-center gap-3 pr-2"><p className={`text-[9px] font-black uppercase tracking-widest ${t ? 'text-[#003875] dark:text-[#FFD500]' : 'text-slate-300 dark:text-navy-800'}`}>{t ? 'INCLUDE' : 'SKIP'}</p><button onClick={() => setBulkToggles(p => ({...p, [id]: !t}))} className={`w-10 h-5 rounded-full relative p-0.5 transition-all shadow-inner ${t ? "bg-[#003875] dark:bg-[#FFD500]" : "bg-slate-200 dark:bg-navy-700"}`}><div className={`w-4 h-4 bg-white dark:bg-navy-900 rounded-full shadow-md transition-all transform duration-300 ${t ? "translate-x-5" : "translate-x-0"}`} /></button></div>
                     </div>
                   </div>
@@ -1316,7 +1437,7 @@ export default function I2RPage() {
               <div>
                 <label className="text-[11px] font-black text-slate-800 dark:text-white/80 uppercase block mb-3">Select Step to Reset</label>
                 <div className="grid grid-cols-5 gap-2">
-                  {Array.from({ length: 10 }, (_, i) => i + 1).map(s => (
+                  {Array.from({ length: I2R_STEP_SHORT.length }, (_, i) => i + 1).map(s => (
                     <button
                       key={s}
                       onClick={() => setRemoveFollowUpStep(s)}

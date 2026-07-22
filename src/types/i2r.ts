@@ -19,14 +19,16 @@ export interface I2R {
   planned_8: string; actual_8: string; status_8: string;
   planned_9: string; actual_9: string; status_9: string;
   planned_10: string; actual_10: string; status_10: string;
+  planned_11: string; actual_11: string; status_11: string;
   // Extra step metadata
   supplier_name_3: string;
   lead_time_acc_to_vendor_4: string;
   sample_pic_5: string;
   sample_qty_5: string;
   po_number_6: string;
-  cargo_8: string;
-  received_qty_9: string;
+  photo_video_8: string;
+  cargo_9: string;
+  received_qty_10: string;
 }
 
 export interface I2RStepConfig {
@@ -43,6 +45,7 @@ export const I2R_STEPS = [
   "Check Physical Sample",
   "Make Po",
   "Check Packing Status in warehouse and Order Packing",
+  "Ask For Photo/Video of Ready Stock From Vendor",
   "Delivered to cargo",
   "Fill Receive material Form",
   "Follow up till Full material received or waive off Qty",

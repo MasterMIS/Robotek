@@ -70,8 +70,8 @@ const STEP_ICONS = [
 // --- Metric Explanations ---
 const METRIC_DESCRIPTIONS: Record<string, string> = {
   'Total PO Raised': 'Calculation: Count entries where `po_number_6` is present.\nDate Filter: PO Date (`actual_6`) is within the selected range.',
-  'Total PO Closed': 'Calculation: Count raised POs where `received_qty_9` >= `quantity`.\nDate Filter: PO Date (`actual_6`) is within the selected range.',
-  'Pending POs': 'Calculation: Count raised POs where `received_qty_9` < `quantity`.\nDate Filter: PO Date (`actual_6`) is within the selected range.',
+  'Total PO Closed': 'Calculation: Count raised POs where `received_qty_10` >= `quantity`.\nDate Filter: PO Date (`actual_6`) is within the selected range.',
+  'Pending POs': 'Calculation: Count raised POs where `received_qty_10` < `quantity`.\nDate Filter: PO Date (`actual_6`) is within the selected range.',
   'Delivery Overdue': 'Calculation: Count Pending POs where today > Expected Delivery (PO Date `actual_6` + `lead_time_acc_to_vendor_4`).\nDate Filter: PO Date (`actual_6`) is within the selected range.',
   'Payment Overdue': 'Calculation: Count mapped GRNs where Actual Payment (`actual_9`) > Planned (`planned_9`), OR if pending and today > Planned.\nDate Filter: PO Date (`actual_6` in I2R) is within the selected range.',
   'Avg I2R time (IND)': 'Calculation: Avg days from PO Date (`actual_6`) to Full Receipt (`actual_9`) for closed POs mapped to IND GRNs.\nDate Filter: PO Date (`actual_6`) is within the selected range.',

@@ -124,7 +124,7 @@ export async function GET(req: NextRequest) {
       let indTotalDays = 0, indCount = 0;
       let chnTotalDays = 0, chnCount = 0;
       let stepDelays: Record<number, number> = {};
-      for (let i = 1; i <= 10; i++) stepDelays[i] = 0;
+      for (let i = 1; i <= 11; i++) stepDelays[i] = 0;
 
       if (type === 'i2r') {
         const rejectedGRNs = grnItems.filter((grn: any) => {
@@ -154,7 +154,7 @@ export async function GET(req: NextRequest) {
       items.forEach(item => {
         if (type === 'i2r') {
           // Bottleneck calculation
-          for (let i = 1; i <= 10; i++) {
+          for (let i = 1; i <= 11; i++) {
             const plannedStr = item[`planned_${i}`];
             const actualStr = item[`actual_${i}`];
             if (plannedStr && actualStr) {
@@ -170,13 +170,13 @@ export async function GET(req: NextRequest) {
           if (hasPO) {
             (metrics['Total PO Raised'] as number)++;
             const reqQty = Number(item.quantity) || 0;
-            const recQty = Number(item.received_qty_9) || 0;
+            const recQty = Number(item.received_qty_10) || 0;
             
             if (reqQty > 0 && recQty >= reqQty) {
               (metrics['Total PO Closed'] as number)++;
               
               // Avg I2R time calculation
-              const fullReceivedStr = item.actual_9;
+            const fullReceivedStr = item.actual_10;
               if (item.actual_6 && fullReceivedStr) {
                 const poCreated = new Date(item.actual_6);
                 const fullReceived = new Date(fullReceivedStr);
@@ -266,7 +266,7 @@ export async function GET(req: NextRequest) {
       if (type === 'i2r') {
         let maxDelay = 0;
         let bottleneckIdx = -1;
-        for (let i = 1; i <= 10; i++) {
+        for (let i = 1; i <= 11; i++) {
           if (stepDelays[i] > maxDelay) {
             maxDelay = stepDelays[i];
             bottleneckIdx = i;
