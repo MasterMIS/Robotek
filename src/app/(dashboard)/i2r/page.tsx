@@ -951,68 +951,71 @@ export default function I2RPage() {
                         </div>
 
                         {/* Card Bottom Grid */}
-                        <div className="grid grid-cols-10 gap-1.5 py-2 border-t border-slate-50 dark:border-navy-700 mt-1.5">
-                          <div className="col-span-2 space-y-0.5">
-                            <div className="flex items-center gap-1.5 text-emerald-500 dark:text-emerald-400"><BuildingOfficeIcon className="w-3.5 h-3.5" /><p className="text-[9px] font-black uppercase tracking-widest">SUPPLIER</p></div>
-                            <p className="text-[13px] font-black text-slate-800 dark:text-white ml-5 line-clamp-1">{item.supplier_name_3 || "—"}</p>
-                          </div>
-                          <div className="space-y-0.5">
-                            <div className="flex items-center gap-1.5 text-orange-400 dark:text-orange-300"><ClockIcon className="w-3.5 h-3.5" /><p className="text-[9px] font-black uppercase tracking-widest">LEAD TIME</p></div>
-                            <p className="text-[13px] font-black text-slate-800 dark:text-white ml-5 truncate">{item.lead_time_acc_to_vendor_4 || "—"}</p>
-                          </div>
-                          <div className="space-y-0.5">
-                            <div className="flex items-center gap-1.5 text-blue-400 dark:text-blue-300"><PhotoIcon className="w-3.5 h-3.5" /><p className="text-[9px] font-black uppercase tracking-widest">SAMPLE</p></div>
+                        <div className="overflow-x-auto custom-scrollbar -mx-1 px-1">
+                          <div className="flex items-start gap-x-3 gap-y-2 py-2 border-t border-slate-50 dark:border-navy-700 mt-1.5 min-w-max pr-1">
+                            <div className="flex items-start gap-3 shrink-0">
+                              <div className="min-w-[72px] shrink-0 space-y-0.5">
+                                <div className="flex items-center gap-1 text-emerald-500 dark:text-emerald-400"><BuildingOfficeIcon className="w-3.5 h-3.5 shrink-0" /><p className="text-[9px] font-black uppercase tracking-widest">SUPPLIER</p></div>
+                                <p className="text-[12px] font-black text-slate-800 dark:text-white ml-4 whitespace-normal break-words leading-tight">{item.supplier_name_3 || "—"}</p>
+                              </div>
+                              <div className="w-[76px] shrink-0 space-y-0.5">
+                                <div className="flex items-center gap-1 text-orange-400 dark:text-orange-300"><ClockIcon className="w-3.5 h-3.5 shrink-0" /><p className="text-[9px] font-black uppercase tracking-widest whitespace-nowrap">LEAD TIME</p></div>
+                                <p className="text-[12px] font-black text-slate-800 dark:text-white truncate">{item.lead_time_acc_to_vendor_4 || "—"}</p>
+                              </div>
+                            </div>
+                            <div className="w-[112px] shrink-0 space-y-0.5">
+                              <div className="flex items-center gap-1 text-blue-400 dark:text-blue-300"><PhotoIcon className="w-3.5 h-3.5 shrink-0" /><p className="text-[9px] font-black uppercase tracking-widest">SAMPLE</p></div>
                             {item.sample_pic_5 ? (
-                              <div className="flex items-center gap-2 ml-5">
-                                <a href={item.sample_pic_5} target="_blank" className="text-[12px] font-black text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 uppercase whitespace-nowrap">
+                              <div className="flex items-center gap-1.5 ml-4">
+                                <a href={item.sample_pic_5} target="_blank" className="text-[11px] font-black text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 uppercase whitespace-nowrap">
                                   <LinkIcon className="w-3 h-3" /> View Pic
                                 </a>
-                                <span className="text-[11px] font-black text-slate-400 dark:text-navy-500 uppercase tracking-tighter">Q:{item.sample_qty_5 || "—"}</span>
+                                <span className="text-[10px] font-black text-slate-400 dark:text-navy-500 uppercase tracking-tighter">Q:{item.sample_qty_5 || "—"}</span>
                               </div>
                             ) : (
-                              <p className="text-[12px] font-black text-slate-300 dark:text-navy-600 ml-5">Pending</p>
+                              <p className="text-[11px] font-black text-slate-300 dark:text-navy-600 ml-4">Pending</p>
                             )}
                           </div>
-                          <div className="space-y-0.5">
-                            <div className="flex items-center gap-1.5 text-violet-500 dark:text-violet-400"><PhotoIcon className="w-3.5 h-3.5" /><p className="text-[9px] font-black uppercase tracking-widest">READY STOCK</p></div>
+                          <div className="w-[118px] shrink-0 space-y-0.5">
+                            <div className="flex items-center gap-1 text-violet-500 dark:text-violet-400"><PhotoIcon className="w-3.5 h-3.5 shrink-0" /><p className="text-[9px] font-black uppercase tracking-widest leading-tight">READY STOCK</p></div>
                             {item.photo_video_8 ? (
-                              <div className="ml-5">
-                                <a href={fileLinkUrl(item.photo_video_8)} target="_blank" rel="noopener noreferrer" className="text-[12px] font-black text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 uppercase whitespace-nowrap">
+                              <div className="ml-4">
+                                <a href={fileLinkUrl(item.photo_video_8)} target="_blank" rel="noopener noreferrer" className="text-[11px] font-black text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 uppercase whitespace-nowrap">
                                   <LinkIcon className="w-3 h-3" /> View Media
                                 </a>
                               </div>
                             ) : (
-                              <p className="text-[12px] font-black text-slate-300 dark:text-navy-600 ml-5">Pending</p>
+                              <p className="text-[11px] font-black text-slate-300 dark:text-navy-600 ml-4">Pending</p>
                             )}
                           </div>
-                          <div className="space-y-0.5">
-                            <div className="flex items-center gap-1.5 text-blue-500 dark:text-blue-400"><GlobeAltIcon className="w-3.5 h-3.5" /><p className="text-[9px] font-black uppercase tracking-widest">COUNTRY</p></div>
-                            <div className="ml-5">
+                          <div className="w-[58px] shrink-0 space-y-0.5">
+                            <div className="flex items-center gap-1 text-blue-500 dark:text-blue-400"><GlobeAltIcon className="w-3.5 h-3.5 shrink-0" /><p className="text-[9px] font-black uppercase tracking-widest">COUNTRY</p></div>
+                            <div className="ml-4">
                               {(() => {
                                 const stats = getGRNStats(item.po_number_6 || "");
-                                return <p className="text-[13px] font-black text-slate-800 dark:text-white truncate uppercase">{stats?.country || "—"}</p>;
+                                return <p className="text-[12px] font-black text-slate-800 dark:text-white truncate uppercase">{stats?.country || "—"}</p>;
                               })()}
                             </div>
                           </div>
 
-                          <div className="space-y-0.5">
-                            <div className="flex items-center gap-1.5 text-rose-500 dark:text-rose-400"><DocumentTextIcon className="w-3.5 h-3.5" /><p className="text-[9px] font-black uppercase tracking-widest">PO NO</p></div>
-                            <p className="text-[13px] font-black text-slate-800 dark:text-white ml-5 truncate">{item.po_number_6 || "—"}</p>
+                          <div className="w-[68px] shrink-0 space-y-0.5">
+                            <div className="flex items-center gap-1 text-rose-500 dark:text-rose-400"><DocumentTextIcon className="w-3.5 h-3.5 shrink-0" /><p className="text-[9px] font-black uppercase tracking-widest">PO NO</p></div>
+                            <p className="text-[12px] font-black text-slate-800 dark:text-white ml-4 truncate">{item.po_number_6 || "—"}</p>
                           </div>
 
-                          <div className="space-y-0.5">
-                            <div className="flex items-center gap-1.5 text-indigo-500 dark:text-indigo-400"><CubeIcon className="w-3.5 h-3.5" /><p className="text-[9px] font-black uppercase tracking-widest">CARGO</p></div>
-                            <p className="text-[13px] font-black text-slate-800 dark:text-white ml-5 truncate">{(item as any).cargo_9 || "—"}</p>
+                          <div className="w-[58px] shrink-0 space-y-0.5">
+                            <div className="flex items-center gap-1 text-indigo-500 dark:text-indigo-400"><CubeIcon className="w-3.5 h-3.5 shrink-0" /><p className="text-[9px] font-black uppercase tracking-widest">CARGO</p></div>
+                            <p className="text-[12px] font-black text-slate-800 dark:text-white ml-4 truncate">{(item as any).cargo_9 || "—"}</p>
                           </div>
 
-                          <div className="space-y-0.5">
-                            <div className="flex items-center gap-1.5 text-emerald-500 dark:text-emerald-400"><HashtagIcon className="w-3.5 h-3.5" /><p className="text-[9px] font-black uppercase tracking-widest">REC QTY</p></div>
-                            <p className="text-[13px] font-black text-slate-800 dark:text-white ml-5 truncate">{(item as any).received_qty_10 || "—"}</p>
+                          <div className="w-[68px] shrink-0 space-y-0.5">
+                            <div className="flex items-center gap-1 text-emerald-500 dark:text-emerald-400"><HashtagIcon className="w-3.5 h-3.5 shrink-0" /><p className="text-[9px] font-black uppercase tracking-widest">REC QTY</p></div>
+                            <p className="text-[12px] font-black text-slate-800 dark:text-white ml-4 truncate">{(item as any).received_qty_10 || "—"}</p>
                           </div>
 
-                          <div className="space-y-0.5">
-                            <div className="flex items-center gap-1.5 text-emerald-500 dark:text-emerald-400"><SparklesIcon className="w-3.5 h-3.5" /><p className="text-[9px] font-black uppercase tracking-widest">BALANCE</p></div>
-                            <div className="ml-5">
+                          <div className="shrink-0 space-y-0.5 min-w-[96px]">
+                            <div className="flex items-center gap-1 text-emerald-500 dark:text-emerald-400"><SparklesIcon className="w-3.5 h-3.5 shrink-0" /><p className="text-[9px] font-black uppercase tracking-widest">BALANCE</p></div>
+                            <div className="ml-4">
                               {item.po_number_6 ? (
                                 <div className="animate-in fade-in slide-in-from-left-1 duration-500">
                                   {(() => {
@@ -1020,7 +1023,7 @@ export default function I2RPage() {
                                     if (!stats) return <p className="text-[9px] font-black text-slate-400 dark:text-navy-600 uppercase tracking-tighter">No GRN yet</p>;
                                     const rem = (parseFloat(item.quantity) || 0) - stats.totalRec;
                                     return (
-                                      <div className="flex items-center gap-2 mt-0.5 font-black text-[11px] uppercase tracking-tighter whitespace-nowrap">
+                                      <div className="flex items-center gap-1.5 font-black text-[10px] uppercase tracking-tighter whitespace-nowrap">
                                         <span className="text-emerald-600 dark:text-emerald-400">R: {stats.totalRec}</span>
                                         <span className="text-slate-300 dark:text-navy-800">|</span>
                                         <span className={rem > 0 ? "text-rose-600" : "text-emerald-600"}>B: {rem}</span>
@@ -1031,6 +1034,7 @@ export default function I2RPage() {
                               ) : <p className="text-[11px] font-black text-slate-300 dark:text-navy-700">—</p>}
                             </div>
                           </div>
+                        </div>
                         </div>
                         
 
