@@ -3,17 +3,7 @@
 import { useState, useEffect } from "react";
 import useSWR from "swr";
 import { XMarkIcon, MagnifyingGlassIcon, PaperAirplaneIcon, ArrowUturnRightIcon } from "@heroicons/react/24/outline";
-
-interface ChatMessage {
-  id: string;
-  sender_id: string;
-  receiver_id: string;
-  text: string;
-  type: "text" | "image" | "file" | "audio";
-  media_url: string;
-  created_at: string;
-  read_by?: string;
-}
+import type { ChatMessage } from "@/types/chat";
 
 interface ForwardModalProps {
   message: ChatMessage;

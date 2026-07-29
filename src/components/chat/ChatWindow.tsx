@@ -1,46 +1,34 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import useSWR from "swr";
 import MessageBubble from "./MessageBubble";
 import ChatInput from "./ChatInput";
 import ForwardModal from "./ForwardModal";
 import ConfirmModal from "../ConfirmModal";
 import SearchableSelect from "../SearchableSelect";
-import { UserCircleIcon, InformationCircleIcon } from "@heroicons/react/24/outline";
-import { XMarkIcon, ArrowDownTrayIcon, DocumentDuplicateIcon, CheckIcon, UserGroupIcon, PlusSmallIcon, TrashIcon, PencilIcon } from "@heroicons/react/24/outline";
+import { UserGroupIcon, XMarkIcon, ArrowDownTrayIcon, DocumentDuplicateIcon, CheckIcon, PlusSmallIcon, TrashIcon, PencilIcon } from "@heroicons/react/24/outline";
 import { getDriveImageUrl } from "@/lib/drive-utils";
 import { format, isToday, isYesterday } from "date-fns";
-
-interface ChatMessage {
-  id: string;
-  sender_id: string;
-  receiver_id: string;
-  text: string;
-  type: "text" | "image" | "file" | "audio";
-  media_url: string;
-  read_by?: string;
-  created_at: string;
-}
-
-interface ChatGroup {
-  id: string;
-  name: string;
-  participants: string;
-  admins: string;
-  created_by: string;
-  created_at: string;
-}
+import type { ChatMessage, ChatGroup } from "@/types/chat";
+import { useChatSocket } from "@/hooks/useChatSocket";
 
 interface ChatWindowProps {
-  chatId: string; // This is the partner's username
+  chatId: string;
   currentUsername: string;
   onBack?: () => void;
+  onlineUsers: Set<string>;
+  onPresenceUpdate?: (username: string, online: boolean) => void;
+  onPresenceSync?: (online: string[]) => void;
+}
+
+interface MessagesResponse {
+  messages: ChatMessage[];
+  hasMore: boolean;
 }
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
-// Helper for gradient background color based on username
 function getDateLabel(dateStr: string): string {
   const date = new Date(dateStr);
   if (isToday(date)) return "Today";
@@ -51,50 +39,49 @@ function getDateLabel(dateStr: string): string {
 function isSameDay(a: string, b: string): boolean {
   const da = new Date(a);
   const db = new Date(b);
-  return da.getFullYear() === db.getFullYear() &&
-    da.getMonth() === db.getMonth() &&
-    da.getDate() === db.getDate();
+  return da.getFullYear() === db.getFullYear() && da.getMonth() === db.getMonth() && da.getDate() === db.getDate();
 }
 
 function getAvatarGradient(username: string) {
-  const colors = [
-    "from-blue-500 to-indigo-600",
-    "from-emerald-500 to-teal-600",
-    "from-orange-500 to-red-600",
-    "from-pink-500 to-rose-600",
-    "from-purple-500 to-fuchsia-600",
-    "from-cyan-500 to-blue-600"
-  ];
+  const colors = ["from-teal-500 to-emerald-600", "from-green-500 to-teal-600", "from-lime-500 to-green-600"];
   let hash = 0;
-  for (let i = 0; i < username.length; i++) {
-    hash = username.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  const index = Math.abs(hash) % colors.length;
-  return colors[index];
+  for (let i = 0; i < username.length; i++) hash = username.charCodeAt(i) + ((hash << 5) - hash);
+  return colors[Math.abs(hash) % colors.length];
 }
 
-export default function ChatWindow({ chatId, currentUsername, onBack }: ChatWindowProps) {
+export default function ChatWindow({ chatId, currentUsername, onBack, onlineUsers, onPresenceUpdate, onPresenceSync }: ChatWindowProps) {
   const [isSending, setIsSending] = useState(false);
+  const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
+  const [editingMessage, setEditingMessage] = useState<ChatMessage | null>(null);
+  const [editText, setEditText] = useState("");
+  const [typingUsers, setTypingUsers] = useState<string[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  
   const [previewMediaUrl, setPreviewMediaUrl] = useState<string | null>(null);
   const [isCopied, setIsCopied] = useState(false);
   const [forwardingMessage, setForwardingMessage] = useState<ChatMessage | null>(null);
 
-  // Fetch messages between current user and the partner (chatId)
-  const { data: messages, mutate } = useSWR<ChatMessage[]>(`/api/chat/messages?chatId=${chatId}`, fetcher, {
-    refreshInterval: 15000, 
-  });
+  const { data, mutate } = useSWR<MessagesResponse>(
+    `/api/chat/messages?chatId=${chatId}&limit=100`,
+    fetcher,
+    { refreshInterval: 60000, revalidateOnFocus: true }
+  );
+
+  const messages = data?.messages || [];
+
+  const messageMap = useMemo(() => {
+    const map = new Map<string, ChatMessage>();
+    messages.forEach((m) => map.set(m.id, m));
+    return map;
+  }, [messages]);
 
   const isGroup = chatId.startsWith("group_");
   const { data: groupInfo, mutate: mutateGroupInfo } = useSWR<ChatGroup>(
     isGroup ? `/api/chat/groups/${chatId}` : null,
     fetcher
   );
-
   const { data: allUsers } = useSWR<any[]>("/api/chat/users", fetcher);
-  const partnerUser = !isGroup && allUsers ? allUsers.find(u => u.username === chatId) : null;
-  
+  const partnerUser = !isGroup && allUsers ? allUsers.find((u) => u.username === chatId) : null;
+
   const [showGroupInfo, setShowGroupInfo] = useState(false);
   const [newParticipant, setNewParticipant] = useState("");
   const [isUpdatingGroup, setIsUpdatingGroup] = useState(false);
@@ -106,9 +93,78 @@ export default function ChatWindow({ chatId, currentUsername, onBack }: ChatWind
     title: string;
     message: string;
     onConfirm: () => void;
-    type?: 'danger' | 'info';
+    type?: "danger" | "info";
     confirmLabel?: string;
   }>({ isOpen: false, title: "", message: "", onConfirm: () => {} });
+
+  const handleNewMessage = useCallback(
+    (msg: ChatMessage) => {
+      const isRelevant =
+        msg.receiver_id === chatId ||
+        (msg.sender_id === chatId && msg.receiver_id === currentUsername) ||
+        (msg.sender_id === currentUsername && msg.receiver_id === chatId);
+
+      if (!isRelevant) return;
+
+      mutate(
+        (current) => {
+          if (!current) return { messages: [msg], hasMore: false };
+          if (current.messages.some((m) => m.id === msg.id)) return current;
+          return { ...current, messages: [...current.messages, msg] };
+        },
+        false
+      );
+    },
+    [chatId, currentUsername, mutate]
+  );
+
+  const handleMessageUpdated = useCallback(
+    (msg: ChatMessage) => {
+      mutate(
+        (current) => {
+          if (!current) return current;
+          return {
+            ...current,
+            messages: current.messages.map((m) => (m.id === msg.id ? msg : m)),
+          };
+        },
+        false
+      );
+    },
+    [mutate]
+  );
+
+  const handleMessageDeleted = useCallback(
+    (messageId: string) => {
+      mutate(
+        (current) => {
+          if (!current) return current;
+          return { ...current, messages: current.messages.filter((m) => m.id !== messageId) };
+        },
+        false
+      );
+    },
+    [mutate]
+  );
+
+  const { connected, sendMessage, emitTypingStart, emitTypingStop, markRead, editMessage, deleteMessage, reactToMessage } =
+    useChatSocket({
+      currentUsername,
+      chatId,
+      onNewMessage: handleNewMessage,
+      onMessageUpdated: handleMessageUpdated,
+      onMessageDeleted: handleMessageDeleted,
+      onTypingStart: (username) => {
+        if (username !== currentUsername) {
+          setTypingUsers((prev) => (prev.includes(username) ? prev : [...prev, username]));
+        }
+      },
+      onTypingStop: (username) => {
+        setTypingUsers((prev) => prev.filter((u) => u !== username));
+      },
+      onPresenceSync: onPresenceSync,
+      onPresenceUpdate: onPresenceUpdate,
+    });
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -116,91 +172,100 @@ export default function ChatWindow({ chatId, currentUsername, onBack }: ChatWind
 
   useEffect(() => {
     scrollToBottom();
-
-    // Mark messages as read
-    if (messages && messages.length > 0) {
+    if (messages.length > 0) {
       const hasUnread = messages.some(
         (m) => m.sender_id !== currentUsername && !(m.read_by || "").includes(currentUsername)
       );
-
       if (hasUnread) {
-        fetch("/api/chat/messages/read", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ partnerId: chatId })
-        }).then(res => {
-          if (res.ok) mutate();
-        }).catch(err => console.error("Failed to mark read:", err));
+        if (connected) markRead(chatId);
+        else {
+          fetch("/api/chat/messages/read", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ partnerId: chatId }),
+          }).then((res) => {
+            if (res.ok) mutate();
+          });
+        }
       }
     }
-  }, [messages, chatId, currentUsername, mutate]);
+  }, [messages, chatId, currentUsername, mutate, connected, markRead]);
 
-  const handleSendMessage = async (text: string, type: "text"|"image"|"file"|"audio", mediaUrl?: string) => {
+  const handleSendMessage = async (
+    text: string,
+    type: "text" | "image" | "file" | "audio",
+    mediaUrl?: string,
+    replyToId?: string
+  ) => {
     if (!text.trim() && type === "text") return;
     setIsSending(true);
+    setReplyTo(null);
+
+    const tempId = `temp-${Date.now()}`;
+    const optimistic: ChatMessage = {
+      id: tempId,
+      sender_id: currentUsername,
+      receiver_id: chatId,
+      text,
+      type,
+      media_url: mediaUrl || "",
+      read_by: currentUsername,
+      created_at: new Date().toISOString(),
+      reply_to_id: replyToId || "",
+    };
+
+    mutate(
+      (current) => ({
+        messages: [...(current?.messages || []), optimistic],
+        hasMore: current?.hasMore || false,
+      }),
+      false
+    );
 
     try {
-      const tempId = `temp-${Date.now()}`;
-      mutate(
-        currentMessages => [
-          ...(currentMessages || []),
-          {
-            id: tempId,
-            sender_id: currentUsername,
-            receiver_id: chatId,
-            text,
-            type,
-            media_url: mediaUrl || "",
-            created_at: new Date().toISOString(),
-          } as ChatMessage
-        ],
-        false
-      );
-
-      const res = await fetch("/api/chat/messages", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          chat_id: chatId, // This is receiver_id
+      let saved: ChatMessage | null = null;
+      if (connected) {
+        saved = await sendMessage({
+          chat_id: chatId,
           text,
           type,
           media_url: mediaUrl,
-        }),
-      });
+          reply_to_id: replyToId,
+        });
+      }
 
-      if (res.ok) {
+      if (!saved) {
+        const res = await fetch("/api/chat/messages", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ chat_id: chatId, text, type, media_url: mediaUrl, reply_to_id: replyToId }),
+        });
+        if (res.ok) saved = await res.json();
+      }
+
+      if (saved) {
+        mutate(
+          (current) => ({
+            messages: (current?.messages || []).map((m) => (m.id === tempId ? saved! : m)),
+            hasMore: current?.hasMore || false,
+          }),
+          false
+        );
+      } else {
         mutate();
       }
     } catch (err) {
       console.error("Failed to send message", err);
+      mutate();
     } finally {
       setIsSending(false);
     }
   };
 
   const handleForwardMessage = async (selectedUsernames: string[], msgToForward: ChatMessage) => {
-    try {
-      const promises = selectedUsernames.map(async (username) => {
-        if (username === chatId) {
-          const tempId = `temp-fwd-${Date.now()}-${Math.random()}`;
-          mutate(
-            currentMessages => [
-              ...(currentMessages || []),
-              {
-                id: tempId,
-                sender_id: currentUsername,
-                receiver_id: chatId,
-                text: msgToForward.text,
-                type: msgToForward.type,
-                media_url: msgToForward.media_url || "",
-                created_at: new Date().toISOString(),
-              } as ChatMessage
-            ],
-            false
-          );
-        }
-
-        const res = await fetch("/api/chat/messages", {
+    await Promise.all(
+      selectedUsernames.map(async (username) => {
+        await fetch("/api/chat/messages", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -208,75 +273,79 @@ export default function ChatWindow({ chatId, currentUsername, onBack }: ChatWind
             text: msgToForward.text,
             type: msgToForward.type,
             media_url: msgToForward.media_url,
+            forwarded_from: msgToForward.id,
           }),
         });
-
-        if (!res.ok) {
-           console.error(`Failed to forward to ${username}`);
-        }
-      });
-
-      await Promise.all(promises);
-      
-      if (selectedUsernames.includes(chatId)) {
-         mutate();
-      }
-    } catch (err) {
-      console.error("Error forwarding messages", err);
-    }
+      })
+    );
+    if (selectedUsernames.includes(chatId)) mutate();
   };
 
-  const handleDeleteMessage = async (msg: ChatMessage) => {
+  const handleDeleteMessage = (msg: ChatMessage) => {
     setConfirmModal({
       isOpen: true,
       title: "Delete Message",
-      message: "Are you sure you want to delete this message? This action cannot be undone.",
+      message: "Delete this message for everyone?",
       type: "danger",
       confirmLabel: "Delete",
       onConfirm: async () => {
-        try {
-          // Optimistic update
-          mutate(
-            currentMessages => (currentMessages || []).filter(m => m.id !== msg.id),
-            false
-          );
-
-          const res = await fetch(`/api/chat/messages?messageId=${msg.id}`, {
-            method: "DELETE"
-          });
-
-          if (!res.ok) {
-            const errorData = await res.json();
-            throw new Error(errorData.error || "Failed to delete message");
-          }
-
-          mutate();
-        } catch (err: any) {
-          console.error("Delete error:", err);
-          alert(err.message || "Failed to delete message");
-          mutate(); // Rollback
-        }
-      }
+        mutate(
+          (current) => ({
+            messages: (current?.messages || []).filter((m) => m.id !== msg.id),
+            hasMore: current?.hasMore || false,
+          }),
+          false
+        );
+        const ok = connected ? await deleteMessage(msg.id) : (
+          await fetch(`/api/chat/messages?messageId=${msg.id}`, { method: "DELETE" })
+        ).ok;
+        if (!ok) mutate();
+      },
     });
   };
 
+  const handleEditMessage = async () => {
+    if (!editingMessage || !editText.trim()) return;
+    const updated = connected
+      ? await editMessage(editingMessage.id, editText)
+      : (await fetch("/api/chat/messages", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ messageId: editingMessage.id, action: "edit", text: editText }),
+        }).then((r) => (r.ok ? r.json() : null)));
+
+    if (updated) handleMessageUpdated(updated);
+    setEditingMessage(null);
+    setEditText("");
+  };
+
+  const handleReact = async (msg: ChatMessage, emoji: string) => {
+    const updated = connected
+      ? await reactToMessage(msg.id, emoji)
+      : (await fetch("/api/chat/messages", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ messageId: msg.id, action: "react", emoji }),
+        }).then((r) => (r.ok ? r.json() : null)));
+    if (updated) handleMessageUpdated(updated);
+  };
+
+  const displayName = isGroup ? groupInfo?.name || "Group" : chatId;
+  const isPartnerOnline = !isGroup && onlineUsers.has(chatId);
+
   return (
-    <div className="flex-1 flex flex-col h-full bg-gradient-to-br from-[#FEF5E7] via-[#fdfaf5] to-[#FCE4EC] md:rounded-br-[24px] transition-colors duration-500">
-      
-      {/* Header */}
-      <div className="p-4 flex justify-between items-center bg-[#001F3F] shadow-sm sticky top-0 z-50 transition-colors">
+    <div className="flex-1 flex flex-col h-full bg-[#ECE5DD] relative">
+      {/* WhatsApp chat header */}
+      <div className="px-4 py-2 flex justify-between items-center bg-[#075E54] text-white shadow-md sticky top-0 z-50">
         <div className="flex items-center gap-3">
           {onBack && (
-            <button 
-              onClick={onBack}
-              className="md:hidden p-1.5 -ml-1 mr-1 rounded-full text-white/80 hover:text-white hover:bg-white/10 transition-colors flex items-center justify-center"
-            >
+            <button onClick={onBack} className="md:hidden p-1 rounded-full hover:bg-white/10">
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-5 h-5">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" />
               </svg>
             </button>
           )}
-          <div className={`w-10 h-10 rounded-full flex-shrink-0 flex items-center justify-center text-white font-bold text-sm border border-white/20 shadow-sm overflow-hidden bg-gradient-to-br ${getAvatarGradient(isGroup ? (groupInfo?.name || chatId) : chatId)}`}>
+          <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-medium overflow-hidden bg-gradient-to-br ${getAvatarGradient(displayName)}`}>
             {isGroup ? (
               <UserGroupIcon className="w-5 h-5" />
             ) : partnerUser?.image_url ? (
@@ -285,367 +354,257 @@ export default function ChatWindow({ chatId, currentUsername, onBack }: ChatWind
               chatId.charAt(0).toUpperCase()
             )}
           </div>
-          <div className="flex-1 min-w-0">
+          <div>
             {isGroup && isEditingGroupName ? (
-              <div className="flex items-center gap-2">
-                <input 
-                  autoFocus
-                  value={editedGroupName}
-                  onChange={e => setEditedGroupName(e.target.value)}
-                  onKeyDown={async e => {
-                    if (e.key === 'Enter') {
-                      setIsEditingGroupName(false);
-                      if (editedGroupName.trim() && editedGroupName !== groupInfo?.name) {
-                        await fetch(`/api/chat/groups/${chatId}`, {
-                          method: "PATCH",
-                          headers: { "Content-Type": "application/json" },
-                          body: JSON.stringify({ name: editedGroupName.trim() })
-                        });
-                        mutateGroupInfo();
-                      }
-                    } else if (e.key === 'Escape') {
-                      setIsEditingGroupName(false);
-                    }
-                  }}
-                  onBlur={() => setIsEditingGroupName(false)}
-                  className="bg-white/10 border border-white/30 text-white rounded px-2 py-0.5 outline-none font-bold text-sm w-40 focus:ring-1 focus:ring-white/50"
-                  placeholder="Group Name"
-                />
-              </div>
+              <input
+                autoFocus
+                value={editedGroupName}
+                onChange={(e) => setEditedGroupName(e.target.value)}
+                onKeyDown={async (e) => {
+                  if (e.key === "Enter" && editedGroupName.trim()) {
+                    setIsEditingGroupName(false);
+                    await fetch(`/api/chat/groups/${chatId}`, {
+                      method: "PATCH",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ name: editedGroupName.trim() }),
+                    });
+                    mutateGroupInfo();
+                  } else if (e.key === "Escape") setIsEditingGroupName(false);
+                }}
+                onBlur={() => setIsEditingGroupName(false)}
+                className="bg-white/10 border border-white/30 text-white rounded px-2 py-0.5 outline-none text-sm w-40"
+              />
             ) : (
-              <div className="flex items-center gap-2 group">
-                <h3 className="font-bold text-white tracking-wide">
-                  {isGroup ? groupInfo?.name : chatId}
-                </h3>
-                {isGroup && groupInfo && (groupInfo.admins || "").split(",").map(a=>a.trim()).includes(currentUsername) && (
-                  <button 
-                    onClick={() => {
-                      setEditedGroupName(groupInfo.name);
-                      setIsEditingGroupName(true);
-                    }}
-                    className="text-white/40 hover:text-white opacity-0 group-hover:opacity-100 transition-opacity p-0.5"
-                    title="Rename Group"
+              <div className="flex items-center gap-2">
+                <h3 className="font-medium text-[16px]">{displayName}</h3>
+                {isGroup && groupInfo && (groupInfo.admins || "").split(",").map((a) => a.trim()).includes(currentUsername) && (
+                  <button
+                    onClick={() => { setEditedGroupName(groupInfo.name); setIsEditingGroupName(true); }}
+                    className="text-white/50 hover:text-white"
                   >
                     <PencilIcon className="w-3 h-3" />
                   </button>
                 )}
               </div>
             )}
-            {isGroup && (
-              <p className="text-[10px] font-bold text-white/60 tracking-wider">
-                {(groupInfo?.participants || "").split(",").filter(Boolean).length} Members
-              </p>
-            )}
+            <p className="text-xs text-white/70">
+              {typingUsers.length > 0
+                ? `${typingUsers.join(", ")} typing...`
+                : isGroup
+                ? `${(groupInfo?.participants || "").split(",").filter(Boolean).length} members`
+                : isPartnerOnline
+                ? "online"
+                : connected
+                ? "offline"
+                : "connecting..."}
+            </p>
           </div>
         </div>
         {isGroup && (
-          <button 
-            onClick={() => setShowGroupInfo(!showGroupInfo)}
-            className={`p-2 rounded-full transition-colors ${showGroupInfo ? "bg-white/20 text-white" : "text-white/60 hover:text-white hover:bg-white/10"}`}
-          >
-            <InformationCircleIcon className="w-6 h-6" />
+          <button onClick={() => setShowGroupInfo(!showGroupInfo)} className="p-2 rounded-full hover:bg-white/10">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
+              <path strokeLinecap="round" strokeLinejoin="round" d="m11.25 11.25.041-.02a.75.75 0 0 1 1.063.852l-.708 2.836a.75.75 0 0 0 1.063.853l.041-.021M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9-3.75h.008v.008H12V8.25Z" />
+            </svg>
           </button>
         )}
       </div>
 
-      {/* Group Info panel */}
+      {/* Group info panel - keep existing logic abbreviated */}
       {showGroupInfo && isGroup && groupInfo && (
-        <div className="absolute top-[72px] right-4 w-72 bg-white dark:bg-[#001F3F] rounded-2xl shadow-2xl border border-white/10 z-[100] p-4 animate-in slide-in-from-top-2 duration-200">
-           <div className="flex justify-between items-center mb-4 pb-2 border-b border-gray-100 dark:border-white/5">
-              <h4 className="font-black text-xs text-[#003875] dark:text-white uppercase tracking-widest">Group Members</h4>
-              <button onClick={() => setShowGroupInfo(false)} className="text-gray-400 hover:text-red-500">
-                <XMarkIcon className="w-5 h-5" />
-              </button>
-           </div>
-           
-           <div className="space-y-2 max-h-60 overflow-y-auto custom-scrollbar mb-4">
-              {(groupInfo.participants || "").split(",").map(p => p.trim()).filter(Boolean).map(username => {
-                const isAdmin = (groupInfo.admins || "").split(",").map(a => a.trim()).includes(username);
-                const currentUserIsAdmin = (groupInfo.admins || "").split(",").map(a => a.trim()).includes(currentUsername);
-
-                return (
-                  <div key={username} className="flex justify-between items-center p-2 rounded-lg bg-gray-50 dark:bg-white/5">
-                    <div className="flex items-center gap-2">
-                       <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] text-white font-bold overflow-hidden shrink-0 bg-gradient-to-br ${getAvatarGradient(username)}`}>
-                          {(() => {
-                            const u = allUsers?.find(user => user.username === username);
-                            return u?.image_url ? <img src={u.image_url} className="w-full h-full object-cover" /> : username.charAt(0).toUpperCase();
-                          })()}
-                       </div>
-                       <span className="text-xs font-bold text-foreground">{username}</span>
-                       {isAdmin && <span className="text-[8px] bg-red-500 text-white px-1 rounded uppercase font-black">Admin</span>}
-                    </div>
-                    {currentUserIsAdmin && username !== currentUsername && (
-                      <div className="flex items-center gap-2">
-                        {!isAdmin ? (
-                          <button 
-                            onClick={() => {
-                               setConfirmModal({
-                                 isOpen: true,
-                                 title: "Make Admin",
-                                 message: `Are you sure you want to make ${username} an admin?`,
-                                 type: "info",
-                                 confirmLabel: "Make Admin",
-                                 onConfirm: async () => {
-                                   const newAdmins = `${groupInfo.admins},${username}`;
-                                   await fetch(`/api/chat/groups/${chatId}`, {
-                                     method: "PATCH",
-                                     headers: { "Content-Type": "application/json" },
-                                     body: JSON.stringify({ admins: newAdmins })
-                                   });
-                                   mutateGroupInfo();
-                                 }
-                               });
-                            }}
-                            className="text-[10px] uppercase font-bold text-blue-500 hover:underline tracking-wider"
-                          >
-                            Make Admin
-                          </button>
-                        ) : (
-                          <button 
-                            onClick={() => {
-                               setConfirmModal({
-                                 isOpen: true,
-                                 title: "Remove Admin",
-                                 message: `Are you sure you want to remove admin rights from ${username}?`,
-                                 type: "danger",
-                                 confirmLabel: "Remove",
-                                 onConfirm: async () => {
-                                   const newAdmins = (groupInfo.admins || "").split(",").map(a=>a.trim()).filter(a => a !== username).join(",");
-                                   await fetch(`/api/chat/groups/${chatId}`, {
-                                     method: "PATCH",
-                                     headers: { "Content-Type": "application/json" },
-                                     body: JSON.stringify({ admins: newAdmins })
-                                   });
-                                   mutateGroupInfo();
-                                 }
-                               });
-                            }}
-                            className="text-[10px] uppercase font-bold text-orange-500 hover:underline tracking-wider"
-                          >
-                            Remove Admin
-                          </button>
-                        )}
-                        <button 
-                          onClick={() => {
-                             setConfirmModal({
-                               isOpen: true,
-                               title: "Remove Participant",
-                               message: `Are you sure you want to remove ${username} from the group?`,
-                               type: "danger",
-                               confirmLabel: "Remove",
-                               onConfirm: async () => {
-                                 const newParticipants = (groupInfo.participants || "").split(",").map(p=>p.trim()).filter(p => p !== username).join(",");
-                                 const newAdmins = (groupInfo.admins || "").split(",").map(a=>a.trim()).filter(a => a !== username).join(",");
-                                 await fetch(`/api/chat/groups/${chatId}`, {
-                                   method: "PATCH",
-                                   headers: { "Content-Type": "application/json" },
-                                   body: JSON.stringify({ participants: newParticipants, admins: newAdmins })
-                                 });
-                                 mutateGroupInfo();
-                               }
-                             });
-                          }}
-                          className="text-gray-400 hover:text-red-500 p-1"
-                        >
-                          <TrashIcon className="w-4 h-4" />
-                        </button>
-                      </div>
-                    )}
+        <div className="absolute top-14 right-4 w-72 bg-white rounded-lg shadow-2xl z-[100] p-4 max-h-[70vh] overflow-y-auto">
+          <div className="flex justify-between items-center mb-3 pb-2 border-b">
+            <h4 className="font-semibold text-sm text-gray-800">Group Members</h4>
+            <button onClick={() => setShowGroupInfo(false)}><XMarkIcon className="w-5 h-5 text-gray-400" /></button>
+          </div>
+          <div className="space-y-1 mb-3">
+            {(groupInfo.participants || "").split(",").map((p) => p.trim()).filter(Boolean).map((username) => {
+              const isAdmin = (groupInfo.admins || "").split(",").map((a) => a.trim()).includes(username);
+              const currentUserIsAdmin = (groupInfo.admins || "").split(",").map((a) => a.trim()).includes(currentUsername);
+              return (
+                <div key={username} className="flex justify-between items-center p-2 rounded bg-gray-50 text-sm">
+                  <div className="flex items-center gap-2">
+                    <span>{username}</span>
+                    {isAdmin && <span className="text-[10px] bg-[#25D366] text-white px-1 rounded">Admin</span>}
                   </div>
-                )
-              })}
-           </div>
-
-           {(groupInfo.admins || "").split(",").map(a => a.trim()).includes(currentUsername) && (
-              <div className="pt-2 border-t border-gray-100 dark:border-white/5">
-                 <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Add Member</p>
-                  <div className="flex gap-2 relative">
-                    <div className="flex-1">
-                      <SearchableSelect
-                        value={newParticipant}
-                        onChange={(val) => setNewParticipant(val)}
-                        placeholder="Select User..."
-                        options={(allUsers || [])
-                          .filter(u => {
-                            const participantList = (groupInfo.participants || "").split(",").map(p => p.trim());
-                            return !participantList.includes(u.username);
-                          })
-                          .map(u => ({ id: u.username, label: u.username }))}
-                      />
-                    </div>
-                    <button 
-                      onClick={async () => {
-                        if (!newParticipant) return;
-                        setIsUpdatingGroup(true);
-                        const newParticipants = `${groupInfo.participants},${newParticipant}`;
-                        await fetch(`/api/chat/groups/${chatId}`, {
-                          method: "PATCH",
-                          headers: { "Content-Type": "application/json" },
-                          body: JSON.stringify({ participants: newParticipants })
+                  {currentUserIsAdmin && username !== currentUsername && (
+                    <button
+                      onClick={() => {
+                        setConfirmModal({
+                          isOpen: true,
+                          title: "Remove Member",
+                          message: `Remove ${username}?`,
+                          type: "danger",
+                          confirmLabel: "Remove",
+                          onConfirm: async () => {
+                            const newParticipants = (groupInfo.participants || "").split(",").map((p) => p.trim()).filter((p) => p !== username).join(",");
+                            const newAdmins = (groupInfo.admins || "").split(",").map((a) => a.trim()).filter((a) => a !== username).join(",");
+                            await fetch(`/api/chat/groups/${chatId}`, {
+                              method: "PATCH",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ participants: newParticipants, admins: newAdmins }),
+                            });
+                            mutateGroupInfo();
+                          },
                         });
-                        setNewParticipant("");
-                        mutateGroupInfo();
-                        setIsUpdatingGroup(false);
                       }}
-                      disabled={isUpdatingGroup || !newParticipant}
-                      className="bg-[#003875] text-white px-3 rounded-xl hover:bg-[#002855] disabled:opacity-50 flex items-center justify-center transition-colors active:scale-95 shadow-sm"
+                      className="text-red-400 hover:text-red-600"
                     >
-                      <PlusSmallIcon className="w-5 h-5" />
+                      <TrashIcon className="w-4 h-4" />
                     </button>
-                 </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          {(groupInfo.admins || "").split(",").map((a) => a.trim()).includes(currentUsername) && (
+            <div className="pt-2 border-t">
+              <p className="text-xs text-gray-500 mb-2">Add member</p>
+              <div className="flex gap-2">
+                <div className="flex-1">
+                  <SearchableSelect
+                    value={newParticipant}
+                    onChange={setNewParticipant}
+                    placeholder="Select user..."
+                    options={(allUsers || [])
+                      .filter((u) => !(groupInfo.participants || "").split(",").map((p) => p.trim()).includes(u.username))
+                      .map((u) => ({ id: u.username, label: u.username }))}
+                  />
+                </div>
+                <button
+                  onClick={async () => {
+                    if (!newParticipant) return;
+                    setIsUpdatingGroup(true);
+                    await fetch(`/api/chat/groups/${chatId}`, {
+                      method: "PATCH",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ participants: `${groupInfo.participants},${newParticipant}` }),
+                    });
+                    setNewParticipant("");
+                    mutateGroupInfo();
+                    setIsUpdatingGroup(false);
+                  }}
+                  disabled={isUpdatingGroup || !newParticipant}
+                  className="bg-[#25D366] text-white px-3 rounded-lg"
+                >
+                  <PlusSmallIcon className="w-5 h-5" />
+                </button>
               </div>
-           )}
+            </div>
+          )}
         </div>
       )}
 
-      {/* Messages Area Container */}
-      <div className="flex-1 relative flex flex-col overflow-hidden z-0">
-        <div 
-          className="flex-1 overflow-y-auto p-4 md:p-6 custom-scrollbar flex flex-col gap-2 relative z-0"
-        >
+      {/* Edit modal */}
+      {editingMessage && (
+        <div className="absolute inset-0 z-[200] bg-black/40 flex items-center justify-center p-4">
+          <div className="bg-white rounded-lg p-4 w-full max-w-md shadow-xl">
+            <h3 className="font-medium mb-2">Edit message</h3>
+            <textarea
+              value={editText}
+              onChange={(e) => setEditText(e.target.value)}
+              className="w-full border rounded-lg p-2 text-sm min-h-[80px] focus:outline-none focus:ring-1 focus:ring-[#25D366]"
+              autoFocus
+            />
+            <div className="flex justify-end gap-2 mt-3">
+              <button onClick={() => setEditingMessage(null)} className="px-4 py-2 text-sm text-gray-600">Cancel</button>
+              <button onClick={handleEditMessage} className="px-4 py-2 text-sm bg-[#25D366] text-white rounded-lg">Save</button>
+            </div>
+          </div>
+        </div>
+      )}
 
-        {!messages ? (
+      {/* Messages */}
+      <div className="flex-1 overflow-y-auto px-4 py-2 custom-scrollbar flex flex-col gap-0.5 relative"
+        style={{ backgroundImage: "url(\"data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23d4cdc4' fill-opacity='0.15'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E\")" }}
+      >
+        {!data ? (
           <div className="flex-1 flex items-center justify-center">
-             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#25D366]" />
           </div>
         ) : messages.length === 0 ? (
-          <div className="flex-1 flex flex-col items-center justify-center text-foreground/40 opacity-70">
-            <div className="w-20 h-20 bg-foreground/5 rounded-full flex items-center justify-center mb-4">
-               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1} stroke="currentColor" className="w-10 h-10">
-                 <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12.76c0 1.6 1.123 2.994 2.707 3.227 1.087.16 2.185.283 3.293.369V21l4.076-4.076a1.526 1.526 0 0 1 1.037-.443 48.282 48.282 0 0 0 5.68-.494c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0 0 12 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018Z" />
-               </svg>
-            </div>
-            <p className="text-sm font-medium">No messages with {chatId} yet.</p>
-            <p className="text-xs mt-1">Send a message to start the conversation.</p>
+          <div className="flex-1 flex flex-col items-center justify-center text-gray-500">
+            <p className="text-sm">No messages yet. Say hello!</p>
           </div>
         ) : (
           messages.map((msg, index) => {
             const isOwn = msg.sender_id === currentUsername;
             const showTail = index === messages.length - 1 || messages[index + 1].sender_id !== msg.sender_id;
             const showDateDivider = index === 0 || !isSameDay(messages[index - 1].created_at, msg.created_at);
-            
+
             return (
               <React.Fragment key={msg.id}>
                 {showDateDivider && (
-                  <div className="flex items-center gap-3 my-2">
-                    <div className="flex-1 h-px bg-gray-300/60 dark:bg-white/10" />
-                    <span className="text-[11px] font-semibold text-gray-500 dark:text-white/40 bg-white/70 dark:bg-white/5 px-3 py-0.5 rounded-full shadow-sm border border-gray-200/60 dark:border-white/10 whitespace-nowrap">
+                  <div className="flex justify-center my-3">
+                    <span className="text-xs font-medium text-gray-600 bg-white/90 px-3 py-1 rounded-lg shadow-sm">
                       {getDateLabel(msg.created_at)}
                     </span>
-                    <div className="flex-1 h-px bg-gray-300/60 dark:bg-white/10" />
                   </div>
                 )}
                 <MessageBubble
-                  message={msg as any}
+                  message={msg}
                   isOwn={isOwn}
                   showTail={showTail}
-                  onImageClick={(url) => setPreviewMediaUrl(url)}
-                  onForwardClick={(msgToForward) => setForwardingMessage(msgToForward as any)}
-                  onDeleteClick={handleDeleteMessage as any}
+                  isGroup={isGroup}
+                  replyToMessage={msg.reply_to_id ? messageMap.get(msg.reply_to_id) : null}
+                  onImageClick={setPreviewMediaUrl}
+                  onForwardClick={setForwardingMessage}
+                  onDeleteClick={handleDeleteMessage}
+                  onReplyClick={setReplyTo}
+                  onEditClick={(m) => { setEditingMessage(m); setEditText(m.text); }}
+                  onReactClick={handleReact}
                 />
               </React.Fragment>
             );
           })
         )}
         <div ref={messagesEndRef} />
-        </div>
-
-        {/* Image Preview Modal */}
-        {previewMediaUrl && (
-          <div 
-            className="absolute inset-0 z-[100] flex flex-col items-center justify-between bg-black/95 backdrop-blur-md p-4 transition-opacity"
-            onClick={() => setPreviewMediaUrl(null)}
-          >
-            {/* Top Bar with Close Button */}
-            <div className="w-full flex justify-end flex-shrink-0 mb-4 h-12">
-              <button 
-                onClick={() => setPreviewMediaUrl(null)}
-                className="p-2 text-white/80 hover:text-white hover:bg-white/20 transition-colors bg-white/10 backdrop-blur-md rounded-full shadow-lg"
-              >
-                <XMarkIcon className="w-6 h-6 md:w-8 md:h-8 font-bold" />
-              </button>
-            </div>
-
-            {/* Image Wrapper - Takes maximum remaining space but shrinks to fit */}
-            <div 
-              className="flex-1 min-h-0 w-full flex items-center justify-center p-2"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <img 
-                src={getDriveImageUrl(previewMediaUrl)}
-                alt="Preview"
-                className="max-h-full max-w-full object-contain rounded-xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] border border-white/10"
-              />
-            </div>
-
-            {/* Bottom Actions */}
-            <div 
-              className="flex flex-shrink-0 flex-wrap items-center justify-center gap-4 w-full pt-4 pb-2"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <button
-                onClick={async (e) => {
-                  e.stopPropagation();
-                  try {
-                    const response = await fetch(`/api/drive-proxy?id=${previewMediaUrl}`);
-                    if (!response.ok) throw new Error("Proxy fetch failed");
-                    const blob = await response.blob();
-                    await navigator.clipboard.write([
-                      new ClipboardItem({ [blob.type]: blob })
-                    ]);
-                    setIsCopied(true);
-                    setTimeout(() => setIsCopied(false), 2000);
-                  } catch (err) {
-                    console.error("Failed to copy image to clipboard:", err);
-                    navigator.clipboard.writeText(`https://drive.google.com/file/d/${previewMediaUrl}/view`);
-                    setIsCopied(true);
-                    setTimeout(() => setIsCopied(false), 2000);
-                  }
-                }}
-                className="flex flex-1 md:flex-none items-center justify-center gap-2 px-6 py-3 bg-white/10 hover:bg-white/20 text-white rounded-full font-bold shadow-lg transition-all backdrop-blur-md border border-white/10 active:scale-95"
-              >
-                {isCopied ? (
-                  <>
-                    <CheckIcon className="w-5 h-5 text-green-400" />
-                    <span className="text-green-400">Copied!</span>
-                  </>
-                ) : (
-                  <>
-                    <DocumentDuplicateIcon className="w-5 h-5" />
-                    <span>Copy Image</span>
-                  </>
-                )}
-              </button>
-              
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  window.open(`https://drive.google.com/uc?export=download&id=${previewMediaUrl}`, '_blank');
-                }}
-                className="flex flex-1 md:flex-none items-center justify-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-full font-bold shadow-lg transition-all active:scale-95 border border-blue-400/20"
-              >
-                <ArrowDownTrayIcon className="w-5 h-5" />
-                <span>Download</span>
-              </button>
-            </div>
-          </div>
-        )}
       </div>
 
-      {/* Forward Modal */}
-      {forwardingMessage && (
-        <ForwardModal
-          message={forwardingMessage}
-          onClose={() => setForwardingMessage(null)}
-          onForward={handleForwardMessage}
-        />
+      {/* Image preview */}
+      {previewMediaUrl && (
+        <div className="absolute inset-0 z-[100] flex flex-col bg-black/95 p-4" onClick={() => setPreviewMediaUrl(null)}>
+          <div className="flex justify-end mb-4">
+            <button onClick={() => setPreviewMediaUrl(null)} className="text-white p-2"><XMarkIcon className="w-6 h-6" /></button>
+          </div>
+          <div className="flex-1 flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
+            <img src={getDriveImageUrl(previewMediaUrl)} alt="Preview" className="max-h-full max-w-full object-contain rounded-lg" />
+          </div>
+          <div className="flex justify-center gap-4 pt-4" onClick={(e) => e.stopPropagation()}>
+            <button
+              onClick={async () => {
+                try {
+                  const response = await fetch(`/api/drive-proxy?id=${previewMediaUrl}`);
+                  const blob = await response.blob();
+                  await navigator.clipboard.write([new ClipboardItem({ [blob.type]: blob })]);
+                  setIsCopied(true);
+                  setTimeout(() => setIsCopied(false), 2000);
+                } catch {
+                  navigator.clipboard.writeText(`https://drive.google.com/file/d/${previewMediaUrl}/view`);
+                  setIsCopied(true);
+                  setTimeout(() => setIsCopied(false), 2000);
+                }
+              }}
+              className="flex items-center gap-2 px-4 py-2 bg-white/10 text-white rounded-full text-sm"
+            >
+              {isCopied ? <><CheckIcon className="w-4 h-4" /> Copied!</> : <><DocumentDuplicateIcon className="w-4 h-4" /> Copy</>}
+            </button>
+            <button
+              onClick={() => window.open(`https://drive.google.com/uc?export=download&id=${previewMediaUrl}`, "_blank")}
+              className="flex items-center gap-2 px-4 py-2 bg-[#25D366] text-white rounded-full text-sm"
+            >
+              <ArrowDownTrayIcon className="w-4 h-4" /> Download
+            </button>
+          </div>
+        </div>
       )}
 
-      {/* Confirm Modal */}
+      {forwardingMessage && (
+        <ForwardModal message={forwardingMessage} onClose={() => setForwardingMessage(null)} onForward={handleForwardMessage} />
+      )}
+
       <ConfirmModal
         isOpen={confirmModal.isOpen}
-        onClose={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+        onClose={() => setConfirmModal((prev) => ({ ...prev, isOpen: false }))}
         onConfirm={confirmModal.onConfirm}
         title={confirmModal.title}
         message={confirmModal.message}
@@ -653,8 +612,14 @@ export default function ChatWindow({ chatId, currentUsername, onBack }: ChatWind
         confirmLabel={confirmModal.confirmLabel}
       />
 
-      {/* Input Area */}
-      <ChatInput onSendMessage={handleSendMessage} isSending={isSending} />
+      <ChatInput
+        onSendMessage={handleSendMessage}
+        isSending={isSending}
+        replyTo={replyTo}
+        onCancelReply={() => setReplyTo(null)}
+        onTypingStart={() => emitTypingStart(chatId)}
+        onTypingStop={() => emitTypingStop(chatId)}
+      />
     </div>
   );
 }

@@ -4,12 +4,13 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --turbo",
+    "dev": "tsx server.ts",
     "build": "cross-env NODE_OPTIONS=--max-old-space-size=4096 next build",
-    "start": "next start",
+    "start": "cross-env NODE_ENV=production tsx server.ts",
     "lint": "eslint"
   },
   "dependencies": {
+    "@chatscope/chat-ui-kit-react": "^2.1.1",
     "@google/generative-ai": "^0.24.1",
     "@heroicons/react": "^2.2.0",
     "date-fns": "^4.1.0",
@@ -30,6 +31,8 @@
     "react-leaflet": "^5.0.0",
     "react-media-recorder": "^1.7.2",
     "recharts": "^3.8.1",
+    "socket.io": "^4.8.3",
+    "socket.io-client": "^4.8.3",
     "swr": "^2.4.1",
     "uuid": "^13.0.0",
     "xlsx": "^0.18.5"
@@ -47,6 +50,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
     "tailwindcss": "^4",
+    "tsx": "^4.23.1",
     "typescript": "^5.9.3"
   }
 }

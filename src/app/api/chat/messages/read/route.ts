@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
-import { getMessages, updateMessage } from "@/lib/chat-sheets";
+import { getMessages, batchMarkMessagesRead } from "@/lib/chat-sheets";
 
 export async function POST(req: Request) {
   try {
     const session = await auth();
-    if (!session || !session.user) {
+    if (!session?.user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -18,10 +18,8 @@ export async function POST(req: Request) {
     }
 
     const messages = await getMessages(currentUsername, partnerId);
-    
-    // In group chat, anyone except the sender can mark as read for themselves
     const isGroup = partnerId.startsWith("group_");
-    
+
     const unreadMessages = messages.filter((m) => {
       const isActuallyUnread = !(m.read_by || "").includes(currentUsername);
       if (isGroup) {
@@ -30,15 +28,7 @@ export async function POST(req: Request) {
       return m.sender_id === partnerId && m.receiver_id === currentUsername && isActuallyUnread;
     });
 
-    let updatedCount = 0;
-    for (const msg of unreadMessages) {
-      const newReadBy = msg.read_by ? `${msg.read_by},${currentUsername}` : currentUsername;
-      const success = await updateMessage(msg.id, { ...msg, read_by: newReadBy });
-      if (success) {
-        updatedCount++;
-      }
-    }
-
+    const updatedCount = await batchMarkMessagesRead(unreadMessages, currentUsername);
     return NextResponse.json({ success: true, updatedCount });
   } catch (error) {
     console.error("Error marking messages as read:", error);
