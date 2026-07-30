@@ -5,10 +5,10 @@ import useSWR from "swr";
 import MessageBubble from "./MessageBubble";
 import ChatInput from "./ChatInput";
 import ForwardModal from "./ForwardModal";
+import MediaPreviewModal, { type ChatMediaItem } from "./MediaPreviewModal";
 import ConfirmModal from "../ConfirmModal";
 import SearchableSelect from "../SearchableSelect";
-import { UserGroupIcon, XMarkIcon, ArrowDownTrayIcon, DocumentDuplicateIcon, CheckIcon, PlusSmallIcon, TrashIcon, PencilIcon } from "@heroicons/react/24/outline";
-import { getDriveImageUrl } from "@/lib/drive-utils";
+import { UserGroupIcon, XMarkIcon, PlusSmallIcon, TrashIcon, PencilIcon } from "@heroicons/react/24/outline";
 import { format, isToday, isYesterday } from "date-fns";
 import type { ChatMessage, ChatGroup } from "@/types/chat";
 import { useChatSocket } from "@/hooks/useChatSocket";
@@ -56,8 +56,7 @@ export default function ChatWindow({ chatId, currentUsername, onBack, onlineUser
   const [editText, setEditText] = useState("");
   const [typingUsers, setTypingUsers] = useState<string[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const [previewMediaUrl, setPreviewMediaUrl] = useState<string | null>(null);
-  const [isCopied, setIsCopied] = useState(false);
+  const [activeMediaId, setActiveMediaId] = useState<string | null>(null);
   const [forwardingMessage, setForwardingMessage] = useState<ChatMessage | null>(null);
 
   const { data, mutate } = useSWR<MessagesResponse>(
@@ -69,6 +68,25 @@ export default function ChatWindow({ chatId, currentUsername, onBack, onlineUser
   const messages = data?.messages || [];
 
   const messageMap = useMemo(() => {
+    const map = new Map<string, ChatMessage>();
+    messages.forEach((m) => map.set(m.id, m));
+    return map;
+  }, [messages]);
+
+  const mediaItems = useMemo<ChatMediaItem[]>(() => {
+    return messages
+      .filter((m) => (m.type === "image" || m.type === "file") && m.media_url)
+      .map((m) => ({
+        id: m.media_url,
+        type: m.type as "image" | "file",
+        label: m.text || (m.type === "image" ? "Image" : "Document"),
+        messageId: m.id,
+        senderId: m.sender_id,
+        createdAt: m.created_at,
+      }));
+  }, [messages]);
+
+  const messageById = useMemo(() => {
     const map = new Map<string, ChatMessage>();
     messages.forEach((m) => map.set(m.id, m));
     return map;
@@ -546,7 +564,7 @@ export default function ChatWindow({ chatId, currentUsername, onBack, onlineUser
                   showTail={showTail}
                   isGroup={isGroup}
                   replyToMessage={msg.reply_to_id ? messageMap.get(msg.reply_to_id) : null}
-                  onImageClick={setPreviewMediaUrl}
+                  onMediaClick={(media) => setActiveMediaId(media.id)}
                   onForwardClick={setForwardingMessage}
                   onDeleteClick={handleDeleteMessage}
                   onReplyClick={setReplyTo}
@@ -560,42 +578,20 @@ export default function ChatWindow({ chatId, currentUsername, onBack, onlineUser
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Image preview */}
-      {previewMediaUrl && (
-        <div className="absolute inset-0 z-[100] flex flex-col bg-black/95 p-4" onClick={() => setPreviewMediaUrl(null)}>
-          <div className="flex justify-end mb-4">
-            <button onClick={() => setPreviewMediaUrl(null)} className="text-white p-2"><XMarkIcon className="w-6 h-6" /></button>
-          </div>
-          <div className="flex-1 flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
-            <img src={getDriveImageUrl(previewMediaUrl)} alt="Preview" className="max-h-full max-w-full object-contain rounded-lg" />
-          </div>
-          <div className="flex justify-center gap-4 pt-4" onClick={(e) => e.stopPropagation()}>
-            <button
-              onClick={async () => {
-                try {
-                  const response = await fetch(`/api/drive-proxy?id=${previewMediaUrl}`);
-                  const blob = await response.blob();
-                  await navigator.clipboard.write([new ClipboardItem({ [blob.type]: blob })]);
-                  setIsCopied(true);
-                  setTimeout(() => setIsCopied(false), 2000);
-                } catch {
-                  navigator.clipboard.writeText(`https://drive.google.com/file/d/${previewMediaUrl}/view`);
-                  setIsCopied(true);
-                  setTimeout(() => setIsCopied(false), 2000);
-                }
-              }}
-              className="flex items-center gap-2 px-4 py-2 bg-white/10 text-white rounded-full text-sm"
-            >
-              {isCopied ? <><CheckIcon className="w-4 h-4" /> Copied!</> : <><DocumentDuplicateIcon className="w-4 h-4" /> Copy</>}
-            </button>
-            <button
-              onClick={() => window.open(`https://drive.google.com/uc?export=download&id=${previewMediaUrl}`, "_blank")}
-              className="flex items-center gap-2 px-4 py-2 bg-[#25D366] text-white rounded-full text-sm"
-            >
-              <ArrowDownTrayIcon className="w-4 h-4" /> Download
-            </button>
-          </div>
-        </div>
+      {activeMediaId && (
+        <MediaPreviewModal
+          items={mediaItems}
+          activeId={activeMediaId}
+          onClose={() => setActiveMediaId(null)}
+          onSelect={setActiveMediaId}
+          onForward={(messageId) => {
+            const msg = messageById.get(messageId);
+            if (msg) {
+              setActiveMediaId(null);
+              setForwardingMessage(msg);
+            }
+          }}
+        />
       )}
 
       {forwardingMessage && (

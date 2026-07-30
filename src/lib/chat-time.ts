@@ -13,6 +13,11 @@ export function formatSidebarChatTime(dateStr: string): string {
   return format(date, "dd/MM/yyyy");
 }
 
+/** Media preview header — e.g. "21/7/2024 at 10:15 am" */
+export function formatPreviewDateTime(dateStr: string): string {
+  return format(new Date(dateStr), "d/M/yyyy 'at' h:mm a").toLowerCase();
+}
+
 /** Recording timer — e.g. "0:05" */
 export function formatRecordingDuration(totalSeconds: number): string {
   const mins = Math.floor(totalSeconds / 60);

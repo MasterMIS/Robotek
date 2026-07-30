@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { formatMessageTime } from "@/lib/chat-time";
 import { getDriveImageUrl } from "@/lib/drive-utils";
 import { PlayIcon, PauseIcon, MicrophoneIcon } from "@heroicons/react/24/solid";
+import { DocumentIcon } from "@heroicons/react/24/outline";
 import type { ChatMessage } from "@/types/chat";
 
 interface MessageBubbleProps {
@@ -10,7 +11,7 @@ interface MessageBubbleProps {
   showTail?: boolean;
   isGroup?: boolean;
   replyToMessage?: ChatMessage | null;
-  onImageClick?: (url: string) => void;
+  onMediaClick?: (media: { id: string; type: "image" | "file"; label: string }) => void;
   onForwardClick?: (message: ChatMessage) => void;
   onDeleteClick?: (message: ChatMessage) => void;
   onReplyClick?: (message: ChatMessage) => void;
@@ -42,7 +43,7 @@ export default function MessageBubble({
   showTail = true,
   isGroup = false,
   replyToMessage,
-  onImageClick,
+  onMediaClick,
   onForwardClick,
   onDeleteClick,
   onReplyClick,
@@ -84,7 +85,7 @@ export default function MessageBubble({
       )}
 
       <div
-        className="flex items-center"
+        className={`flex items-center ${isOwn ? "flex-row-reverse" : "flex-row"}`}
         onMouseEnter={() => setShowActions(true)}
         onMouseLeave={() => setShowActions(false)}
       >
@@ -119,20 +120,43 @@ export default function MessageBubble({
           <img
             src={getDriveImageUrl(message.media_url)}
             alt="Media"
-            className="max-w-[280px] rounded-md cursor-pointer mt-0.5"
-            onClick={() => onImageClick?.(message.media_url)}
+            className="max-w-[280px] rounded-md cursor-pointer mt-0.5 hover:opacity-90 transition-opacity"
+            onClick={() =>
+              onMediaClick?.({
+                id: message.media_url,
+                type: "image",
+                label: message.text || "Image",
+              })
+            }
           />
         )}
 
         {message.type === "file" && message.media_url && (
-          <a
-            href={`https://drive.google.com/file/d/${message.media_url}/view`}
-            target="_blank"
-            rel="noreferrer"
-            className="flex items-center gap-2 bg-black/5 p-2 rounded-md mt-0.5 text-gray-800"
+          <button
+            type="button"
+            onClick={() =>
+              onMediaClick?.({
+                id: message.media_url,
+                type: "file",
+                label: message.text || "Document",
+              })
+            }
+            className={`flex items-center gap-3 mt-0.5 p-2 rounded-lg max-w-[280px] text-left transition-opacity hover:opacity-90 ${
+              isOwn ? "bg-[#c8e6b0]/80" : "bg-gray-50"
+            }`}
           >
-            <span className="text-sm underline">Open document</span>
-          </a>
+            <div className="w-12 h-12 rounded-lg bg-red-500/10 flex items-center justify-center shrink-0">
+              <DocumentIcon className={`w-7 h-7 ${isOwn ? "text-red-700" : "text-red-500"}`} />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium text-gray-900 truncate">
+                {message.text || "Document"}
+              </p>
+              <p className="text-xs text-gray-500 mt-0.5">
+                {(message.text || "").split(".").pop()?.toUpperCase() || "FILE"} · Tap to preview
+              </p>
+            </div>
+          </button>
         )}
 
         {message.type === "audio" && message.media_url && (
@@ -181,7 +205,7 @@ export default function MessageBubble({
 
         {/* Reactions */}
         {Object.keys(reactions).length > 0 && (
-          <div className="flex flex-wrap gap-1 mt-1">
+          <div className={`flex flex-wrap gap-1 mt-1 ${isOwn ? "justify-start" : "justify-end"}`}>
             {Object.entries(reactions).map(([emoji, users]) => (
               <button
                 key={emoji}

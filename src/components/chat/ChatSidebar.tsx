@@ -3,7 +3,7 @@
 import { useState } from "react";
 import useSWR from "swr";
 import { ChatBubbleLeftEllipsisIcon, MagnifyingGlassIcon, UsersIcon, PlusIcon } from "@heroicons/react/24/outline";
-import CreateGroupModal from "./CreateGroupModal";
+import CreateGroupPanel from "./CreateGroupPanel";
 import { formatSidebarChatTime } from "@/lib/chat-time";
 
 interface User {
@@ -67,7 +67,7 @@ interface ChatSidebarProps {
 
 export default function ChatSidebar({ currentUsername, activeChatId, onSelectChat, onlineUsers }: ChatSidebarProps) {
   const [searchTerm, setSearchTerm] = useState("");
-  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isCreatingGroup, setIsCreatingGroup] = useState(false);
 
   const { data: contacts } = useSWR<User[]>("/api/chat/users", fetcher, { refreshInterval: 30000 });
   const { data: groups, mutate: mutateGroups } = useSWR<Group[]>(
@@ -91,7 +91,19 @@ export default function ChatSidebar({ currentUsername, activeChatId, onSelectCha
     });
 
   return (
-    <div className="w-full md:w-[400px] flex flex-col h-full bg-white border-r border-gray-200">
+    <div className="w-full md:w-[400px] flex flex-col h-full bg-white border-r border-gray-200 relative">
+      {isCreatingGroup ? (
+        <CreateGroupPanel
+          currentUsername={currentUsername}
+          onClose={() => setIsCreatingGroup(false)}
+          onGroupCreated={(group) => {
+            mutateGroups();
+            setIsCreatingGroup(false);
+            onSelectChat(group.id);
+          }}
+        />
+      ) : (
+        <>
       {/* WhatsApp header */}
       <div className="px-4 py-3 bg-[#075E54] text-white flex items-center justify-between">
         <div className="flex items-center gap-3">
@@ -101,7 +113,7 @@ export default function ChatSidebar({ currentUsername, activeChatId, onSelectCha
           <span className="font-medium text-[15px]">Chats</span>
         </div>
         <button
-          onClick={() => setIsCreateModalOpen(true)}
+          onClick={() => setIsCreatingGroup(true)}
           className="p-2 hover:bg-white/10 rounded-full transition-colors"
           title="New group"
         >
@@ -231,16 +243,8 @@ export default function ChatSidebar({ currentUsername, activeChatId, onSelectCha
           })
         )}
       </div>
-
-      <CreateGroupModal
-        isOpen={isCreateModalOpen}
-        onClose={() => setIsCreateModalOpen(false)}
-        currentUsername={currentUsername}
-        onGroupCreated={(group) => {
-          mutateGroups();
-          onSelectChat(group.id);
-        }}
-      />
+        </>
+      )}
     </div>
   );
 }
