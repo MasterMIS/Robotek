@@ -17,6 +17,7 @@ interface MessageBubbleProps {
   onReplyClick?: (message: ChatMessage) => void;
   onEditClick?: (message: ChatMessage) => void;
   onReactClick?: (message: ChatMessage, emoji: string) => void;
+  isHighlighted?: boolean;
 }
 
 const QUICK_REACTIONS = ["👍", "❤️", "😂", "😮", "😢", "🙏"];
@@ -49,6 +50,7 @@ export default function MessageBubble({
   onReplyClick,
   onEditClick,
   onReactClick,
+  isHighlighted = false,
 }: MessageBubbleProps) {
   const emojisOnly = message.type === "text" && isEmojiOnly(message.text);
   const isRead = isOwn && !isGroup && (message.read_by || "").split(",").map((s) => s.trim()).includes(message.receiver_id);
@@ -90,7 +92,9 @@ export default function MessageBubble({
         onMouseLeave={() => setShowActions(false)}
       >
       <div
-        className={`relative leading-relaxed break-words shadow-sm ${
+        className={`relative leading-relaxed break-words shadow-sm transition-all duration-500 ${
+          isHighlighted ? "ring-2 ring-[#25D366] ring-offset-2 rounded-lg" : ""
+        } ${
           emojisOnly
             ? "text-[3rem] p-0"
             : `text-[14.2px] px-2 py-1.5 ${

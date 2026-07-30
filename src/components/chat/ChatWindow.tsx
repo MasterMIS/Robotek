@@ -6,9 +6,10 @@ import MessageBubble from "./MessageBubble";
 import ChatInput from "./ChatInput";
 import ForwardModal from "./ForwardModal";
 import MediaPreviewModal, { type ChatMediaItem } from "./MediaPreviewModal";
+import GroupInfoSidebar from "./GroupInfoSidebar";
+import MessageSearchSidebar from "./MessageSearchSidebar";
 import ConfirmModal from "../ConfirmModal";
-import SearchableSelect from "../SearchableSelect";
-import { UserGroupIcon, XMarkIcon, PlusSmallIcon, TrashIcon, PencilIcon } from "@heroicons/react/24/outline";
+import { UserGroupIcon, MagnifyingGlassIcon } from "@heroicons/react/24/outline";
 import { format, isToday, isYesterday } from "date-fns";
 import type { ChatMessage, ChatGroup } from "@/types/chat";
 import { useChatSocket } from "@/hooks/useChatSocket";
@@ -56,8 +57,12 @@ export default function ChatWindow({ chatId, currentUsername, onBack, onlineUser
   const [editText, setEditText] = useState("");
   const [typingUsers, setTypingUsers] = useState<string[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const messageRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const [activeMediaId, setActiveMediaId] = useState<string | null>(null);
   const [forwardingMessage, setForwardingMessage] = useState<ChatMessage | null>(null);
+  const [showMessageSearch, setShowMessageSearch] = useState(false);
+  const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
 
   const { data, mutate } = useSWR<MessagesResponse>(
     `/api/chat/messages?chatId=${chatId}&limit=100`,
@@ -101,10 +106,21 @@ export default function ChatWindow({ chatId, currentUsername, onBack, onlineUser
   const partnerUser = !isGroup && allUsers ? allUsers.find((u) => u.username === chatId) : null;
 
   const [showGroupInfo, setShowGroupInfo] = useState(false);
-  const [newParticipant, setNewParticipant] = useState("");
-  const [isUpdatingGroup, setIsUpdatingGroup] = useState(false);
-  const [isEditingGroupName, setIsEditingGroupName] = useState(false);
-  const [editedGroupName, setEditedGroupName] = useState("");
+
+  useEffect(() => {
+    setShowGroupInfo(false);
+    setShowMessageSearch(false);
+    setHighlightedMessageId(null);
+  }, [chatId]);
+
+  const scrollToMessage = useCallback((messageId: string) => {
+    const el = messageRefs.current.get(messageId);
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+      setHighlightedMessageId(messageId);
+      window.setTimeout(() => setHighlightedMessageId((current) => (current === messageId ? null : current)), 2500);
+    }
+  }, []);
 
   const [confirmModal, setConfirmModal] = useState<{
     isOpen: boolean;
@@ -350,9 +366,16 @@ export default function ChatWindow({ chatId, currentUsername, onBack, onlineUser
 
   const displayName = isGroup ? groupInfo?.name || "Group" : chatId;
   const isPartnerOnline = !isGroup && onlineUsers.has(chatId);
+  const groupMemberNames = (groupInfo?.participants || "")
+    .split(",")
+    .map((p) => p.trim())
+    .filter(Boolean)
+    .map((p) => (p === currentUsername ? "You" : p))
+    .join(", ");
 
   return (
-    <div className="flex-1 flex flex-col h-full bg-[#ECE5DD] relative">
+    <div className="flex-1 flex h-full min-h-0">
+      <div className="flex-1 flex flex-col min-w-0 bg-[#ECE5DD] relative">
       {/* WhatsApp chat header */}
       <div className="px-4 py-2 flex justify-between items-center bg-[#075E54] text-white shadow-md sticky top-0 z-50">
         <div className="flex items-center gap-3">
@@ -373,43 +396,14 @@ export default function ChatWindow({ chatId, currentUsername, onBack, onlineUser
             )}
           </div>
           <div>
-            {isGroup && isEditingGroupName ? (
-              <input
-                autoFocus
-                value={editedGroupName}
-                onChange={(e) => setEditedGroupName(e.target.value)}
-                onKeyDown={async (e) => {
-                  if (e.key === "Enter" && editedGroupName.trim()) {
-                    setIsEditingGroupName(false);
-                    await fetch(`/api/chat/groups/${chatId}`, {
-                      method: "PATCH",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ name: editedGroupName.trim() }),
-                    });
-                    mutateGroupInfo();
-                  } else if (e.key === "Escape") setIsEditingGroupName(false);
-                }}
-                onBlur={() => setIsEditingGroupName(false)}
-                className="bg-white/10 border border-white/30 text-white rounded px-2 py-0.5 outline-none text-sm w-40"
-              />
-            ) : (
-              <div className="flex items-center gap-2">
-                <h3 className="font-medium text-[16px]">{displayName}</h3>
-                {isGroup && groupInfo && (groupInfo.admins || "").split(",").map((a) => a.trim()).includes(currentUsername) && (
-                  <button
-                    onClick={() => { setEditedGroupName(groupInfo.name); setIsEditingGroupName(true); }}
-                    className="text-white/50 hover:text-white"
-                  >
-                    <PencilIcon className="w-3 h-3" />
-                  </button>
-                )}
-              </div>
-            )}
-            <p className="text-xs text-white/70">
+            <div className="flex items-center gap-2">
+              <h3 className="font-medium text-[16px]">{displayName}</h3>
+            </div>
+            <p className="text-xs text-white/70 truncate max-w-[min(100%,420px)]">
               {typingUsers.length > 0
                 ? `${typingUsers.join(", ")} typing...`
                 : isGroup
-                ? `${(groupInfo?.participants || "").split(",").filter(Boolean).length} members`
+                ? groupMemberNames || `${(groupInfo?.participants || "").split(",").filter(Boolean).length} members`
                 : isPartnerOnline
                 ? "online"
                 : connected
@@ -418,99 +412,35 @@ export default function ChatWindow({ chatId, currentUsername, onBack, onlineUser
             </p>
           </div>
         </div>
-        {isGroup && (
-          <button onClick={() => setShowGroupInfo(!showGroupInfo)} className="p-2 rounded-full hover:bg-white/10">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
-              <path strokeLinecap="round" strokeLinejoin="round" d="m11.25 11.25.041-.02a.75.75 0 0 1 1.063.852l-.708 2.836a.75.75 0 0 0 1.063.853l.041-.021M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9-3.75h.008v.008H12V8.25Z" />
-            </svg>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => {
+              setShowGroupInfo(false);
+              setShowMessageSearch((open) => !open);
+            }}
+            className={`p-2 rounded-full hover:bg-white/10 ${showMessageSearch ? "bg-white/15" : ""}`}
+            title="Search messages"
+          >
+            <MagnifyingGlassIcon className="w-6 h-6" />
           </button>
-        )}
-      </div>
-
-      {/* Group info panel - keep existing logic abbreviated */}
-      {showGroupInfo && isGroup && groupInfo && (
-        <div className="absolute top-14 right-4 w-72 bg-white rounded-lg shadow-2xl z-[100] p-4 max-h-[70vh] overflow-y-auto">
-          <div className="flex justify-between items-center mb-3 pb-2 border-b">
-            <h4 className="font-semibold text-sm text-gray-800">Group Members</h4>
-            <button onClick={() => setShowGroupInfo(false)}><XMarkIcon className="w-5 h-5 text-gray-400" /></button>
-          </div>
-          <div className="space-y-1 mb-3">
-            {(groupInfo.participants || "").split(",").map((p) => p.trim()).filter(Boolean).map((username) => {
-              const isAdmin = (groupInfo.admins || "").split(",").map((a) => a.trim()).includes(username);
-              const currentUserIsAdmin = (groupInfo.admins || "").split(",").map((a) => a.trim()).includes(currentUsername);
-              return (
-                <div key={username} className="flex justify-between items-center p-2 rounded bg-gray-50 text-sm">
-                  <div className="flex items-center gap-2">
-                    <span>{username}</span>
-                    {isAdmin && <span className="text-[10px] bg-[#25D366] text-white px-1 rounded">Admin</span>}
-                  </div>
-                  {currentUserIsAdmin && username !== currentUsername && (
-                    <button
-                      onClick={() => {
-                        setConfirmModal({
-                          isOpen: true,
-                          title: "Remove Member",
-                          message: `Remove ${username}?`,
-                          type: "danger",
-                          confirmLabel: "Remove",
-                          onConfirm: async () => {
-                            const newParticipants = (groupInfo.participants || "").split(",").map((p) => p.trim()).filter((p) => p !== username).join(",");
-                            const newAdmins = (groupInfo.admins || "").split(",").map((a) => a.trim()).filter((a) => a !== username).join(",");
-                            await fetch(`/api/chat/groups/${chatId}`, {
-                              method: "PATCH",
-                              headers: { "Content-Type": "application/json" },
-                              body: JSON.stringify({ participants: newParticipants, admins: newAdmins }),
-                            });
-                            mutateGroupInfo();
-                          },
-                        });
-                      }}
-                      className="text-red-400 hover:text-red-600"
-                    >
-                      <TrashIcon className="w-4 h-4" />
-                    </button>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-          {(groupInfo.admins || "").split(",").map((a) => a.trim()).includes(currentUsername) && (
-            <div className="pt-2 border-t">
-              <p className="text-xs text-gray-500 mb-2">Add member</p>
-              <div className="flex gap-2">
-                <div className="flex-1">
-                  <SearchableSelect
-                    value={newParticipant}
-                    onChange={setNewParticipant}
-                    placeholder="Select user..."
-                    options={(allUsers || [])
-                      .filter((u) => !(groupInfo.participants || "").split(",").map((p) => p.trim()).includes(u.username))
-                      .map((u) => ({ id: u.username, label: u.username }))}
-                  />
-                </div>
-                <button
-                  onClick={async () => {
-                    if (!newParticipant) return;
-                    setIsUpdatingGroup(true);
-                    await fetch(`/api/chat/groups/${chatId}`, {
-                      method: "PATCH",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ participants: `${groupInfo.participants},${newParticipant}` }),
-                    });
-                    setNewParticipant("");
-                    mutateGroupInfo();
-                    setIsUpdatingGroup(false);
-                  }}
-                  disabled={isUpdatingGroup || !newParticipant}
-                  className="bg-[#25D366] text-white px-3 rounded-lg"
-                >
-                  <PlusSmallIcon className="w-5 h-5" />
-                </button>
-              </div>
-            </div>
+          {isGroup && (
+            <button
+              type="button"
+              onClick={() => {
+                setShowMessageSearch(false);
+                setShowGroupInfo((open) => !open);
+              }}
+              className={`p-2 rounded-full hover:bg-white/10 ${showGroupInfo ? "bg-white/15" : ""}`}
+              title="Group info"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
+                <path strokeLinecap="round" strokeLinejoin="round" d="m11.25 11.25.041-.02a.75.75 0 0 1 1.063.852l-.708 2.836a.75.75 0 0 0 1.063.853l.041-.021M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9-3.75h.008v.008H12V8.25Z" />
+              </svg>
+            </button>
           )}
         </div>
-      )}
+      </div>
 
       {/* Edit modal */}
       {editingMessage && (
@@ -532,7 +462,9 @@ export default function ChatWindow({ chatId, currentUsername, onBack, onlineUser
       )}
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-4 py-2 custom-scrollbar flex flex-col gap-0.5 relative"
+      <div
+        ref={messagesContainerRef}
+        className="flex-1 overflow-y-auto px-4 py-2 custom-scrollbar flex flex-col gap-0.5 relative"
         style={{ backgroundImage: "url(\"data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23d4cdc4' fill-opacity='0.15'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E\")" }}
       >
         {!data ? (
@@ -558,19 +490,28 @@ export default function ChatWindow({ chatId, currentUsername, onBack, onlineUser
                     </span>
                   </div>
                 )}
-                <MessageBubble
-                  message={msg}
-                  isOwn={isOwn}
-                  showTail={showTail}
-                  isGroup={isGroup}
-                  replyToMessage={msg.reply_to_id ? messageMap.get(msg.reply_to_id) : null}
-                  onMediaClick={(media) => setActiveMediaId(media.id)}
-                  onForwardClick={setForwardingMessage}
-                  onDeleteClick={handleDeleteMessage}
-                  onReplyClick={setReplyTo}
-                  onEditClick={(m) => { setEditingMessage(m); setEditText(m.text); }}
-                  onReactClick={handleReact}
-                />
+                <div
+                  ref={(el) => {
+                    if (el) messageRefs.current.set(msg.id, el);
+                    else messageRefs.current.delete(msg.id);
+                  }}
+                  className={`flex ${isOwn ? "justify-end" : "justify-start"}`}
+                >
+                  <MessageBubble
+                    message={msg}
+                    isOwn={isOwn}
+                    showTail={showTail}
+                    isGroup={isGroup}
+                    isHighlighted={highlightedMessageId === msg.id}
+                    replyToMessage={msg.reply_to_id ? messageMap.get(msg.reply_to_id) : null}
+                    onMediaClick={(media) => setActiveMediaId(media.id)}
+                    onForwardClick={setForwardingMessage}
+                    onDeleteClick={handleDeleteMessage}
+                    onReplyClick={setReplyTo}
+                    onEditClick={(m) => { setEditingMessage(m); setEditText(m.text); }}
+                    onReactClick={handleReact}
+                  />
+                </div>
               </React.Fragment>
             );
           })
@@ -616,6 +557,37 @@ export default function ChatWindow({ chatId, currentUsername, onBack, onlineUser
         onTypingStart={() => emitTypingStart(chatId)}
         onTypingStop={() => emitTypingStop(chatId)}
       />
+      </div>
+
+      {showMessageSearch && (
+        <MessageSearchSidebar
+          messages={messages}
+          isGroup={isGroup}
+          onClose={() => setShowMessageSearch(false)}
+          onSelectMessage={scrollToMessage}
+        />
+      )}
+
+      {showGroupInfo && isGroup && groupInfo && (
+        <GroupInfoSidebar
+          groupInfo={groupInfo}
+          chatId={chatId}
+          currentUsername={currentUsername}
+          allUsers={allUsers || []}
+          onClose={() => setShowGroupInfo(false)}
+          onMutate={mutateGroupInfo}
+          onConfirm={({ title, message, confirmLabel, onConfirm }) =>
+            setConfirmModal({
+              isOpen: true,
+              title,
+              message,
+              type: "danger",
+              confirmLabel,
+              onConfirm,
+            })
+          }
+        />
+      )}
     </div>
   );
 }
