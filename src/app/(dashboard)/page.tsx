@@ -134,6 +134,7 @@ export default function Dashboard() {
         <CompactTable 
             title="Today's Logins"
             icon={UsersIcon}
+            headerTheme="emerald"
             data={data?.attendanceToday || []}
             linkHref="/attendance"
             columns={[
@@ -155,6 +156,7 @@ export default function Dashboard() {
         <CompactTable 
             title="Open/Pending Tickets"
             icon={ChatBubbleLeftRightIcon}
+            headerTheme="blue"
             data={data?.openTickets || []}
             linkHref="/tickets"
             columns={[
@@ -175,7 +177,8 @@ export default function Dashboard() {
         <CompactTable 
             title="Team Absence Power"
             icon={UserMinusIcon}
-          data={(data?.recentLeaves || []).filter((l: any) => (l.status || '').toLowerCase() === 'pending')}
+            headerTheme="amber"
+            data={(data?.recentLeaves || []).filter((l: any) => (l.status || '').toLowerCase() === 'pending')}
             linkHref="/leave"
             columns={[
                 { label: 'User/Reason', key: 'userName', render: (row: any) => (

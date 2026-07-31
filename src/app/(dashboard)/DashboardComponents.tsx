@@ -19,7 +19,7 @@ import {
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import SemiCircleGauge from "@/components/SemiCircleGauge";
-import { useState, useEffect } from "react";
+import { useState, useEffect, type ComponentType } from "react";
 
 // --- ROW 1 COMPONENTS ---
 
@@ -478,33 +478,88 @@ export function UpcomingMeetingsPanel({ meetings, teamMembers }: { meetings: any
 
 // --- ROW 4 COMPONENTS ---
 
-export function CompactTable({ title, icon: Icon, data, columns, linkHref }: any) {
+const COMPACT_TABLE_THEMES = {
+  emerald: {
+    cardHeader:
+      "bg-gradient-to-r from-emerald-500 via-emerald-600 to-teal-600 border-emerald-400/40 shadow-inner",
+    thead: "bg-gradient-to-r from-emerald-400 via-emerald-500 to-teal-500",
+    thText: "text-white drop-shadow-sm",
+    rowBorder: "border-white/25",
+    icon: "text-white",
+    title: "text-white drop-shadow-sm",
+    link: "text-white/70",
+    linkHover: "hover:text-white",
+  },
+  blue: {
+    cardHeader:
+      "bg-gradient-to-r from-[#002855] via-[#003875] to-[#0066cc] border-[#FFD500]/30 shadow-inner",
+    thead: "bg-gradient-to-r from-[#001a33] via-[#003875] to-[#0055aa]",
+    thText: "text-[#FFD500] drop-shadow-sm",
+    rowBorder: "border-[#FFD500]/25",
+    icon: "text-[#FFD500]",
+    title: "text-white drop-shadow-sm",
+    link: "text-white/60",
+    linkHover: "hover:text-[#FFD500]",
+  },
+  amber: {
+    cardHeader:
+      "bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500 border-orange-400/40 shadow-inner",
+    thead: "bg-gradient-to-r from-amber-400 via-orange-500 to-orange-600",
+    thText: "text-white drop-shadow-sm",
+    rowBorder: "border-white/25",
+    icon: "text-white",
+    title: "text-white drop-shadow-sm",
+    link: "text-white/70",
+    linkHover: "hover:text-white",
+  },
+} as const;
+
+type CompactTableTheme = keyof typeof COMPACT_TABLE_THEMES;
+
+export function CompactTable({
+  title,
+  icon: Icon,
+  data = [],
+  columns,
+  linkHref,
+  headerTheme = "blue",
+}: {
+  title: string;
+  icon: ComponentType<{ className?: string }>;
+  data?: any[];
+  columns: any[];
+  linkHref?: string;
+  headerTheme?: CompactTableTheme;
+}) {
+    const theme = COMPACT_TABLE_THEMES[headerTheme];
+    const rows = data ?? [];
+
     return (
       <div className="bg-white dark:bg-navy-800 rounded-[2rem] border border-gray-100 dark:border-white/5 shadow-lg overflow-hidden flex flex-col h-[340px]">
-            <div className="p-4 border-b border-gray-50 dark:border-white/5 flex items-center justify-between bg-gray-50/30 dark:bg-white/1">
-                <h3 className="text-[10px] font-black text-gray-900 dark:text-white uppercase tracking-widest flex items-center gap-2">
-                    <Icon className="w-4 h-4 text-[#003875] dark:text-[#FFD500]" />
+            <div className={`p-4 border-b flex items-center justify-between ${theme.cardHeader}`}>
+                <h3 className={`text-[10px] font-black uppercase tracking-widest flex items-center gap-2 ${theme.title}`}>
+                    <Icon className={`w-4 h-4 ${theme.icon}`} />
                     {title}
                 </h3>
                 {linkHref && (
-                    <Link href={linkHref} className="text-[8px] font-black text-gray-400 uppercase tracking-widest hover:text-[#003875] dark:hover:text-[#FFD500]">Master View</Link>
+                    <Link href={linkHref} className={`text-[8px] font-black uppercase tracking-widest transition-colors ${theme.link} ${theme.linkHover}`}>Master View</Link>
                 )}
             </div>
             <div className="flex-1 overflow-y-auto no-scrollbar scroll-smooth">
                 <table className="w-full text-left">
-                    <thead className="sticky top-0 bg-white dark:bg-navy-800 z-10 shadow-sm">
-                        <tr className="border-b border-gray-50 dark:border-white/5">
+                    <thead className={`sticky top-0 z-10 shadow-sm ${theme.thead}`}>
+                        <tr className={`border-b ${theme.rowBorder}`}>
                             {columns.map((col: any, i: number) => (
-                                <th key={i} className={`p-3 text-[8px] font-black text-gray-400 uppercase tracking-widest ${col.className}`}>{col.label}</th>
+                                <th key={i} className={`p-3 text-[8px] font-black uppercase tracking-widest ${theme.thText} ${col.className || ""}`}>{col.label}</th>
                             ))}
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-50 dark:divide-white/5">
-                        {data.length === 0 ? (
+                        {rows.length === 0 ? (
                             <tr>
                                 <td colSpan={columns.length} className="p-8 text-center text-[10px] font-bold text-gray-300 uppercase italic">Synchronization Pending...</td>
                             </tr>
-                        ) : data.map((row: any, i: number) => (
+                        ) : rows.map((row: any, i: number) => (
                           <tr key={i} className="hover:bg-gray-50 dark:hover:bg-white/1 transition-colors group">
                             {columns.map((col: any, j: number) => (
                               <td key={j} className={`p-4 align-top text-[10px] font-bold text-gray-700 dark:text-gray-300 whitespace-normal ${col.className}`}>
