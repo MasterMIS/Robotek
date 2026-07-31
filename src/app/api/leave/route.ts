@@ -1,10 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { formatDateMMM } from "@/lib/dateUtils";
-import { leaveRequestService, leaveRemarkService, LeaveRequest, LeaveRemark } from "@/lib/leave-sheets";
+import { leaveRequestService, leaveRemarkService, type LeaveRequest, type LeaveRemark } from "@/lib/leave-sheets";
+import { globalCache } from "@/lib/cache";
+import { invalidateLeavePendingCache, invalidateDashboardCache } from "@/lib/sheet-cache-keys";
 import { sendLeaveNotification } from "@/lib/leave-notifications";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
+
+function bustLeaveCaches() {
+  invalidateLeavePendingCache();
+  invalidateDashboardCache();
+}
 
 export async function GET(req: NextRequest) {
   try {
@@ -13,6 +20,18 @@ export async function GET(req: NextRequest) {
     const role = searchParams.get('role');
     const type = searchParams.get('type');
     const leaveId = searchParams.get('leaveId');
+
+    if (searchParams.get("summary") === "pending") {
+      const cacheKey = "leave_pending_count";
+      const cached = globalCache.get<number>(cacheKey);
+      if (cached !== null) {
+        return NextResponse.json({ count: cached });
+      }
+      const allLeaves = await leaveRequestService.getAll();
+      const count = allLeaves.filter((l) => (l.status || "").toLowerCase() === "pending").length;
+      globalCache.set(cacheKey, count, 2 * 60 * 1000);
+      return NextResponse.json({ count });
+    }
 
     if (type === 'remarks' && leaveId) {
       const allRemarks = await leaveRemarkService.getAll();
@@ -55,6 +74,7 @@ export async function POST(req: NextRequest) {
       if (!lv) throw new Error("Leave not found");
 
       await leaveRequestService.update(leaveId, { ...lv, status });
+      bustLeaveCaches();
       
       // Fire notification in background
       sendLeaveNotification('UPDATE_STATUS', { ...lv, status }, { status }).catch(console.error);
@@ -148,6 +168,7 @@ export async function POST(req: NextRequest) {
       }
 
       await leaveRequestService.add(newLeave);
+      bustLeaveCaches();
 
       // Fire notification in background
       sendLeaveNotification('CREATE', newLeave).catch(console.error);

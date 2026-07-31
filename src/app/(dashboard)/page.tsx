@@ -31,7 +31,7 @@ export default function Dashboard() {
   const userId = session?.user?.id;
   
   const { data, error, isLoading } = useSWR('/api/dashboard', fetcher, {
-    refreshInterval: 120000 
+    refreshInterval: 300000 
   });
 
   const { data: attendanceData } = useSWR(userId ? `/api/attendance?userId=${userId}` : null, fetcher);

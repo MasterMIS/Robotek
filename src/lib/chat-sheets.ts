@@ -5,6 +5,7 @@ import {
   invalidateConversationCache,
   setCachedMessages,
 } from "./chat-cache";
+import { invalidateChatUsersCache } from "./sheet-cache-keys";
 
 const CHAT_SHEET_ID = "1G0o9W5ImXNAPjhdFXMtPuHnFTdU_rRkWmSRcaqu9kxM";
 
@@ -204,6 +205,7 @@ export async function addMessage(message: ChatMessage): Promise<boolean> {
 
   if (success) {
     invalidateConversationCache();
+    invalidateChatUsersCache();
     if (message.receiver_id.startsWith("group_")) {
       await updateGroupLastMessage(message.receiver_id, now);
     }
@@ -237,6 +239,9 @@ export async function batchMarkMessagesRead(
     })
   );
 
+  if (updatedCount > 0) {
+    invalidateChatUsersCache();
+  }
   return updatedCount;
 }
 

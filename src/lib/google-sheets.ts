@@ -1,5 +1,9 @@
 import { google } from "googleapis";
 import { User } from "@/types/user";
+import { globalCache } from "./cache";
+import { getUsersCacheKey, getUsersCacheTtl, invalidateUsersCache } from "./sheet-cache-keys";
+
+export { invalidateUsersCache };
 
 const GOOGLE_SHEET_ID = "1cuOGO1UZ3O41zUDrowRlFZ6FCSfUWVsmfVULA0Jx6Tg";
 const SHEET_NAME = "user";
@@ -27,6 +31,12 @@ async function getSheetsClient() {
 }
 
 export async function getUsers(): Promise<User[]> {
+  const cacheKey = getUsersCacheKey();
+  const cached = globalCache.get<User[]>(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
   try {
     const sheets = await getSheetsClient();
     const response = await sheets.spreadsheets.values.get({
@@ -37,7 +47,7 @@ export async function getUsers(): Promise<User[]> {
     const rows = response.data.values;
     if (!rows || rows.length <= 1) return [];
 
-    return rows.slice(1).map((row) => {
+    const users = rows.slice(1).map((row) => {
       const id = row[0] || "";
       let permissions: string[] = [];
       try {
@@ -68,6 +78,9 @@ export async function getUsers(): Promise<User[]> {
         permissions: permissions,
       };
     });
+
+    globalCache.set(cacheKey, users, getUsersCacheTtl());
+    return users;
   } catch (error) {
     console.error("Error fetching users from Google Sheets:", error);
     return [];
@@ -102,6 +115,7 @@ export async function addUser(user: User): Promise<boolean> {
         ]],
       },
     });
+    invalidateUsersCache();
     return true;
   } catch (error) {
     console.error("Error adding user to Google Sheets:", error);
@@ -148,14 +162,13 @@ export async function updateUser(id: string, user: User): Promise<boolean> {
         ]],
       },
     });
+    invalidateUsersCache();
     return true;
   } catch (error) {
     console.error("Error updating user in Google Sheets:", error);
     return false;
   }
 }
-
-import { globalCache } from "./cache";
 
 const VISIBILITY_SHEET_NAME = "page_visibility";
 

@@ -68,7 +68,7 @@ export default function Header({ onMenuClick }: HeaderProps) {
   };
 
   const { data: chatData } = useSWR<any[]>('/api/chat/users', fetcher, {
-    refreshInterval: 120000,
+    refreshInterval: 300000,
   });
   const chatUnreadCount = Array.isArray(chatData) ? chatData.reduce((acc, user) => acc + (user.unreadCount || 0), 0) : 0;
 

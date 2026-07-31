@@ -69,11 +69,11 @@ export default function ChatSidebar({ currentUsername, activeChatId, onSelectCha
   const [searchTerm, setSearchTerm] = useState("");
   const [isCreatingGroup, setIsCreatingGroup] = useState(false);
 
-  const { data: contacts } = useSWR<User[]>("/api/chat/users", fetcher, { refreshInterval: 30000 });
+  const { data: contacts } = useSWR<User[]>("/api/chat/users", fetcher, { refreshInterval: 120000 });
   const { data: groups, mutate: mutateGroups } = useSWR<Group[]>(
     `/api/chat/groups?username=${currentUsername}`,
     fetcher,
-    { refreshInterval: 30000 }
+    { refreshInterval: 120000 }
   );
 
   const allChats = [

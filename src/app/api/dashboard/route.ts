@@ -9,6 +9,7 @@ import { auth } from "@/auth";
 import { getUsers } from "@/lib/google-sheets";
 import { getAttendanceRecords } from "@/lib/sheets/attendance-sheets";
 import { leaveRequestService } from "@/lib/leave-sheets";
+import { globalCache } from "@/lib/cache";
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -85,6 +86,12 @@ export async function GET(req: NextRequest) {
     const userId = session?.user?.id;
     const username = (session?.user as any)?.username;
     const isAdmin = userRole === "ADMIN" || userRole === "EA";
+
+    const dashboardCacheKey = `dashboard_${userId}_${isAdmin}`;
+    const cachedDashboard = globalCache.get<Record<string, unknown>>(dashboardCacheKey);
+    if (cachedDashboard) {
+      return NextResponse.json(cachedDashboard);
+    }
 
     const now = new Date();
     const istFormatter = new Intl.DateTimeFormat('en-GB', {
@@ -276,7 +283,7 @@ export async function GET(req: NextRequest) {
         ? attendanceTodayWithRole
         : attendanceTodayWithRole.filter((r: any) => r.userId === userId || r.userName === username);
 
-    return NextResponse.json({
+    const responsePayload = {
       attendanceToday: filteredAttendanceToday.slice(0, 10),
       summary: {
         totalIn: inTodayCount,
@@ -307,7 +314,10 @@ export async function GET(req: NextRequest) {
       teamMembers: users.map((u: any) => ({ username: u.username, image_url: u.image_url })),
       score: companyMetrics,
       isAdmin
-    });
+    };
+
+    globalCache.set(dashboardCacheKey, responsePayload, 2 * 60 * 1000);
+    return NextResponse.json(responsePayload);
 
   } catch (error) {
     console.error("Dashboard API Error:", error);

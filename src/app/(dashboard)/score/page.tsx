@@ -1532,7 +1532,7 @@ function ScorePageContent() {
   const { data, error, isLoading } = useSWR(
     `/api/score?from=${dateRange.from}&to=${dateRange.to}&type=${filterType}`, 
     fetcher, 
-    { refreshInterval: 120000 }
+    { refreshInterval: 300000 }
   );
 
   // Auto-select user if not privileged

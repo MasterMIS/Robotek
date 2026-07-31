@@ -50,14 +50,13 @@ export default function Sidebar({ mobileOpen, setMobileOpen }: SidebarProps) {
           return null;
         };
 
-        const [delData, checkData, tickData, o2dSummary, chatData, hrmsSummary, recentLeaves] = await Promise.all([
+        const [delData, checkData, tickData, o2dSummary, badgeData, hrmsSummary] = await Promise.all([
           safeFetch('/api/delegations'),
           safeFetch('/api/checklists'),
           safeFetch('/api/tickets'),
           safeFetch('/api/o2d/summary'),   // lightweight — just aggregate counts, not all rows
-          safeFetch('/api/chat/users'),
+          safeFetch('/api/sidebar/badges'),
           safeFetch('/api/hrms/summary')
-          , safeFetch('/api/dashboard')
         ]);
         
         // Filter for USER role
@@ -108,19 +107,11 @@ export default function Sidebar({ mobileOpen, setMobileOpen }: SidebarProps) {
         const totalPending = stepCounts.slice(0, 11).reduce((sum: number, c: number) => sum + (c || 0), 0);
         setO2dPendingCount(totalPending);
 
-        // Pending leave count for sidebar badge (only show pending leaves)
-        try {
-          const dash = recentLeaves || (await safeFetch('/api/dashboard')) || {};
-          const leavesArr = dash?.recentLeaves || [];
-          const pendingCount = leavesArr.filter((l: any) => (l.status || '').toLowerCase() === 'pending').length;
-          setLeavePendingCount(pendingCount);
-        } catch (e) {
-          // ignore
-        }
+        // Pending leave count for sidebar badge
+        setLeavePendingCount(badgeData?.pendingLeaveCount || 0);
 
         // Chat Logic
-        const totalUnreadChat = Array.isArray(chatData) ? chatData.reduce((acc, user) => acc + (user.unreadCount || 0), 0) : 0;
-        setChatUnreadCount(totalUnreadChat);
+        setChatUnreadCount(badgeData?.chatUnreadCount || 0);
 
         // HRMS Logic
         if (hrmsSummary) {
@@ -141,8 +132,8 @@ export default function Sidebar({ mobileOpen, setMobileOpen }: SidebarProps) {
 
     fetchCounts();
     
-    // Refresh counts every 2 minutes
-    const interval = setInterval(fetchCounts, 120000);
+    // Refresh counts every 5 minutes
+    const interval = setInterval(fetchCounts, 300000);
     return () => clearInterval(interval);
   }, [session]);
 
