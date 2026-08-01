@@ -537,12 +537,12 @@ export function CompactTable({
     return (
       <div className="bg-white dark:bg-navy-800 rounded-[2rem] border border-gray-100 dark:border-white/5 shadow-lg overflow-hidden flex flex-col h-[340px]">
             <div className={`p-4 border-b flex items-center justify-between ${theme.cardHeader}`}>
-                <h3 className={`text-[10px] font-black uppercase tracking-widest flex items-center gap-2 ${theme.title}`}>
-                    <Icon className={`w-4 h-4 ${theme.icon}`} />
+                <h3 className={`text-sm font-black uppercase tracking-widest flex items-center gap-2 ${theme.title}`}>
+                    <Icon className={`w-5 h-5 ${theme.icon}`} />
                     {title}
                 </h3>
                 {linkHref && (
-                    <Link href={linkHref} className={`text-[8px] font-black uppercase tracking-widest transition-colors ${theme.link} ${theme.linkHover}`}>Master View</Link>
+                    <Link href={linkHref} className={`text-[11px] font-black uppercase tracking-widest transition-colors ${theme.link} ${theme.linkHover}`}>Master View</Link>
                 )}
             </div>
             <div className="flex-1 overflow-y-auto no-scrollbar scroll-smooth">
@@ -550,19 +550,19 @@ export function CompactTable({
                     <thead className={`sticky top-0 z-10 shadow-sm ${theme.thead}`}>
                         <tr className={`border-b ${theme.rowBorder}`}>
                             {columns.map((col: any, i: number) => (
-                                <th key={i} className={`p-3 text-[8px] font-black uppercase tracking-widest ${theme.thText} ${col.className || ""}`}>{col.label}</th>
+                                <th key={i} className={`px-3 py-3.5 text-xs font-black uppercase tracking-wider ${theme.thText} ${col.className || ""}`}>{col.label}</th>
                             ))}
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-50 dark:divide-white/5">
                         {rows.length === 0 ? (
                             <tr>
-                                <td colSpan={columns.length} className="p-8 text-center text-[10px] font-bold text-gray-300 uppercase italic">Synchronization Pending...</td>
+                                <td colSpan={columns.length} className="p-8 text-center text-xs font-bold text-gray-300 uppercase italic">Synchronization Pending...</td>
                             </tr>
                         ) : rows.map((row: any, i: number) => (
                           <tr key={i} className="hover:bg-gray-50 dark:hover:bg-white/1 transition-colors group">
                             {columns.map((col: any, j: number) => (
-                              <td key={j} className={`p-4 align-top text-[10px] font-bold text-gray-700 dark:text-gray-300 whitespace-normal ${col.className}`}>
+                              <td key={j} className={`p-4 align-top text-xs font-bold text-gray-700 dark:text-gray-300 whitespace-normal ${col.className}`}>
                                 {col.render ? col.render(row) : row[col.key]}
                               </td>
                             ))}
