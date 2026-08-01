@@ -16,7 +16,12 @@ import { notifyChatRecipients } from "@/lib/chat-notifications";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
+import { chatApiDisabledResponse } from "@/lib/chat-api-guard";
+
 export async function GET(req: Request) {
+  const disabled = chatApiDisabledResponse();
+  if (disabled) return disabled;
+
   try {
     const session = await auth();
     if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -40,6 +45,9 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
+  const disabled = chatApiDisabledResponse();
+  if (disabled) return disabled;
+
   try {
     const session = await auth();
     if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -78,6 +86,9 @@ export async function POST(req: Request) {
 }
 
 export async function PATCH(req: Request) {
+  const disabled = chatApiDisabledResponse();
+  if (disabled) return disabled;
+
   try {
     const session = await auth();
     if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -108,6 +119,9 @@ export async function PATCH(req: Request) {
 }
 
 export async function DELETE(req: Request) {
+  const disabled = chatApiDisabledResponse();
+  if (disabled) return disabled;
+
   try {
     const session = await auth();
     if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

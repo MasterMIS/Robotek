@@ -110,8 +110,8 @@ export default function Sidebar({ mobileOpen, setMobileOpen }: SidebarProps) {
         // Pending leave count for sidebar badge
         setLeavePendingCount(badgeData?.pendingLeaveCount || 0);
 
-        // Chat Logic
-        setChatUnreadCount(badgeData?.chatUnreadCount || 0);
+        // Chat badge disabled — no Sheets reads for unread counts
+        setChatUnreadCount(0);
 
         // HRMS Logic
         if (hrmsSummary) {

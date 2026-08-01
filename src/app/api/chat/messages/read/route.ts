@@ -2,7 +2,12 @@ import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { getMessages, batchMarkMessagesRead } from "@/lib/chat-sheets";
 
+import { chatApiDisabledResponse } from "@/lib/chat-api-guard";
+
 export async function POST(req: Request) {
+  const disabled = chatApiDisabledResponse();
+  if (disabled) return disabled;
+
   try {
     const session = await auth();
     if (!session?.user) {

@@ -7,7 +7,12 @@ export const dynamic = "force-dynamic";
 
 const CHAT_USERS_CACHE_TTL = 90 * 1000;
 
+import { chatApiDisabledResponse } from "@/lib/chat-api-guard";
+
 export async function GET() {
+  const disabled = chatApiDisabledResponse();
+  if (disabled) return disabled;
+
   try {
     const session = await auth();
     if (!session?.user) {

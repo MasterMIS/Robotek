@@ -2,7 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { getGroupsForUser, createGroup, messageService } from "@/lib/chat-sheets";
 
+import { chatApiDisabledResponse } from "@/lib/chat-api-guard";
+
 export async function GET(req: NextRequest) {
+  const disabled = chatApiDisabledResponse();
+  if (disabled) return disabled;
+
   try {
     const session = await auth();
     if (!session?.user) {
@@ -57,6 +62,9 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const disabled = chatApiDisabledResponse();
+  if (disabled) return disabled;
+
   try {
     const session = await auth();
     if (!session?.user) {

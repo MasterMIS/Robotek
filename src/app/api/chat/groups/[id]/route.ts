@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { updateGroup, deleteGroup, getGroupsForUser } from "@/lib/chat-sheets";
 
+import { chatApiDisabledResponse } from "@/lib/chat-api-guard";
+
 async function getSessionUser() {
   const session = await auth();
   if (!session?.user) return null;
@@ -12,6 +14,9 @@ export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const disabled = chatApiDisabledResponse();
+  if (disabled) return disabled;
+
   try {
     const currentUsername = await getSessionUser();
     if (!currentUsername) {
@@ -37,6 +42,9 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const disabled = chatApiDisabledResponse();
+  if (disabled) return disabled;
+
   try {
     const currentUsername = await getSessionUser();
     if (!currentUsername) {
@@ -83,6 +91,9 @@ export async function DELETE(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const disabled = chatApiDisabledResponse();
+  if (disabled) return disabled;
+
   try {
     const currentUsername = await getSessionUser();
     if (!currentUsername) {

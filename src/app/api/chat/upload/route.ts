@@ -4,7 +4,12 @@ import { uploadFileToDrive } from "@/lib/google-drive";
 
 const CHAT_UPLOADS_FOLDER_ID = "1Ce_cdrXz6V02nu0eceGwUJu9N0o3f3DZ";
 
+import { chatApiDisabledResponse } from "@/lib/chat-api-guard";
+
 export async function POST(req: Request) {
+  const disabled = chatApiDisabledResponse();
+  if (disabled) return disabled;
+
   try {
     const session = await auth();
     if (!session || !session.user) {

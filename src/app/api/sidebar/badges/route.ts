@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { globalCache } from "@/lib/cache";
 import { leaveRequestService } from "@/lib/leave-sheets";
-import { buildChatContactsForUser, getChatUnreadTotal } from "@/lib/chat-contacts";
 
 export const dynamic = "force-dynamic";
 
@@ -16,20 +15,17 @@ export async function GET() {
     }
 
     const username = (session.user as { username?: string }).username as string;
-    const cacheKey = `sidebar_badges_${username}`;
+    const cacheKey = `sidebar_badges_v2_${username}`;
     const cached = globalCache.get<{ pendingLeaveCount: number; chatUnreadCount: number }>(cacheKey);
     if (cached) {
-      return NextResponse.json(cached);
+      return NextResponse.json({ ...cached, chatUnreadCount: 0 });
     }
 
-    const [leaves, contacts] = await Promise.all([
-      leaveRequestService.getAll(),
-      buildChatContactsForUser(username),
-    ]);
+    const leaves = await leaveRequestService.getAll();
 
     const payload = {
       pendingLeaveCount: leaves.filter((l) => (l.status || "").toLowerCase() === "pending").length,
-      chatUnreadCount: getChatUnreadTotal(contacts),
+      chatUnreadCount: 0,
     };
 
     globalCache.set(cacheKey, payload, BADGES_CACHE_TTL);

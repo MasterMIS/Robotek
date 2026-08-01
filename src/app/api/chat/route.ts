@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 
+import { chatApiDisabledResponse } from "@/lib/chat-api-guard";
+
 export async function GET() {
+  const disabled = chatApiDisabledResponse();
+  if (disabled) return disabled;
+
   try {
     const session = await auth();
     if (!session || !session.user) {
@@ -18,6 +23,9 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
+  const disabled = chatApiDisabledResponse();
+  if (disabled) return disabled;
+
   // Post is no longer needed since chats are created implicitly by sending messages
   return NextResponse.json({ success: true });
 }

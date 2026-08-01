@@ -3,7 +3,6 @@
 import { useSession, signOut } from "next-auth/react";
 import Image from "next/image";
 import Link from "next/link";
-import useSWR from "swr";
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { navigation } from "@/lib/navigation";
@@ -18,8 +17,6 @@ import {
 } from "@heroicons/react/24/outline";
 
 import ThemeToggle from "./ThemeToggle";
-
-const fetcher = (url: string) => fetch(url).then(res => res.json());
 
 interface HeaderProps {
   onMenuClick?: () => void;
@@ -67,10 +64,8 @@ export default function Header({ onMenuClick }: HeaderProps) {
     return url;
   };
 
-  const { data: chatData } = useSWR<any[]>('/api/chat/users', fetcher, {
-    refreshInterval: 300000,
-  });
-  const chatUnreadCount = Array.isArray(chatData) ? chatData.reduce((acc, user) => acc + (user.unreadCount || 0), 0) : 0;
+  // Chat unread badge disabled while chat backend is off (see chat-config.ts)
+  const chatUnreadCount = 0;
 
   return (
     <header
