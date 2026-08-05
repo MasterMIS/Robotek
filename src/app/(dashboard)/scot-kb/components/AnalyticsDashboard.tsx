@@ -27,6 +27,41 @@ import {
   LineChart, Line, PieChart, Pie, Cell, AreaChart, Area, Legend, LabelList
 } from "recharts";
 
+function formatWeekRangeDate(date: Date) {
+  return date.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+}
+
+function getWeekStartFromKey(weekKey: string): Date | null {
+  const parts = weekKey.split(" ");
+  if (parts.length !== 3 || parts[0] !== "Week") return null;
+
+  const weekNum = parseInt(parts[1], 10);
+  const year = 2000 + parseInt(parts[2], 10);
+  if (Number.isNaN(weekNum) || Number.isNaN(year)) return null;
+
+  const simpleDate = new Date(year, 0, 1 + (weekNum - 1) * 7);
+  const simpleDay = simpleDate.getDay();
+  const mondayOffset = simpleDate.getDate() - simpleDay + (simpleDay === 0 ? -6 : 1);
+  const start = new Date(simpleDate.getFullYear(), simpleDate.getMonth(), mondayOffset);
+  start.setHours(0, 0, 0, 0);
+  return start;
+}
+
+function getWeekRangeLabel(weekKey: string) {
+  const start = getWeekStartFromKey(weekKey);
+  if (!start) return weekKey;
+
+  const end = new Date(start);
+  end.setDate(end.getDate() + 6);
+  return `${formatWeekRangeDate(start)} - ${formatWeekRangeDate(end)}`;
+}
+
+function getWeekOptionLabel(weekKey: string) {
+  const parts = weekKey.split(" ");
+  const weekNum = parts[1] || "";
+  return `Week ${weekNum} · ${getWeekRangeLabel(weekKey)}`;
+}
+
 export default function AnalyticsDashboard({ feeders, scotRows = [], defaultEmployeeName = "UZEFA (SC)" }: { feeders: DataFeeder[], scotRows?: any[], defaultEmployeeName?: string }) {
   const [filters, setFilters] = useState<AnalyticsFilters>({
     dateRange: 'all',
@@ -131,18 +166,9 @@ export default function AnalyticsDashboard({ feeders, scotRows = [], defaultEmpl
   startOfWeek.setHours(0,0,0,0);
 
   if (filters.week !== 'all') {
-    const parts = filters.week.split(' ');
-    if (parts.length === 3) {
-      const w = parseInt(parts[1], 10);
-      const y = 2000 + parseInt(parts[2], 10);
-      if (!isNaN(w) && !isNaN(y)) {
-        // Approximate the date for this week number
-        const simpleDate = new Date(y, 0, 1 + (w - 1) * 7);
-        const simpleDay = simpleDate.getDay();
-        const simpleDiff = simpleDate.getDate() - simpleDay + (simpleDay === 0 ? -6 : 1);
-        startOfWeek = new Date(simpleDate.getFullYear(), simpleDate.getMonth(), simpleDiff);
-        startOfWeek.setHours(0,0,0,0);
-      }
+    const weekStart = getWeekStartFromKey(filters.week);
+    if (weekStart) {
+      startOfWeek = weekStart;
     }
   }
   
@@ -302,7 +328,9 @@ export default function AnalyticsDashboard({ feeders, scotRows = [], defaultEmpl
               className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-xs font-bold text-slate-700 dark:text-slate-200 outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="all">All Weeks</option>
-              {uniqueWeeks.map((w, i) => <option key={i} value={w}>{w}</option>)}
+              {uniqueWeeks.map((w, i) => (
+                <option key={i} value={w}>{getWeekOptionLabel(w)}</option>
+              ))}
             </select>
           </div>
 
@@ -481,7 +509,9 @@ export default function AnalyticsDashboard({ feeders, scotRows = [], defaultEmpl
                   className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 text-xs font-bold text-slate-700 dark:text-slate-200 outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
                 >
                   <option value="all">All Weeks</option>
-                  {uniqueWeeks.map((w, i) => <option key={i} value={w}>{w}</option>)}
+                  {uniqueWeeks.map((w, i) => (
+                    <option key={i} value={w}>{getWeekOptionLabel(w)}</option>
+                  ))}
                 </select>
               </div>
             </div>
