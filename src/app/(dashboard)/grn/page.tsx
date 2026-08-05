@@ -344,7 +344,7 @@ export default function GRNDashboard() {
       const res = await fetch("/api/grn", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: editingItem?.id, ...formData, Attach_Bill: billUrl }),
+        body: JSON.stringify({ id: editingItem?.id, ...formData, Attach_Bill: billUrl, notifyMdPaymentReview: true }),
       });
 
       if (res.ok) {

@@ -3,7 +3,8 @@ import { auth } from "@/auth";
 import { 
   getScotData, 
   getCallData, 
-  getFollowUpData 
+  getFollowUpData,
+  getActivePartyData
 } from "@/lib/scot-sheets";
 import { o2dService } from "@/lib/o2d-sheets";
 import { o2dkbService } from "@/lib/o2dkb-sheets";
@@ -49,6 +50,7 @@ export async function GET(req: NextRequest) {
   const startDateStr = searchParams.get("startDate");
   const endDateStr = searchParams.get("endDate");
   const source = searchParams.get("source") || "scot";
+  const activeOnly = searchParams.get("activeOnly") === "true";
 
   // Determine last completed calendar week Monday to Sunday by default
   const today = new Date();
@@ -99,11 +101,21 @@ export async function GET(req: NextRequest) {
       callsData = Array.from(uniqueParties.values());
 
     } else {
-      [scotFeeder, followUpData, allO2Ds] = await Promise.all([
+      const [scotFeederResult, followUpResult, allO2DsResult, activePartyResult] = await Promise.all([
         getScotData(),
         getFollowUpData("scot"),
-        o2dService.getAll()
+        o2dService.getAll(),
+        getActivePartyData("scot"),
       ]);
+      scotFeeder = scotFeederResult;
+      followUpData = followUpResult;
+      allO2Ds = allO2DsResult;
+
+      const activePartySet = new Set(
+        activePartyResult
+          .filter((record) => record.active)
+          .map((record) => record.partyName.toLowerCase().trim())
+      );
 
       // Mock callsData for scot to act as the master party list since we are ignoring the Target sheet
       const uniqueParties = new Map<string, any>();
@@ -135,6 +147,12 @@ export async function GET(req: NextRequest) {
       });
 
       callsData = Array.from(uniqueParties.values());
+
+      if (activeOnly) {
+        callsData = callsData.filter((party) =>
+          activePartySet.has((party.partyName || "").toLowerCase().trim())
+        );
+      }
     }
 
     // 1. Filter calls & follow-ups in the requested date range

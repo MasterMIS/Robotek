@@ -1,6 +1,8 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
+import { read, utils } from 'xlsx';
+import { parsePunchMachineSheet, type PunchParseResult } from '@/lib/utils/punchMachineParser';
 import { ensureSessionId } from '@/utils/session';
 import { useToast } from '@/components/ToastProvider';
 import CustomDateTimePicker from '@/components/CustomDateTimePicker';
@@ -23,6 +25,7 @@ import {
     PencilSquareIcon,
     TrashIcon,
     ArrowDownTrayIcon,
+    ArrowUpTrayIcon,
     PlusIcon,
     MagnifyingGlassIcon,
     SunIcon,
@@ -84,6 +87,14 @@ export default function AttendancePage() {
     const [submitTarget, setSubmitTarget] = useState<'IN' | 'OUT' | null>(null);
     const [masterSearch, setMasterSearch] = useState('');
     const [reportViewMode, setReportViewMode] = useState<'STATUS' | 'TIME' | 'INFO'>('STATUS');
+    const [importPreview, setImportPreview] = useState<PunchParseResult | null>(null);
+    const [isImporting, setIsImporting] = useState(false);
+    const [importFileName, setImportFileName] = useState('');
+    const [importProgress, setImportProgress] = useState(0);
+    const [importLogs, setImportLogs] = useState<string[]>([]);
+    const [importPhase, setImportPhase] = useState<'preview' | 'scanning' | 'uploading' | 'done'>('preview');
+    const punchImportInputRef = useRef<HTMLInputElement>(null);
+    const importLogRef = useRef<HTMLDivElement>(null);
 
     // Dual Scrollbar Logic
     const topScrollRef = useRef<HTMLDivElement>(null);
@@ -111,6 +122,12 @@ export default function AttendancePage() {
             dummyDivRef.current.style.width = `${tableScrollRef.current.scrollWidth}px`;
         }
     }, [masterData, reportViewMode]);
+
+    useEffect(() => {
+        if (importLogRef.current) {
+            importLogRef.current.scrollTop = importLogRef.current.scrollHeight;
+        }
+    }, [importLogs]);
 
     useEffect(() => {
         const ua = navigator.userAgent;
@@ -480,6 +497,143 @@ export default function AttendancePage() {
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
+    };
+
+    const handlePunchImportFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+
+        try {
+            const buffer = await file.arrayBuffer();
+            const workbook = read(buffer);
+            const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+            const rows = utils.sheet_to_json<unknown[]>(worksheet, { header: 1, raw: false }) as unknown[][];
+            const parsed = parsePunchMachineSheet(rows);
+
+            setImportFileName(file.name);
+            setImportPreview(parsed);
+            setImportProgress(0);
+            setImportLogs([]);
+            setImportPhase('preview');
+
+            if (parsed.records.length === 0) {
+                error('No punch records found in the uploaded file.');
+            }
+        } catch (e) {
+            console.error(e);
+            error('Failed to read punch machine file.');
+        } finally {
+            if (punchImportInputRef.current) {
+                punchImportInputRef.current.value = '';
+            }
+        }
+    };
+
+    const handleConfirmPunchImport = async () => {
+        if (!importPreview || importPreview.records.length === 0) return;
+
+        const records = importPreview.records;
+        const totalRecords = records.length;
+
+        setIsImporting(true);
+        setImportProgress(0);
+        setImportLogs([]);
+        setImportPhase('scanning');
+
+        const pushLog = (message: string) => {
+            setImportLogs((prev) => [...prev.slice(-79), message]);
+        };
+
+        const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+        pushLog(`[INIT] Loading ${importFileName}`);
+        pushLog(`[INFO] Detected ${importPreview.employeeCount} employees across ${importPreview.monthHint || 'unknown month'}`);
+        await wait(350);
+
+        pushLog('[SCAN] Reading punch machine workbook structure...');
+        await wait(300);
+
+        const scanSteps = Math.min(totalRecords, 48);
+        const stepSize = Math.max(1, Math.ceil(totalRecords / scanSteps));
+
+        for (let index = 0; index < totalRecords; index += stepSize) {
+            const batchEnd = Math.min(index + stepSize, totalRecords);
+            for (let i = index; i < batchEnd; i++) {
+                const record = records[i];
+                pushLog(
+                    `[SCAN] ${record.userCode} | ${record.userNameFromFile || 'Employee'} | ${record.date} | IN ${record.inTime || '--:--'} | OUT ${record.outTime || '--:--'}`
+                );
+            }
+
+            const scanPercent = Math.min(78, Math.round((batchEnd / totalRecords) * 78));
+            setImportProgress(scanPercent);
+            await wait(70);
+        }
+
+        pushLog('[SCAN] Row validation complete');
+        pushLog('[MATCH] Mapping user codes to employee database...');
+        setImportProgress(82);
+        await wait(450);
+
+        setImportPhase('uploading');
+        pushLog('[UPLOAD] Writing attendance records to Google Sheet...');
+        setImportProgress(88);
+
+        try {
+            const res = await fetch('/api/attendance/import', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ records: importPreview.records }),
+            });
+
+            const data = await res.json();
+            if (!res.ok) {
+                throw new Error(data.error || 'Import failed');
+            }
+
+            setImportProgress(96);
+            pushLog(`[SAVE] ${data.imported} new record(s) added`);
+            pushLog(`[SAVE] ${data.updated} existing record(s) updated`);
+            if (data.skipped) {
+                pushLog(`[WARN] ${data.skipped} record(s) skipped`);
+            }
+            if (Array.isArray(data.errors) && data.errors.length > 0) {
+                data.errors.slice(0, 5).forEach((entry: { userCode: string; date: string; reason: string }) => {
+                    pushLog(`[SKIP] ${entry.userCode} | ${entry.date} | ${entry.reason}`);
+                });
+            }
+
+            await fetchMasterData();
+            setImportProgress(100);
+            setImportPhase('done');
+            pushLog('[DONE] Punch machine import completed successfully');
+            await wait(900);
+
+            setImportPreview(null);
+            setImportFileName('');
+            setImportProgress(0);
+            setImportLogs([]);
+            setImportPhase('preview');
+            success(
+                `Imported ${data.imported} new and updated ${data.updated} attendance record(s).` +
+                (data.skipped ? ` Skipped ${data.skipped}.` : '')
+            );
+        } catch (e: any) {
+            pushLog(`[ERROR] ${e.message || 'Import failed'}`);
+            setImportPhase('preview');
+            error(e.message || 'Failed to import punch attendance');
+        } finally {
+            setIsImporting(false);
+        }
+    };
+
+    const resetImportModal = () => {
+        if (isImporting) return;
+        setImportPreview(null);
+        setImportFileName('');
+        setImportProgress(0);
+        setImportLogs([]);
+        setImportPhase('preview');
     };
 
     const renderCalendar = () => {
@@ -884,8 +1038,8 @@ export default function AttendancePage() {
                                             } else {
                                                 presents++;
                                                 statusChar = isLate ? 'P(L)' : 'P';
-                                                statusColor = isLate ? 'text-red-500 font-black' : 'text-green-500 font-black';
-                                                dotColor = isLate ? 'bg-red-500' : 'bg-green-500';
+                                                statusColor = 'text-green-500 font-black';
+                                                dotColor = 'bg-green-500';
                                                 dotText = '1';
                                             }
                                         } else if (dateStr < todayStr) {
@@ -970,7 +1124,7 @@ export default function AttendancePage() {
                                                             </div>
                                                             <div className="grid grid-cols-5 sm:grid-cols-7 md:grid-cols-10 gap-3">
                                                                 {dayCells.map((c, idx) => (
-                                                                    <div key={idx} className={`relative ${c.isLate ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-500/30' : 'bg-gray-50/50 dark:bg-slate-900 border-gray-100 dark:border-white/5'} rounded-[20px] p-3 flex flex-col items-center justify-center min-h-[72px] shadow-[inset_0_2px_4px_rgba(0,0,0,0.02)] hover:shadow-md transition-shadow group`}>
+                                                                    <div key={idx} className={`relative ${c.isLate && c.statusChar.includes('HD') ? 'bg-orange-50 dark:bg-orange-900/20 border-orange-200 dark:border-orange-500/30' : 'bg-gray-50/50 dark:bg-slate-900 border-gray-100 dark:border-white/5'} rounded-[20px] p-3 flex flex-col items-center justify-center min-h-[72px] shadow-[inset_0_2px_4px_rgba(0,0,0,0.02)] hover:shadow-md transition-shadow group`}>
                                                                         {c.dotColor && <div className={`absolute -top-2 -right-2 w-auto min-w-[22px] h-5 px-1.5 rounded-full ${c.dotColor} border-[3px] border-white dark:border-slate-800 text-[10px] text-white flex items-center justify-center font-black shadow-sm z-10 scale-105`}>{c.dotText}</div>}
                                                                         <div className="text-[11px] font-black text-gray-800 dark:text-gray-200 mb-2 opacity-80">{c.d}</div>
                                                                         <div className={`text-[11px] font-black uppercase tracking-wider ${c.statusColor}`}>{c.statusChar}</div>
@@ -1025,6 +1179,25 @@ export default function AttendancePage() {
                             <ArrowDownTrayIcon className="w-3 h-3" />
                             Export
                         </button>
+
+                        {isAdminOrEA && (
+                            <>
+                                <input
+                                    ref={punchImportInputRef}
+                                    type="file"
+                                    accept=".xlsx,.xls,.csv"
+                                    className="hidden"
+                                    onChange={handlePunchImportFile}
+                                />
+                                <button
+                                    onClick={() => punchImportInputRef.current?.click()}
+                                    className="flex items-center gap-1.5 bg-emerald-600 text-white px-4 py-1.5 rounded-full font-black text-[9px] uppercase tracking-widest shadow-lg shadow-emerald-600/20 hover:-translate-y-0.5 transition-all active:scale-95 shrink-0"
+                                >
+                                    <ArrowUpTrayIcon className="w-3 h-3" />
+                                    Import Punch Data
+                                </button>
+                            </>
+                        )}
                     </div>
 
                     {!masterData ? (
@@ -1130,7 +1303,7 @@ export default function AttendancePage() {
                                                     } else {
                                                         presents++;
                                                         statusChar = isLate ? 'P(L)' : 'P';
-                                                        statusColor = isLate ? 'text-red-500 font-black' : 'text-green-500 font-black';
+                                                        statusColor = 'text-green-500 font-black';
                                                         dotText = '+1';
                                                     }
                                                 } else if (dateStr < todayStr) {
@@ -1169,13 +1342,13 @@ export default function AttendancePage() {
                                                         <td 
                                                           key={idx} 
                                                           style={{ borderColor: 'var(--panel-border)' }}
-                                                          className={`p-2 border-b border-r text-center min-w-[60px] align-middle ${c.isLate ? 'bg-red-50/50 dark:bg-red-900/10' : ''}`}
+                                                          className={`p-2 border-b border-r text-center min-w-[60px] align-middle ${c.isLate && c.statusChar.includes('HD') ? 'bg-orange-50/50 dark:bg-orange-900/10' : ''}`}
                                                         >
                                                             {reportViewMode === 'STATUS' ? (
                                                                 <div className="flex flex-col items-center justify-center gap-1">
                                                                     <div className={`text-xs font-black uppercase tracking-tighter ${c.statusColor}`}>{c.statusChar}</div>
                                                                     {c.dotText && (
-                                                                         <div className={`text-[9px] font-black ${c.statusChar === 'P' ? 'text-green-500' : c.statusChar === 'HD' ? 'text-orange-500' : 'text-red-500'}`}>
+                                                                         <div className={`text-[9px] font-black ${c.statusChar === 'P' || c.statusChar === 'P(L)' ? 'text-green-500' : c.statusChar === 'HD' || c.statusChar === 'HD(L)' ? 'text-orange-500' : 'text-red-500'}`}>
                                                                             {c.dotText}
                                                                          </div>
                                                                     )}
@@ -1327,6 +1500,169 @@ export default function AttendancePage() {
                             </tbody>
                         </table>
                     )}
+                </div>
+            )}
+
+            {importPreview && (
+                <div className="fixed inset-0 z-[220] bg-black/70 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+                    <div className="bg-white dark:bg-slate-900 rounded-[28px] w-full max-w-2xl max-h-[calc(100vh-1.5rem)] my-auto shadow-2xl border border-white/10 overflow-hidden flex flex-col">
+                        <div className="shrink-0 px-5 sm:px-6 py-4 border-b border-gray-100 dark:border-white/10 bg-[#003875] text-white">
+                            <div className="flex items-center justify-between gap-4">
+                                <div>
+                                    <h3 className="text-lg font-black uppercase tracking-widest">Import Punch Data</h3>
+                                    <p className="text-[10px] font-bold uppercase tracking-widest text-white/70 mt-1">{importFileName}</p>
+                                </div>
+                                {isImporting && (
+                                    <div className="text-right">
+                                        <p className="text-[9px] font-black uppercase tracking-widest text-emerald-200">
+                                            {importPhase === 'scanning' ? 'Scanning File' : importPhase === 'uploading' ? 'Uploading Data' : 'Completed'}
+                                        </p>
+                                        <p className="text-2xl font-black text-white">{importProgress}%</p>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-6 space-y-3 sm:space-y-4">
+                            <div className="relative overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-950 shadow-inner">
+                                <div className="px-4 py-3 border-b border-slate-800 flex items-center justify-between bg-slate-900/90">
+                                    <div className="flex items-center gap-2">
+                                        <DocumentTextIcon className="w-4 h-4 text-emerald-400" />
+                                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-300">File Preview</span>
+                                    </div>
+                                    <span className="text-[9px] font-bold uppercase tracking-widest text-slate-500">XLSX</span>
+                                </div>
+
+                                <div className="relative h-28 sm:h-32 overflow-hidden bg-[linear-gradient(180deg,#0f172a_0%,#111827_100%)]">
+                                    <div className="absolute inset-0 opacity-30">
+                                        {Array.from({ length: 8 }).map((_, rowIndex) => (
+                                            <div key={rowIndex} className="grid grid-cols-6 gap-px px-3 py-1">
+                                                {Array.from({ length: 6 }).map((__, colIndex) => (
+                                                    <div key={colIndex} className="h-3 rounded-sm bg-slate-700/60" />
+                                                ))}
+                                            </div>
+                                        ))}
+                                    </div>
+
+                                    <div className="absolute inset-x-4 top-4 rounded-lg border border-emerald-500/20 bg-emerald-500/5 px-3 py-2">
+                                        <p className="text-[10px] font-black uppercase tracking-widest text-emerald-300">Monthly Attendance Report</p>
+                                        <p className="text-[9px] font-medium text-slate-400 mt-1 truncate">{importFileName}</p>
+                                    </div>
+
+                                    <div className="absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-emerald-400/10 to-transparent pointer-events-none" />
+
+                                    {isImporting && (
+                                        <>
+                                            <div
+                                                className="absolute inset-x-0 h-8 bg-gradient-to-b from-emerald-400/0 via-emerald-400/25 to-emerald-400/0 border-y border-emerald-300/40 shadow-[0_0_30px_rgba(52,211,153,0.35)] animate-punch-scan"
+                                                style={{ top: `${Math.max(8, Math.min(78, importProgress * 0.75))}%` }}
+                                            />
+                                            <div className="absolute inset-0 bg-[repeating-linear-gradient(0deg,rgba(16,185,129,0.04)_0px,rgba(16,185,129,0.04)_1px,transparent_1px,transparent_8px)] pointer-events-none" />
+                                        </>
+                                    )}
+                                </div>
+                            </div>
+
+                            {isImporting && (
+                                <div className="space-y-2">
+                                    <div className="flex items-center justify-between text-[10px] font-black uppercase tracking-widest text-slate-500">
+                                        <span>{importPhase === 'scanning' ? 'Scanning punch rows' : importPhase === 'uploading' ? 'Saving to attendance sheet' : 'Import complete'}</span>
+                                        <span>{importProgress}%</span>
+                                    </div>
+                                    <div className="h-2 rounded-full bg-slate-200 dark:bg-slate-800 overflow-hidden">
+                                        <div
+                                            className="h-full rounded-full bg-gradient-to-r from-emerald-500 via-teal-400 to-cyan-400 transition-all duration-300 ease-out"
+                                            style={{ width: `${importProgress}%` }}
+                                        />
+                                    </div>
+                                </div>
+                            )}
+
+                            {!isImporting && (
+                                <div className="grid grid-cols-3 gap-2 sm:gap-3">
+                                    <div className="rounded-2xl bg-emerald-50 dark:bg-emerald-900/20 p-3 sm:p-4 text-center">
+                                        <p className="text-[9px] font-black uppercase tracking-widest text-emerald-700 dark:text-emerald-300">Employees</p>
+                                        <p className="text-2xl font-black text-emerald-800 dark:text-emerald-200">{importPreview.employeeCount}</p>
+                                    </div>
+                                    <div className="rounded-2xl bg-blue-50 dark:bg-blue-900/20 p-3 sm:p-4 text-center">
+                                        <p className="text-[9px] font-black uppercase tracking-widest text-blue-700 dark:text-blue-300">Records</p>
+                                        <p className="text-2xl font-black text-blue-800 dark:text-blue-200">{importPreview.records.length}</p>
+                                    </div>
+                                    <div className="rounded-2xl bg-amber-50 dark:bg-amber-900/20 p-3 sm:p-4 text-center">
+                                        <p className="text-[9px] font-black uppercase tracking-widest text-amber-700 dark:text-amber-300">Month</p>
+                                        <p className="text-sm font-black text-amber-800 dark:text-amber-200 mt-2">{importPreview.monthHint || 'N/A'}</p>
+                                    </div>
+                                </div>
+                            )}
+
+                            <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-950 overflow-hidden">
+                                <div className="px-4 py-2 border-b border-slate-800 flex items-center gap-2 bg-slate-900">
+                                    <div className="flex gap-1.5">
+                                        <span className="w-2.5 h-2.5 rounded-full bg-red-500/80" />
+                                        <span className="w-2.5 h-2.5 rounded-full bg-amber-400/80" />
+                                        <span className="w-2.5 h-2.5 rounded-full bg-emerald-400/80" />
+                                    </div>
+                                    <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Import Console</span>
+                                </div>
+                                <div
+                                    ref={importLogRef}
+                                    className="h-28 sm:h-32 overflow-y-auto p-3 font-mono text-[10px] leading-5 text-emerald-300 bg-[#020617]"
+                                >
+                                    {importLogs.length === 0 ? (
+                                        <p className="text-slate-500">Waiting to start import...</p>
+                                    ) : (
+                                        importLogs.map((log, index) => (
+                                            <div key={`${log}-${index}`} className="whitespace-pre-wrap break-all">
+                                                <span className="text-slate-500 mr-2">{String(index + 1).padStart(2, '0')}</span>
+                                                {log}
+                                            </div>
+                                        ))
+                                    )}
+                                    {isImporting && (
+                                        <div className="mt-1 text-emerald-400 animate-pulse">▮ processing...</div>
+                                    )}
+                                </div>
+                            </div>
+
+                            {!isImporting && importPreview.warnings.length > 0 && (
+                                <div className="rounded-2xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 p-4 max-h-32 overflow-y-auto">
+                                    <p className="text-[10px] font-black uppercase tracking-widest text-amber-700 dark:text-amber-300 mb-2">Warnings</p>
+                                    <ul className="space-y-1 text-[11px] font-medium text-amber-800 dark:text-amber-200">
+                                        {importPreview.warnings.slice(0, 8).map((warning, index) => (
+                                            <li key={index}>• {warning}</li>
+                                        ))}
+                                        {importPreview.warnings.length > 8 && (
+                                            <li>• And {importPreview.warnings.length - 8} more...</li>
+                                        )}
+                                    </ul>
+                                </div>
+                            )}
+
+                            {!isImporting && (
+                                <p className="text-[11px] font-medium text-gray-500 dark:text-gray-400">
+                                    Existing attendance for the same user and date will be overwritten with punch machine in/out times.
+                                </p>
+                            )}
+                        </div>
+
+                        <div className="shrink-0 px-5 sm:px-6 py-3 sm:py-4 border-t border-gray-100 dark:border-white/10 bg-white dark:bg-slate-900 flex justify-end gap-3">
+                            <button
+                                onClick={resetImportModal}
+                                disabled={isImporting}
+                                className="px-5 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest text-gray-500 hover:bg-gray-100 dark:hover:bg-slate-800 transition disabled:opacity-50"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleConfirmPunchImport}
+                                disabled={isImporting || importPreview.records.length === 0}
+                                className="px-5 py-2.5 rounded-full bg-emerald-600 text-white text-[10px] font-black uppercase tracking-widest shadow-lg disabled:opacity-50 flex items-center gap-2"
+                            >
+                                {isImporting ? <ArrowPathIcon className="w-4 h-4 animate-spin" /> : <ArrowUpTrayIcon className="w-4 h-4" />}
+                                {isImporting ? 'Processing...' : 'Confirm Import'}
+                            </button>
+                        </div>
+                    </div>
                 </div>
             )}
 

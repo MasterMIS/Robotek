@@ -10,7 +10,6 @@ import {
   PlusIcon,
   TrashIcon,
   ArrowDownTrayIcon,
-  MagnifyingGlassIcon,
   XMarkIcon,
   ArrowLeftIcon,
   EyeIcon,
@@ -25,6 +24,7 @@ import {
 import { FloorIMS } from "@/types/ims-floor";
 import TimeSeriesTable, { TimeBucket } from "@/components/TimeSeriesTable";
 import DateFilterBar, { FilterPeriod } from "@/components/DateFilterBar";
+import SearchableMultiSelect from "@/components/SearchableMultiSelect";
 import { startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfQuarter, endOfQuarter, startOfYear, endOfYear, isWithinInterval } from "date-fns";
 import { CalendarIcon } from "@heroicons/react/24/outline";
 
@@ -110,7 +110,8 @@ export default function IMSFloor({ location, onBack }: { location: "1st" | "g", 
     setIsStatusModalOpen(true);
   };
 
-  const [searchQuery, setSearchQuery] = useState("");
+  const [categoryFilters, setCategoryFilters] = useState<string[]>([]);
+  const [itemNameFilters, setItemNameFilters] = useState<string[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 50;
 
@@ -250,23 +251,49 @@ function parseDateStr(dStr: string) {
   }, [filteredRawItems, allTimeStockMap]);
 
   const uniqueCategories = useMemo(() => {
-    return Array.from(new Set(aggregatedItems.map(i => i.category))).filter(Boolean);
+    return Array.from(new Set(aggregatedItems.map(i => i.category))).filter(Boolean).sort();
   }, [aggregatedItems]);
+
+  const categoryOptions = useMemo(
+    () => uniqueCategories.map((cat) => ({ id: cat as string, label: cat as string })),
+    [uniqueCategories]
+  );
+
+  const uniqueItemNames = useMemo(() => {
+    const source =
+      categoryFilters.length > 0
+        ? aggregatedItems.filter((i) => categoryFilters.includes(i.category))
+        : aggregatedItems;
+    return Array.from(new Set(source.map((i) => i.item_name))).filter(Boolean).sort();
+  }, [aggregatedItems, categoryFilters]);
+
+  const itemNameOptions = useMemo(
+    () => uniqueItemNames.map((name) => ({ id: name, label: name })),
+    [uniqueItemNames]
+  );
+
+  const matchesCategoryItemFilters = (item: { category?: string; item_name?: string }) => {
+    if (categoryFilters.length > 0 && !categoryFilters.includes(item.category || "")) return false;
+    if (itemNameFilters.length > 0 && !itemNameFilters.includes(item.item_name || "")) return false;
+    return true;
+  };
+
+  const filteredItems = useMemo(() => {
+    return aggregatedItems.filter(item => {
+      const matchesPacked = packedFilter === 'ALL' || 
+                            (packedFilter === 'PACKED' && item.packed_status === 'PACKED') ||
+                            (packedFilter === 'UNPACKED' && item.packed_status === 'UNPACKED');
+      return matchesPacked && matchesCategoryItemFilters(item);
+    });
+  }, [aggregatedItems, packedFilter, categoryFilters, itemNameFilters]);
+
+  const filteredDatewiseItems = useMemo(() => {
+    return filteredRawItems.filter((item) => matchesCategoryItemFilters(item));
+  }, [filteredRawItems, categoryFilters, itemNameFilters]);
 
   const masterCategories = useMemo(() => {
     return Array.from(new Set(masterItems.map(i => i.category))).filter(Boolean);
   }, [masterItems]);
-
-  const filteredItems = useMemo(() => {
-    return aggregatedItems.filter(item => {
-      const matchesSearch = item.item_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                            item.category?.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesPacked = packedFilter === 'ALL' || 
-                            (packedFilter === 'PACKED' && item.packed_status === 'PACKED') ||
-                            (packedFilter === 'UNPACKED' && item.packed_status === 'UNPACKED');
-      return matchesSearch && matchesPacked;
-    });
-  }, [aggregatedItems, searchQuery, packedFilter]);
 
   const totalPages = Math.ceil(filteredItems.length / itemsPerPage);
   const paginatedItems = useMemo(() => {
@@ -283,7 +310,16 @@ function parseDateStr(dStr: string) {
 
   React.useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery]);
+  }, [packedFilter, categoryFilters, itemNameFilters]);
+
+  React.useEffect(() => {
+    setItemNameFilters((prev) => {
+      if (prev.length === 0) return prev;
+      const valid = new Set(uniqueItemNames);
+      const next = prev.filter((name) => valid.has(name));
+      return next.length === prev.length ? prev : next;
+    });
+  }, [categoryFilters, uniqueItemNames]);
 
   const getHealthColors = (live: number) => {
     if (live < 0) return { color: "bg-gray-400", text: "text-gray-500", label: "Negative" };
@@ -492,7 +528,7 @@ function parseDateStr(dStr: string) {
 
     if (viewMode === 'datewise') {
       headers = ["Date", "Category", "Item Name", "In Qty", "Out Qty", "Live Stock"];
-      rows = filteredRawItems.map(log => [
+      rows = filteredDatewiseItems.map(log => [
         formatDate(log.date || log.updated_at),
         log.category,
         log.item_name,
@@ -625,7 +661,7 @@ function parseDateStr(dStr: string) {
         </div>
       </div>
 
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-2 shrink-0">
+      <div className="flex flex-wrap items-stretch gap-2 mb-2 shrink-0">
         <DateFilterBar 
           period={filterPeriod}
           setPeriod={setFilterPeriod}
@@ -638,37 +674,64 @@ function parseDateStr(dStr: string) {
           theme={location === '1st' ? 'purple' : 'emerald'}
         />
 
-        <div className="flex items-center gap-2">
-          <div className="relative shrink-0 flex-1 lg:flex-none">
-            <MagnifyingGlassIcon className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-            <input
-              type="text"
-              placeholder="SEARCH ITEM..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9 pr-4 py-2 bg-white dark:bg-[#111827] border border-gray-200 dark:border-white/10 rounded-xl text-[11px] font-black uppercase tracking-wider outline-none focus:ring-2 focus:ring-[#003875] dark:text-white w-full lg:w-64 transition-all shadow-sm h-[38px]"
+        <div className={`flex flex-wrap items-end gap-2 flex-1 min-w-[280px] p-2 bg-white dark:bg-[#111827] border rounded-xl shadow-sm ${
+          location === '1st' ? 'border-purple-200 dark:border-purple-500/20' : 'border-emerald-200 dark:border-emerald-500/20'
+        }`}>
+          <div className="flex-1 min-w-[130px]">
+            <SearchableMultiSelect
+              options={categoryOptions}
+              value={categoryFilters}
+              onChange={setCategoryFilters}
+              placeholder="All Categories"
+              className="bg-gray-50 dark:bg-[#0a0f1c] border border-gray-200 dark:border-white/10 py-2 px-3 rounded-lg"
+              accentClass={location === '1st' ? 'border-purple-500 ring-purple-500/20' : 'border-emerald-500 ring-emerald-500/20'}
+            />
+          </div>
+          <div className="flex-1 min-w-[160px]">
+            <SearchableMultiSelect
+              options={itemNameOptions}
+              value={itemNameFilters}
+              onChange={setItemNameFilters}
+              placeholder="All Items"
+              className="bg-gray-50 dark:bg-[#0a0f1c] border border-gray-200 dark:border-white/10 py-2 px-3 rounded-lg"
+              accentClass={location === '1st' ? 'border-purple-500 ring-purple-500/20' : 'border-emerald-500 ring-emerald-500/20'}
             />
           </div>
           {location === '1st' && (
             <select
               value={packedFilter}
               onChange={(e) => setPackedFilter(e.target.value as 'ALL' | 'PACKED' | 'UNPACKED')}
-              className="px-3 py-2 bg-white dark:bg-[#111827] border border-gray-200 dark:border-white/10 rounded-xl text-[11px] font-black uppercase tracking-wider outline-none focus:ring-2 focus:ring-purple-500 dark:text-white shadow-sm h-[38px] cursor-pointer"
+              className="px-3 py-2 bg-gray-50 dark:bg-[#0a0f1c] border border-gray-200 dark:border-white/10 rounded-lg text-[11px] font-black uppercase tracking-wider outline-none focus:ring-2 focus:ring-purple-500 dark:text-white shadow-sm h-[42px] cursor-pointer shrink-0"
             >
               <option value="ALL">ALL STATUS</option>
               <option value="PACKED">PACKED</option>
               <option value="UNPACKED">UNPACKED</option>
             </select>
           )}
+          {(categoryFilters.length > 0 || itemNameFilters.length > 0) && (
+            <button
+              onClick={() => {
+                setCategoryFilters([]);
+                setItemNameFilters([]);
+              }}
+              className={`mb-0.5 px-3 py-2.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-colors shrink-0 border ${
+                location === '1st'
+                  ? 'text-purple-700 dark:text-purple-400 bg-purple-50 hover:bg-purple-100 dark:bg-purple-500/10 dark:hover:bg-purple-500/20 border-purple-200 dark:border-purple-500/20'
+                  : 'text-emerald-700 dark:text-emerald-400 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-500/10 dark:hover:bg-emerald-500/20 border-emerald-200 dark:border-emerald-500/20'
+              }`}
+            >
+              Clear
+            </button>
+          )}
         </div>
       </div>
 
       {viewMode === 'datewise' ? (
         <div className="flex-1 bg-white dark:bg-[#111827] border border-gray-200 dark:border-white/5 rounded-xl overflow-hidden flex flex-col shadow-sm min-h-0 mt-2">
-          {filteredRawItems.length > 0 && !isLoading && (
+          {filteredDatewiseItems.length > 0 && !isLoading && (
             <div className={`py-2 px-4 border-b flex items-center justify-between shrink-0 ${location === '1st' ? 'border-purple-200/50 dark:border-purple-500/10 bg-purple-50/50 dark:bg-purple-500/5' : 'border-emerald-200/50 dark:border-emerald-500/10 bg-emerald-50/50 dark:bg-emerald-500/5'}`}>
               <p className={`text-[10px] font-black uppercase tracking-widest ${location === '1st' ? 'text-purple-600 dark:text-purple-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
-                Showing {filteredRawItems.length} transactions
+                Showing {filteredDatewiseItems.length} transactions
               </p>
             </div>
           )}
@@ -696,7 +759,7 @@ function parseDateStr(dStr: string) {
                   </tr>
                 </thead>
                 <tbody className={`divide-y ${location === '1st' ? 'divide-purple-100 dark:divide-purple-500/10' : 'divide-emerald-100 dark:divide-emerald-500/10'}`}>
-                  {filteredRawItems.map((log) => (
+                  {filteredDatewiseItems.map((log) => (
                     <tr key={log.id} className="hover:bg-gray-50 dark:hover:bg-white/[0.03] transition-colors group">
                       <td className="py-2 px-4 text-[11px] font-bold text-gray-500">{formatDate(log.date || log.updated_at)}</td>
                       <td className="py-2 px-3 text-[11px] font-bold text-gray-500 uppercase">{log.category}</td>
@@ -720,7 +783,7 @@ function parseDateStr(dStr: string) {
                       </td>
                     </tr>
                   ))}
-                  {filteredRawItems.length === 0 && (
+                  {filteredDatewiseItems.length === 0 && (
                     <tr>
                       <td colSpan={6} className="py-8 text-center text-gray-400 text-[11px] font-black uppercase">No items found</td>
                     </tr>
@@ -742,7 +805,6 @@ function parseDateStr(dStr: string) {
             }))}
             bucket={mappedTimeBucket}
             isLoading={isLoading}
-            searchQuery={searchQuery}
           />
         </div>
       ) : (

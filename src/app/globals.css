@@ -194,6 +194,30 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator:hover {
   animation: marquee 15s linear infinite;
 }
 
+@keyframes punchScanLine {
+  0% {
+    transform: translateY(-120%);
+    opacity: 0.2;
+  }
+
+  20% {
+    opacity: 1;
+  }
+
+  80% {
+    opacity: 1;
+  }
+
+  100% {
+    transform: translateY(420%);
+    opacity: 0.2;
+  }
+}
+
+.animate-punch-scan {
+  animation: punchScanLine 2.2s ease-in-out infinite;
+}
+
 @utility invisible-scrollbar {
   scrollbar-width: none;
   -ms-overflow-style: none;

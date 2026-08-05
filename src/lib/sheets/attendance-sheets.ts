@@ -143,6 +143,103 @@ export async function updateAttendanceRecord(id: string, outTime: string, status
   }
 }
 
+function normalizeAttendanceDate(dateVal: string | undefined | null): string {
+  if (!dateVal) return "";
+  let dateStr = dateVal.split("T")[0];
+  if (/^\d{2}\/\d{2}\/\d{4}$/.test(dateStr)) {
+    const [dd, mm, yyyy] = dateStr.split("/");
+    dateStr = `${yyyy}-${mm}-${dd}`;
+  }
+  return dateStr;
+}
+
+function getAttendanceSheetDateValue(record: AttendanceRecord): string {
+  if (record.inTime) return record.inTime;
+  if (record.date.includes("T")) return record.date;
+  if (record.outTime) return record.outTime;
+  return record.date;
+}
+
+export async function upsertAttendanceRecords(
+  records: AttendanceRecord[]
+): Promise<{ imported: number; updated: number }> {
+  if (records.length === 0) {
+    return { imported: 0, updated: 0 };
+  }
+
+  try {
+    const sheets = await getSheetsClient();
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId: ATTENDANCE_SPREADSHEET_ID,
+      range: "Sheet1!A:K",
+    });
+
+    const rows = response.data.values || [];
+    const existingRows = rows.length > 1 ? rows.slice(1) : rows.slice(0);
+    let imported = 0;
+    let updated = 0;
+    const appendValues: unknown[][] = [];
+
+    for (const record of records) {
+      const dateNorm = normalizeAttendanceDate(record.date);
+      const rowIndex = existingRows.findIndex(
+        (row) =>
+          String(row[1] || "") === String(record.userId) &&
+          normalizeAttendanceDate(row[3] || "") === dateNorm
+      );
+
+      const rowValues = [
+        record.id,
+        record.userId,
+        record.userName,
+        getAttendanceSheetDateValue(record),
+        record.inTime,
+        record.outTime,
+        record.status,
+        record.inPhoto || "",
+        record.outPhoto || "",
+        record.inLocation || "",
+        record.outLocation || "",
+      ];
+
+      if (rowIndex !== -1) {
+        const sheetRow = rowIndex + (rows.length > 1 ? 2 : 1);
+        const existingId = existingRows[rowIndex][0] || record.id;
+        rowValues[0] = existingId;
+
+        await sheets.spreadsheets.values.update({
+          spreadsheetId: ATTENDANCE_SPREADSHEET_ID,
+          range: `Sheet1!A${sheetRow}:K${sheetRow}`,
+          valueInputOption: "USER_ENTERED",
+          requestBody: {
+            values: [rowValues],
+          },
+        });
+        updated++;
+      } else {
+        appendValues.push(rowValues);
+        imported++;
+      }
+    }
+
+    if (appendValues.length > 0) {
+      await sheets.spreadsheets.values.append({
+        spreadsheetId: ATTENDANCE_SPREADSHEET_ID,
+        range: "Sheet1!A:K",
+        valueInputOption: "USER_ENTERED",
+        requestBody: {
+          values: appendValues,
+        },
+      });
+    }
+
+    return { imported, updated };
+  } catch (error) {
+    console.error("Error upserting attendance records:", error);
+    throw error;
+  }
+}
+
 // --- Leave ---
 
 export interface LeaveRequest {

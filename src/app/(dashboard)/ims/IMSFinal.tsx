@@ -5,7 +5,6 @@ import useSWR from "swr";
 import {
   ClipboardDocumentListIcon,
   ArrowDownTrayIcon,
-  MagnifyingGlassIcon,
   ArrowLeftIcon,
   TableCellsIcon,
   ChartBarIcon,
@@ -14,6 +13,7 @@ import {
 import * as XLSX from "xlsx";
 import TimeSeriesTable, { TimeBucket, Transaction } from "@/components/TimeSeriesTable";
 import DateFilterBar, { FilterPeriod } from "@/components/DateFilterBar";
+import SearchableMultiSelect from "@/components/SearchableMultiSelect";
 import { startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfQuarter, endOfQuarter, startOfYear, endOfYear, isWithinInterval } from "date-fns";
 
 const fetcher = (url: string) => fetch(url).then(res => res.json());
@@ -25,7 +25,8 @@ const getHealthColors = (live: number) => {
 };
 
 export default function IMSFinal({ onBack }: { onBack: () => void }) {
-  const [searchQuery, setSearchQuery] = useState("");
+  const [categoryFilters, setCategoryFilters] = useState<string[]>([]);
+  const [itemNameFilters, setItemNameFilters] = useState<string[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 50;
 
@@ -89,12 +90,37 @@ export default function IMSFinal({ onBack }: { onBack: () => void }) {
     return Array.from(map.values()).sort((a, b) => a.item_name.localeCompare(b.item_name));
   }, [masterItems, firstItems, gItems]);
 
+  const uniqueCategories = useMemo(() => {
+    return Array.from(new Set(aggregatedItems.map((i) => i.category))).filter(Boolean).sort();
+  }, [aggregatedItems]);
+
+  const categoryOptions = useMemo(
+    () => uniqueCategories.map((cat) => ({ id: cat, label: cat })),
+    [uniqueCategories]
+  );
+
+  const uniqueItemNames = useMemo(() => {
+    const source =
+      categoryFilters.length > 0
+        ? aggregatedItems.filter((i) => categoryFilters.includes(i.category))
+        : aggregatedItems;
+    return Array.from(new Set(source.map((i) => i.item_name))).filter(Boolean).sort();
+  }, [aggregatedItems, categoryFilters]);
+
+  const itemNameOptions = useMemo(
+    () => uniqueItemNames.map((name) => ({ id: name, label: name })),
+    [uniqueItemNames]
+  );
+
+  const matchesCategoryItemFilters = (item: { category?: string; item_name?: string }) => {
+    if (categoryFilters.length > 0 && !categoryFilters.includes(item.category || "")) return false;
+    if (itemNameFilters.length > 0 && !itemNameFilters.includes(item.item_name || "")) return false;
+    return true;
+  };
+
   const filteredItems = useMemo(() => {
-    return aggregatedItems.filter(item =>
-      item.item_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.category?.toLowerCase().includes(searchQuery.toLowerCase())
-    );
-  }, [aggregatedItems, searchQuery]);
+    return aggregatedItems.filter((item) => matchesCategoryItemFilters(item));
+  }, [aggregatedItems, categoryFilters, itemNameFilters]);
 
   const totalPages = Math.ceil(filteredItems.length / itemsPerPage);
   const paginatedItems = useMemo(() => {
@@ -104,7 +130,7 @@ export default function IMSFinal({ onBack }: { onBack: () => void }) {
 
   const handleExport = () => {
     if (viewMode === 'datewise') {
-      const exportData = datewiseTransactions.map((log: any) => ({
+      const exportData = filteredDatewiseTransactions.map((log: any) => ({
         "Date": new Date(log.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' }),
         "Source": log.source,
         "Category": log.category,
@@ -136,7 +162,16 @@ export default function IMSFinal({ onBack }: { onBack: () => void }) {
 
   React.useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery]);
+  }, [categoryFilters, itemNameFilters]);
+
+  React.useEffect(() => {
+    setItemNameFilters((prev) => {
+      if (prev.length === 0) return prev;
+      const valid = new Set(uniqueItemNames);
+      const next = prev.filter((name) => valid.has(name));
+      return next.length === prev.length ? prev : next;
+    });
+  }, [categoryFilters, uniqueItemNames]);
 
   const combinedTransactions = useMemo(() => {
     const masterTxs = (timeSeriesData || []).map((item: any) => ({
@@ -216,6 +251,10 @@ export default function IMSFinal({ onBack }: { onBack: () => void }) {
     });
   }, [combinedTransactions, dateRange]);
 
+  const filteredDatewiseTransactions = useMemo(() => {
+    return datewiseTransactions.filter((item) => matchesCategoryItemFilters(item));
+  }, [datewiseTransactions, categoryFilters, itemNameFilters]);
+
   return (
     <div className="flex flex-col h-[calc(100vh-2rem)]">
       <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 p-5 bg-white dark:bg-[#111827] rounded-xl shadow-sm border border-gray-200 dark:border-white/5 shrink-0">
@@ -271,40 +310,66 @@ export default function IMSFinal({ onBack }: { onBack: () => void }) {
         </div>
 
         <div className="flex items-center gap-3 w-full lg:w-auto">
-          <div className="relative shrink-0 flex-1 lg:flex-none">
-            <MagnifyingGlassIcon className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-            <input
-              type="text"
-              placeholder="SEARCH ITEM..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9 pr-4 py-2 bg-white dark:bg-[#111827] border border-gray-200 dark:border-white/10 rounded-xl text-[11px] font-black uppercase tracking-wider outline-none focus:ring-2 focus:ring-[#003875] dark:text-white w-full lg:w-64 transition-all shadow-sm h-full"
-            />
-          </div>
           <button onClick={handleExport} className="flex items-center gap-1.5 px-3 py-2 bg-orange-50 hover:bg-orange-100 dark:bg-orange-500/10 dark:hover:bg-orange-500/20 text-orange-600 dark:text-orange-500 rounded-lg text-[11px] font-black uppercase tracking-wider transition-all border border-orange-200 dark:border-orange-500/20 shadow-sm whitespace-nowrap">
             <ArrowDownTrayIcon className="w-4 h-4" /> Export
           </button>
         </div>
       </div>
 
-      <DateFilterBar 
-        period={filterPeriod}
-        setPeriod={setFilterPeriod}
-        currentDate={filterDate}
-        setCurrentDate={setFilterDate}
-        startDate={filterStartDate}
-        setStartDate={setFilterStartDate}
-        endDate={filterEndDate}
-        setEndDate={setFilterEndDate}
-        theme="orange"
-      />
+      <div className="flex flex-wrap items-stretch gap-2 shrink-0">
+        <DateFilterBar 
+          period={filterPeriod}
+          setPeriod={setFilterPeriod}
+          currentDate={filterDate}
+          setCurrentDate={setFilterDate}
+          startDate={filterStartDate}
+          setStartDate={setFilterStartDate}
+          endDate={filterEndDate}
+          setEndDate={setFilterEndDate}
+          theme="orange"
+        />
+
+        <div className="flex flex-wrap items-end gap-2 flex-1 min-w-[280px] p-2 bg-white dark:bg-[#111827] border border-orange-200 dark:border-orange-500/20 rounded-xl shadow-sm">
+          <div className="flex-1 min-w-[130px]">
+            <SearchableMultiSelect
+              options={categoryOptions}
+              value={categoryFilters}
+              onChange={setCategoryFilters}
+              placeholder="All Categories"
+              className="bg-gray-50 dark:bg-[#0a0f1c] border border-gray-200 dark:border-white/10 py-2 px-3 rounded-lg"
+              accentClass="border-orange-500 ring-orange-500/20"
+            />
+          </div>
+          <div className="flex-1 min-w-[160px]">
+            <SearchableMultiSelect
+              options={itemNameOptions}
+              value={itemNameFilters}
+              onChange={setItemNameFilters}
+              placeholder="All Items"
+              className="bg-gray-50 dark:bg-[#0a0f1c] border border-gray-200 dark:border-white/10 py-2 px-3 rounded-lg"
+              accentClass="border-orange-500 ring-orange-500/20"
+            />
+          </div>
+          {(categoryFilters.length > 0 || itemNameFilters.length > 0) && (
+            <button
+              onClick={() => {
+                setCategoryFilters([]);
+                setItemNameFilters([]);
+              }}
+              className="mb-0.5 px-3 py-2.5 rounded-lg text-[10px] font-black uppercase tracking-wider text-orange-700 dark:text-orange-400 bg-orange-50 hover:bg-orange-100 dark:bg-orange-500/10 dark:hover:bg-orange-500/20 border border-orange-200 dark:border-orange-500/20 transition-colors shrink-0"
+            >
+              Clear
+            </button>
+          )}
+        </div>
+      </div>
 
       {viewMode === 'datewise' ? (
         <div className="flex-1 bg-white dark:bg-[#111827] border border-gray-200 dark:border-white/5 rounded-xl overflow-hidden flex flex-col shadow-sm min-h-0 mt-2">
-          {datewiseTransactions.length > 0 && !isLoading && (
+          {filteredDatewiseTransactions.length > 0 && !isLoading && (
             <div className="py-2 px-4 border-b border-orange-200/50 dark:border-orange-500/10 flex items-center justify-between bg-orange-50/50 dark:bg-orange-500/5 shrink-0">
               <p className="text-[10px] font-black text-orange-600 dark:text-orange-500 uppercase tracking-widest">
-                Showing {datewiseTransactions.length} transactions
+                Showing {filteredDatewiseTransactions.length} transactions
               </p>
             </div>
           )}
@@ -329,7 +394,7 @@ export default function IMSFinal({ onBack }: { onBack: () => void }) {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-orange-100 dark:divide-orange-500/10">
-                  {datewiseTransactions.map((log, index) => (
+                  {filteredDatewiseTransactions.map((log, index) => (
                     <tr key={index} className="hover:bg-orange-50/50 dark:hover:bg-orange-500/[0.03] even:bg-orange-50/30 dark:even:bg-orange-900/10 transition-colors group">
                       <td className="py-2 px-4 text-[11px] font-bold text-gray-500">
                         {new Date(log.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' })}
@@ -350,7 +415,7 @@ export default function IMSFinal({ onBack }: { onBack: () => void }) {
                       <td className="py-2 px-4 text-[11px] font-black text-orange-600 dark:text-[#FFD500] text-right">{(log as any).running_stock}</td>
                     </tr>
                   ))}
-                  {datewiseTransactions.length === 0 && (
+                  {filteredDatewiseTransactions.length === 0 && (
                     <tr>
                       <td colSpan={6} className="py-8 text-center text-gray-400 text-[11px] font-black uppercase">No items found</td>
                     </tr>
@@ -366,7 +431,6 @@ export default function IMSFinal({ onBack }: { onBack: () => void }) {
             transactions={combinedTransactions}
             bucket={mappedTimeBucket}
             isLoading={isTimeSeriesLoading || isLoading}
-            searchQuery={searchQuery}
           />
         </div>
       ) : (
@@ -466,7 +530,7 @@ export default function IMSFinal({ onBack }: { onBack: () => void }) {
                   {paginatedItems.length === 0 && (
                     <tr>
                       <td colSpan={6} className="py-12 text-center text-gray-400 text-[11px] font-black uppercase tracking-widest">
-                        {searchQuery ? "No items found matching search" : "No items available"}
+                        {categoryFilters.length > 0 || itemNameFilters.length > 0 ? "No items found matching filters" : "No items available"}
                       </td>
                     </tr>
                   )}

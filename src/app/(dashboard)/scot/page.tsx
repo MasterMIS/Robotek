@@ -18,7 +18,10 @@ import {
   ShoppingBagIcon,
   ShoppingCartIcon,
   PencilIcon,
-  CheckCircleIcon
+  CheckCircleIcon,
+  ArrowLeftIcon,
+  XCircleIcon,
+  ChevronRightIcon
 } from "@heroicons/react/24/outline";
 
 import { O2D } from "@/types/o2d";
@@ -53,10 +56,16 @@ export default function ScotPage() {
     fetcher
   );
 
+  const { data: activePartyData, mutate: mutateActiveParties } = useSWR(
+    '/api/scot/active-party?source=scot',
+    fetcher
+  );
+
   const o2ds: O2D[] = o2dDataRes?.data || [];
   const feeders: DataFeeder[] = feederData || [];
   const followUps = followUpsData || [];
   const frequencies = freqData?.data || [];
+  const activeParties = activePartyData?.data || [];
 
   const [isFreqModalOpen, setIsFreqModalOpen] = useState(false);
   const [freqParty, setFreqParty] = useState("");
@@ -138,6 +147,8 @@ export default function ScotPage() {
   const itemsPerPage = 25;
   const [selectedScotMonth, setSelectedScotMonth] = useState<string>("");
   const [showTodayOnly, setShowTodayOnly] = useState(false);
+  const [scotListView, setScotListView] = useState<"tiles" | "active" | "inactive">("tiles");
+  const [togglingParty, setTogglingParty] = useState<string | null>(null);
 
   const [searchFeeder, setSearchFeeder] = useState("");
   const [feederPage, setFeederPage] = useState(1);
@@ -146,14 +157,14 @@ export default function ScotPage() {
 
   const handleGenerateWeeklyReports = async () => {
     setIsReportLoading(true);
-    toast.info("Aggregating spreadsheet metrics for last week...");
+    toast.info("Aggregating spreadsheet metrics for last week (active parties only)...");
     try {
-      const res = await fetch('/api/scot/report');
+      const res = await fetch('/api/scot/report?activeOnly=true&source=scot');
       if (res.ok) {
         const data = await res.json();
         const coordinators = data.report || [];
         if (coordinators.length === 0) {
-          toast.error("No active sales coordinator records found for last week.");
+          toast.error("No active parties found. Mark parties as active to generate weekly report.");
           return;
         }
         
@@ -172,6 +183,35 @@ export default function ScotPage() {
       toast.error("Error connecting to server while generating reports");
     } finally {
       setIsReportLoading(false);
+    }
+  };
+
+  const activePartySet = useMemo(() => {
+    return new Set(
+      activeParties
+        .filter((record: { partyName: string; active: boolean }) => record.active)
+        .map((record: { partyName: string }) => record.partyName.toLowerCase().trim())
+    );
+  }, [activeParties]);
+
+  const toggleActiveParty = async (partyName: string, active: boolean) => {
+    setTogglingParty(partyName);
+    try {
+      const res = await fetch("/api/scot/active-party", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ partyName, active, source: "scot" }),
+      });
+      if (res.ok) {
+        mutateActiveParties();
+        toast.success(active ? "Marked as active party" : "Removed from active parties");
+      } else {
+        toast.error("Failed to update active party");
+      }
+    } catch {
+      toast.error("Error updating active party");
+    } finally {
+      setTogglingParty(null);
     }
   };
 
@@ -325,7 +365,7 @@ export default function ScotPage() {
     return dates;
   }, [activeScotMonth, showTodayOnly]);
 
-  const scotRows = useMemo(() => {
+  const scotRowsResult = useMemo(() => {
     const feederGroup = new Map<string, { originalName: string, employeeName: string, callsByDate: Record<string, string> }>();
     feeders.forEach(f => {
       const key = f.toName?.toLowerCase().trim();
@@ -453,15 +493,27 @@ export default function ScotPage() {
         frequencyDays,
         isManualFrequency,
         manualFollowUpDate,
-        rawOrders: orders
+        rawOrders: orders,
+        isActive: activePartySet.has(toName.toLowerCase().trim()),
       };
     });
+
+    const partyCounts = {
+      active: rows.filter((row) => activePartySet.has(row.toName.toLowerCase().trim())).length,
+      inactive: rows.filter((row) => !activePartySet.has(row.toName.toLowerCase().trim())).length,
+    };
 
     const searchTerm = searchScot.toLowerCase().trim();
     let filteredRows = rows;
     
     if (searchTerm) {
       filteredRows = filteredRows.filter(r => r.toName.toLowerCase().includes(searchTerm));
+    }
+
+    if (scotListView === "active") {
+      filteredRows = filteredRows.filter((row) => row.isActive);
+    } else if (scotListView === "inactive") {
+      filteredRows = filteredRows.filter((row) => !row.isActive);
     }
     
     if (showTodayOnly) {
@@ -481,8 +533,11 @@ export default function ScotPage() {
       return 0;
     });
 
-    return filteredRows;
-  }, [feeders, o2ds, searchScot, showTodayOnly, followUps]);
+    return { rows: filteredRows, partyCounts };
+  }, [feeders, o2ds, searchScot, showTodayOnly, followUps, frequencies, activePartySet, scotListView]);
+
+  const scotRows = scotRowsResult.rows;
+  const scotPartyCounts = scotRowsResult.partyCounts;
 
   const paginatedScotRows = scotRows.slice((scotPage - 1) * itemsPerPage, scotPage * itemsPerPage);
 
@@ -778,13 +833,44 @@ export default function ScotPage() {
 
       {/* Scot Tab */}
       {activeTab === "scot" && (
-        <div className="flex-1 min-h-0 flex flex-col rounded-[2rem] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm transition-all duration-500">
-          <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row justify-between items-center gap-4">
-            <h2 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-widest flex items-center gap-2">
-              <TableCellsIcon className="w-5 h-5 text-emerald-500" />
+        <div className={`flex-1 min-h-0 flex flex-col rounded-[2rem] overflow-hidden shadow-sm transition-all duration-500 ${
+          scotListView === "tiles"
+            ? "border border-emerald-200/60 dark:border-emerald-900/40"
+            : "bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800"
+        }`}>
+          <div className={`px-6 py-4 flex flex-col sm:flex-row justify-between items-center gap-4 ${
+            scotListView === "tiles"
+              ? "bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 text-white border-none"
+              : "border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900"
+          }`}>
+            <h2 className={`text-sm font-black uppercase tracking-widest flex items-center gap-2 ${
+              scotListView === "tiles" ? "text-white" : "text-slate-900 dark:text-white"
+            }`}>
+              {scotListView !== "tiles" && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setScotListView("tiles");
+                    setScotPage(1);
+                    setSearchScot("");
+                    setShowTodayOnly(false);
+                  }}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 mr-1 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                >
+                  <ArrowLeftIcon className="w-4 h-4" />
+                  Back
+                </button>
+              )}
+              <TableCellsIcon className={`w-5 h-5 ${scotListView === "tiles" ? "text-emerald-100" : "text-emerald-500"}`} />
               Party Call Cross-Reference
+              {scotListView === "active" && (
+                <span className="text-[10px] font-black uppercase tracking-widest text-emerald-600 dark:text-emerald-400">— Active Parties</span>
+              )}
+              {scotListView === "inactive" && (
+                <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">— Non Active Parties</span>
+              )}
             </h2>
-            <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
+            <div className={`flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto ${scotListView === "tiles" ? "hidden" : ""}`}>
               
               <button
                 onClick={handleGenerateWeeklyReports}
@@ -846,11 +932,73 @@ export default function ScotPage() {
               )}
             </div>
           </div>
+
+          {scotListView === "tiles" ? (
+            <div className="flex-1 min-h-0 px-6 sm:px-10 py-8 sm:py-10 flex flex-col justify-center bg-gradient-to-br from-emerald-50 via-teal-50 to-cyan-50 dark:from-slate-950 dark:via-emerald-950/40 dark:to-slate-900 relative overflow-hidden">
+              <div className="pointer-events-none absolute -top-24 -left-24 h-72 w-72 rounded-full bg-emerald-300/30 blur-3xl dark:bg-emerald-500/10" />
+              <div className="pointer-events-none absolute -bottom-24 -right-24 h-72 w-72 rounded-full bg-cyan-300/30 blur-3xl dark:bg-cyan-500/10" />
+
+              <div className="relative z-10 w-full max-w-6xl mx-auto">
+                <p className="text-center text-[11px] font-black uppercase tracking-[0.25em] text-emerald-700/80 dark:text-emerald-300/80 mb-6">
+                  Select a category to view party list
+                </p>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setScotListView("active");
+                      setScotPage(1);
+                    }}
+                    className="group relative overflow-hidden rounded-[2rem] bg-gradient-to-br from-emerald-500 via-emerald-600 to-teal-600 p-8 text-left text-white shadow-xl shadow-emerald-500/25 transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl hover:shadow-emerald-500/35"
+                  >
+                    <div className="pointer-events-none absolute -right-8 -top-8 h-32 w-32 rounded-full bg-white/10 blur-2xl" />
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-white/20 ring-1 ring-white/30 backdrop-blur-sm">
+                        <CheckCircleIcon className="h-9 w-9 text-white" />
+                      </div>
+                      <span className="inline-flex items-center gap-1 rounded-full bg-white/15 px-3 py-1 text-[10px] font-black uppercase tracking-widest ring-1 ring-white/20">
+                        View list
+                        <ChevronRightIcon className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
+                      </span>
+                    </div>
+                    <p className="mt-6 text-[11px] font-black uppercase tracking-[0.2em] text-emerald-100">Active Parties</p>
+                    <p className="mt-2 text-6xl font-black leading-none">{scotPartyCounts.active}</p>
+                    <p className="mt-3 text-xs font-bold uppercase tracking-widest text-emerald-100/90">Included in weekly report</p>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setScotListView("inactive");
+                      setScotPage(1);
+                    }}
+                    className="group relative overflow-hidden rounded-[2rem] bg-gradient-to-br from-indigo-500 via-violet-600 to-purple-700 p-8 text-left text-white shadow-xl shadow-indigo-500/25 transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl hover:shadow-indigo-500/35"
+                  >
+                    <div className="pointer-events-none absolute -right-8 -top-8 h-32 w-32 rounded-full bg-white/10 blur-2xl" />
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-white/20 ring-1 ring-white/30 backdrop-blur-sm">
+                        <XCircleIcon className="h-9 w-9 text-white" />
+                      </div>
+                      <span className="inline-flex items-center gap-1 rounded-full bg-white/15 px-3 py-1 text-[10px] font-black uppercase tracking-widest ring-1 ring-white/20">
+                        View list
+                        <ChevronRightIcon className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
+                      </span>
+                    </div>
+                    <p className="mt-6 text-[11px] font-black uppercase tracking-[0.2em] text-indigo-100">Non Active Parties</p>
+                    <p className="mt-2 text-6xl font-black leading-none">{scotPartyCounts.inactive}</p>
+                    <p className="mt-3 text-xs font-bold uppercase tracking-widest text-indigo-100/90">Excluded from weekly report</p>
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : (
           <div className="flex-1 min-h-0 overflow-x-auto overflow-y-auto relative custom-scrollbar">
             <table className="w-full text-left border-collapse table-auto relative">
               <thead>
                 <tr className="bg-gradient-to-r from-emerald-600 to-teal-600 text-white">
-                  <th className="px-2 py-4 text-[10px] font-black uppercase tracking-widest whitespace-nowrap sticky top-0 left-0 z-30 bg-emerald-600 border-r-2 border-emerald-700/80 shadow-[4px_0_10px_-4px_rgba(0,0,0,0.3)]">Target Name</th>
+                  <th className="px-2 py-4 text-[10px] font-black uppercase tracking-widest text-center whitespace-nowrap sticky top-0 left-0 z-40 bg-emerald-600 border-r-2 border-emerald-700/80 min-w-[52px]">Active</th>
+                  <th className="px-2 py-4 text-[10px] font-black uppercase tracking-widest whitespace-nowrap sticky top-0 left-[52px] z-30 bg-emerald-600 border-r-2 border-emerald-700/80 shadow-[4px_0_10px_-4px_rgba(0,0,0,0.3)]">Target Name</th>
                   <th className="px-2 py-4 text-[10px] font-black uppercase tracking-widest text-center whitespace-normal leading-tight sticky top-0 z-20 bg-emerald-600 border-r-2 border-emerald-500/80 min-w-[60px]">Total Orders</th>
                   <th className="px-2 py-4 text-[10px] font-black uppercase tracking-widest text-center whitespace-normal leading-tight sticky top-0 z-20 bg-emerald-600 border-r-2 border-emerald-500/80 min-w-[70px]">Last Order Date</th>
                   <th className="px-2 py-4 text-[10px] font-black uppercase tracking-widest text-center whitespace-normal leading-tight sticky top-0 z-20 bg-emerald-600 border-r-2 border-emerald-500/80 min-w-[70px]">Recent Follow Up</th>
@@ -871,10 +1019,20 @@ export default function ScotPage() {
               </thead>
               <tbody className="divide-y-2 divide-slate-200 dark:divide-slate-700">
                 {paginatedScotRows.length === 0 ? (
-                  <tr><td colSpan={5} className="px-6 py-10 text-center text-sm font-bold text-slate-400 uppercase tracking-widest">No target records found</td></tr>
+                  <tr><td colSpan={8 + scotMonthDates.length} className="px-6 py-10 text-center text-sm font-bold text-slate-400 uppercase tracking-widest">No target records found</td></tr>
                 ) : paginatedScotRows.map((row, idx) => (
                   <tr key={idx} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors group/row">
-                    <td className="px-2 py-4 whitespace-nowrap sticky left-0 z-10 bg-white dark:bg-slate-900 border-r-2 border-slate-200 dark:border-slate-700 shadow-[4px_0_10px_-4px_rgba(0,0,0,0.1)] dark:shadow-[4px_0_10px_-4px_rgba(0,0,0,0.5)] truncate group-hover/row:bg-slate-50 dark:group-hover/row:bg-slate-800/80 transition-colors max-w-[250px]">
+                    <td className="px-2 py-4 text-center whitespace-nowrap sticky left-0 z-20 bg-white dark:bg-slate-900 border-r-2 border-slate-200 dark:border-slate-700 group-hover/row:bg-slate-50 dark:group-hover/row:bg-slate-800/80 transition-colors">
+                      <input
+                        type="checkbox"
+                        checked={row.isActive}
+                        disabled={togglingParty === row.toName}
+                        onChange={(e) => toggleActiveParty(row.toName, e.target.checked)}
+                        className="h-4 w-4 cursor-pointer rounded border-emerald-300 accent-emerald-600 focus:ring-2 focus:ring-emerald-500 focus:ring-offset-0 disabled:opacity-50 dark:border-emerald-700 dark:accent-emerald-500"
+                        title={row.isActive ? "Active party (included in weekly report)" : "Mark as active party"}
+                      />
+                    </td>
+                    <td className="px-2 py-4 whitespace-nowrap sticky left-[52px] z-10 bg-white dark:bg-slate-900 border-r-2 border-slate-200 dark:border-slate-700 shadow-[4px_0_10px_-4px_rgba(0,0,0,0.1)] dark:shadow-[4px_0_10px_-4px_rgba(0,0,0,0.5)] truncate group-hover/row:bg-slate-50 dark:group-hover/row:bg-slate-800/80 transition-colors max-w-[250px]">
                       <div className="flex flex-col gap-1">
                         <p className="text-xs font-black text-slate-900 dark:text-white flex items-center gap-1.5" title={row.toName}>
                           <UserGroupIcon className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
@@ -1003,6 +1161,7 @@ export default function ScotPage() {
               </tbody>
             </table>
           </div>
+          )}
         </div>
       )}
       {/* Manual Frequency Modal */}

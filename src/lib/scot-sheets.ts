@@ -434,3 +434,116 @@ export async function updateFrequencyData(partyName: string, frequency: string, 
     throw new Error(error.message || "Failed to update frequency data in sheet");
   }
 }
+
+export interface ActivePartyRecord {
+  partyName: string;
+  active: boolean;
+}
+
+async function ensureActivePartySheet(spreadsheetId: string) {
+  const sheets = await getSheetsClient();
+  await sheets.spreadsheets.batchUpdate({
+    spreadsheetId,
+    requestBody: {
+      requests: [{ addSheet: { properties: { title: "Active Party" } } }],
+    },
+  });
+  await sheets.spreadsheets.values.update({
+    spreadsheetId,
+    range: `'Active Party'!A1:B1`,
+    valueInputOption: "USER_ENTERED",
+    requestBody: {
+      values: [["Party Name", "Active"]],
+    },
+  });
+}
+
+export async function getActivePartyData(source: "scot" | "scot-kb" = "scot"): Promise<ActivePartyRecord[]> {
+  const spreadsheetId = source === "scot" ? SCOT_SPREADSHEET_ID : SCOT_KB_SPREADSHEET_ID;
+  try {
+    const sheets = await getSheetsClient();
+    let response;
+    try {
+      response = await sheets.spreadsheets.values.get({
+        spreadsheetId,
+        range: `'Active Party'!A2:B`,
+      });
+    } catch (err: any) {
+      if (err.message?.includes("Unable to parse range")) {
+        await ensureActivePartySheet(spreadsheetId);
+        return [];
+      }
+      throw err;
+    }
+
+    const rows = response.data.values || [];
+    return rows
+      .map((row) => ({
+        partyName: row[0] || "",
+        active: String(row[1] || "").toUpperCase() === "TRUE",
+      }))
+      .filter((row) => row.partyName);
+  } catch (error) {
+    console.error("Error fetching Active Party data:", error);
+    return [];
+  }
+}
+
+export async function updateActivePartyData(
+  partyName: string,
+  active: boolean,
+  source: "scot" | "scot-kb" = "scot"
+): Promise<boolean> {
+  const spreadsheetId = source === "scot" ? SCOT_SPREADSHEET_ID : SCOT_KB_SPREADSHEET_ID;
+  try {
+    const sheets = await getSheetsClient();
+    let response;
+    try {
+      response = await sheets.spreadsheets.values.get({
+        spreadsheetId,
+        range: `'Active Party'!A:B`,
+      });
+    } catch (err: any) {
+      if (err.message?.includes("Unable to parse range")) {
+        await ensureActivePartySheet(spreadsheetId);
+        response = await sheets.spreadsheets.values.get({
+          spreadsheetId,
+          range: `'Active Party'!A:B`,
+        });
+      } else {
+        throw err;
+      }
+    }
+
+    const rows = response.data.values || [];
+    const normalized = partyName.toLowerCase().trim();
+    const rowIndex = rows.findIndex(
+      (row, idx) => idx > 0 && (row[0] || "").toLowerCase().trim() === normalized
+    );
+
+    if (rowIndex !== -1) {
+      await sheets.spreadsheets.values.update({
+        spreadsheetId,
+        range: `'Active Party'!A${rowIndex + 1}:B${rowIndex + 1}`,
+        valueInputOption: "USER_ENTERED",
+        requestBody: {
+          values: [[rows[rowIndex][0] || partyName, active ? "TRUE" : "FALSE"]],
+        },
+      });
+    } else if (active) {
+      await sheets.spreadsheets.values.append({
+        spreadsheetId,
+        range: `'Active Party'!A:B`,
+        valueInputOption: "USER_ENTERED",
+        requestBody: {
+          values: [[partyName, "TRUE"]],
+        },
+      });
+    }
+
+    return true;
+  } catch (error: any) {
+    console.error("Error updating Active Party data:", error);
+    throw new Error(error.message || "Failed to update active party in sheet");
+  }
+}

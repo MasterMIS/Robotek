@@ -35,6 +35,7 @@ import { IMS } from "@/types/ims";
 import * as XLSX from "xlsx";
 import TimeSeriesTable, { TimeBucket, Transaction } from "@/components/TimeSeriesTable";
 import DateFilterBar, { FilterPeriod } from "@/components/DateFilterBar";
+import SearchableMultiSelect from "@/components/SearchableMultiSelect";
 import { startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfQuarter, endOfQuarter, startOfYear, endOfYear, isWithinInterval } from "date-fns";
 
 const fetcher = (url: string) => fetch(url).then(res => res.json());
@@ -96,6 +97,8 @@ export default function IMSMaster({ onBack }: { onBack: () => void }) {
   };
 
   const [searchQuery, setSearchQuery] = useState("");
+  const [categoryFilters, setCategoryFilters] = useState<string[]>([]);
+  const [itemNameFilters, setItemNameFilters] = useState<string[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 50;
   const [legendFilter, setLegendFilter] = useState<number | null>(null);
@@ -310,22 +313,47 @@ export default function IMSMaster({ onBack }: { onBack: () => void }) {
   }, [items]);
 
   const uniqueCategories = useMemo(() => {
-    return Array.from(new Set(items.map(i => i.category))).filter(Boolean);
+    return Array.from(new Set(items.map(i => i.category))).filter(Boolean).sort();
   }, [items]);
 
+  const categoryOptions = useMemo(
+    () => uniqueCategories.map((cat) => ({ id: cat, label: cat })),
+    [uniqueCategories]
+  );
+
+  const uniqueItemNames = useMemo(() => {
+    const source =
+      categoryFilters.length > 0
+        ? items.filter((i) => categoryFilters.includes(i.category))
+        : items;
+    return Array.from(new Set(source.map((i) => i.item_name))).filter(Boolean).sort();
+  }, [items, categoryFilters]);
+
+  const itemNameOptions = useMemo(
+    () => uniqueItemNames.map((name) => ({ id: name, label: name })),
+    [uniqueItemNames]
+  );
+
   const filteredItems = useMemo(() => {
-    let result = items.filter(item =>
-      item.item_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.category?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.id?.toString().includes(searchQuery.toLowerCase())
-    );
+    let result = items.filter((item) => {
+      const matchesSearch =
+        item.item_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        item.category?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        item.id?.toString().includes(searchQuery.toLowerCase());
+      if (!matchesSearch) return false;
+      if (categoryFilters.length > 0 && !categoryFilters.includes(item.category)) return false;
+      if (itemNameFilters.length > 0 && !itemNameFilters.includes(item.item_name)) return false;
+      return true;
+    });
 
     if (legendFilter !== null) {
-      result = result.filter(item => getLegendBucket(item.live_stock, item.max_level) === legendFilter);
+      result = result.filter(
+        (item) => getLegendBucket(item.live_stock, item.max_level) === legendFilter
+      );
     }
 
     return result;
-  }, [items, searchQuery, legendFilter]);
+  }, [items, searchQuery, legendFilter, categoryFilters, itemNameFilters]);
 
   const totalPages = Math.ceil(filteredItems.length / itemsPerPage);
   const paginatedItems = useMemo(() => {
@@ -335,7 +363,16 @@ export default function IMSMaster({ onBack }: { onBack: () => void }) {
 
   React.useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, legendFilter]);
+  }, [searchQuery, legendFilter, categoryFilters, itemNameFilters]);
+
+  React.useEffect(() => {
+    setItemNameFilters((prev) => {
+      if (prev.length === 0) return prev;
+      const valid = new Set(uniqueItemNames);
+      const next = prev.filter((name) => valid.has(name));
+      return next.length === prev.length ? prev : next;
+    });
+  }, [categoryFilters, uniqueItemNames]);
 
   // KPIs
   const totalItems = items.length;
@@ -597,17 +634,53 @@ export default function IMSMaster({ onBack }: { onBack: () => void }) {
         </div>
       </div>
 
-      <DateFilterBar 
-        period={filterPeriod}
-        setPeriod={setFilterPeriod}
-        currentDate={filterDate}
-        setCurrentDate={setFilterDate}
-        startDate={filterStartDate}
-        setStartDate={setFilterStartDate}
-        endDate={filterEndDate}
-        setEndDate={setFilterEndDate}
-        theme="blue"
-      />
+      <div className="flex flex-wrap items-stretch gap-2 shrink-0">
+        <DateFilterBar
+          period={filterPeriod}
+          setPeriod={setFilterPeriod}
+          currentDate={filterDate}
+          setCurrentDate={setFilterDate}
+          startDate={filterStartDate}
+          setStartDate={setFilterStartDate}
+          endDate={filterEndDate}
+          setEndDate={setFilterEndDate}
+          theme="blue"
+        />
+
+        <div className="flex flex-wrap items-end gap-2 flex-1 min-w-[280px] p-2 bg-white dark:bg-[#111827] border border-gray-200 dark:border-white/5 rounded-xl shadow-sm">
+          <div className="flex-1 min-w-[140px]">
+            <SearchableMultiSelect
+              options={categoryOptions}
+              value={categoryFilters}
+              onChange={setCategoryFilters}
+              placeholder="All Categories"
+              className="bg-gray-50 dark:bg-[#0a0f1c] border border-gray-200 dark:border-white/10 py-2 px-3 rounded-lg"
+              accentClass="border-blue-500 ring-blue-500/20"
+            />
+          </div>
+          <div className="flex-1 min-w-[180px]">
+            <SearchableMultiSelect
+              options={itemNameOptions}
+              value={itemNameFilters}
+              onChange={setItemNameFilters}
+              placeholder="All Items"
+              className="bg-gray-50 dark:bg-[#0a0f1c] border border-gray-200 dark:border-white/10 py-2 px-3 rounded-lg"
+              accentClass="border-blue-500 ring-blue-500/20"
+            />
+          </div>
+          {(categoryFilters.length > 0 || itemNameFilters.length > 0) && (
+            <button
+              onClick={() => {
+                setCategoryFilters([]);
+                setItemNameFilters([]);
+              }}
+              className="mb-0.5 px-3 py-2.5 rounded-lg text-[10px] font-black uppercase tracking-wider text-blue-700 dark:text-blue-400 bg-blue-50 hover:bg-blue-100 dark:bg-blue-500/10 dark:hover:bg-blue-500/20 border border-blue-200 dark:border-blue-500/20 transition-colors shrink-0"
+            >
+              Clear
+            </button>
+          )}
+        </div>
+      </div>
 
       <div className="flex items-center gap-2 bg-gray-100 dark:bg-white/5 p-1 rounded-xl shrink-0 self-start lg:self-auto mb-2">
         <button
