@@ -25,6 +25,7 @@ import { FloorIMS } from "@/types/ims-floor";
 import TimeSeriesTable, { TimeBucket } from "@/components/TimeSeriesTable";
 import DateFilterBar, { FilterPeriod } from "@/components/DateFilterBar";
 import SearchableMultiSelect from "@/components/SearchableMultiSelect";
+import { matchesCategoryItemFilters } from "@/lib/ims-filters";
 import { startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfQuarter, endOfQuarter, startOfYear, endOfYear, isWithinInterval } from "date-fns";
 import { CalendarIcon } from "@heroicons/react/24/outline";
 
@@ -232,7 +233,14 @@ function parseDateStr(dStr: string) {
       const key = item.item_name?.toLowerCase().trim();
       if (!key) return;
       if (!map.has(key)) {
-        map.set(key, { ...item, in_qty: "0", out_qty: "0", live_stock: allTimeStockMap.get(key) || 0 });
+        map.set(key, {
+          ...item,
+          item_name: (item.item_name ?? "").trim(),
+          category: (item.category ?? "").trim(),
+          in_qty: "0",
+          out_qty: "0",
+          live_stock: allTimeStockMap.get(key) || 0,
+        });
       }
       const agg = map.get(key)!;
       const inVal = parseFloat(item.in_qty) || 0;
@@ -240,18 +248,22 @@ function parseDateStr(dStr: string) {
       agg.in_qty = (parseFloat(agg.in_qty) + inVal).toString();
       agg.out_qty = (parseFloat(agg.out_qty) + outVal).toString();
       
-      const ts = parseDateStr(item.updated_at || "");
-      const aggTs = parseDateStr(agg.updated_at || "");
+      const ts = parseDateStr(item.updated_at || item.date || "");
+      const aggTs = parseDateStr(agg.updated_at || agg.date || "");
       if (ts > aggTs) {
         agg.updated_at = item.updated_at;
+        agg.date = item.date;
         agg.packed_status = item.packed_status || agg.packed_status;
+        if (item.category) agg.category = item.category.trim();
       }
     });
     return Array.from(map.values()).sort((a, b) => a.item_name.localeCompare(b.item_name));
   }, [filteredRawItems, allTimeStockMap]);
 
   const uniqueCategories = useMemo(() => {
-    return Array.from(new Set(aggregatedItems.map(i => i.category))).filter(Boolean).sort();
+    return Array.from(
+      new Set(aggregatedItems.map((i) => (i.category ?? "").trim()).filter(Boolean))
+    ).sort();
   }, [aggregatedItems]);
 
   const categoryOptions = useMemo(
@@ -262,7 +274,9 @@ function parseDateStr(dStr: string) {
   const uniqueItemNames = useMemo(() => {
     const source =
       categoryFilters.length > 0
-        ? aggregatedItems.filter((i) => categoryFilters.includes(i.category))
+        ? aggregatedItems.filter((i) =>
+            matchesCategoryItemFilters(i, categoryFilters, [])
+          )
         : aggregatedItems;
     return Array.from(new Set(source.map((i) => i.item_name))).filter(Boolean).sort();
   }, [aggregatedItems, categoryFilters]);
@@ -272,24 +286,32 @@ function parseDateStr(dStr: string) {
     [uniqueItemNames]
   );
 
-  const matchesCategoryItemFilters = (item: { category?: string; item_name?: string }) => {
-    if (categoryFilters.length > 0 && !categoryFilters.includes(item.category || "")) return false;
-    if (itemNameFilters.length > 0 && !itemNameFilters.includes(item.item_name || "")) return false;
-    return true;
-  };
-
   const filteredItems = useMemo(() => {
     return aggregatedItems.filter(item => {
       const matchesPacked = packedFilter === 'ALL' || 
                             (packedFilter === 'PACKED' && item.packed_status === 'PACKED') ||
                             (packedFilter === 'UNPACKED' && item.packed_status === 'UNPACKED');
-      return matchesPacked && matchesCategoryItemFilters(item);
+      return matchesPacked && matchesCategoryItemFilters(item, categoryFilters, itemNameFilters);
     });
   }, [aggregatedItems, packedFilter, categoryFilters, itemNameFilters]);
 
   const filteredDatewiseItems = useMemo(() => {
-    return filteredRawItems.filter((item) => matchesCategoryItemFilters(item));
+    return filteredRawItems.filter((item) =>
+      matchesCategoryItemFilters(item, categoryFilters, itemNameFilters)
+    );
   }, [filteredRawItems, categoryFilters, itemNameFilters]);
+
+  const filteredTimeSeriesTransactions = useMemo(() => {
+    return rawItems
+      .filter((item) => matchesCategoryItemFilters(item, categoryFilters, itemNameFilters))
+      .map(item => ({
+        item_name: item.item_name,
+        category: item.category,
+        date: item.date || item.updated_at || '',
+        in_qty: parseFloat(item.in_qty) || 0,
+        out_qty: parseFloat(item.out_qty) || 0,
+      }));
+  }, [rawItems, categoryFilters, itemNameFilters]);
 
   const masterCategories = useMemo(() => {
     return Array.from(new Set(masterItems.map(i => i.category))).filter(Boolean);
@@ -796,13 +818,7 @@ function parseDateStr(dStr: string) {
       ) : viewMode === 'timeseries' ? (
         <div className="flex flex-col gap-2 shrink-0 mb-2">
           <TimeSeriesTable 
-            transactions={rawItems.map(item => ({ 
-              item_name: item.item_name, 
-              category: item.category, 
-              date: item.date || item.updated_at || '', 
-              in_qty: parseFloat(item.in_qty) || 0, 
-              out_qty: parseFloat(item.out_qty) || 0 
-            }))}
+            transactions={filteredTimeSeriesTransactions}
             bucket={mappedTimeBucket}
             isLoading={isLoading}
           />

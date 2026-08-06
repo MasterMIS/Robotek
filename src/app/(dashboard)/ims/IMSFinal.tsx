@@ -14,6 +14,7 @@ import * as XLSX from "xlsx";
 import TimeSeriesTable, { TimeBucket, Transaction } from "@/components/TimeSeriesTable";
 import DateFilterBar, { FilterPeriod } from "@/components/DateFilterBar";
 import SearchableMultiSelect from "@/components/SearchableMultiSelect";
+import { matchesCategoryItemFilters } from "@/lib/ims-filters";
 import { startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfQuarter, endOfQuarter, startOfYear, endOfYear, isWithinInterval } from "date-fns";
 
 const fetcher = (url: string) => fetch(url).then(res => res.json());
@@ -63,8 +64,8 @@ export default function IMSFinal({ onBack }: { onBack: () => void }) {
       const key = `${name}-${sourceName}`;
       if (!map.has(key)) {
         map.set(key, {
-          item_name: item.item_name, 
-          category: item.category || 'Uncategorized', 
+          item_name: (item.item_name ?? "").trim(),
+          category: (item.category || "Uncategorized").trim(),
           source: sourceName,
           in_qty: 0, 
           out_qty: 0, 
@@ -78,8 +79,8 @@ export default function IMSFinal({ onBack }: { onBack: () => void }) {
       agg.out_qty += outVal;
       agg.live_stock += (inVal - outVal);
       // keep the latest category if not set
-      if (agg.category === 'Uncategorized' && item.category) {
-        agg.category = item.category;
+      if (agg.category === "Uncategorized" && item.category) {
+        agg.category = item.category.trim();
       }
     };
 
@@ -91,7 +92,9 @@ export default function IMSFinal({ onBack }: { onBack: () => void }) {
   }, [masterItems, firstItems, gItems]);
 
   const uniqueCategories = useMemo(() => {
-    return Array.from(new Set(aggregatedItems.map((i) => i.category))).filter(Boolean).sort();
+    return Array.from(
+      new Set(aggregatedItems.map((i) => (i.category ?? "").trim()).filter(Boolean))
+    ).sort();
   }, [aggregatedItems]);
 
   const categoryOptions = useMemo(
@@ -102,7 +105,9 @@ export default function IMSFinal({ onBack }: { onBack: () => void }) {
   const uniqueItemNames = useMemo(() => {
     const source =
       categoryFilters.length > 0
-        ? aggregatedItems.filter((i) => categoryFilters.includes(i.category))
+        ? aggregatedItems.filter((i) =>
+            matchesCategoryItemFilters(i, categoryFilters, [])
+          )
         : aggregatedItems;
     return Array.from(new Set(source.map((i) => i.item_name))).filter(Boolean).sort();
   }, [aggregatedItems, categoryFilters]);
@@ -112,14 +117,10 @@ export default function IMSFinal({ onBack }: { onBack: () => void }) {
     [uniqueItemNames]
   );
 
-  const matchesCategoryItemFilters = (item: { category?: string; item_name?: string }) => {
-    if (categoryFilters.length > 0 && !categoryFilters.includes(item.category || "")) return false;
-    if (itemNameFilters.length > 0 && !itemNameFilters.includes(item.item_name || "")) return false;
-    return true;
-  };
-
   const filteredItems = useMemo(() => {
-    return aggregatedItems.filter((item) => matchesCategoryItemFilters(item));
+    return aggregatedItems.filter((item) =>
+      matchesCategoryItemFilters(item, categoryFilters, itemNameFilters)
+    );
   }, [aggregatedItems, categoryFilters, itemNameFilters]);
 
   const totalPages = Math.ceil(filteredItems.length / itemsPerPage);
@@ -252,8 +253,16 @@ export default function IMSFinal({ onBack }: { onBack: () => void }) {
   }, [combinedTransactions, dateRange]);
 
   const filteredDatewiseTransactions = useMemo(() => {
-    return datewiseTransactions.filter((item) => matchesCategoryItemFilters(item));
+    return datewiseTransactions.filter((item) =>
+      matchesCategoryItemFilters(item, categoryFilters, itemNameFilters)
+    );
   }, [datewiseTransactions, categoryFilters, itemNameFilters]);
+
+  const filteredCombinedTransactions = useMemo(() => {
+    return combinedTransactions.filter((item) =>
+      matchesCategoryItemFilters(item, categoryFilters, itemNameFilters)
+    );
+  }, [combinedTransactions, categoryFilters, itemNameFilters]);
 
   return (
     <div className="flex flex-col h-[calc(100vh-2rem)]">
@@ -428,7 +437,7 @@ export default function IMSFinal({ onBack }: { onBack: () => void }) {
       ) : viewMode === 'timeseries' ? (
         <div className="flex flex-col gap-2 shrink-0 mb-2 mt-4">
           <TimeSeriesTable 
-            transactions={combinedTransactions}
+            transactions={filteredCombinedTransactions}
             bucket={mappedTimeBucket}
             isLoading={isTimeSeriesLoading || isLoading}
           />
@@ -492,7 +501,7 @@ export default function IMSFinal({ onBack }: { onBack: () => void }) {
                     const health = getHealthColors(item.live_stock || 0);
                     return (
                       <tr
-                        key={item.item_name}
+                        key={`${item.source}-${item.item_name}`}
                         className="hover:bg-orange-50/30 dark:hover:bg-white/[0.03] even:bg-gray-50/50 dark:even:bg-[#1f2937]/30 transition-colors group"
                       >
                         <td className="py-1 px-2 text-center sticky left-0 z-10 transition-colors border-r shadow-[1px_0_0_0_#fed7aa] dark:shadow-[1px_0_0_0_rgba(249,115,22,0.2)] bg-white group-even:bg-orange-50/30 dark:bg-[#111827] dark:group-even:bg-[#182031] group-hover:bg-orange-50/50 dark:group-hover:bg-[#1a2335] border-orange-100 dark:border-orange-500/10">

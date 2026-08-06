@@ -36,6 +36,7 @@ import * as XLSX from "xlsx";
 import TimeSeriesTable, { TimeBucket, Transaction } from "@/components/TimeSeriesTable";
 import DateFilterBar, { FilterPeriod } from "@/components/DateFilterBar";
 import SearchableMultiSelect from "@/components/SearchableMultiSelect";
+import { matchesCategoryItemFilters } from "@/lib/ims-filters";
 import { startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfQuarter, endOfQuarter, startOfYear, endOfYear, isWithinInterval } from "date-fns";
 
 const fetcher = (url: string) => fetch(url).then(res => res.json());
@@ -277,11 +278,25 @@ export default function IMSMaster({ onBack }: { onBack: () => void }) {
     });
   }, [timeSeriesData, dateRange]);
 
+  const filteredDatewiseTransactions = useMemo(() => {
+    return datewiseTransactions.filter((item) =>
+      matchesCategoryItemFilters(item, categoryFilters, itemNameFilters)
+    );
+  }, [datewiseTransactions, categoryFilters, itemNameFilters]);
+
+  const filteredTimeSeriesData = useMemo(() => {
+    return timeSeriesData.filter((item) =>
+      matchesCategoryItemFilters(item, categoryFilters, itemNameFilters)
+    );
+  }, [timeSeriesData, categoryFilters, itemNameFilters]);
+
   const { data: rawItems = [], mutate: mutateMaster, isLoading: masterLoading } = useSWR<IMS[]>("/api/ims", fetcher);
 
   const items = useMemo(() => {
     return rawItems.map(item => ({
       ...item,
+      item_name: (item.item_name ?? "").trim(),
+      category: (item.category ?? "").trim(),
       in_qty: item.in_qty || 0,
       out_qty: item.out_qty || 0,
       live_stock: item.live_stock || 0,
@@ -313,7 +328,9 @@ export default function IMSMaster({ onBack }: { onBack: () => void }) {
   }, [items]);
 
   const uniqueCategories = useMemo(() => {
-    return Array.from(new Set(items.map(i => i.category))).filter(Boolean).sort();
+    return Array.from(
+      new Set(items.map((i) => (i.category ?? "").trim()).filter(Boolean))
+    ).sort();
   }, [items]);
 
   const categoryOptions = useMemo(
@@ -324,7 +341,7 @@ export default function IMSMaster({ onBack }: { onBack: () => void }) {
   const uniqueItemNames = useMemo(() => {
     const source =
       categoryFilters.length > 0
-        ? items.filter((i) => categoryFilters.includes(i.category))
+        ? items.filter((i) => matchesCategoryItemFilters(i, categoryFilters, []))
         : items;
     return Array.from(new Set(source.map((i) => i.item_name))).filter(Boolean).sort();
   }, [items, categoryFilters]);
@@ -337,13 +354,11 @@ export default function IMSMaster({ onBack }: { onBack: () => void }) {
   const filteredItems = useMemo(() => {
     let result = items.filter((item) => {
       const matchesSearch =
+        !searchQuery ||
         item.item_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        item.category?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         item.id?.toString().includes(searchQuery.toLowerCase());
       if (!matchesSearch) return false;
-      if (categoryFilters.length > 0 && !categoryFilters.includes(item.category)) return false;
-      if (itemNameFilters.length > 0 && !itemNameFilters.includes(item.item_name)) return false;
-      return true;
+      return matchesCategoryItemFilters(item, categoryFilters, itemNameFilters);
     });
 
     if (legendFilter !== null) {
@@ -488,7 +503,7 @@ export default function IMSMaster({ onBack }: { onBack: () => void }) {
 
     if (viewMode === 'datewise') {
       headers = ["Date", "Category", "Item Name", "In Qty", "Out Qty", "Live Stock"];
-      rows = datewiseTransactions.map((log: any) => [
+      rows = filteredDatewiseTransactions.map((log: any) => [
         new Date(log.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' }),
         log.category,
         log.item_name,
@@ -718,7 +733,7 @@ export default function IMSMaster({ onBack }: { onBack: () => void }) {
       {viewMode === 'timeseries' ? (
         <div className="flex flex-col gap-2 shrink-0 mb-2">
           <TimeSeriesTable 
-            transactions={timeSeriesData}
+            transactions={filteredTimeSeriesData}
             bucket={mappedTimeBucket}
             isLoading={isTimeSeriesLoading}
             searchQuery={searchQuery}
@@ -726,10 +741,10 @@ export default function IMSMaster({ onBack }: { onBack: () => void }) {
         </div>
       ) : viewMode === 'datewise' ? (
         <div className="flex-1 bg-white dark:bg-[#111827] border border-gray-200 dark:border-white/5 rounded-xl overflow-hidden flex flex-col shadow-sm min-h-0 mt-2">
-          {datewiseTransactions.length > 0 && !isTimeSeriesLoading && (
+          {filteredDatewiseTransactions.length > 0 && !isTimeSeriesLoading && (
             <div className="py-2 px-4 border-b border-blue-200/50 dark:border-blue-500/10 flex items-center justify-between bg-blue-50/50 dark:bg-[#1f2937]/50 shrink-0">
               <p className="text-[10px] font-black text-blue-700 dark:text-blue-400 uppercase tracking-widest">
-                Showing {datewiseTransactions.length} transactions
+                Showing {filteredDatewiseTransactions.length} transactions
               </p>
             </div>
           )}
@@ -753,7 +768,7 @@ export default function IMSMaster({ onBack }: { onBack: () => void }) {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 dark:divide-white/5">
-                  {datewiseTransactions.map((log, index) => (
+                  {filteredDatewiseTransactions.map((log, index) => (
                     <tr key={index} className="hover:bg-blue-50/30 dark:hover:bg-white/[0.03] even:bg-gray-50/50 dark:even:bg-[#1f2937]/30 transition-colors group">
                       <td className="py-2 px-4 text-[11px] font-bold text-gray-500">
                         {new Date(log.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' })}
@@ -765,7 +780,7 @@ export default function IMSMaster({ onBack }: { onBack: () => void }) {
                       <td className="py-2 px-4 text-[11px] font-black text-[#003875] dark:text-[#FFD500] text-right">{(log as any).running_stock}</td>
                     </tr>
                   ))}
-                  {datewiseTransactions.length === 0 && (
+                  {filteredDatewiseTransactions.length === 0 && (
                     <tr>
                       <td colSpan={6} className="py-8 text-center text-gray-400 text-[11px] font-black uppercase">No items found</td>
                     </tr>

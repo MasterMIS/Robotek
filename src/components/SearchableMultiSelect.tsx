@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { MagnifyingGlassIcon, ChevronDownIcon, XMarkIcon } from "@heroicons/react/24/outline";
+import { matchesOptionSearch } from "@/lib/ims-filters";
 
 interface Option {
   id: string;
@@ -34,7 +35,7 @@ export default function SearchableMultiSelect({
   const [dropdownPos, setDropdownPos] = useState({ top: 0, left: 0, width: 0 });
 
   const filteredOptions = options.filter((opt) =>
-    (opt.label || "").toLowerCase().includes(searchTerm.toLowerCase())
+    matchesOptionSearch(opt.label || "", searchTerm)
   );
 
   const selectedLabels = options

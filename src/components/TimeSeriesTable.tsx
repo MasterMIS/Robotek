@@ -117,11 +117,10 @@ export default function TimeSeriesTable({ transactions, bucket, isLoading, searc
 
     const finalArr = Array.from(itemMap.values()).sort((a, b) => a.item_name.localeCompare(b.item_name));
     
-    if (searchQuery) {
-      const q = searchQuery.toLowerCase();
-      return finalArr.filter(item => 
-        item.item_name.toLowerCase().includes(q) || 
-        item.category.toLowerCase().includes(q)
+    if (searchQuery.trim()) {
+      const q = searchQuery.trim().toLowerCase();
+      return finalArr.filter((item) =>
+        item.item_name.toLowerCase().includes(q)
       );
     }
     return finalArr;
