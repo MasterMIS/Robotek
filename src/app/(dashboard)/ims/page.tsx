@@ -40,6 +40,17 @@ export default function IMSHub() {
     totalOut: (summary.main?.totalOut || 0) + (summary.first?.totalOut || 0) + (summary.g?.totalOut || 0),
   } : undefined;
 
+  const DecorativeBubbles = () => (
+    <div className="relative w-[88px] h-[76px] shrink-0 pointer-events-none mr-1">
+      <div className="absolute top-0 right-0 w-[52px] h-[52px] rounded-full bg-white/18 border border-white/30 backdrop-blur-[2px] shadow-[inset_0_1px_8px_rgba(255,255,255,0.25)] transition-transform duration-500 group-hover:scale-105" />
+      <div className="absolute top-1 right-[42px] w-[34px] h-[34px] rounded-full bg-white/12 border border-white/22 backdrop-blur-[1px] transition-transform duration-500 group-hover:-translate-y-0.5" />
+      <div className="absolute -top-0.5 right-5 w-[18px] h-[18px] rounded-full bg-white/22 border border-white/35" />
+      <div className="absolute top-[38px] right-1 w-[22px] h-[22px] rounded-full bg-white/14 border border-white/25 backdrop-blur-[1px]" />
+      <div className="absolute top-[46px] right-[38px] w-[10px] h-[10px] rounded-full bg-white/28 border border-white/40" />
+      <div className="absolute top-3 right-[68px] w-[8px] h-[8px] rounded-full bg-white/20 border border-white/30" />
+    </div>
+  );
+
   const renderTile = (
     id: "master" | "1st" | "g" | "final", 
     title: string, 
@@ -69,6 +80,8 @@ export default function IMSHub() {
               <p className="text-[10px] font-bold text-white/70 uppercase tracking-widest mt-0.5">{subtitle}</p>
             </div>
           </div>
+
+          <DecorativeBubbles />
         </div>
 
         {isLoading || !data ? (
