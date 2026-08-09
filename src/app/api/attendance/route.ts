@@ -3,6 +3,7 @@ import { getAttendanceRecords, addAttendanceRecord, updateAttendanceRecord } fro
 import { getUsers } from "@/lib/google-sheets";
 import { uploadFileToDrive } from "@/lib/google-drive";
 import { parseLatLong, getShortestDistance } from "@/lib/locationUtils";
+import { isWeeklyOffDateString, getWeeklyOffLabel } from "@/lib/dateUtils";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -91,6 +92,14 @@ export async function POST(req: NextRequest) {
     if (action === 'CHECK_IN') {
       const allUsers = await getUsers();
       const user = allUsers.find(u => String(u.id) === String(userId));
+
+      if (isWeeklyOffDateString(user?.office, dateStr)) {
+        return NextResponse.json(
+          { error: `Check-in is not allowed on ${getWeeklyOffLabel(user?.office)} weekly off days` },
+          { status: 400 }
+        );
+      }
+
       if (user?.late_long) {
         const registeredPoints = parseLatLong(user.late_long);
         if (registeredPoints && latitude && longitude) {

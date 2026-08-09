@@ -17,6 +17,25 @@ import IMSFinal from "./IMSFinal";
 
 const fetcher = (url: string) => fetch(url).then(res => res.json());
 
+const formatMetric = (value: number) =>
+  value.toLocaleString(undefined, { maximumFractionDigits: 2 });
+
+const getLiveStockFontClass = (value: number) => {
+  const length = formatMetric(value).length;
+  if (length > 13) return "text-lg sm:text-xl";
+  if (length > 10) return "text-2xl sm:text-3xl";
+  if (length > 8) return "text-3xl";
+  return "text-4xl";
+};
+
+const getInOutFontClass = (value: number) => {
+  const length = formatMetric(value).length;
+  if (length > 12) return "text-[10px] sm:text-xs";
+  if (length > 10) return "text-xs sm:text-sm";
+  if (length > 8) return "text-sm sm:text-base";
+  return "text-lg sm:text-xl";
+};
+
 export default function IMSHub() {
   const [activeLocation, setActiveLocation] = useState<"master" | "1st" | "g" | "final" | null>(null);
   
@@ -41,13 +60,12 @@ export default function IMSHub() {
   } : undefined;
 
   const DecorativeBubbles = () => (
-    <div className="relative w-[88px] h-[76px] shrink-0 pointer-events-none mr-1">
-      <div className="absolute top-0 right-0 w-[52px] h-[52px] rounded-full bg-white/18 border border-white/30 backdrop-blur-[2px] shadow-[inset_0_1px_8px_rgba(255,255,255,0.25)] transition-transform duration-500 group-hover:scale-105" />
-      <div className="absolute top-1 right-[42px] w-[34px] h-[34px] rounded-full bg-white/12 border border-white/22 backdrop-blur-[1px] transition-transform duration-500 group-hover:-translate-y-0.5" />
-      <div className="absolute -top-0.5 right-5 w-[18px] h-[18px] rounded-full bg-white/22 border border-white/35" />
-      <div className="absolute top-[38px] right-1 w-[22px] h-[22px] rounded-full bg-white/14 border border-white/25 backdrop-blur-[1px]" />
-      <div className="absolute top-[46px] right-[38px] w-[10px] h-[10px] rounded-full bg-white/28 border border-white/40" />
-      <div className="absolute top-3 right-[68px] w-[8px] h-[8px] rounded-full bg-white/20 border border-white/30" />
+    <div className="absolute top-0 right-0 w-[72px] h-[64px] pointer-events-none">
+      <div className="absolute top-0 right-0 w-[44px] h-[44px] rounded-full bg-white/18 border border-white/30 backdrop-blur-[2px] shadow-[inset_0_1px_8px_rgba(255,255,255,0.25)] transition-transform duration-500 group-hover:scale-105" />
+      <div className="absolute top-1 right-[34px] w-[28px] h-[28px] rounded-full bg-white/12 border border-white/22 backdrop-blur-[1px] transition-transform duration-500 group-hover:-translate-y-0.5" />
+      <div className="absolute -top-0.5 right-4 w-[14px] h-[14px] rounded-full bg-white/22 border border-white/35" />
+      <div className="absolute top-[32px] right-0 w-[18px] h-[18px] rounded-full bg-white/14 border border-white/25 backdrop-blur-[1px]" />
+      <div className="absolute top-[40px] right-[30px] w-[8px] h-[8px] rounded-full bg-white/28 border border-white/40" />
     </div>
   );
 
@@ -63,25 +81,30 @@ export default function IMSHub() {
     return (
       <div 
         onClick={() => setActiveLocation(id)}
-        className={`relative rounded-3xl p-6 shadow-xl ${shadow} transition-all duration-300 group flex flex-col justify-between overflow-hidden border border-white/10 ${gradient} hover:shadow-2xl hover:-translate-y-2 cursor-pointer`}
+        className={`relative rounded-3xl p-6 shadow-xl ${shadow} transition-all duration-300 group flex flex-col justify-between border border-white/10 ${gradient} hover:shadow-2xl hover:-translate-y-2 cursor-pointer`}
       >
-        <div className="absolute inset-0 bg-black/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"></div>
-        <div className="absolute -right-10 -top-10 w-40 h-40 bg-white/10 rounded-full blur-3xl group-hover:scale-150 transition-transform duration-500 pointer-events-none"></div>
+        <div className="absolute inset-0 overflow-hidden rounded-3xl pointer-events-none">
+          <div className="absolute inset-0 bg-black/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+          <div className="absolute -right-10 -top-10 w-40 h-40 bg-white/10 rounded-full blur-3xl group-hover:scale-150 transition-transform duration-500"></div>
+        </div>
         
-        <div className="relative flex items-start justify-between mb-10 z-10">
-          <div className="flex items-center gap-4">
-            <div className="p-3.5 bg-white/20 backdrop-blur-md rounded-2xl transition-all duration-300 shadow-sm group-hover:shadow-md">
-              <div className="text-white w-8 h-8 transition-colors duration-300">
+        <div className="relative mb-10 z-10 pr-16">
+          <DecorativeBubbles />
+          <div className="flex items-start gap-3">
+            <div className="p-3 bg-white/20 backdrop-blur-md rounded-2xl transition-all duration-300 shadow-sm group-hover:shadow-md shrink-0">
+              <div className="text-white w-7 h-7 transition-colors duration-300">
                 {icon}
               </div>
             </div>
-            <div>
-              <h2 className="text-xl font-black text-white uppercase tracking-tight transition-colors">{title}</h2>
-              <p className="text-[10px] font-bold text-white/70 uppercase tracking-widest mt-0.5">{subtitle}</p>
+            <div className="flex-1 min-w-0">
+              <h2 className="text-base lg:text-lg xl:text-xl font-black text-white uppercase tracking-tight leading-snug transition-colors">
+                {title}
+              </h2>
+              <p className="text-[10px] font-bold text-white/70 uppercase tracking-widest mt-1 leading-snug">
+                {subtitle}
+              </p>
             </div>
           </div>
-
-          <DecorativeBubbles />
         </div>
 
         {isLoading || !data ? (
@@ -93,37 +116,46 @@ export default function IMSHub() {
             </div>
           </div>
         ) : (
-          <div className="relative space-y-4 z-10">
-            <div className="bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/20 transition-colors shadow-sm">
+          <div className="relative space-y-4 z-10 min-w-0">
+            <div className="bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/20 transition-colors shadow-sm min-w-0">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-[10px] font-black text-white/80 uppercase tracking-widest flex items-center gap-1.5">
                   <ScaleIcon className="w-4 h-4 text-white/80"/> Live Stock
                 </span>
               </div>
-              <div className={`text-4xl font-black tracking-tighter ${data.liveStock < 0 ? 'text-rose-300' : 'text-white'} transition-colors`}>
-                {data.liveStock.toLocaleString()}
+              <div
+                className={`${getLiveStockFontClass(data.liveStock)} font-black tracking-tight leading-none break-words [overflow-wrap:anywhere] ${data.liveStock < 0 ? "text-rose-300" : "text-white"} transition-colors`}
+                title={formatMetric(data.liveStock)}
+              >
+                {formatMetric(data.liveStock)}
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/20 transition-colors">
+            <div className="grid grid-cols-2 gap-3 min-w-0">
+              <div className="bg-white/10 backdrop-blur-md rounded-2xl p-3 sm:p-4 border border-white/20 transition-colors min-w-0">
                 <div className="flex items-center justify-between mb-1.5">
                   <span className="text-[10px] font-black text-white/80 uppercase tracking-widest flex items-center gap-1.5">
-                    <ArrowTrendingUpIcon className="w-3.5 h-3.5"/> In
+                    <ArrowTrendingUpIcon className="w-3.5 h-3.5 shrink-0"/> In
                   </span>
                 </div>
-                <div className="text-xl font-black text-white">
-                  {data.totalIn.toLocaleString()}
+                <div
+                  className={`${getInOutFontClass(data.totalIn)} font-black text-white leading-none break-words [overflow-wrap:anywhere]`}
+                  title={formatMetric(data.totalIn)}
+                >
+                  {formatMetric(data.totalIn)}
                 </div>
               </div>
-              <div className="bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/20 transition-colors">
+              <div className="bg-white/10 backdrop-blur-md rounded-2xl p-3 sm:p-4 border border-white/20 transition-colors min-w-0">
                 <div className="flex items-center justify-between mb-1.5">
                   <span className="text-[10px] font-black text-white/80 uppercase tracking-widest flex items-center gap-1.5">
-                    <ArrowTrendingDownIcon className="w-3.5 h-3.5"/> Out
+                    <ArrowTrendingDownIcon className="w-3.5 h-3.5 shrink-0"/> Out
                   </span>
                 </div>
-                <div className="text-xl font-black text-white">
-                  {data.totalOut.toLocaleString()}
+                <div
+                  className={`${getInOutFontClass(data.totalOut)} font-black text-white leading-none break-words [overflow-wrap:anywhere]`}
+                  title={formatMetric(data.totalOut)}
+                >
+                  {formatMetric(data.totalOut)}
                 </div>
               </div>
             </div>

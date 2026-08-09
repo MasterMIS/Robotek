@@ -27,6 +27,7 @@ class FloorIMSService extends BaseSheetsService<FloorIMS> {
       out_qty: get("out qty", 4),
       date: get("date", 5),
       packed_status: get("packed status", -1), // dynamic based on header
+      checked_status: get("checked status", -1),
       updated_at: get("updated_at", 6),
     };
   }
@@ -48,6 +49,10 @@ class FloorIMSService extends BaseSheetsService<FloorIMS> {
     // Only set if we know where it goes, otherwise rely on header map
     if (this.hMap["packed status"] !== undefined) {
       set("packed status", -1, ims.packed_status || "");
+    }
+
+    if (this.hMap["checked status"] !== undefined) {
+      set("checked status", -1, ims.checked_status || "");
     }
     
     // If updated_at is mapped dynamically, use that, else assume index 6 (which might shift if packed status is inserted before it, but hMap solves this)
@@ -110,4 +115,27 @@ export async function updateFloorIMSItem(location: string, id: string, data: Flo
 export async function deleteFloorIMSItem(location: string, id: string): Promise<boolean> {
   const service = getService(location);
   return service.delete(id);
+}
+
+export async function markFloorIMSItemsChecked(
+  location: string,
+  ids: string[]
+): Promise<{ success: boolean; updated: number }> {
+  const service = getService(location);
+  const allItems = await service.getAll();
+  let updated = 0;
+
+  for (const id of ids) {
+    const item = allItems.find((i) => String(i.id).trim() === String(id).trim());
+    if (!item) continue;
+    if (String(item.checked_status || "").trim().toUpperCase() === "CHECKED") continue;
+
+    const success = await service.update(id, {
+      ...item,
+      checked_status: "CHECKED",
+    });
+    if (success) updated++;
+  }
+
+  return { success: updated > 0, updated };
 }

@@ -68,44 +68,43 @@ export default function TimeSeriesTable({ transactions, bucket, isLoading, searc
   }, [bucket]);
 
   const aggregatedData = useMemo(() => {
-    // Map item name -> item object with name, category, and an array of values for each bucket
     const itemMap = new Map<string, { item_name: string; category: string; values: number[] }>();
+    const txByItem = new Map<string, Transaction[]>();
 
-    // Sort transactions by date so we can accumulate properly
-    const sortedTx = [...transactions].sort((a, b) => new Date(a.date || (a as any).updated_at || 0).getTime() - new Date(b.date || (b as any).updated_at || 0).getTime());
+    const sortedTx = [...transactions].sort(
+      (a, b) =>
+        new Date(a.date || (a as any).updated_at || 0).getTime() -
+        new Date(b.date || (b as any).updated_at || 0).getTime()
+    );
 
-    // First pass: gather all items
-    sortedTx.forEach(tx => {
+    sortedTx.forEach((tx) => {
       const key = tx.item_name.trim().toLowerCase();
       if (!itemMap.has(key)) {
         itemMap.set(key, {
           item_name: tx.item_name.trim(),
-          category: tx.category || 'GENERAL',
-          values: new Array(buckets.length).fill(0)
+          category: tx.category || "GENERAL",
+          values: new Array(buckets.length).fill(0),
         });
+        txByItem.set(key, []);
       }
+      txByItem.get(key)!.push(tx);
     });
 
-    // We want cumulative live stock at the end of each bucket.
-    // That is SUM(in) - SUM(out) for all tx <= bucket.end
-    
-    Array.from(itemMap.keys()).forEach(key => {
-      const itemTx = sortedTx.filter(tx => tx.item_name.trim().toLowerCase() === key);
-      const itemObj = itemMap.get(key)!;
-
+    itemMap.forEach((itemObj, key) => {
+      const itemTx = txByItem.get(key)!;
       let currentStock = 0;
       let txIdx = 0;
 
       for (let b = 0; b < buckets.length; b++) {
         const bucketEnd = buckets[b].end;
-        
+
         while (txIdx < itemTx.length) {
           const txDateStr = itemTx[txIdx].date || (itemTx[txIdx] as any).updated_at;
           const txDate = txDateStr ? new Date(txDateStr) : new Date(0);
           if (isBefore(txDate, bucketEnd) || isEqual(txDate, bucketEnd)) {
             const inQ = parseFloat(itemTx[txIdx].in_qty as any) || 0;
             const outQ = parseFloat(itemTx[txIdx].out_qty as any) || 0;
-            currentStock += (inQ - outQ);
+            currentStock += inQ - outQ;
             txIdx++;
           } else {
             break;
@@ -115,13 +114,13 @@ export default function TimeSeriesTable({ transactions, bucket, isLoading, searc
       }
     });
 
-    const finalArr = Array.from(itemMap.values()).sort((a, b) => a.item_name.localeCompare(b.item_name));
-    
+    const finalArr = Array.from(itemMap.values()).sort((a, b) =>
+      a.item_name.localeCompare(b.item_name)
+    );
+
     if (searchQuery.trim()) {
       const q = searchQuery.trim().toLowerCase();
-      return finalArr.filter((item) =>
-        item.item_name.toLowerCase().includes(q)
-      );
+      return finalArr.filter((item) => item.item_name.toLowerCase().includes(q));
     }
     return finalArr;
   }, [transactions, buckets, searchQuery]);
@@ -137,7 +136,7 @@ export default function TimeSeriesTable({ transactions, bucket, isLoading, searc
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, bucket]);
+  }, [searchQuery, bucket, transactions.length]);
 
   const totalPages = Math.ceil(aggregatedData.length / itemsPerPage);
   const paginatedData = useMemo(() => {

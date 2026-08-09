@@ -376,9 +376,15 @@ export default function IMSMaster({ onBack }: { onBack: () => void }) {
     return filteredItems.slice(start, start + itemsPerPage);
   }, [filteredItems, currentPage]);
 
+  const datewiseTotalPages = Math.ceil(filteredDatewiseTransactions.length / itemsPerPage);
+  const paginatedDatewiseTransactions = useMemo(() => {
+    const start = (currentPage - 1) * itemsPerPage;
+    return filteredDatewiseTransactions.slice(start, start + itemsPerPage);
+  }, [filteredDatewiseTransactions, currentPage]);
+
   React.useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, legendFilter, categoryFilters, itemNameFilters]);
+  }, [searchQuery, legendFilter, categoryFilters, itemNameFilters, viewMode, filterPeriod, filterDate, filterStartDate, filterEndDate]);
 
   React.useEffect(() => {
     setItemNameFilters((prev) => {
@@ -744,8 +750,24 @@ export default function IMSMaster({ onBack }: { onBack: () => void }) {
           {filteredDatewiseTransactions.length > 0 && !isTimeSeriesLoading && (
             <div className="py-2 px-4 border-b border-blue-200/50 dark:border-blue-500/10 flex items-center justify-between bg-blue-50/50 dark:bg-[#1f2937]/50 shrink-0">
               <p className="text-[10px] font-black text-blue-700 dark:text-blue-400 uppercase tracking-widest">
-                Showing {filteredDatewiseTransactions.length} transactions
+                Showing {Math.min((currentPage - 1) * itemsPerPage + 1, filteredDatewiseTransactions.length)} to {Math.min(currentPage * itemsPerPage, filteredDatewiseTransactions.length)} of {filteredDatewiseTransactions.length} transactions
               </p>
+              <div className="flex gap-1">
+                <button
+                  onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                  disabled={currentPage === 1}
+                  className="px-3 py-1.5 rounded bg-white dark:bg-[#111827] border border-gray-200 dark:border-white/10 text-[10px] font-black text-gray-500 uppercase tracking-widest hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm"
+                >
+                  Prev
+                </button>
+                <button
+                  onClick={() => setCurrentPage(prev => Math.min(prev + 1, datewiseTotalPages))}
+                  disabled={currentPage === datewiseTotalPages || datewiseTotalPages === 0}
+                  className="px-3 py-1.5 rounded bg-white dark:bg-[#111827] border border-gray-200 dark:border-white/10 text-[10px] font-black text-gray-500 uppercase tracking-widest hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm"
+                >
+                  Next
+                </button>
+              </div>
             </div>
           )}
           <div className="flex-1 overflow-auto custom-scrollbar relative">
@@ -768,7 +790,7 @@ export default function IMSMaster({ onBack }: { onBack: () => void }) {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 dark:divide-white/5">
-                  {filteredDatewiseTransactions.map((log, index) => (
+                  {paginatedDatewiseTransactions.map((log, index) => (
                     <tr key={index} className="hover:bg-blue-50/30 dark:hover:bg-white/[0.03] even:bg-gray-50/50 dark:even:bg-[#1f2937]/30 transition-colors group">
                       <td className="py-2 px-4 text-[11px] font-bold text-gray-500">
                         {new Date(log.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' })}

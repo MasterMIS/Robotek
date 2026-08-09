@@ -29,6 +29,53 @@ export function getIstDateString(): string {
   return istNow.toISOString().split('T')[0];
 }
 
+/** Sunday check for YYYY-MM-DD (calendar date, not timezone-shifted clock). */
+export function isSundayDateString(dateStr: string): boolean {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  if (!y || !m || !d) return false;
+  return new Date(y, m - 1, d).getDay() === 0;
+}
+
+export function isKbOffice(office?: string): boolean {
+  return String(office || '').trim().toUpperCase() === 'KB';
+}
+
+/** KB branch: Monday off. All other offices: Sunday off. */
+export function getWeeklyOffDayOfWeek(office?: string): 0 | 1 {
+  return isKbOffice(office) ? 1 : 0;
+}
+
+export function getWeeklyOffLabel(office?: string): 'SUN' | 'MON' {
+  return getWeeklyOffDayOfWeek(office) === 1 ? 'MON' : 'SUN';
+}
+
+export function isWeeklyOffForUser(
+  office: string | undefined,
+  year: number,
+  month: number,
+  day: number
+): boolean {
+  return new Date(year, month, day).getDay() === getWeeklyOffDayOfWeek(office);
+}
+
+export function isWeeklyOffDateString(office: string | undefined, dateStr: string): boolean {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  if (!y || !m || !d) return false;
+  return isWeeklyOffForUser(office, y, m - 1, d);
+}
+
+export function isWeeklyOffIstToday(office?: string): boolean {
+  return isWeeklyOffDateString(office, getIstDateString());
+}
+
+export function isSundayIstToday(): boolean {
+  return isSundayDateString(getIstDateString());
+}
+
+export function isSundayInMonth(year: number, month: number, day: number): boolean {
+  return new Date(year, month, day).getDay() === 0;
+}
+
 export function formatDate(dateStr: string | null): string {
     if (!dateStr) return "—";
     const d = new Date(dateStr);

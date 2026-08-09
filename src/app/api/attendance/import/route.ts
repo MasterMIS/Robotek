@@ -3,6 +3,7 @@ import { auth } from "@/auth";
 import { getUsers } from "@/lib/google-sheets";
 import { upsertAttendanceRecords, type AttendanceRecord } from "@/lib/sheets/attendance-sheets";
 import { buildIstIsoTimestamp, type ParsedPunchRecord } from "@/lib/utils/punchMachineParser";
+import { isWeeklyOffDateString, getWeeklyOffLabel } from "@/lib/dateUtils";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -69,6 +70,16 @@ export async function POST(req: NextRequest) {
           userCode,
           date: record.date,
           reason: "Missing in and out time",
+        });
+        continue;
+      }
+
+      if (isWeeklyOffDateString(matchedUser.office, record.date)) {
+        skipped++;
+        errors.push({
+          userCode,
+          date: record.date,
+          reason: `${getWeeklyOffLabel(matchedUser.office)} weekly off day`,
         });
         continue;
       }

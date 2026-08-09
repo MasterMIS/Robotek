@@ -9,22 +9,24 @@ import {
   ClipboardDocumentListIcon,
   PlusIcon,
   TrashIcon,
+  PencilSquareIcon,
   ArrowDownTrayIcon,
   XMarkIcon,
   ArrowLeftIcon,
   EyeIcon,
   TableCellsIcon,
   ChartBarIcon,
-  TagIcon,
   FolderIcon,
   HashtagIcon,
   CalendarDaysIcon,
-  ClipboardDocumentCheckIcon
+  ClipboardDocumentCheckIcon,
+  CheckIcon
 } from "@heroicons/react/24/outline";
 import { FloorIMS } from "@/types/ims-floor";
 import TimeSeriesTable, { TimeBucket } from "@/components/TimeSeriesTable";
 import DateFilterBar, { FilterPeriod } from "@/components/DateFilterBar";
 import SearchableMultiSelect from "@/components/SearchableMultiSelect";
+import SearchableSelect from "@/components/SearchableSelect";
 import { matchesCategoryItemFilters } from "@/lib/ims-filters";
 import { startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfQuarter, endOfQuarter, startOfYear, endOfYear, isWithinInterval } from "date-fns";
 import { CalendarIcon } from "@heroicons/react/24/outline";
@@ -40,6 +42,33 @@ const formatDate = (dateString?: string) => {
   const year = String(date.getFullYear()).slice(-2);
   return `${day} ${month} ${year}`;
 };
+
+const roundQty = (value: number) => {
+  if (!Number.isFinite(value)) return 0;
+  return Math.round(value * 100) / 100;
+};
+
+const formatQty = (value: number | string) => {
+  const n = typeof value === 'string' ? parseFloat(value) : value;
+  if (!Number.isFinite(n)) return '-';
+  const rounded = roundQty(n);
+  if (Number.isInteger(rounded)) return String(rounded);
+  return rounded.toFixed(2).replace(/0+$/, '').replace(/\.$/, '');
+};
+
+const computeAuditDiff = (physicalQty: number, liveStock: number) => {
+  const diff = roundQty(physicalQty - liveStock);
+  if (diff === 0) {
+    return { diff_qty: 0, diff_type: 'NONE' as const };
+  }
+  return {
+    diff_qty: Math.abs(diff),
+    diff_type: diff > 0 ? ('IN' as const) : ('OUT' as const),
+  };
+};
+
+const isItemChecked = (item: { checked_status?: string }) =>
+  String(item.checked_status || '').trim().toUpperCase() === 'CHECKED';
 
 const FloatingInput = ({
   label, value, onChange, type = "text", step, disabled, name, list, icon: Icon
@@ -82,6 +111,7 @@ interface AuditRow {
   physical_qty: string;
   diff_qty: number;
   diff_type: 'IN' | 'OUT' | 'NONE';
+  fromPaste?: boolean;
 }
 
 export default function IMSFloor({ location, onBack }: { location: "1st" | "g", onBack: () => void }) {
@@ -97,6 +127,8 @@ export default function IMSFloor({ location, onBack }: { location: "1st" | "g", 
   const [filterEndDate, setFilterEndDate] = useState<Date | null>(null);
 
   const [packedFilter, setPackedFilter] = useState<'ALL' | 'PACKED' | 'UNPACKED'>('ALL');
+  const [checkedFilter, setCheckedFilter] = useState<'ALL' | 'CHECKED' | 'UNCHECKED'>('ALL');
+  const [selectedVerifyIds, setSelectedVerifyIds] = useState<string[]>([]);
 
   const mappedTimeBucket: TimeBucket = useMemo(() => {
     if (filterPeriod === 'WEEK') return 'Weekly';
@@ -126,13 +158,28 @@ export default function IMSFloor({ location, onBack }: { location: "1st" | "g", 
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
 
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editingLog, setEditingLog] = useState<FloorIMS | null>(null);
+  const [editForm, setEditForm] = useState<{ type: 'IN' | 'OUT'; qty: string }>({ type: 'IN', qty: '' });
+
   // Form states
   const [bulkRows, setBulkRows] = useState<BulkRow[]>([]);
   const [isAuditModalOpen, setIsAuditModalOpen] = useState(false);
   const [auditRows, setAuditRows] = useState<AuditRow[]>([]);
+  const [auditPasteText, setAuditPasteText] = useState("");
 
   const { data: rawItems = [], mutate, isLoading } = useSWR<FloorIMS[]>(`/api/ims/floor?location=${location}`, fetcher);
   const { data: masterItems = [] } = useSWR<any[]>("/api/ims", fetcher);
+
+  const masterItemOptions = useMemo(() => {
+    const names = Array.from(
+      new Set(masterItems.map((item: any) => item.item_name?.trim()).filter(Boolean))
+    ) as string[];
+    return names.sort((a, b) => a.localeCompare(b)).map((name) => ({ id: name, label: name }));
+  }, [masterItems]);
+
+  const isValidMasterItemName = (name: string) =>
+    masterItemOptions.some((opt) => opt.id.toLowerCase() === name.toLowerCase());
 
   const dateRange = useMemo(() => {
     let start, end;
@@ -296,10 +343,13 @@ function parseDateStr(dStr: string) {
   }, [aggregatedItems, packedFilter, categoryFilters, itemNameFilters]);
 
   const filteredDatewiseItems = useMemo(() => {
-    return filteredRawItems.filter((item) =>
-      matchesCategoryItemFilters(item, categoryFilters, itemNameFilters)
-    );
-  }, [filteredRawItems, categoryFilters, itemNameFilters]);
+    return filteredRawItems.filter((item) => {
+      if (!matchesCategoryItemFilters(item, categoryFilters, itemNameFilters)) return false;
+      if (checkedFilter === 'CHECKED') return isItemChecked(item);
+      if (checkedFilter === 'UNCHECKED') return !isItemChecked(item);
+      return true;
+    });
+  }, [filteredRawItems, categoryFilters, itemNameFilters, checkedFilter]);
 
   const filteredTimeSeriesTransactions = useMemo(() => {
     return rawItems
@@ -323,6 +373,12 @@ function parseDateStr(dStr: string) {
     return filteredItems.slice(start, start + itemsPerPage);
   }, [filteredItems, currentPage]);
 
+  const datewiseTotalPages = Math.ceil(filteredDatewiseItems.length / itemsPerPage);
+  const paginatedDatewiseItems = useMemo(() => {
+    const start = (currentPage - 1) * itemsPerPage;
+    return filteredDatewiseItems.slice(start, start + itemsPerPage);
+  }, [filteredDatewiseItems, currentPage]);
+
   const transactionLogs = useMemo(() => {
     if (!selectedLogItem) return [];
     return rawItems
@@ -332,7 +388,12 @@ function parseDateStr(dStr: string) {
 
   React.useEffect(() => {
     setCurrentPage(1);
-  }, [packedFilter, categoryFilters, itemNameFilters]);
+    setSelectedVerifyIds([]);
+  }, [packedFilter, categoryFilters, itemNameFilters, checkedFilter, viewMode, filterPeriod, filterDate, filterStartDate, filterEndDate]);
+
+  React.useEffect(() => {
+    setSelectedVerifyIds([]);
+  }, [currentPage]);
 
   React.useEffect(() => {
     setItemNameFilters((prev) => {
@@ -375,10 +436,14 @@ function parseDateStr(dStr: string) {
 
   const handleSaveItem = async () => {
     // Bulk Save Logic - Ledger Style Append Only
-    for(const row of bulkRows) {
-      if(!row.item_name || !row.qty || parseFloat(row.qty) <= 0) {
-          showStatus("Please fill all fields and ensure qty > 0", "error");
-          return;
+    for (const row of bulkRows) {
+      if (!row.item_name || !row.qty || parseFloat(row.qty) <= 0) {
+        showStatus("Please fill all fields and ensure qty > 0", "error");
+        return;
+      }
+      if (!isValidMasterItemName(row.item_name)) {
+        showStatus("Please select a valid item from the master list", "error");
+        return;
       }
     }
     setSubmitting(true);
@@ -417,6 +482,26 @@ function parseDateStr(dStr: string) {
     }
   };
 
+  const getItemLiveStockAndCategory = (itemName: string) => {
+    let totalIn = 0;
+    let totalOut = 0;
+    let category = '';
+    rawItems.forEach((i) => {
+      if (i.item_name?.toLowerCase().trim() === itemName.toLowerCase().trim()) {
+        totalIn += parseFloat(i.in_qty) || 0;
+        totalOut += parseFloat(i.out_qty) || 0;
+        category = i.category || category;
+      }
+    });
+    if (!category) {
+      const masterItem = masterItems.find(
+        (i: any) => i.item_name?.toLowerCase().trim() === itemName.toLowerCase().trim()
+      );
+      category = masterItem?.category || '';
+    }
+    return { live_stock: roundQty(totalIn - totalOut), category };
+  };
+
   const addAuditRow = () => {
     setAuditRows(prev => [...prev, { id: Date.now().toString(), item_name: '', category: '', live_stock: 0, physical_qty: '', diff_qty: 0, diff_type: 'NONE' }]);
   };
@@ -430,39 +515,24 @@ function parseDateStr(dStr: string) {
       if (row.id === id) {
         const newRow = { ...row, [field]: value };
         if (field === "item_name") {
-          let totalIn = 0;
-          let totalOut = 0;
-          let category = '';
-          rawItems.forEach(i => {
-            if (i.item_name?.toLowerCase().trim() === value.toLowerCase().trim()) {
-              totalIn += parseFloat(i.in_qty) || 0;
-              totalOut += parseFloat(i.out_qty) || 0;
-              category = i.category || category;
-            }
-          });
-          
-          if (totalIn > 0 || totalOut > 0 || category) {
-            newRow.category = category;
-            newRow.live_stock = totalIn - totalOut;
-          } else {
-            newRow.category = '';
-            newRow.live_stock = 0;
-          }
+          const { live_stock, category } = getItemLiveStockAndCategory(value);
+          newRow.category = category;
+          newRow.live_stock = live_stock;
           
           // Recalculate difference immediately
           if (newRow.physical_qty) {
-            const phys = parseFloat(newRow.physical_qty) || 0;
-            const diff = phys - newRow.live_stock;
-            newRow.diff_qty = Math.abs(diff);
-            newRow.diff_type = diff > 0 ? 'IN' : diff < 0 ? 'OUT' : 'NONE';
+            const phys = roundQty(parseFloat(newRow.physical_qty) || 0);
+            const { diff_qty, diff_type } = computeAuditDiff(phys, newRow.live_stock);
+            newRow.diff_qty = diff_qty;
+            newRow.diff_type = diff_type;
           }
         }
         if (field === "physical_qty") {
           const phys = parseFloat(value);
           if (!isNaN(phys)) {
-            const diff = phys - row.live_stock;
-            newRow.diff_qty = Math.abs(diff);
-            newRow.diff_type = diff > 0 ? 'IN' : diff < 0 ? 'OUT' : 'NONE';
+            const { diff_qty, diff_type } = computeAuditDiff(phys, row.live_stock);
+            newRow.diff_qty = diff_qty;
+            newRow.diff_type = diff_type;
           } else {
             newRow.diff_qty = 0;
             newRow.diff_type = 'NONE';
@@ -474,8 +544,98 @@ function parseDateStr(dStr: string) {
     }));
   };
 
+  const handleAuditPaste = () => {
+    if (!auditPasteText.trim()) {
+      showStatus("Paste your data first (Item Name and Physical Qty)", "error");
+      return;
+    }
+
+    const lines = auditPasteText.split('\n').map((line) => line.trim()).filter(Boolean);
+    const newRows: AuditRow[] = [];
+    const errors: string[] = [];
+
+    lines.forEach((line, idx) => {
+      let parts = line.split('\t');
+      if (parts.length < 2 && line.includes(',')) {
+        parts = line.split(',').map((part) => part.trim());
+      }
+
+      if (parts.length < 2) {
+        errors.push(`Line ${idx + 1}: need Item Name and Physical Qty`);
+        return;
+      }
+
+      if (/item\s*name/i.test(parts[0]) && /qty|physical/i.test(parts[1])) return;
+
+      const itemName = parts[0].trim();
+      const physicalQtyRaw = parts[1].trim();
+      const physicalQty = physicalQtyRaw === '' ? NaN : parseFloat(physicalQtyRaw);
+
+      if (!itemName) return;
+
+      if (!isValidMasterItemName(itemName)) {
+        errors.push(`Line ${idx + 1}: "${itemName}" not in master list`);
+        return;
+      }
+
+      if (isNaN(physicalQty)) {
+        errors.push(`Line ${idx + 1}: invalid physical qty`);
+        return;
+      }
+
+      const { live_stock, category } = getItemLiveStockAndCategory(itemName);
+      const { diff_qty, diff_type } = computeAuditDiff(physicalQty, live_stock);
+      if (diff_type === 'NONE') return;
+
+      newRows.push({
+        id: `${Date.now()}-${idx}`,
+        item_name: itemName,
+        category,
+        live_stock,
+        physical_qty: String(roundQty(physicalQty)),
+        diff_qty,
+        diff_type,
+        fromPaste: true,
+      });
+    });
+
+    if (newRows.length === 0) {
+      showStatus(
+        errors.length > 0
+          ? errors.slice(0, 2).join(' · ')
+          : "No valid rows found. Use: Item Name and Physical Qty",
+        "error"
+      );
+      return;
+    }
+
+    setAuditRows((prev) => {
+      const hasOnlyEmpty = prev.length === 1 && !prev[0].item_name && !prev[0].physical_qty && !prev[0].fromPaste;
+      return hasOnlyEmpty ? newRows : [...prev, ...newRows];
+    });
+    setAuditPasteText("");
+
+    if (errors.length > 0) {
+      showStatus(`Loaded ${newRows.length} row(s). Skipped: ${errors.slice(0, 2).join(' · ')}`, "error");
+    } else {
+      showStatus(`Loaded ${newRows.length} adjustment row(s)`, "success");
+      setTimeout(() => setIsStatusModalOpen(false), 1500);
+    }
+  };
+
   const handleSaveAudit = async () => {
-    const validRows = auditRows.filter(r => r.item_name && r.physical_qty && r.diff_type !== 'NONE' && r.diff_qty > 0);
+    const validRows = auditRows.filter(
+      (r) =>
+        r.item_name &&
+        r.diff_type !== 'NONE' &&
+        r.diff_qty > 0 &&
+        (r.fromPaste || r.physical_qty)
+    );
+
+    if (validRows.some((row) => !isValidMasterItemName(row.item_name))) {
+      showStatus("Please select a valid item from the master list", "error");
+      return;
+    }
     
     if (validRows.length === 0) {
       showStatus("No valid differences to apply. Add items with physical quantities that differ from live stock.", "error");
@@ -492,8 +652,8 @@ function parseDateStr(dStr: string) {
         const newItem: Partial<FloorIMS> = {
           item_name: row.item_name.trim(),
           category: row.category,
-          in_qty: row.diff_type === 'IN' ? row.diff_qty.toString() : "0",
-          out_qty: row.diff_type === 'OUT' ? row.diff_qty.toString() : "0",
+          in_qty: row.diff_type === 'IN' ? String(roundQty(row.diff_qty)) : "0",
+          out_qty: row.diff_type === 'OUT' ? String(roundQty(row.diff_qty)) : "0",
           date: today,
           updated_at: new Date().toISOString()
         };
@@ -506,10 +666,107 @@ function parseDateStr(dStr: string) {
       mutate();
       setIsAuditModalOpen(false);
       setAuditRows([]);
+      setAuditPasteText("");
       showStatus("Physical Stock Reconciled!", "success");
       setTimeout(() => setIsStatusModalOpen(false), 1500);
     } catch(e) {
       showStatus("Error saving adjustments.", "error");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const isStoredFloorLog = (id: string | number) => !String(id).startsWith("outform-");
+
+  const toggleVerifySelection = (id: string) => {
+    setSelectedVerifyIds((prev) =>
+      prev.includes(id) ? prev.filter((v) => v !== id) : [...prev, id]
+    );
+  };
+
+  const handleMarkChecked = async () => {
+    const ids = selectedVerifyIds.filter((id) => {
+      const item = rawItems.find((i) => String(i.id) === id);
+      return item && isStoredFloorLog(id) && !isItemChecked(item);
+    });
+
+    if (ids.length === 0) {
+      showStatus("Select unchecked entries to mark as checked", "error");
+      return;
+    }
+
+    setSubmitting(true);
+    showStatus(`Marking ${ids.length} entr${ids.length === 1 ? 'y' : 'ies'} as checked...`, "loading");
+
+    try {
+      const res = await fetch(`/api/ims/floor?location=${location}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids }),
+      });
+
+      if (res.ok) {
+        mutate();
+        setSelectedVerifyIds([]);
+        showStatus("Marked as checked!", "success");
+        setTimeout(() => setIsStatusModalOpen(false), 1500);
+      } else {
+        throw new Error("Failed to mark checked");
+      }
+    } catch (e) {
+      showStatus("Error marking entries as checked.", "error");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const openEditLog = (log: FloorIMS) => {
+    const inQty = parseFloat(log.in_qty) || 0;
+    const outQty = parseFloat(log.out_qty) || 0;
+    setEditingLog(log);
+    setEditForm({
+      type: outQty > 0 ? 'OUT' : 'IN',
+      qty: (outQty > 0 ? outQty : inQty).toString(),
+    });
+    setIsEditModalOpen(true);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingLog) return;
+    const qty = parseFloat(editForm.qty);
+    if (!editForm.qty || isNaN(qty) || qty <= 0) {
+      showStatus("Please enter a valid quantity greater than 0", "error");
+      return;
+    }
+
+    setSubmitting(true);
+    showStatus("Updating transaction...", "loading");
+
+    try {
+      const payload: FloorIMS = {
+        ...editingLog,
+        in_qty: editForm.type === 'IN' ? qty.toString() : "0",
+        out_qty: editForm.type === 'OUT' ? qty.toString() : "0",
+        updated_at: new Date().toISOString(),
+      };
+
+      const res = await fetch(`/api/ims/floor?location=${location}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      if (res.ok) {
+        mutate();
+        setIsEditModalOpen(false);
+        setEditingLog(null);
+        showStatus("Transaction Updated Successfully!", "success");
+        setTimeout(() => setIsStatusModalOpen(false), 1500);
+      } else {
+        throw new Error("Failed to update");
+      }
+    } catch (e) {
+      showStatus("Error updating transaction.", "error");
     } finally {
       setSubmitting(false);
     }
@@ -660,6 +917,7 @@ function parseDateStr(dStr: string) {
           </button>
           <button onClick={() => {
             setAuditRows([]);
+            setAuditPasteText("");
             setIsAuditModalOpen(true);
             addAuditRow(); // start with one empty row
           }} className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-[11px] font-black uppercase tracking-wider transition-all shadow-sm border ${
@@ -730,11 +988,25 @@ function parseDateStr(dStr: string) {
               <option value="UNPACKED">UNPACKED</option>
             </select>
           )}
-          {(categoryFilters.length > 0 || itemNameFilters.length > 0) && (
+          {viewMode === 'datewise' && (
+            <select
+              value={checkedFilter}
+              onChange={(e) => setCheckedFilter(e.target.value as 'ALL' | 'CHECKED' | 'UNCHECKED')}
+              className={`px-3 py-2 bg-gray-50 dark:bg-[#0a0f1c] border border-gray-200 dark:border-white/10 rounded-lg text-[11px] font-black uppercase tracking-wider outline-none dark:text-white shadow-sm h-[42px] cursor-pointer shrink-0 ${
+                location === '1st' ? 'focus:ring-2 focus:ring-purple-500' : 'focus:ring-2 focus:ring-emerald-500'
+              }`}
+            >
+              <option value="ALL">ALL CHECKS</option>
+              <option value="CHECKED">CHECKED</option>
+              <option value="UNCHECKED">UNCHECKED</option>
+            </select>
+          )}
+          {(categoryFilters.length > 0 || itemNameFilters.length > 0 || checkedFilter !== 'ALL') && (
             <button
               onClick={() => {
                 setCategoryFilters([]);
                 setItemNameFilters([]);
+                setCheckedFilter('ALL');
               }}
               className={`mb-0.5 px-3 py-2.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-colors shrink-0 border ${
                 location === '1st'
@@ -751,10 +1023,40 @@ function parseDateStr(dStr: string) {
       {viewMode === 'datewise' ? (
         <div className="flex-1 bg-white dark:bg-[#111827] border border-gray-200 dark:border-white/5 rounded-xl overflow-hidden flex flex-col shadow-sm min-h-0 mt-2">
           {filteredDatewiseItems.length > 0 && !isLoading && (
-            <div className={`py-2 px-4 border-b flex items-center justify-between shrink-0 ${location === '1st' ? 'border-purple-200/50 dark:border-purple-500/10 bg-purple-50/50 dark:bg-purple-500/5' : 'border-emerald-200/50 dark:border-emerald-500/10 bg-emerald-50/50 dark:bg-emerald-500/5'}`}>
-              <p className={`text-[10px] font-black uppercase tracking-widest ${location === '1st' ? 'text-purple-600 dark:text-purple-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
-                Showing {filteredDatewiseItems.length} transactions
-              </p>
+            <div className={`py-2 px-4 border-b flex items-center justify-between shrink-0 gap-3 flex-wrap ${location === '1st' ? 'border-purple-200/50 dark:border-purple-500/10 bg-purple-50/50 dark:bg-purple-500/5' : 'border-emerald-200/50 dark:border-emerald-500/10 bg-emerald-50/50 dark:bg-emerald-500/5'}`}>
+              <div className="flex items-center gap-3 flex-wrap">
+                <p className={`text-[10px] font-black uppercase tracking-widest ${location === '1st' ? 'text-purple-600 dark:text-purple-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                  Showing {Math.min((currentPage - 1) * itemsPerPage + 1, filteredDatewiseItems.length)} to {Math.min(currentPage * itemsPerPage, filteredDatewiseItems.length)} of {filteredDatewiseItems.length} transactions
+                </p>
+                {selectedVerifyIds.length > 0 && (
+                  <button
+                    onClick={handleMarkChecked}
+                    disabled={submitting}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest text-white transition-all shadow-sm disabled:opacity-50 ${
+                      location === '1st' ? 'bg-purple-600 hover:bg-purple-700' : 'bg-emerald-600 hover:bg-emerald-700'
+                    }`}
+                  >
+                    <CheckIcon className="w-4 h-4" />
+                    Checked ({selectedVerifyIds.length})
+                  </button>
+                )}
+              </div>
+              <div className="flex gap-1">
+                <button
+                  onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                  disabled={currentPage === 1}
+                  className="px-3 py-1.5 rounded bg-white dark:bg-[#111827] border border-gray-200 dark:border-white/10 text-[10px] font-black text-gray-500 uppercase tracking-widest hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm"
+                >
+                  Prev
+                </button>
+                <button
+                  onClick={() => setCurrentPage(prev => Math.min(prev + 1, datewiseTotalPages))}
+                  disabled={currentPage === datewiseTotalPages || datewiseTotalPages === 0}
+                  className="px-3 py-1.5 rounded bg-white dark:bg-[#111827] border border-gray-200 dark:border-white/10 text-[10px] font-black text-gray-500 uppercase tracking-widest hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm"
+                >
+                  Next
+                </button>
+              </div>
             </div>
           )}
           <div className="flex-1 overflow-auto custom-scrollbar relative">
@@ -768,6 +1070,7 @@ function parseDateStr(dStr: string) {
               <table className="w-full text-left border-collapse relative">
                 <thead className={`sticky top-0 z-20 shadow-sm ${location === '1st' ? 'bg-purple-50 dark:bg-purple-900/20' : 'bg-emerald-50 dark:bg-emerald-900/20'}`}>
                   <tr>
+                    <th className={`py-2.5 px-3 text-[10px] font-black uppercase tracking-widest border-b text-center w-10 ${location === '1st' ? 'text-purple-600 dark:text-purple-400 border-purple-200 dark:border-purple-500/20' : 'text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-500/20'}`}></th>
                     <th className={`py-2.5 px-4 text-[10px] font-black uppercase tracking-widest border-b ${location === '1st' ? 'text-purple-600 dark:text-purple-400 border-purple-200 dark:border-purple-500/20' : 'text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-500/20'}`}>Date</th>
                     <th className={`py-2.5 px-3 text-[10px] font-black uppercase tracking-widest border-b ${location === '1st' ? 'text-purple-600 dark:text-purple-400 border-purple-200 dark:border-purple-500/20' : 'text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-500/20'}`}>Category</th>
                     <th className={`py-2.5 px-3 text-[10px] font-black uppercase tracking-widest border-b ${location === '1st' ? 'text-purple-600 dark:text-purple-400 border-purple-200 dark:border-purple-500/20' : 'text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-500/20'}`}>Item Name</th>
@@ -777,12 +1080,40 @@ function parseDateStr(dStr: string) {
                     {location === '1st' && (
                       <th className="py-2.5 px-3 text-[10px] font-black uppercase tracking-widest border-b text-center text-purple-600 dark:text-purple-400 border-purple-200 dark:border-purple-500/20">Status</th>
                     )}
-                    <th className={`py-2.5 px-4 text-[10px] font-black uppercase tracking-widest border-b text-center w-20 ${location === '1st' ? 'text-purple-600 dark:text-purple-400 border-purple-200 dark:border-purple-500/20' : 'text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-500/20'}`}>Act</th>
+                    <th className={`py-2.5 px-3 text-[10px] font-black uppercase tracking-widest border-b text-center ${location === '1st' ? 'text-purple-600 dark:text-purple-400 border-purple-200 dark:border-purple-500/20' : 'text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-500/20'}`}>Checked</th>
+                    <th className={`py-2.5 px-4 text-[10px] font-black uppercase tracking-widest border-b text-center w-24 ${location === '1st' ? 'text-purple-600 dark:text-purple-400 border-purple-200 dark:border-purple-500/20' : 'text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-500/20'}`}>Act</th>
                   </tr>
                 </thead>
                 <tbody className={`divide-y ${location === '1st' ? 'divide-purple-100 dark:divide-purple-500/10' : 'divide-emerald-100 dark:divide-emerald-500/10'}`}>
-                  {filteredDatewiseItems.map((log) => (
-                    <tr key={log.id} className="hover:bg-gray-50 dark:hover:bg-white/[0.03] transition-colors group">
+                  {paginatedDatewiseItems.map((log) => {
+                    const checked = isItemChecked(log);
+                    const canVerify = isStoredFloorLog(log.id);
+                    const isSelected = selectedVerifyIds.includes(String(log.id));
+                    return (
+                    <tr
+                      key={log.id}
+                      className={`transition-colors group ${
+                        checked
+                          ? location === '1st'
+                            ? 'bg-purple-50/70 dark:bg-purple-500/10 hover:bg-purple-50 dark:hover:bg-purple-500/15'
+                            : 'bg-emerald-50/70 dark:bg-emerald-500/10 hover:bg-emerald-50 dark:hover:bg-emerald-500/15'
+                          : 'hover:bg-gray-50 dark:hover:bg-white/[0.03]'
+                      } ${isSelected ? (location === '1st' ? 'ring-1 ring-inset ring-purple-300 dark:ring-purple-500/40' : 'ring-1 ring-inset ring-emerald-300 dark:ring-emerald-500/40') : ''}`}
+                    >
+                      <td className="py-2 px-3 text-center">
+                        {canVerify && !checked ? (
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => toggleVerifySelection(String(log.id))}
+                            className={`w-4 h-4 rounded border-gray-300 cursor-pointer ${
+                              location === '1st' ? 'text-purple-600 focus:ring-purple-500' : 'text-emerald-600 focus:ring-emerald-500'
+                            }`}
+                          />
+                        ) : (
+                          <span className="text-gray-300 dark:text-gray-600">-</span>
+                        )}
+                      </td>
                       <td className="py-2 px-4 text-[11px] font-bold text-gray-500">{formatDate(log.date || log.updated_at)}</td>
                       <td className="py-2 px-3 text-[11px] font-bold text-gray-500 uppercase">{log.category}</td>
                       <td className="py-2 px-3 text-[11px] font-black text-gray-900 dark:text-white uppercase">{log.item_name}</td>
@@ -798,16 +1129,50 @@ function parseDateStr(dStr: string) {
                           ) : <span className="text-gray-300">-</span>}
                         </td>
                       )}
+                      <td className="py-2 px-3 text-center">
+                        {checked ? (
+                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[9px] font-black uppercase ${
+                            location === '1st'
+                              ? 'bg-purple-100 text-purple-700 dark:bg-purple-500/20 dark:text-purple-300'
+                              : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300'
+                          }`}>
+                            <CheckIcon className="w-3 h-3" />
+                            Checked
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400 rounded-md text-[9px] font-black uppercase">
+                            Pending
+                          </span>
+                        )}
+                      </td>
                       <td className="py-2 px-4 text-center">
-                        <button onClick={() => confirmDelete(log.id.toString())} className="text-rose-400 hover:text-rose-600 transition-colors">
-                          <TrashIcon className="w-4 h-4 mx-auto" />
-                        </button>
+                        {isStoredFloorLog(log.id) ? (
+                          <div className="flex items-center justify-center gap-2">
+                            <button
+                              onClick={() => openEditLog(log)}
+                              className={`transition-colors hover:scale-110 ${location === '1st' ? 'text-purple-500 hover:text-purple-700 dark:text-purple-400 dark:hover:text-purple-300' : 'text-emerald-600 hover:text-emerald-800 dark:text-emerald-400 dark:hover:text-emerald-300'}`}
+                              title="Edit quantity"
+                            >
+                              <PencilSquareIcon className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => confirmDelete(log.id.toString())}
+                              className="text-rose-400 hover:text-rose-600 transition-colors hover:scale-110"
+                              title="Delete"
+                            >
+                              <TrashIcon className="w-4 h-4" />
+                            </button>
+                          </div>
+                        ) : (
+                          <span className="text-gray-300 dark:text-gray-600">-</span>
+                        )}
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                   {filteredDatewiseItems.length === 0 && (
                     <tr>
-                      <td colSpan={6} className="py-8 text-center text-gray-400 text-[11px] font-black uppercase">No items found</td>
+                      <td colSpan={location === '1st' ? 10 : 9} className="py-8 text-center text-gray-400 text-[11px] font-black uppercase">No items found</td>
                     </tr>
                   )}
                 </tbody>
@@ -940,12 +1305,6 @@ function parseDateStr(dStr: string) {
         ))}
       </datalist>
 
-      <datalist id="master-items-list">
-        {masterItems.map((item: any) => (
-          <option key={item.id} value={item.item_name} />
-        ))}
-      </datalist>
-
       {/* Transaction Log Modal */}
       <AnimatePresence>
         {isLogModalOpen && selectedLogItem && (
@@ -1035,13 +1394,13 @@ function parseDateStr(dStr: string) {
                   {bulkRows.map((row, index) => (
                     <div key={row.id} className="flex flex-col md:flex-row items-start md:items-center gap-3 p-4 bg-gray-50 dark:bg-white/[0.02] border border-gray-200 dark:border-white/5 rounded-xl relative group">
                       <div className="flex-1 min-w-[200px] w-full">
-                        <FloatingInput 
-                          label="Item Name *" 
-                          name={`item_name_${row.id}`} 
-                          list="master-items-list" 
-                          value={row.item_name} 
-                          icon={TagIcon}
-                          onChange={(val) => handleBulkRowChange(row.id, "item_name", val)} 
+                        <SearchableSelect
+                          label="Item Name *"
+                          options={masterItemOptions}
+                          value={row.item_name}
+                          onChange={(val) => handleBulkRowChange(row.id, "item_name", val)}
+                          placeholder="Select item..."
+                          className="bg-white dark:bg-[#111827] border-2 border-gray-200 dark:border-white/10 rounded-lg"
                         />
                       </div>
                       <div className="w-full md:w-40">
@@ -1156,6 +1515,40 @@ function parseDateStr(dStr: string) {
 
               <div className="p-6 overflow-y-auto custom-scrollbar bg-white dark:bg-[#111827]">
                 <div className="space-y-4">
+                  <div className={`p-4 rounded-xl border border-dashed ${
+                    location === '1st'
+                      ? 'border-purple-300 dark:border-purple-500/30 bg-purple-50/50 dark:bg-purple-500/5'
+                      : 'border-emerald-300 dark:border-emerald-500/30 bg-emerald-50/50 dark:bg-emerald-500/5'
+                  }`}>
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-3">
+                      <div>
+                        <p className={`text-[11px] font-black uppercase tracking-widest ${
+                          location === '1st' ? 'text-purple-700 dark:text-purple-300' : 'text-emerald-700 dark:text-emerald-300'
+                        }`}>
+                          Paste Item & Qty
+                        </p>
+                        <p className="text-[10px] font-bold text-gray-400 mt-1">
+                          Paste two columns: Item Name · Physical Qty (tab-separated from Excel)
+                        </p>
+                      </div>
+                      <button
+                        onClick={handleAuditPaste}
+                        className={`shrink-0 px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest text-white transition-all shadow-sm ${
+                          location === '1st' ? 'bg-purple-600 hover:bg-purple-700' : 'bg-emerald-600 hover:bg-emerald-700'
+                        }`}
+                      >
+                        Load Pasted Data
+                      </button>
+                    </div>
+                    <textarea
+                      value={auditPasteText}
+                      onChange={(e) => setAuditPasteText(e.target.value)}
+                      rows={5}
+                      placeholder={"Item Name\tPhysical Qty\n10 LITE HONOR...\t10\nANS DC W\t25"}
+                      className="w-full rounded-xl border-2 border-gray-200 dark:border-white/10 bg-white dark:bg-[#111827] px-3 py-2.5 text-[11px] font-bold text-gray-900 dark:text-white placeholder:text-gray-400 focus:outline-none focus:border-[#003875] dark:focus:border-[#FFD500] custom-scrollbar font-mono"
+                    />
+                  </div>
+
                   <button 
                     onClick={addAuditRow}
                     className={`flex items-center gap-2 px-4 py-2 text-[11px] font-black uppercase tracking-widest hover:bg-opacity-10 rounded-xl transition-colors border border-dashed w-full justify-center ${
@@ -1167,44 +1560,67 @@ function parseDateStr(dStr: string) {
                   {auditRows.map((row) => (
                     <div key={row.id} className="flex flex-col md:flex-row items-start md:items-center gap-3 p-4 bg-gray-50 dark:bg-white/[0.02] border border-gray-200 dark:border-white/5 rounded-xl relative group">
                       <div className="flex-1 min-w-[200px] w-full">
-                        <FloatingInput 
-                          label="Item Name *" 
-                          name={`audit_item_${row.id}`} 
-                          list="master-items-list" 
-                          value={row.item_name} 
-                          icon={TagIcon}
-                          onChange={(val) => handleAuditRowChange(row.id, "item_name", val)} 
-                        />
+                        {row.fromPaste ? (
+                          <div className="px-3 py-2.5 rounded-lg border-2 border-gray-200 dark:border-white/10 bg-white dark:bg-[#111827]">
+                            <p className="text-[9px] font-black uppercase tracking-widest text-gray-400 mb-1">Item Name *</p>
+                            <p className="text-[11px] font-black text-gray-900 dark:text-white uppercase truncate" title={row.item_name}>
+                              {row.item_name}
+                            </p>
+                            {row.category && (
+                              <p className="text-[9px] font-bold text-gray-500 uppercase mt-1 truncate" title={row.category}>
+                                {row.category}
+                              </p>
+                            )}
+                          </div>
+                        ) : (
+                          <SearchableSelect
+                            label="Item Name *"
+                            options={masterItemOptions}
+                            value={row.item_name}
+                            onChange={(val) => handleAuditRowChange(row.id, "item_name", val)}
+                            placeholder="Select item..."
+                            className="bg-white dark:bg-[#111827] border-2 border-gray-200 dark:border-white/10 rounded-lg"
+                          />
+                        )}
                       </div>
                       
                       <div className="flex flex-col md:flex-row items-center gap-3 w-full md:w-auto">
                         <div className="flex items-center gap-2 w-full md:w-auto shrink-0 mt-2 md:mt-0 px-3 py-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg">
                           <span className="text-[9px] font-black uppercase tracking-widest text-gray-400">Live Stock</span>
-                          <span className={`text-sm font-black ${getHealthColors(row.live_stock).text}`}>{row.live_stock}</span>
+                          <span className={`text-sm font-black ${getHealthColors(row.live_stock).text}`}>{formatQty(row.live_stock)}</span>
                         </div>
                         
                         <div className="w-24 shrink-0">
-                          <FloatingInput 
-                            label="Physical Qty *" 
-                            type="number" 
-                            step="0.01" 
-                            name={`phys_qty_${row.id}`} 
-                            value={row.physical_qty} 
-                            icon={HashtagIcon}
-                            onChange={(val) => handleAuditRowChange(row.id, "physical_qty", val)} 
-                          />
+                          {row.fromPaste ? (
+                            <div className="flex flex-col items-center justify-center h-[42px] px-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+                              <span className="text-[9px] font-black uppercase tracking-widest text-gray-400 leading-none mb-1">Physical</span>
+                              <span className="text-xs font-black text-gray-900 dark:text-white leading-none">
+                                {row.physical_qty ? formatQty(row.physical_qty) : '-'}
+                              </span>
+                            </div>
+                          ) : (
+                            <FloatingInput 
+                              label="Physical Qty *" 
+                              type="number" 
+                              step="0.01" 
+                              name={`phys_qty_${row.id}`} 
+                              value={row.physical_qty} 
+                              icon={HashtagIcon}
+                              onChange={(val) => handleAuditRowChange(row.id, "physical_qty", val)} 
+                            />
+                          )}
                         </div>
 
                         <div className="flex flex-col items-center justify-center w-28 shrink-0 h-10 px-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
                           <span className="text-[9px] font-black uppercase tracking-widest text-gray-400 leading-none mb-1">Difference</span>
                           {row.diff_type === 'IN' && (
                             <span className="text-emerald-600 dark:text-emerald-400 text-xs font-black uppercase tracking-wider leading-none">
-                              +{row.diff_qty} (ADD)
+                              +{formatQty(row.diff_qty)} (ADD)
                             </span>
                           )}
                           {row.diff_type === 'OUT' && (
                             <span className="text-rose-600 dark:text-rose-400 text-xs font-black uppercase tracking-wider leading-none">
-                              -{row.diff_qty} (OUT)
+                              -{formatQty(row.diff_qty)} (OUT)
                             </span>
                           )}
                           {row.diff_type === 'NONE' && row.physical_qty && row.item_name && (
@@ -1212,11 +1628,11 @@ function parseDateStr(dStr: string) {
                               MATCHED
                             </span>
                           )}
-                          {(!row.physical_qty || !row.item_name) && (
+                          {(!row.physical_qty && !row.fromPaste) || !row.item_name ? (
                             <span className="text-gray-300 dark:text-gray-600 text-xs font-black uppercase tracking-wider leading-none">
                               -
                             </span>
-                          )}
+                          ) : null}
                         </div>
 
                         <button onClick={() => removeAuditRow(row.id)} className="p-2 text-gray-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 rounded-xl transition-colors shrink-0 self-end md:self-center">
@@ -1238,6 +1654,89 @@ function parseDateStr(dStr: string) {
                   }`}
                 >
                   {submitting ? 'Applying...' : 'Apply Adjustments'}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Edit Transaction Modal */}
+      <AnimatePresence>
+        {isEditModalOpen && editingLog && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              className="bg-white dark:bg-[#111827] rounded-2xl shadow-[0_0_40px_rgba(0,0,0,0.2)] w-full max-w-md overflow-hidden border border-gray-200 dark:border-white/10"
+            >
+              <div className={`flex items-center justify-between p-5 border-b border-gray-100 dark:border-white/5 shrink-0 ${location === '1st' ? 'bg-purple-50 dark:bg-purple-900/20' : 'bg-emerald-50 dark:bg-emerald-900/20'}`}>
+                <h3 className="text-sm font-black uppercase tracking-widest flex items-center gap-2 text-gray-900 dark:text-white">
+                  <PencilSquareIcon className={`w-5 h-5 ${location === '1st' ? 'text-purple-500' : 'text-emerald-500'}`} />
+                  Edit Transaction
+                </h3>
+                <button
+                  onClick={() => { setIsEditModalOpen(false); setEditingLog(null); }}
+                  className="p-1.5 text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white rounded-lg transition-colors"
+                >
+                  <XMarkIcon className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="p-6 space-y-4 bg-white dark:bg-[#111827]">
+                <div className="p-3 rounded-xl bg-gray-50 dark:bg-white/[0.02] border border-gray-100 dark:border-white/5 space-y-1">
+                  <p className="text-[9px] font-black uppercase tracking-widest text-gray-400">Item</p>
+                  <p className="text-[11px] font-black text-gray-900 dark:text-white uppercase">{editingLog.item_name}</p>
+                  <p className="text-[10px] font-bold text-gray-500 uppercase">{editingLog.category} · {formatDate(editingLog.date || editingLog.updated_at)}</p>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <div className="flex bg-gray-200 dark:bg-gray-800 p-1 rounded-lg">
+                    <button
+                      onClick={() => setEditForm(prev => ({ ...prev, type: 'IN' }))}
+                      className={`px-4 py-2 rounded-md text-[10px] font-black uppercase tracking-wider transition-all ${editForm.type === 'IN' ? 'bg-emerald-500 text-white shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}
+                    >
+                      IN
+                    </button>
+                    <button
+                      onClick={() => setEditForm(prev => ({ ...prev, type: 'OUT' }))}
+                      className={`px-4 py-2 rounded-md text-[10px] font-black uppercase tracking-wider transition-all ${editForm.type === 'OUT' ? 'bg-rose-500 text-white shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}
+                    >
+                      OUT
+                    </button>
+                  </div>
+                  <div className="flex-1">
+                    <FloatingInput
+                      label="Qty *"
+                      name="edit_qty"
+                      type="number"
+                      step="0.01"
+                      value={editForm.qty}
+                      icon={HashtagIcon}
+                      onChange={(val) => setEditForm(prev => ({ ...prev, qty: val }))}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-4 border-t border-gray-100 dark:border-white/5 flex justify-end gap-3 bg-gray-50/50 dark:bg-[#1f2937]/50">
+                <button
+                  onClick={() => { setIsEditModalOpen(false); setEditingLog(null); }}
+                  className="px-5 py-2 rounded-xl text-xs font-black text-gray-500 uppercase tracking-widest hover:bg-white dark:hover:bg-[#111827] shadow-sm border border-gray-200 dark:border-white/10 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSaveEdit}
+                  disabled={submitting}
+                  className={`px-6 py-2 rounded-xl text-xs font-black text-white uppercase tracking-widest hover:brightness-110 shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
+                    location === '1st'
+                      ? 'bg-gradient-to-r from-purple-600 to-fuchsia-600 shadow-purple-500/20'
+                      : 'bg-gradient-to-r from-emerald-600 to-teal-600 shadow-emerald-500/20'
+                  }`}
+                >
+                  {submitting ? 'Saving...' : 'Save Changes'}
                 </button>
               </div>
             </motion.div>

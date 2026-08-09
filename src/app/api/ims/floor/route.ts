@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getFloorIMSItems, addFloorIMSItem, updateFloorIMSItem, deleteFloorIMSItem } from "@/lib/ims-floor-sheets";
+import { getFloorIMSItems, addFloorIMSItem, updateFloorIMSItem, deleteFloorIMSItem, markFloorIMSItemsChecked } from "@/lib/ims-floor-sheets";
 import { FloorIMS } from "@/types/ims-floor";
 
 export const dynamic = "force-dynamic";
@@ -124,5 +124,34 @@ export async function DELETE(request: NextRequest) {
   } catch (error: any) {
     console.error("Error deleting Floor IMS item:", error);
     return NextResponse.json({ error: "Failed to delete Floor IMS item" }, { status: 500 });
+  }
+}
+
+export async function PATCH(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const location = searchParams.get("location");
+
+    if (!location || !["1st", "g"].includes(location)) {
+      return NextResponse.json({ error: "Invalid location" }, { status: 400 });
+    }
+
+    const body = await request.json();
+    const ids: string[] = Array.isArray(body.ids) ? body.ids.map(String) : [];
+
+    if (ids.length === 0) {
+      return NextResponse.json({ error: "At least one ID is required" }, { status: 400 });
+    }
+
+    const result = await markFloorIMSItemsChecked(location, ids);
+
+    if (!result.success) {
+      return NextResponse.json({ error: "Failed to mark items as checked" }, { status: 500 });
+    }
+
+    return NextResponse.json(result);
+  } catch (error: any) {
+    console.error("Error marking Floor IMS items checked:", error);
+    return NextResponse.json({ error: "Failed to mark items as checked" }, { status: 500 });
   }
 }

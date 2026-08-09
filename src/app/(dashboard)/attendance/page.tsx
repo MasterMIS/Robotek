@@ -8,7 +8,7 @@ import { useToast } from '@/components/ToastProvider';
 import CustomDateTimePicker from '@/components/CustomDateTimePicker';
 import SearchableSelect from '@/components/SearchableSelect';
 import ConfirmModal from '@/components/ConfirmModal';
-import { getIstDateString, formatDateMMM } from '@/lib/dateUtils';
+import { getIstDateString, formatDateMMM, isWeeklyOffIstToday, isWeeklyOffForUser, getWeeklyOffLabel } from '@/lib/dateUtils';
 import { calculateDistance, calculateBearing, getCompassDirection, parseLatLong, getShortestDistance } from '@/lib/locationUtils';
 import { 
     CalendarIcon as CalendarBtnIcon, 
@@ -355,6 +355,10 @@ export default function AttendancePage() {
     };
 
     const handleAction = async (action: 'CHECK_IN' | 'CHECK_OUT', photoData?: string) => {
+        if (action === 'CHECK_IN' && isWeeklyOffIstToday(user?.office)) {
+            error(`Check-in is not allowed on ${getWeeklyOffLabel(user?.office)} weekly off days`);
+            return;
+        }
         setIsPageLoading(true);
         try {
             const res = await fetch('/api/attendance', {
@@ -451,7 +455,8 @@ export default function AttendancePage() {
 
                 for (let d = 1; d <= daysInMonth; d++) {
                     const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-                    const isSunday = new Date(year, month, d).getDay() === 0;
+                    const isWeeklyOff = isWeeklyOffForUser(u.office, year, month, d);
+                    const offLabel = getWeeklyOffLabel(u.office);
 
                     const record = monthAtt.find(h => normalizeDateSheet(h.date) === dateStr);
                     const leave = uLeaves.find((l:any) => {
@@ -461,8 +466,8 @@ export default function AttendancePage() {
                     });
 
                     let cellValue = '-';
-                    if (isSunday) {
-                        cellValue = 'SUN';
+                    if (isWeeklyOff) {
+                        cellValue = offLabel;
                     } else if (leave) {
                         cellValue = 'L';
                     } else if (record?.inTime) {
@@ -649,6 +654,7 @@ export default function AttendancePage() {
 
         for (let d = 1; d <= daysInMonth; d++) {
             const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+            const isWeeklyOff = isWeeklyOffForUser(user?.office, year, month, d);
             const record = history.find(h => normalizeDateSheet(h.date) === dateStr);
             const isToday = dateStr === todayStr;
             const leave = masterData?.leaves?.find((l:any) => {
@@ -656,10 +662,9 @@ export default function AttendancePage() {
                 const end = normalizeDateSheet(l.endDate);
                 return String(l.userId) === String(user.id) && dateStr >= start && dateStr <= end && l.status === 'Approved';
             });
-            const isSunday = new Date(year, month, d).getDay() === 0;
 
             let color = 'bg-white/50 dark:bg-slate-800/30';
-            if (isSunday) color = 'bg-gray-100 dark:bg-slate-900/50 opacity-40';
+            if (isWeeklyOff) color = 'bg-gray-100 dark:bg-slate-900/50 opacity-40';
             else if (leave) color = 'bg-purple-500/80 text-white shadow-purple-500/30 border-2 border-purple-400';
             else if (record?.inTime) {
                 let isHalfDay = false;
@@ -785,6 +790,11 @@ export default function AttendancePage() {
                             <div className={`text-4xl xl:text-5xl font-black mb-8 tracking-tighter font-mono ${currentStatus === 'CHECKED_IN' ? 'text-[#FFD500]' : 'text-[#003875] dark:text-white'}`}>{elapsedTime}</div>
                             
                             {currentStatus === 'IDLE' ? (
+                                isWeeklyOffIstToday(user?.office) ? (
+                                    <div className="w-full p-6 bg-gray-100 dark:bg-slate-900/50 rounded-3xl border border-gray-200 dark:border-white/10 text-gray-500 font-black text-sm uppercase tracking-widest">
+                                        Check-in closed on {getWeeklyOffLabel(user?.office)} weekly off
+                                    </div>
+                                ) : (
                                 <div className="space-y-4 w-full">
                                     <button
                                         onClick={() => setShowCameraMode('CHECK_IN')}
@@ -799,6 +809,7 @@ export default function AttendancePage() {
                                         </div>
                                     )}
                                 </div>
+                                )
                             ) : currentStatus === 'CHECKED_IN' ? (
                                 <button 
                                     onClick={() => setShowCameraMode('CHECK_OUT')} 
@@ -992,9 +1003,10 @@ export default function AttendancePage() {
                                      const dayCells = [];
                                      for (let d = 1; d <= daysInMonth; d++) {
                                         const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-                                        const isSunday = new Date(year, month, d).getDay() === 0;
+                                        const isWeeklyOff = isWeeklyOffForUser(u.office, year, month, d);
+                                        const offLabel = getWeeklyOffLabel(u.office);
                                         
-                                        if (!isSunday) totalWorkingDays++;
+                                        if (!isWeeklyOff) totalWorkingDays++;
 
                                         const record = monthAtt.find(h => normalizeDateSheet(h.date) === dateStr);
                                         const leave = uLeaves.find((l:any) => {
@@ -1014,8 +1026,8 @@ export default function AttendancePage() {
                                             isLate = inIST.getUTCHours() > 9 || (inIST.getUTCHours() === 9 && inIST.getUTCMinutes() > 40);
                                         }
 
-                                        if (isSunday) {
-                                            statusChar = 'SUN';
+                                        if (isWeeklyOff) {
+                                            statusChar = offLabel;
                                             statusColor = 'text-gray-300 font-bold';
                                         } else if (leave) {
                                             leavesCount++;
@@ -1229,8 +1241,8 @@ export default function AttendancePage() {
                                         {(() => {
                                             const year = currentDate.getFullYear();
                                             const month = currentDate.getMonth();
-                                            const days = new Date(year, month + 1, 0).getDate();
-                                            return Array.from({length: days}, (_, i) => i + 1).map(d => (
+                                            const daysInMonth = new Date(year, month + 1, 0).getDate();
+                                            return Array.from({ length: daysInMonth }, (_, i) => i + 1).map(d => (
                                                 <th 
                                                   key={d} 
                                                   style={{ backgroundColor: 'var(--background)', borderColor: 'var(--panel-border)' }}
@@ -1258,9 +1270,10 @@ export default function AttendancePage() {
                                             const dayCells = [];
                                             for (let d = 1; d <= daysInMonth; d++) {
                                                 const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-                                                const isSunday = new Date(year, month, d).getDay() === 0;
+                                                const isWeeklyOff = isWeeklyOffForUser(u.office, year, month, d);
+                                                const offLabel = getWeeklyOffLabel(u.office);
                                                 
-                                                if (!isSunday) totalWorkingDays++;
+                                                if (!isWeeklyOff) totalWorkingDays++;
 
                                                 const record = monthAtt.find(h => normalizeDateSheet(h.date) === dateStr);
                                                 const leave = uLeaves.find((l:any) => {
@@ -1285,8 +1298,8 @@ export default function AttendancePage() {
                                                     isLate = inIST.getUTCHours() > 9 || (inIST.getUTCHours() === 9 && inIST.getUTCMinutes() > 40);
                                                 }
 
-                                                if (isSunday) {
-                                                    statusChar = 'SUN';
+                                                if (isWeeklyOff) {
+                                                    statusChar = offLabel;
                                                     statusColor = 'text-gray-800 dark:text-gray-200 font-bold';
                                                 } else if (leave) {
                                                     leavesCount++;
@@ -1313,7 +1326,7 @@ export default function AttendancePage() {
                                                     dotText = '-1';
                                                 }
 
-                                                dayCells.push({ d, statusChar, statusColor, dotText, rawIn, rawOut, inPhoto, outPhoto, inLocation, outLocation, isLate });
+                                                dayCells.push({ d, statusChar, statusColor, dotText, rawIn, rawOut, inPhoto, outPhoto, inLocation, outLocation, isLate, isWeeklyOff });
                                             }
 
                                             const monthlyScore = (presents * 1) + (halfDays * 0.5) - (absents * 1);
@@ -1342,7 +1355,7 @@ export default function AttendancePage() {
                                                         <td 
                                                           key={idx} 
                                                           style={{ borderColor: 'var(--panel-border)' }}
-                                                          className={`p-2 border-b border-r text-center min-w-[60px] align-middle ${c.isLate && c.statusChar.includes('HD') ? 'bg-orange-50/50 dark:bg-orange-900/10' : ''}`}
+                                                          className={`p-2 border-b border-r text-center min-w-[60px] align-middle ${c.isWeeklyOff ? 'bg-gray-50 dark:bg-slate-900/40' : ''} ${c.isLate && c.statusChar.includes('HD') ? 'bg-orange-50/50 dark:bg-orange-900/10' : ''}`}
                                                         >
                                                             {reportViewMode === 'STATUS' ? (
                                                                 <div className="flex flex-col items-center justify-center gap-1">
@@ -1355,7 +1368,7 @@ export default function AttendancePage() {
                                                                 </div>
                                                             ) : reportViewMode === 'TIME' ? (
                                                                 <div className="flex flex-col items-center justify-center gap-0.5">
-                                                                    {c.statusChar === 'SUN' || c.statusChar === 'L' || c.statusChar === 'A' || c.statusChar === '-' ? (
+                                                                    {c.isWeeklyOff || c.statusChar === 'L' || c.statusChar === 'A' || c.statusChar === '-' ? (
                                                                         <div className={`text-xs font-black uppercase tracking-tighter ${c.statusColor}`}>{c.statusChar}</div>
                                                                     ) : (
                                                                         <>
@@ -1386,7 +1399,7 @@ export default function AttendancePage() {
                                                                 </div>
                                                             ) : (
                                                                 <div className="flex flex-col items-center justify-center gap-1 min-w-[120px]">
-                                                                    {c.statusChar === 'SUN' || c.statusChar === 'L' || c.statusChar === 'A' || c.statusChar === '-' ? (
+                                                                    {c.isWeeklyOff || c.statusChar === 'L' || c.statusChar === 'A' || c.statusChar === '-' ? (
                                                                         <div className={`text-xs font-black uppercase tracking-tighter ${c.statusColor}`}>{c.statusChar}</div>
                                                                     ) : (
                                                                         <>
