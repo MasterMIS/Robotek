@@ -59,16 +59,6 @@ export default function IMSHub() {
     totalOut: (summary.main?.totalOut || 0) + (summary.first?.totalOut || 0) + (summary.g?.totalOut || 0),
   } : undefined;
 
-  const DecorativeBubbles = () => (
-    <div className="absolute top-0 right-0 w-[72px] h-[64px] pointer-events-none">
-      <div className="absolute top-0 right-0 w-[44px] h-[44px] rounded-full bg-white/18 border border-white/30 backdrop-blur-[2px] shadow-[inset_0_1px_8px_rgba(255,255,255,0.25)] transition-transform duration-500 group-hover:scale-105" />
-      <div className="absolute top-1 right-[34px] w-[28px] h-[28px] rounded-full bg-white/12 border border-white/22 backdrop-blur-[1px] transition-transform duration-500 group-hover:-translate-y-0.5" />
-      <div className="absolute -top-0.5 right-4 w-[14px] h-[14px] rounded-full bg-white/22 border border-white/35" />
-      <div className="absolute top-[32px] right-0 w-[18px] h-[18px] rounded-full bg-white/14 border border-white/25 backdrop-blur-[1px]" />
-      <div className="absolute top-[40px] right-[30px] w-[8px] h-[8px] rounded-full bg-white/28 border border-white/40" />
-    </div>
-  );
-
   const renderTile = (
     id: "master" | "1st" | "g" | "final", 
     title: string, 
@@ -88,8 +78,7 @@ export default function IMSHub() {
           <div className="absolute -right-10 -top-10 w-40 h-40 bg-white/10 rounded-full blur-3xl group-hover:scale-150 transition-transform duration-500"></div>
         </div>
         
-        <div className="relative mb-10 z-10 pr-16">
-          <DecorativeBubbles />
+        <div className="relative mb-10 z-10">
           <div className="flex items-start gap-3">
             <div className="p-3 bg-white/20 backdrop-blur-md rounded-2xl transition-all duration-300 shadow-sm group-hover:shadow-md shrink-0">
               <div className="text-white w-7 h-7 transition-colors duration-300">
