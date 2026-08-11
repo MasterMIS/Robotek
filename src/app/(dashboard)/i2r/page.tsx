@@ -375,6 +375,8 @@ export default function I2RPage() {
     if (!isAdmin && viewMode === "active") {
       list = list.filter(item => {
         const step = getActiveStep(item);
+        // Completed items are visible to all users (read-only actions handled in UI)
+        if (step === 0) return true;
         if (step > 0) {
           const cfg = globalConfigs[step - 1];
           return cfg?.responsible_person?.split(",").map(s => s.trim()).includes(currentUser);
@@ -941,11 +943,15 @@ export default function I2RPage() {
                             )}
                             <div className="flex items-center gap-1 px-2 py-1 bg-white dark:bg-navy-800 rounded-full border border-slate-100 dark:border-navy-700 shadow-lg ring-1 ring-slate-100/50 dark:ring-navy-700/50">
                               <button onClick={e => { e.stopPropagation(); setExpandedTiles(p => ({ ...p, [item.id]: !exp })); }} className={`p-1.5 rounded-full transition-all active:scale-90 ${exp ? "bg-[#003875] text-[#FFD500]" : "text-[#003875] dark:text-[#FFD500] hover:bg-yellow-50 dark:hover:bg-yellow-900/20"}`} title={exp ? "Hide Pipeline" : "Show Pipeline"}><ChevronDownIcon className={`w-3.5 h-3.5 stroke-[3] transition-transform ${exp ? "rotate-180" : ""}`} /></button>
-                              <button onClick={e => { e.stopPropagation(); openPOModal(item); }} className="p-1.5 text-[#003875] dark:text-[#FFD500] hover:bg-yellow-50 dark:hover:bg-yellow-900/20 rounded-full transition-all active:scale-90" title="Make PO"><PlusIcon className="w-3.5 h-3.5 stroke-[3]" /></button>
-                              <button onClick={e => { e.stopPropagation(); openEditModal(item); }} className="p-1.5 text-blue-500 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-full transition-all active:scale-90"><PencilSquareIcon className="w-3.5 h-3.5" /></button>
-                              <button onClick={e => { e.stopPropagation(); openRemoveFollowUpModal(item); }} className="p-1.5 text-purple-500 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/20 rounded-full transition-all active:scale-90" title="Remove Follow Up"><ArrowUturnLeftIcon className="w-3.5 h-3.5" /></button>
-                              <button onClick={e => { e.stopPropagation(); handleDeleteClick(item.id); }} className="p-1.5 text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-full transition-all active:scale-90"><TrashIcon className="w-3.5 h-3.5" /></button>
-                              <button onClick={e => { e.stopPropagation(); setCancelTargetId(item.id); }} className="p-1.5 text-orange-500 dark:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-900/20 rounded-full transition-all active:scale-90"><NoSymbolIcon className="w-3.5 h-3.5" /></button>
+                              {(isAdmin || step > 0) && (
+                                <>
+                                  <button onClick={e => { e.stopPropagation(); openPOModal(item); }} className="p-1.5 text-[#003875] dark:text-[#FFD500] hover:bg-yellow-50 dark:hover:bg-yellow-900/20 rounded-full transition-all active:scale-90" title="Make PO"><PlusIcon className="w-3.5 h-3.5 stroke-[3]" /></button>
+                                  <button onClick={e => { e.stopPropagation(); openEditModal(item); }} className="p-1.5 text-blue-500 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-full transition-all active:scale-90"><PencilSquareIcon className="w-3.5 h-3.5" /></button>
+                                  <button onClick={e => { e.stopPropagation(); openRemoveFollowUpModal(item); }} className="p-1.5 text-purple-500 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/20 rounded-full transition-all active:scale-90" title="Remove Follow Up"><ArrowUturnLeftIcon className="w-3.5 h-3.5" /></button>
+                                  <button onClick={e => { e.stopPropagation(); handleDeleteClick(item.id); }} className="p-1.5 text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-full transition-all active:scale-90"><TrashIcon className="w-3.5 h-3.5" /></button>
+                                  <button onClick={e => { e.stopPropagation(); setCancelTargetId(item.id); }} className="p-1.5 text-orange-500 dark:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-900/20 rounded-full transition-all active:scale-90"><NoSymbolIcon className="w-3.5 h-3.5" /></button>
+                                </>
+                              )}
                             </div>
                           </div>
                         </div>
@@ -1116,12 +1122,16 @@ export default function I2RPage() {
                       <tr key={it.id} className="hover:bg-slate-50/50 dark:hover:bg-navy-900/30 transition-all text-[11px] group">
                         <td className="p-3 text-center sticky left-0 z-10 bg-white dark:bg-navy-800 group-hover:bg-slate-50 dark:group-hover:bg-navy-900/30 transition-all"><input type="checkbox" checked={selectedIds.has(it.id)} onChange={() => { const n = new Set(selectedIds); if (n.has(it.id)) n.delete(it.id); else n.add(it.id); setSelectedIds(n); }} className="rounded border-slate-300 dark:border-navy-700 text-[#003875] dark:text-[#FFD500] focus:ring-[#003875] dark:focus:ring-[#FFD500] dark:bg-navy-900" /></td>
                         <td className="p-3 sticky left-10 z-10 bg-white dark:bg-navy-800 group-hover:bg-slate-50 dark:group-hover:bg-navy-900/30 transition-all">
-                          <div className="flex items-center gap-2">
-                            <button onClick={() => openPOModal(it)} className="p-1.5 text-[#003875] dark:text-[#FFD500] hover:bg-yellow-50 dark:hover:bg-yellow-900/20 rounded-md transition-all" title="Make PO"><PlusIcon className="w-4 h-4 stroke-[3]" /></button>
-                            <button onClick={() => openEditModal(it)} className="p-1.5 text-blue-500 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-md transition-all"><PencilSquareIcon className="w-4 h-4" /></button>
-                            <button onClick={() => openRemoveFollowUpModal(it)} className="p-1.5 text-purple-500 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/20 rounded-md transition-all" title="Remove Follow Up"><ArrowUturnLeftIcon className="w-4 h-4" /></button>
-                            <button onClick={() => handleDeleteClick(it.id)} className="p-1.5 text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-all"><TrashIcon className="w-4 h-4" /></button>
-                          </div>
+                          {(isAdmin || getActiveStep(it) > 0) ? (
+                            <div className="flex items-center gap-2">
+                              <button onClick={() => openPOModal(it)} className="p-1.5 text-[#003875] dark:text-[#FFD500] hover:bg-yellow-50 dark:hover:bg-yellow-900/20 rounded-md transition-all" title="Make PO"><PlusIcon className="w-4 h-4 stroke-[3]" /></button>
+                              <button onClick={() => openEditModal(it)} className="p-1.5 text-blue-500 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-md transition-all"><PencilSquareIcon className="w-4 h-4" /></button>
+                              <button onClick={() => openRemoveFollowUpModal(it)} className="p-1.5 text-purple-500 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/20 rounded-md transition-all" title="Remove Follow Up"><ArrowUturnLeftIcon className="w-4 h-4" /></button>
+                              <button onClick={() => handleDeleteClick(it.id)} className="p-1.5 text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-all"><TrashIcon className="w-4 h-4" /></button>
+                            </div>
+                          ) : (
+                            <span className="text-[9px] font-black text-slate-300 dark:text-navy-600 uppercase">View only</span>
+                          )}
                         </td>
                         <td className="p-3 sticky left-24 z-10 bg-white dark:bg-navy-800 group-hover:bg-slate-50 dark:group-hover:bg-navy-900/30 transition-all">
                           <div className="flex flex-col gap-1">

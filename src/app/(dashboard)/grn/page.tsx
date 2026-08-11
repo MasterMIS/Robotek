@@ -173,6 +173,8 @@ function UserMultiCombobox({
 export default function GRNDashboard() {
   const { data: session } = useSession();
   const currentUser = session?.user?.name || "User";
+  const userRole: string = (session?.user as any)?.role || "User";
+  const isAdmin = userRole.toUpperCase() === "ADMIN" || userRole.toUpperCase() === "EA";
   const [now, setNow] = useState(new Date());
   
   useEffect(() => {
@@ -765,15 +767,19 @@ export default function GRNDashboard() {
                               >
                                 {exp ? <ChevronUpIcon className="w-4 h-4 stroke-[3]" /> : <ChevronDownIcon className="w-4 h-4 stroke-[3]" />}
                               </button>
-                              <div className="w-[1px] h-4 bg-slate-100 dark:bg-navy-700 mx-0.5" />
-                              <button onClick={e => { e.stopPropagation(); openEditModal(item); }} className="p-2 text-blue-500 hover:bg-blue-50 rounded-full transition-all active:scale-90"><PencilSquareIcon className="w-4 h-4" /></button>
-                              <button onClick={e => { e.stopPropagation(); openRemoveFollowUpModal(item); }} className="p-2 text-purple-500 hover:bg-purple-50 dark:hover:bg-purple-900/20 rounded-full transition-all active:scale-90" title="Remove Follow Up"><ArrowUturnLeftIcon className="w-4 h-4" /></button>
-                              {item.cancelled ? (
-                                <button onClick={e => { e.stopPropagation(); confirmCancelRestore(item); }} className="p-2 text-emerald-500 hover:bg-emerald-50 rounded-full transition-all active:scale-90" title="Restore"><ArrowUturnLeftIcon className="w-4 h-4 stroke-[3]" /></button>
-                              ) : (
-                                <button onClick={e => { e.stopPropagation(); confirmCancelRestore(item); }} className="p-2 text-red-500 hover:bg-red-50 rounded-full transition-all active:scale-90" title="Cancel GRN"><XCircleIcon className="w-4 h-4 stroke-[3]" /></button>
+                              {(isAdmin || step > 0) && (
+                                <>
+                                  <div className="w-[1px] h-4 bg-slate-100 dark:bg-navy-700 mx-0.5" />
+                                  <button onClick={e => { e.stopPropagation(); openEditModal(item); }} className="p-2 text-blue-500 hover:bg-blue-50 rounded-full transition-all active:scale-90"><PencilSquareIcon className="w-4 h-4" /></button>
+                                  <button onClick={e => { e.stopPropagation(); openRemoveFollowUpModal(item); }} className="p-2 text-purple-500 hover:bg-purple-50 dark:hover:bg-purple-900/20 rounded-full transition-all active:scale-90" title="Remove Follow Up"><ArrowUturnLeftIcon className="w-4 h-4" /></button>
+                                  {item.cancelled ? (
+                                    <button onClick={e => { e.stopPropagation(); confirmCancelRestore(item); }} className="p-2 text-emerald-500 hover:bg-emerald-50 rounded-full transition-all active:scale-90" title="Restore"><ArrowUturnLeftIcon className="w-4 h-4 stroke-[3]" /></button>
+                                  ) : (
+                                    <button onClick={e => { e.stopPropagation(); confirmCancelRestore(item); }} className="p-2 text-red-500 hover:bg-red-50 rounded-full transition-all active:scale-90" title="Cancel GRN"><XCircleIcon className="w-4 h-4 stroke-[3]" /></button>
+                                  )}
+                                  <button onClick={e => { e.stopPropagation(); confirmDelete(item); }} className="p-2 text-red-500 hover:bg-red-50 rounded-full transition-all active:scale-90"><TrashIcon className="w-4 h-4" /></button>
+                                </>
                               )}
-                              <button onClick={e => { e.stopPropagation(); confirmDelete(item); }} className="p-2 text-red-500 hover:bg-red-50 rounded-full transition-all active:scale-90"><TrashIcon className="w-4 h-4" /></button>
                             </div>
                           </div>
                         </div>
@@ -887,16 +893,20 @@ export default function GRNDashboard() {
                       <tr key={it.id} className="hover:bg-slate-50/50 dark:hover:bg-navy-900/30 transition-all text-[11px] group">
                         <td className="p-4 text-center sticky left-0 z-10 bg-white dark:bg-navy-900 group-hover:bg-slate-50 transition-all"><input type="checkbox" checked={selectedIds.has(it.id)} onChange={() => { const n = new Set(selectedIds); if (n.has(it.id)) n.delete(it.id); else n.add(it.id); setSelectedIds(n); }} className="rounded border-slate-300 text-[#003875] focus:ring-[#003875]" /></td>
                         <td className="p-4 sticky left-10 z-10 bg-white dark:bg-navy-900 group-hover:bg-slate-50 transition-all">
-                          <div className="flex items-center gap-2">
-                             <button onClick={() => openEditModal(it)} className="p-2 text-blue-500 hover:bg-blue-50 rounded-md transition-all"><PencilSquareIcon className="w-4 h-4" /></button>
-                             <button onClick={() => openRemoveFollowUpModal(it)} className="p-2 text-purple-500 hover:bg-purple-50 rounded-md transition-all" title="Remove Follow Up"><ArrowUturnLeftIcon className="w-4 h-4" /></button>
-                            {it.cancelled ? (
-                              <button onClick={() => confirmCancelRestore(it)} className="p-2 text-emerald-500 hover:bg-emerald-50 rounded-md transition-all" title="Restore"><ArrowUturnLeftIcon className="w-4 h-4" /></button>
-                            ) : (
-                              <button onClick={() => confirmCancelRestore(it)} className="p-2 text-red-500 hover:bg-red-50 rounded-md transition-all" title="Cancel GRN"><XCircleIcon className="w-4 h-4" /></button>
-                            )}
-                             <button onClick={() => confirmDelete(it)} className="p-2 text-red-400 hover:bg-red-50 rounded-md transition-all"><TrashIcon className="w-4 h-4" /></button>
-                          </div>
+                          {(isAdmin || getActiveStep(it) > 0) ? (
+                            <div className="flex items-center gap-2">
+                               <button onClick={() => openEditModal(it)} className="p-2 text-blue-500 hover:bg-blue-50 rounded-md transition-all"><PencilSquareIcon className="w-4 h-4" /></button>
+                               <button onClick={() => openRemoveFollowUpModal(it)} className="p-2 text-purple-500 hover:bg-purple-50 rounded-md transition-all" title="Remove Follow Up"><ArrowUturnLeftIcon className="w-4 h-4" /></button>
+                              {it.cancelled ? (
+                                <button onClick={() => confirmCancelRestore(it)} className="p-2 text-emerald-500 hover:bg-emerald-50 rounded-md transition-all" title="Restore"><ArrowUturnLeftIcon className="w-4 h-4" /></button>
+                              ) : (
+                                <button onClick={() => confirmCancelRestore(it)} className="p-2 text-red-500 hover:bg-red-50 rounded-md transition-all" title="Cancel GRN"><XCircleIcon className="w-4 h-4" /></button>
+                              )}
+                               <button onClick={() => confirmDelete(it)} className="p-2 text-red-400 hover:bg-red-50 rounded-md transition-all"><TrashIcon className="w-4 h-4" /></button>
+                            </div>
+                          ) : (
+                            <span className="text-[9px] font-black text-slate-300 dark:text-navy-600 uppercase">View only</span>
+                          )}
                         </td>
                         <td className="p-4 sticky left-24 z-10 bg-white dark:bg-navy-900 group-hover:bg-slate-50 transition-all font-black text-[#003875] dark:text-blue-400">{it.GRN_No}</td>
                         <td className="p-4 font-black text-slate-800 dark:text-white uppercase max-w-[200px] truncate">{it.Item_Name}</td>

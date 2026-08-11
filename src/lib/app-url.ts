@@ -16,3 +16,7 @@ export function getAppBaseUrl(): string {
 export function getPaymentVendorApprovalUrl(grnNo: string): string {
   return `${getAppBaseUrl()}/payment-vendor-approval?grn=${encodeURIComponent(grnNo)}`;
 }
+
+export function getLeaveUrl(leaveId: string): string {
+  return `${getAppBaseUrl()}/leave?id=${encodeURIComponent(leaveId)}`;
+}

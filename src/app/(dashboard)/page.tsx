@@ -20,7 +20,7 @@ import {
   HighightedCalendar,
   CompactTable,
   BirthdayCelebrationModal,
-  UpcomingMeetingsPanel,
+  UserAssetsPanel,
   CompactPartyCelebrationCard
 } from "./DashboardComponents";
 
@@ -37,6 +37,7 @@ export default function Dashboard() {
   const { data: attendanceData } = useSWR(userId ? `/api/attendance?userId=${userId}` : null, fetcher);
 
   const firstName = (session?.user as any)?.username || session?.user?.name?.split(' ')[0] || "Guest";
+  const username = (session?.user as any)?.username as string | undefined;
   const userRole = (session?.user as any)?.role || 'User';
   const isAdmin = (session?.user as any)?.role === 'ADMIN' || (session?.user as any)?.role === 'EA';
 
@@ -113,9 +114,9 @@ export default function Dashboard() {
            <QuickActionSquare label="Attendance" href="/attendance" icon={ClockIcon} color="bg-emerald-500" />
         </div>
 
-        {/* Middle Column: Upcoming Meetings */}
+        {/* Middle Column: My Assets */}
         <div className="lg:col-span-4">
-            <UpcomingMeetingsPanel meetings={data?.upcomingMeetings} teamMembers={data?.teamMembers} />
+            <UserAssetsPanel username={username} />
         </div>
 
         {/* Right Column: Personal Calendar */}

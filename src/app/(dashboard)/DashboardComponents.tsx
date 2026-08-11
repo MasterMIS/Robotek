@@ -14,12 +14,17 @@ import {
   PlusIcon,
   SparklesIcon,
   XMarkIcon,
-  HeartIcon
+  HeartIcon,
+  ComputerDesktopIcon
 } from "@heroicons/react/24/outline";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import SemiCircleGauge from "@/components/SemiCircleGauge";
 import { useState, useEffect, type ComponentType } from "react";
+import useSWR from "swr";
+import type { AssetItem } from "@/types/asset";
+
+const assetFetcher = (url: string) => fetch(url).then((res) => res.json());
 
 // --- ROW 1 COMPONENTS ---
 
@@ -380,99 +385,72 @@ export function HighightedCalendar({ history, leaveDates = [], avgIn, avgOut }: 
 
 // --- ROW 3 COMPONENTS ---
 
-export function UpcomingMeetingsPanel({ meetings, teamMembers }: { meetings: any[], teamMembers: any[] }) {
-    if (!meetings || meetings.length === 0) {
-        return (
-            <div className="bg-white dark:bg-navy-800 rounded-[2rem] border border-gray-100 dark:border-white/5 shadow-sm h-[302px] flex flex-col items-center justify-center">
-                <CalendarIcon className="w-8 h-8 text-gray-300 dark:text-gray-600 mb-3" />
-                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">No Meetings Scheduled</p>
-            </div>
-        );
-    }
+export function UserAssetsPanel({ username }: { username?: string }) {
+    const { data: assets, isLoading } = useSWR<AssetItem[]>(
+        username ? "/api/assets" : null,
+        assetFetcher,
+        { refreshInterval: 300000 }
+    );
+
+    const myAssets = (assets || []).filter(
+        (a) => (a.assigned_to || "").trim().toLowerCase() === (username || "").trim().toLowerCase()
+    );
 
     return (
-        <div className="bg-white dark:bg-navy-800 rounded-[2.5rem] border border-gray-100 dark:border-white/5 shadow-sm h-[302px] flex flex-col overflow-hidden">
-            <div className="p-5 border-b border-gray-50 dark:border-white/5 flex items-center justify-between bg-gray-50/50 dark:bg-white/1">
-                <div className="flex items-center gap-3">
-                    <div className="bg-indigo-50 dark:bg-indigo-900/30 p-2 rounded-xl">
-                        <CalendarIcon className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
-                    </div>
-                    <div>
-                        <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Schedule</h3>
-                        <p className="text-xs font-black text-[#003875] dark:text-white uppercase tracking-tight">Upcoming Meetings</p>
-                    </div>
-                </div>
-            </div>
-            
-            <div className="flex-1 overflow-y-auto invisible-scrollbar p-3 space-y-2">
-                {meetings.map((m: any, i: number) => {
-                    const startRaw = m.start_time;
-                    const d = new Date(startRaw);
-                    const timeString = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                    
-                    const end = new Date(m.end_time);
-                    const endTimeString = end.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
-                    const todayStr = new Date().toISOString().split('T')[0];
-                    const meetingDateStr = d.toISOString().split('T')[0];
-                    const isToday = todayStr === meetingDateStr;
-
-                    const attendeesRaw = m.attendees || [];
-                    const attendeesList = Array.isArray(attendeesRaw) ? attendeesRaw : attendeesRaw.split(',');
-                    const creatorMatch = teamMembers?.find(t => t.username === m.created_by);
-
-                    return (
-                        <div key={i} className="p-4 rounded-[1.5rem] bg-gray-50/50 dark:bg-white/5 border border-gray-100 dark:border-white/5 hover:border-indigo-200 dark:hover:border-indigo-500/30 transition-all flex items-center gap-3 group">
-                            
-                            {/* Creator Avatar */}
-                            <div className="flex-shrink-0 relative" title={`Created by ${m.created_by}`}>
-                               <div className="w-10 h-10 rounded-full ring-2 ring-white dark:ring-navy-800 bg-[#FFD500] flex items-center justify-center text-xs font-black text-[#003875] bg-cover bg-center shadow-md shadow-[#FFD500]/20" style={creatorMatch?.image_url ? {backgroundImage: `url(${creatorMatch.image_url})`} : {}}>
-                                  {!creatorMatch?.image_url && (m.created_by ? m.created_by.charAt(0).toUpperCase() : '?')}
-                               </div>
-                               <div className="absolute -bottom-1 -right-1 bg-white dark:bg-navy-800 rounded-full p-px">
-                                 <div className="w-3.5 h-3.5 rounded-full bg-emerald-500 flex items-center justify-center">
-                                    <span className="text-[6px] text-white font-black">★</span>
-                                 </div>
-                               </div>
-                            </div>
-
-                            {/* Meeting Info */}
-                            <div className="flex-1 min-w-0">
-                                <h4 className="text-sm font-black text-gray-900 dark:text-white uppercase tracking-tight mb-1.5 truncate">{m.title}</h4>
-                                <div className="flex items-center gap-2 flex-wrap">
-                                    {isToday ? (
-                                        <span className="text-[8px] font-black bg-rose-100 text-rose-600 dark:bg-rose-900/30 dark:text-rose-400 px-2 py-0.5 rounded-full uppercase tracking-widest">Today</span>
-                                    ) : (
-                                        <span className="text-[8px] font-black bg-gray-200 text-gray-600 dark:bg-white/10 dark:text-gray-400 px-2 py-0.5 rounded-full uppercase tracking-widest">{d.toLocaleDateString([], { month: 'short', day: 'numeric' })}</span>
-                                    )}
-                                    <span className="text-[9px] font-bold text-gray-500 uppercase flex items-center gap-1">
-                                        <ClockIcon className="w-3 h-3 text-gray-400" />
-                                        {timeString} - {endTimeString}
-                                    </span>
-                                </div>
-                            </div>
-                            
-                            {/* Attendees Stack */}
-                            <div className="flex -space-x-2 overflow-hidden flex-shrink-0 relative z-0">
-                                {attendeesList.slice(0, 3).map((u: string, idx: number) => {
-                                    const match = teamMembers?.find(t => t.username === u.trim());
-                                    return (
-                                        <div key={idx} className="relative z-10 hover:z-20 inline-block h-8 w-8 rounded-full ring-2 ring-white dark:ring-navy-800 bg-indigo-500 flex items-center justify-center text-[9px] font-black text-white bg-cover bg-center transition-transform hover:scale-110 shadow-sm" style={match?.image_url ? {backgroundImage: `url(${match.image_url})`} : {}}>
-                                            {!match?.image_url && u.trim().charAt(0).toUpperCase()}
-                                        </div>
-                                    )
-                                })}
-                                {attendeesList.length > 3 && (
-                                    <div className="relative z-10 flex h-8 w-8 items-center justify-center rounded-full ring-2 ring-white dark:ring-navy-800 bg-gray-800 text-[8px] font-black text-white">
-                                        +{attendeesList.length - 3}
-                                    </div>
-                                )}
-                            </div>
+        <CompactTable
+            title="My Assets"
+            icon={ComputerDesktopIcon}
+            headerTheme="blue"
+            heightClass="h-[302px]"
+            emptyLabel={isLoading || !username ? "Loading Assets..." : "No Assets Assigned"}
+            data={isLoading || !username ? [] : myAssets}
+            linkHref="/asset-management"
+            columns={[
+                {
+                    label: "Asset",
+                    key: "asset_name",
+                    render: (row: AssetItem) => (
+                        <div className="flex flex-col">
+                            <span className="block font-black text-gray-900 dark:text-white uppercase leading-tight text-[11px] break-words">
+                                {row.asset_name || "Unnamed Asset"}
+                            </span>
+                            <span className="text-[9px] text-gray-400 font-mono italic mt-0.5">
+                                {row.asset_id || "—"}
+                            </span>
                         </div>
-                    );
-                })}
-            </div>
-        </div>
+                    ),
+                },
+                {
+                    label: "Category",
+                    key: "category",
+                    render: (row: AssetItem) => (
+                        <span className="text-[11px] font-bold text-gray-600 dark:text-gray-300 uppercase">
+                            {row.category || "—"}
+                        </span>
+                    ),
+                },
+                {
+                    label: "Status",
+                    key: "status",
+                    className: "text-right",
+                    render: (row: AssetItem) => (
+                        <span
+                            className={`px-2 py-0.5 rounded-full text-[9px] uppercase font-black ${
+                                row.status === "Available"
+                                    ? "bg-emerald-500/10 text-emerald-500"
+                                    : row.status === "In Use"
+                                    ? "bg-[#003875]/10 text-[#003875] dark:bg-blue-500/10 dark:text-blue-400"
+                                    : row.status === "Maintenance"
+                                    ? "bg-amber-500/10 text-amber-500"
+                                    : "bg-gray-500/10 text-gray-500"
+                            }`}
+                        >
+                            {row.status || "—"}
+                        </span>
+                    ),
+                },
+            ]}
+        />
     );
 }
 
@@ -523,6 +501,8 @@ export function CompactTable({
   columns,
   linkHref,
   headerTheme = "blue",
+  heightClass = "h-[340px]",
+  emptyLabel = "Synchronization Pending...",
 }: {
   title: string;
   icon: ComponentType<{ className?: string }>;
@@ -530,12 +510,14 @@ export function CompactTable({
   columns: any[];
   linkHref?: string;
   headerTheme?: CompactTableTheme;
+  heightClass?: string;
+  emptyLabel?: string;
 }) {
     const theme = COMPACT_TABLE_THEMES[headerTheme];
     const rows = data ?? [];
 
     return (
-      <div className="bg-white dark:bg-navy-800 rounded-[2rem] border border-gray-100 dark:border-white/5 shadow-lg overflow-hidden flex flex-col h-[340px]">
+      <div className={`bg-white dark:bg-navy-800 rounded-[2rem] border border-gray-100 dark:border-white/5 shadow-lg overflow-hidden flex flex-col ${heightClass}`}>
             <div className={`p-4 border-b flex items-center justify-between ${theme.cardHeader}`}>
                 <h3 className={`text-sm font-black uppercase tracking-widest flex items-center gap-2 ${theme.title}`}>
                     <Icon className={`w-5 h-5 ${theme.icon}`} />
@@ -557,7 +539,7 @@ export function CompactTable({
                     <tbody className="divide-y divide-gray-50 dark:divide-white/5">
                         {rows.length === 0 ? (
                             <tr>
-                                <td colSpan={columns.length} className="p-8 text-center text-xs font-bold text-gray-300 uppercase italic">Synchronization Pending...</td>
+                                <td colSpan={columns.length} className="p-8 text-center text-xs font-bold text-gray-300 uppercase italic">{emptyLabel}</td>
                             </tr>
                         ) : rows.map((row: any, i: number) => (
                           <tr key={i} className="hover:bg-gray-50 dark:hover:bg-white/1 transition-colors group">

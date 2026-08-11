@@ -400,6 +400,8 @@ export default function I2RPackingPage() {
     if (!isAdmin && viewMode === "active") {
       list = list.filter(item => {
         const step = getActiveStep(item);
+        // Completed items are visible to all users (read-only actions handled in UI)
+        if (step === 0) return true;
         if (step > 0) {
           const cfg = globalConfigs[step - 1];
           return cfg?.responsible_person?.split(",").map(s => s.trim()).includes(currentUser);
@@ -858,15 +860,19 @@ export default function I2RPackingPage() {
                             )}
                             <div className="flex items-center gap-1 px-2 py-1 bg-white dark:bg-navy-800 rounded-full border border-slate-100 dark:border-navy-700 shadow-lg">
                               <button onClick={e => { e.stopPropagation(); setExpandedTiles(p => ({ ...p, [item.id]: !exp })); }} className={`p-1.5 rounded-full transition-all ${exp ? "bg-[#003875] text-[#FFD500]" : "text-[#003875] dark:text-[#FFD500] hover:bg-yellow-50"}`}><ChevronDownIcon className={`w-3.5 h-3.5 stroke-[3] transition-transform ${exp ? "rotate-180" : ""}`} /></button>
-                              <button onClick={e => { e.stopPropagation(); openReceiveModal(item); }} className="p-1.5 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 rounded-full transition-all" title="Inward Item Receive"><PlusIcon className="w-3.5 h-3.5 stroke-[3.5]" /></button>
-                              <button onClick={e => { e.stopPropagation(); openEditModal(item); }} className="p-1.5 text-blue-500 hover:bg-blue-50 rounded-full transition-all" title="Edit"><PencilSquareIcon className="w-3.5 h-3.5" /></button>
-                              <button onClick={e => { e.stopPropagation(); openRemoveFollowUpModal(item); }} className="p-1.5 text-purple-500 hover:bg-purple-50 rounded-full transition-all" title="Remove Follow Up"><ArrowUturnLeftIcon className="w-3.5 h-3.5" /></button>
-                              {item.cancelled ? (
-                                <button onClick={e => { e.stopPropagation(); setRestoreTargetId(item.id); }} className="p-1.5 text-emerald-500 hover:bg-emerald-50 rounded-full transition-all" title="Restore Process"><ArrowPathIcon className="w-3.5 h-3.5" /></button>
-                              ) : (
-                                <button onClick={e => { e.stopPropagation(); setCancelTargetId(item.id); }} className="p-1.5 text-orange-500 hover:bg-orange-50 rounded-full transition-all" title="Cancel Process"><NoSymbolIcon className="w-3.5 h-3.5" /></button>
+                              {(isAdmin || step > 0) && (
+                                <>
+                                  <button onClick={e => { e.stopPropagation(); openReceiveModal(item); }} className="p-1.5 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 rounded-full transition-all" title="Inward Item Receive"><PlusIcon className="w-3.5 h-3.5 stroke-[3.5]" /></button>
+                                  <button onClick={e => { e.stopPropagation(); openEditModal(item); }} className="p-1.5 text-blue-500 hover:bg-blue-50 rounded-full transition-all" title="Edit"><PencilSquareIcon className="w-3.5 h-3.5" /></button>
+                                  <button onClick={e => { e.stopPropagation(); openRemoveFollowUpModal(item); }} className="p-1.5 text-purple-500 hover:bg-purple-50 rounded-full transition-all" title="Remove Follow Up"><ArrowUturnLeftIcon className="w-3.5 h-3.5" /></button>
+                                  {item.cancelled ? (
+                                    <button onClick={e => { e.stopPropagation(); setRestoreTargetId(item.id); }} className="p-1.5 text-emerald-500 hover:bg-emerald-50 rounded-full transition-all" title="Restore Process"><ArrowPathIcon className="w-3.5 h-3.5" /></button>
+                                  ) : (
+                                    <button onClick={e => { e.stopPropagation(); setCancelTargetId(item.id); }} className="p-1.5 text-orange-500 hover:bg-orange-50 rounded-full transition-all" title="Cancel Process"><NoSymbolIcon className="w-3.5 h-3.5" /></button>
+                                  )}
+                                  <button onClick={e => { e.stopPropagation(); handleDeleteClick(item.id); }} className="p-1.5 text-red-500 hover:bg-red-50 rounded-full transition-all" title="Delete"><TrashIcon className="w-3.5 h-3.5" /></button>
+                                </>
                               )}
-                              <button onClick={e => { e.stopPropagation(); handleDeleteClick(item.id); }} className="p-1.5 text-red-500 hover:bg-red-50 rounded-full transition-all" title="Delete"><TrashIcon className="w-3.5 h-3.5" /></button>
                             </div>
                           </div>
                         </div>
@@ -1001,17 +1007,21 @@ export default function I2RPackingPage() {
                             />
                           </td>
                           <td className="p-4 sticky left-10 z-10 bg-white dark:bg-navy-900 group-hover:bg-[#FFFBF0] dark:group-hover:bg-navy-800 transition-colors">
-                            <div className="flex items-center gap-1.5">
-                              <button onClick={() => openReceiveModal(item)} className="p-1.5 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/40 rounded-lg transition-all" title="Inward Item Receive"><PlusIcon className="w-4 h-4 stroke-[3]" /></button>
-                              <button onClick={() => openEditModal(item)} className="p-1.5 text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/40 rounded-lg transition-all" title="Edit"><PencilSquareIcon className="w-4 h-4" /></button>
-                              <button onClick={() => openRemoveFollowUpModal(item)} className="p-1.5 text-purple-500 hover:bg-purple-50 dark:hover:bg-purple-900/40 rounded-lg transition-all" title="Remove Follow Up"><ArrowUturnLeftIcon className="w-4 h-4" /></button>
-                              {item.cancelled ? (
-                                <button onClick={() => setRestoreTargetId(item.id)} className="p-1.5 text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-900/40 rounded-lg transition-all" title="Restore"><ArrowPathIcon className="w-4 h-4" /></button>
-                              ) : (
-                                <button onClick={() => setCancelTargetId(item.id)} className="p-1.5 text-orange-500 hover:bg-orange-50 dark:hover:bg-orange-900/40 rounded-lg transition-all" title="Cancel"><NoSymbolIcon className="w-4 h-4" /></button>
-                              )}
-                              <button onClick={() => handleDeleteClick(item.id)} className="p-1.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/40 rounded-lg transition-all" title="Delete"><TrashIcon className="w-4 h-4" /></button>
-                            </div>
+                            {(isAdmin || step > 0) ? (
+                              <div className="flex items-center gap-1.5">
+                                <button onClick={() => openReceiveModal(item)} className="p-1.5 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/40 rounded-lg transition-all" title="Inward Item Receive"><PlusIcon className="w-4 h-4 stroke-[3]" /></button>
+                                <button onClick={() => openEditModal(item)} className="p-1.5 text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/40 rounded-lg transition-all" title="Edit"><PencilSquareIcon className="w-4 h-4" /></button>
+                                <button onClick={() => openRemoveFollowUpModal(item)} className="p-1.5 text-purple-500 hover:bg-purple-50 dark:hover:bg-purple-900/40 rounded-lg transition-all" title="Remove Follow Up"><ArrowUturnLeftIcon className="w-4 h-4" /></button>
+                                {item.cancelled ? (
+                                  <button onClick={() => setRestoreTargetId(item.id)} className="p-1.5 text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-900/40 rounded-lg transition-all" title="Restore"><ArrowPathIcon className="w-4 h-4" /></button>
+                                ) : (
+                                  <button onClick={() => setCancelTargetId(item.id)} className="p-1.5 text-orange-500 hover:bg-orange-50 dark:hover:bg-orange-900/40 rounded-lg transition-all" title="Cancel"><NoSymbolIcon className="w-4 h-4" /></button>
+                                )}
+                                <button onClick={() => handleDeleteClick(item.id)} className="p-1.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/40 rounded-lg transition-all" title="Delete"><TrashIcon className="w-4 h-4" /></button>
+                              </div>
+                            ) : (
+                              <span className="text-[9px] font-black text-slate-300 dark:text-navy-600 uppercase">View only</span>
+                            )}
                           </td>
                           <td className="p-4 sticky left-[120px] z-10 bg-white dark:bg-navy-900 group-hover:bg-[#FFFBF0] dark:group-hover:bg-navy-800 transition-colors">
                             <div className="flex flex-col">

@@ -9,13 +9,64 @@ import {
   ScaleIcon,
   BuildingOfficeIcon,
   BuildingStorefrontIcon,
-  CubeIcon
+  CubeIcon,
+  InformationCircleIcon,
+  XMarkIcon
 } from "@heroicons/react/24/outline";
 import IMSMaster from "./IMSMaster";
 import IMSFloor from "./IMSFloor";
 import IMSFinal from "./IMSFinal";
 
 const fetcher = (url: string) => fetch(url).then(res => res.json());
+
+type ImsLocation = "master" | "1st" | "g" | "final";
+
+const IMS_CALC_INFO: Record<ImsLocation, {
+  title: string;
+  formula: string;
+  inSource: string;
+  inHow: string;
+  outSource: string;
+  outHow: string;
+  liveHow: string;
+}> = {
+  master: {
+    title: "Master IMS",
+    formula: "Live Stock = IN − OUT",
+    inSource: "GRN Sheet (Goods Receipt Note)",
+    inHow: "Sum of GRN Qty for items that match the Master IMS catalog (item name match). Cancelled and Rejected GRN rows are excluded.",
+    outSource: "O2D Out Form sheet",
+    outHow: "Sum of Out Form quantities for line items whose names match the Master IMS catalog.",
+    liveHow: "For each catalog item: IN − OUT, then summed across all Master items.",
+  },
+  "1st": {
+    title: "IMS - 1st Floor",
+    formula: "Live Stock = IN − OUT",
+    inSource: "IMS-1st Floor Google Sheet (in_qty column)",
+    inHow: "Sum of every row’s in_qty from the 1st Floor IMS sheet.",
+    outSource: "IMS-1st Floor Google Sheet (out_qty column)",
+    outHow: "Sum of every row’s out_qty from the 1st Floor IMS sheet.",
+    liveHow: "For each sheet row: in_qty − out_qty, then summed across all rows.",
+  },
+  g: {
+    title: "IMS - G Floor",
+    formula: "Live Stock = IN − OUT",
+    inSource: "IMS-G Floor Google Sheet (in_qty column)",
+    inHow: "Sum of every row’s in_qty from the G Floor IMS sheet.",
+    outSource: "IMS-G Floor sheet (out_qty) + O2D Out Form",
+    outHow: "Sum of sheet out_qty, plus all Out Form line-item quantities (appended on top of sheet OUT).",
+    liveHow: "Floor (IN − OUT from sheet), then minus the Out Form total added to OUT.",
+  },
+  final: {
+    title: "Final IMS",
+    formula: "Total of Master + 1st Floor + G Floor",
+    inSource: "Combined from Master, 1st Floor, and G Floor",
+    inHow: "Master IN + 1st Floor IN + G Floor IN.",
+    outSource: "Combined from Master, 1st Floor, and G Floor",
+    outHow: "Master OUT + 1st Floor OUT + G Floor OUT.",
+    liveHow: "Master Live Stock + 1st Floor Live Stock + G Floor Live Stock.",
+  },
+};
 
 const formatMetric = (value: number) =>
   value.toLocaleString(undefined, { maximumFractionDigits: 2 });
@@ -37,7 +88,8 @@ const getInOutFontClass = (value: number) => {
 };
 
 export default function IMSHub() {
-  const [activeLocation, setActiveLocation] = useState<"master" | "1st" | "g" | "final" | null>(null);
+  const [activeLocation, setActiveLocation] = useState<ImsLocation | null>(null);
+  const [infoLocation, setInfoLocation] = useState<ImsLocation | null>(null);
   
   const { data: summary, isLoading } = useSWR(activeLocation === null ? "/api/ims/summary" : null, fetcher);
 
@@ -60,7 +112,7 @@ export default function IMSHub() {
   } : undefined;
 
   const renderTile = (
-    id: "master" | "1st" | "g" | "final", 
+    id: ImsLocation, 
     title: string, 
     subtitle: string, 
     icon: React.ReactNode, 
@@ -77,8 +129,20 @@ export default function IMSHub() {
           <div className="absolute inset-0 bg-black/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
           <div className="absolute -right-10 -top-10 w-40 h-40 bg-white/10 rounded-full blur-3xl group-hover:scale-150 transition-transform duration-500"></div>
         </div>
+
+        <button
+          type="button"
+          title="How IN / OUT are calculated"
+          onClick={(e) => {
+            e.stopPropagation();
+            setInfoLocation(id);
+          }}
+          className="absolute top-4 right-4 z-20 p-1.5 rounded-full bg-white/15 hover:bg-white/30 border border-white/25 text-white transition-colors"
+        >
+          <InformationCircleIcon className="w-5 h-5" />
+        </button>
         
-        <div className="relative mb-10 z-10">
+        <div className="relative mb-10 z-10 pr-8">
           <div className="flex items-start gap-3">
             <div className="p-3 bg-white/20 backdrop-blur-md rounded-2xl transition-all duration-300 shadow-sm group-hover:shadow-md shrink-0">
               <div className="text-white w-7 h-7 transition-colors duration-300">
@@ -205,6 +269,73 @@ export default function IMSHub() {
             "shadow-orange-900/20"
           )}
         </div>
+
+        {infoLocation && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
+            onClick={() => setInfoLocation(null)}
+          >
+            <div
+              className="w-full max-w-lg bg-white dark:bg-[#1C1C1E] rounded-3xl shadow-2xl border border-gray-200 dark:border-white/10 overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-white/10 bg-[#003875]">
+                <div className="flex items-center gap-2 min-w-0">
+                  <InformationCircleIcon className="w-5 h-5 text-[#FFD500] shrink-0" />
+                  <h3 className="text-sm font-black text-white uppercase tracking-widest truncate">
+                    {IMS_CALC_INFO[infoLocation].title} — Calculation
+                  </h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setInfoLocation(null)}
+                  className="p-1.5 rounded-full hover:bg-white/10 text-white/80 hover:text-white transition-colors"
+                >
+                  <XMarkIcon className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="p-5 space-y-4">
+                <div className="rounded-2xl bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-white/10 px-4 py-3">
+                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Formula</p>
+                  <p className="text-sm font-black text-[#003875] dark:text-[#FFD500]">{IMS_CALC_INFO[infoLocation].formula}</p>
+                </div>
+
+                <div className="space-y-3">
+                  <div className="rounded-2xl border border-emerald-100 dark:border-emerald-500/20 bg-emerald-50/60 dark:bg-emerald-900/10 p-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <ArrowTrendingUpIcon className="w-4 h-4 text-emerald-600" />
+                      <p className="text-[11px] font-black text-emerald-700 dark:text-emerald-400 uppercase tracking-widest">IN</p>
+                    </div>
+                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Data Source</p>
+                    <p className="text-xs font-bold text-gray-800 dark:text-gray-200 mb-2">{IMS_CALC_INFO[infoLocation].inSource}</p>
+                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">How Calculated</p>
+                    <p className="text-xs font-medium text-gray-600 dark:text-gray-300 leading-relaxed">{IMS_CALC_INFO[infoLocation].inHow}</p>
+                  </div>
+
+                  <div className="rounded-2xl border border-rose-100 dark:border-rose-500/20 bg-rose-50/60 dark:bg-rose-900/10 p-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <ArrowTrendingDownIcon className="w-4 h-4 text-rose-600" />
+                      <p className="text-[11px] font-black text-rose-700 dark:text-rose-400 uppercase tracking-widest">OUT</p>
+                    </div>
+                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Data Source</p>
+                    <p className="text-xs font-bold text-gray-800 dark:text-gray-200 mb-2">{IMS_CALC_INFO[infoLocation].outSource}</p>
+                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">How Calculated</p>
+                    <p className="text-xs font-medium text-gray-600 dark:text-gray-300 leading-relaxed">{IMS_CALC_INFO[infoLocation].outHow}</p>
+                  </div>
+
+                  <div className="rounded-2xl border border-blue-100 dark:border-blue-500/20 bg-blue-50/60 dark:bg-blue-900/10 p-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <ScaleIcon className="w-4 h-4 text-blue-600" />
+                      <p className="text-[11px] font-black text-blue-700 dark:text-blue-400 uppercase tracking-widest">Live Stock</p>
+                    </div>
+                    <p className="text-xs font-medium text-gray-600 dark:text-gray-300 leading-relaxed">{IMS_CALC_INFO[infoLocation].liveHow}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

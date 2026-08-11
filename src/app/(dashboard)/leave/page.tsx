@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { ensureSessionId } from '@/utils/session';
 import { useToast } from '@/components/ToastProvider';
@@ -33,6 +33,7 @@ import {
     ArrowRightIcon,
     ArrowLongRightIcon,
     ChevronDownIcon,
+    InformationCircleIcon,
 } from '@heroicons/react/24/outline';
 
 interface Leave {
@@ -118,6 +119,9 @@ export default function LeavePage() {
     const [masterData, setMasterData] = useState<{ users: any[] } | null>(null);
     const [isConfirmOpen, setIsConfirmOpen] = useState(false);
     const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+    const [highlightLeaveId, setHighlightLeaveId] = useState<string | null>(null);
+    const highlightLeaveRef = useRef<HTMLDivElement>(null);
+    const [showInfoModal, setShowInfoModal] = useState(false);
 
     useEffect(() => {
         const init = async () => {
@@ -152,7 +156,33 @@ export default function LeavePage() {
             setLeaveForm(defaultForm);
             setShowLeaveModal(true);
         }
+
+        const leaveId = searchParams?.get('id');
+        if (leaveId) {
+            setHighlightLeaveId(leaveId);
+            setFilterTab('All');
+            setLeaveSearch('');
+            setLeavePage(1);
+        }
     }, [searchParams]);
+
+    useEffect(() => {
+        if (!highlightLeaveId || leaves.length === 0 || isPageLoading) return;
+
+        const idx = leaves.findIndex((lv) => String(lv.id) === String(highlightLeaveId));
+        if (idx === -1) return;
+
+        const page = Math.floor(idx / LEAVES_PER_PAGE) + 1;
+        if (page !== leavePage) {
+            setLeavePage(page);
+            return;
+        }
+
+        const timer = window.setTimeout(() => {
+            highlightLeaveRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 120);
+        return () => window.clearTimeout(timer);
+    }, [highlightLeaveId, leaves, isPageLoading, leavePage]);
 
     useEffect(() => {
         // Keep input text synced to selected IDs when master data or form changes
@@ -376,6 +406,14 @@ export default function LeavePage() {
                             </div>
                         </div>
                             <div className="flex items-center gap-3">
+                                <button
+                                    type="button"
+                                    title="How Leave Management works"
+                                    onClick={() => setShowInfoModal(true)}
+                                    className="p-2 rounded-full bg-[#003875]/10 hover:bg-[#003875]/20 text-[#003875] dark:bg-[#FFD500]/15 dark:hover:bg-[#FFD500]/25 dark:text-[#FFD500] transition-colors"
+                                >
+                                    <InformationCircleIcon className="w-5 h-5" />
+                                </button>
                                 <div className="relative hidden md:block">
                                     <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                                     <input
@@ -469,7 +507,16 @@ export default function LeavePage() {
                                         const statusBg = lv.status === 'Approved' ? 'bg-emerald-100 text-emerald-700' : lv.status === 'Rejected' ? 'bg-rose-100 text-rose-600' : 'bg-amber-100 text-amber-700';
                                         const leaveTypeBg = isHalfDay ? 'bg-orange-100 text-orange-700' : 'bg-indigo-100 text-indigo-700';
                                         return (
-                                            <div key={lv.id} className="bg-white dark:bg-slate-800 border border-gray-100 dark:border-white/5 rounded-2xl overflow-hidden shadow-sm hover:shadow-lg transition-all duration-200 transform-gpu hover:-translate-y-0.5" style={{borderLeft:`4px solid ${statusClr}`}}>
+                                            <div
+                                                key={lv.id}
+                                                ref={highlightLeaveId && String(lv.id) === String(highlightLeaveId) ? highlightLeaveRef : undefined}
+                                                className={`bg-white dark:bg-slate-800 border rounded-2xl overflow-hidden shadow-sm hover:shadow-lg transition-all duration-200 transform-gpu hover:-translate-y-0.5 ${
+                                                    highlightLeaveId && String(lv.id) === String(highlightLeaveId)
+                                                        ? 'border-[#0a84ff] ring-2 ring-[#0a84ff]/40 dark:ring-[#FFD500]/40'
+                                                        : 'border-gray-100 dark:border-white/5'
+                                                }`}
+                                                style={{borderLeft:`4px solid ${statusClr}`}}
+                                            >
                                                 <div className="flex flex-col md:flex-row min-h-0">
                                                     {/* ── LEFT COLUMN ── */}
                                                     <div className="w-full md:w-1/2 min-w-0 px-5 py-4 flex flex-col gap-3 relative">
@@ -1003,6 +1050,179 @@ export default function LeavePage() {
                             >
                                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg>
                             </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {showInfoModal && (
+                <div
+                    className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
+                    onClick={() => setShowInfoModal(false)}
+                >
+                    <div
+                        className="w-full max-w-3xl bg-white dark:bg-[#1C1C1E] rounded-3xl shadow-2xl border border-gray-200 dark:border-white/10 overflow-hidden max-h-[90vh] flex flex-col"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-white/10 bg-[#003875] shrink-0">
+                            <div className="flex items-center gap-2 min-w-0">
+                                <InformationCircleIcon className="w-5 h-5 text-[#FFD500] shrink-0" />
+                                <h3 className="text-sm font-black text-white uppercase tracking-widest truncate">
+                                    Leave Management — Full Process Guide
+                                </h3>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setShowInfoModal(false)}
+                                className="p-1.5 rounded-full hover:bg-white/10 text-white/80 hover:text-white transition-colors"
+                            >
+                                <XMarkIcon className="w-5 h-5" />
+                            </button>
+                        </div>
+
+                        <div className="p-5 overflow-y-auto space-y-5 custom-scrollbar">
+                            <div className="rounded-2xl bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-white/10 px-4 py-3">
+                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">End-to-End Flow</p>
+                                <p className="text-xs font-medium text-gray-700 dark:text-gray-300 leading-relaxed">
+                                    Apply Leave → Coverage persons accept responsibility → Admin/EA Approve or Reject → WhatsApp alerts at every step (with ERP deep link).
+                                </p>
+                            </div>
+
+                            {/* Visibility */}
+                            <section className="space-y-2">
+                                <h4 className="text-[11px] font-black text-[#003875] dark:text-[#FFD500] uppercase tracking-widest">1. Who Can See What (Visibility)</h4>
+                                <div className="rounded-2xl border border-blue-100 dark:border-blue-500/20 bg-blue-50/50 dark:bg-blue-900/10 p-4 space-y-2 text-xs text-gray-700 dark:text-gray-300">
+                                    <p><span className="font-black">ADMIN / EA:</span> See all organisation leave requests. Subtitle shows “Manage Org Leaves”.</p>
+                                    <p><span className="font-black">Normal User:</span> Sees only (a) their own leaves, OR (b) leaves where they are listed as Coverage person 1 / 2 / 3. Subtitle shows “My Leave Requests”.</p>
+                                    <p><span className="font-black">API filter:</span> <code className="text-[10px] bg-white/70 dark:bg-black/30 px-1 rounded">role ≠ ADMIN/EA</code> → filter by <code className="text-[10px] bg-white/70 dark:bg-black/30 px-1 rounded">userId</code> match on requester or responsibility slots.</p>
+                                </div>
+                            </section>
+
+                            {/* Create */}
+                            <section className="space-y-2">
+                                <h4 className="text-[11px] font-black text-[#003875] dark:text-[#FFD500] uppercase tracking-widest">2. Create Leave (Apply Leave)</h4>
+                                <div className="rounded-2xl border border-emerald-100 dark:border-emerald-500/20 bg-emerald-50/50 dark:bg-emerald-900/10 p-4 space-y-2 text-xs text-gray-700 dark:text-gray-300">
+                                    <p><span className="font-black">Who:</span> Any logged-in user via “+ Apply Leave” (or deep link <code className="text-[10px] bg-white/70 dark:bg-black/30 px-1 rounded">/leave?open=apply</code>).</p>
+                                    <p><span className="font-black">Leave types:</span></p>
+                                    <ul className="list-disc pl-4 space-y-1">
+                                        <li><span className="font-black">Full Day — 1 Day:</span> single date (endDate = startDate).</li>
+                                        <li><span className="font-black">Full Day — Multi Day:</span> startDate → endDate range.</li>
+                                        <li><span className="font-black">Half Day:</span> one date + session First Half / Second Half.</li>
+                                    </ul>
+                                    <p><span className="font-black">Coverage (optional, up to 3 people):</span> responsibility1 / 2 / 3. Each person must be different (duplicate check on submit).</p>
+                                    <p><span className="font-black">Task modes:</span></p>
+                                    <ul className="list-disc pl-4 space-y-1">
+                                        <li><span className="font-black">Individual:</span> separate tasks1 / tasks2 / tasks3 per coverage person.</li>
+                                        <li><span className="font-black">Shared:</span> one sharedTask for all coverage people.</li>
+                                    </ul>
+                                    <p><span className="font-black">Required fields:</span> userId, startDate, endDate, reason.</p>
+                                    <p><span className="font-black">Initial status:</span> Pending. ID format <code className="text-[10px] bg-white/70 dark:bg-black/30 px-1 rounded">LV-{'{timestamp}'}</code>.</p>
+                                    <p><span className="font-black">WhatsApp:</span> CREATE → HR numbers + applicant + each coverage person (with their task details).</p>
+                                </div>
+                            </section>
+
+                            {/* Edit / Delete */}
+                            <section className="space-y-2">
+                                <h4 className="text-[11px] font-black text-[#003875] dark:text-[#FFD500] uppercase tracking-widest">3. Edit & Delete</h4>
+                                <div className="rounded-2xl border border-amber-100 dark:border-amber-500/20 bg-amber-50/50 dark:bg-amber-900/10 p-4 space-y-2 text-xs text-gray-700 dark:text-gray-300">
+                                    <p><span className="font-black">Edit (pencil icon):</span> Visible only when <code className="text-[10px] bg-white/70 dark:bg-black/30 px-1 rounded">isRequester && status === Pending</code>.</p>
+                                    <p>Opens Apply modal pre-filled. Same validation as create (unique coverage people). Saves via PUT.</p>
+                                    <p><span className="font-black">Delete (trash icon):</span> Same visibility: requester + Pending only. Confirm modal → DELETE API. Also deletes related remarks.</p>
+                                    <p><span className="font-black">WhatsApp:</span> UPDATE / DELETE → HR + applicant + coverage persons.</p>
+                                    <p className="text-amber-800 dark:text-amber-300 font-bold">Note: Admin/EA currently do not get Edit/Delete buttons on other users’ leaves (only Approve/Reject when conditions met).</p>
+                                </div>
+                            </section>
+
+                            {/* Coverage accept */}
+                            <section className="space-y-2">
+                                <h4 className="text-[11px] font-black text-[#003875] dark:text-[#FFD500] uppercase tracking-widest">4. Accept Coverage (&quot;I&apos;ll Accept&quot;)</h4>
+                                <div className="rounded-2xl border border-purple-100 dark:border-purple-500/20 bg-purple-50/50 dark:bg-purple-900/10 p-4 space-y-2 text-xs text-gray-700 dark:text-gray-300">
+                                    <p><span className="font-black">Base condition:</span> You are listed as responsibility1/2/3 AND leave status is Pending.</p>
+                                    <p><span className="font-black">Button visibility rules (canIAccept):</span></p>
+                                    <ul className="list-disc pl-4 space-y-1">
+                                        <li><span className="font-black">Shared task mode:</span> Show to all listed people until ANYONE accepts → then hide for everyone (1 acceptance covers shared work).</li>
+                                        <li><span className="font-black">Individual tasks:</span> Show only for YOUR slot if your slot has a task AND you have not accepted yet.</li>
+                                        <li><span className="font-black">No tasks assigned:</span> Show to any listed person until that person accepts.</li>
+                                    </ul>
+                                    <p><span className="font-black">On accept:</span> Sets <code className="text-[10px] bg-white/70 dark:bg-black/30 px-1 rounded">acceptedByN</code> + <code className="text-[10px] bg-white/70 dark:bg-black/30 px-1 rounded">acceptedAtN</code> for that slot. Status stays Pending.</p>
+                                    <p><span className="font-black">WhatsApp:</span> ACCEPT_RESPONSIBILITY → HR, applicant, and other coverage people (message differs for the acceptor vs others).</p>
+                                </div>
+                            </section>
+
+                            {/* Approve / Reject */}
+                            <section className="space-y-2">
+                                <h4 className="text-[11px] font-black text-[#003875] dark:text-[#FFD500] uppercase tracking-widest">5. Approve & Reject</h4>
+                                <div className="rounded-2xl border border-rose-100 dark:border-rose-500/20 bg-rose-50/50 dark:bg-rose-900/10 p-4 space-y-2 text-xs text-gray-700 dark:text-gray-300">
+                                    <p><span className="font-black">Who:</span> ADMIN or EA only.</p>
+                                    <p><span className="font-black">Buttons show when:</span> <code className="text-[10px] bg-white/70 dark:bg-black/30 px-1 rounded">isAdminOrEA && status === Pending && acceptedAll</code></p>
+                                    <p><span className="font-black">acceptedAll meaning:</span></p>
+                                    <ul className="list-disc pl-4 space-y-1">
+                                        <li><span className="font-black">Individual + tasks:</span> every coverage slot that has a task must have accepted.</li>
+                                        <li><span className="font-black">Shared task OR no tasks:</span> at least one acceptance is enough (or no coverage people listed).</li>
+                                    </ul>
+                                    <p>Until coverage is complete, Approve/Reject stay hidden — Admin cannot finalise early.</p>
+                                    <p><span className="font-black">WhatsApp:</span> UPDATE_STATUS → HR + applicant + coverage (status = Approved / Rejected).</p>
+                                </div>
+                            </section>
+
+                            {/* Remarks */}
+                            <section className="space-y-2">
+                                <h4 className="text-[11px] font-black text-[#003875] dark:text-[#FFD500] uppercase tracking-widest">6. Discussion / Remarks</h4>
+                                <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-gray-50/80 dark:bg-white/5 p-4 space-y-2 text-xs text-gray-700 dark:text-gray-300">
+                                    <p>Users can add remarks on a leave (Discussion modal). Saved as REM-{'{timestamp}'} linked to leaveId.</p>
+                                    <p><span className="font-black">WhatsApp:</span> ADD_REMARK → HR + applicant + coverage with the remark text.</p>
+                                </div>
+                            </section>
+
+                            {/* WhatsApp */}
+                            <section className="space-y-2">
+                                <h4 className="text-[11px] font-black text-[#003875] dark:text-[#FFD500] uppercase tracking-widest">7. WhatsApp Messaging Process</h4>
+                                <div className="rounded-2xl border border-emerald-100 dark:border-emerald-500/20 bg-emerald-50/50 dark:bg-emerald-900/10 p-4 space-y-2 text-xs text-gray-700 dark:text-gray-300">
+                                    <p><span className="font-black">Transport:</span> Maytapi WhatsApp API (<code className="text-[10px] bg-white/70 dark:bg-black/30 px-1 rounded">sendWhatsAppMessage</code>).</p>
+                                    <p><span className="font-black">Recipients:</span> Fixed HR phone numbers + phones looked up from Users sheet for applicant and coverage persons (duplicate phones skipped).</p>
+                                    <p><span className="font-black">Actions that send messages:</span> CREATE, ACCEPT_RESPONSIBILITY, UPDATE_STATUS (Approve/Reject), ADD_REMARK, UPDATE (edit), DELETE.</p>
+                                    <p><span className="font-black">ERP deep link (every message):</span></p>
+                                    <p className="font-mono text-[10px] bg-white/70 dark:bg-black/30 px-2 py-1.5 rounded-lg break-all">
+                                        {'{APP_URL}'}/leave?id={'{leaveId}'}
+                                    </p>
+                                    <p>Footer text: <span className="font-black">👉 Open in ERP:</span> + URL. Opening the link highlights & scrolls to that leave card on this page.</p>
+                                    <p><span className="font-black">Base URL:</span> NEXTAUTH_URL / AUTH_URL / NEXT_PUBLIC_APP_URL (same helper as Payment Vendor Approval).</p>
+                                </div>
+                            </section>
+
+                            {/* Permission matrix */}
+                            <section className="space-y-2">
+                                <h4 className="text-[11px] font-black text-[#003875] dark:text-[#FFD500] uppercase tracking-widest">8. Action Permission Matrix</h4>
+                                <div className="overflow-x-auto rounded-2xl border border-gray-200 dark:border-white/10">
+                                    <table className="w-full text-left text-[11px]">
+                                        <thead className="bg-[#003875] text-white">
+                                            <tr>
+                                                <th className="px-3 py-2 font-black uppercase tracking-wider">Action</th>
+                                                <th className="px-3 py-2 font-black uppercase tracking-wider">Who</th>
+                                                <th className="px-3 py-2 font-black uppercase tracking-wider">Condition</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-gray-100 dark:divide-white/5 text-gray-700 dark:text-gray-300">
+                                            <tr className="bg-white dark:bg-transparent"><td className="px-3 py-2 font-bold">Apply / Create</td><td className="px-3 py-2">Any user</td><td className="px-3 py-2">Logged in</td></tr>
+                                            <tr className="bg-gray-50/80 dark:bg-white/[0.02]"><td className="px-3 py-2 font-bold">Edit</td><td className="px-3 py-2">Requester only</td><td className="px-3 py-2">status = Pending</td></tr>
+                                            <tr className="bg-white dark:bg-transparent"><td className="px-3 py-2 font-bold">Delete</td><td className="px-3 py-2">Requester only</td><td className="px-3 py-2">status = Pending</td></tr>
+                                            <tr className="bg-gray-50/80 dark:bg-white/[0.02]"><td className="px-3 py-2 font-bold">I&apos;ll Accept</td><td className="px-3 py-2">Coverage person</td><td className="px-3 py-2">Pending + slot rules (shared / individual / no-task)</td></tr>
+                                            <tr className="bg-white dark:bg-transparent"><td className="px-3 py-2 font-bold">Approve</td><td className="px-3 py-2">ADMIN / EA</td><td className="px-3 py-2">Pending + acceptedAll = true</td></tr>
+                                            <tr className="bg-gray-50/80 dark:bg-white/[0.02]"><td className="px-3 py-2 font-bold">Reject</td><td className="px-3 py-2">ADMIN / EA</td><td className="px-3 py-2">Pending + acceptedAll = true</td></tr>
+                                            <tr className="bg-white dark:bg-transparent"><td className="px-3 py-2 font-bold">View all leaves</td><td className="px-3 py-2">ADMIN / EA</td><td className="px-3 py-2">Role check on API</td></tr>
+                                            <tr className="bg-gray-50/80 dark:bg-white/[0.02]"><td className="px-3 py-2 font-bold">View own / coverage</td><td className="px-3 py-2">Normal user</td><td className="px-3 py-2">Requester or responsibility1/2/3</td></tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </section>
+
+                            <div className="rounded-2xl border border-dashed border-gray-300 dark:border-white/20 px-4 py-3 text-[11px] text-gray-500 dark:text-gray-400">
+                                <p className="font-black uppercase tracking-widest text-gray-400 mb-1">For developers & clients</p>
+                                <p className="leading-relaxed">
+                                    This modal mirrors the live UI conditions in <code className="text-[10px]">leave/page.tsx</code> and API rules in <code className="text-[10px]">api/leave/route.ts</code> + WhatsApp in <code className="text-[10px]">leave-notifications.ts</code>.
+                                    If something feels missing (e.g. Admin edit/delete, approve without coverage, MD role), use this checklist to decide what to add next.
+                                </p>
+                            </div>
                         </div>
                     </div>
                 </div>

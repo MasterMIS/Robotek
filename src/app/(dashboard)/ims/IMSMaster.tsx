@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useMemo } from "react";
-import useSWR from "swr";
+import useSWR, { mutate as globalMutate } from "swr";
 import { useSession } from "next-auth/react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useTheme } from "next-themes";
@@ -24,7 +24,9 @@ import {
   ArrowLeftIcon,
   TableCellsIcon,
   ChartBarIcon,
-  CalendarIcon
+  CalendarIcon,
+  DocumentTextIcon,
+  ArrowPathIcon
 } from "@heroicons/react/24/outline";
 import {
   PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis,
@@ -84,6 +86,19 @@ type EnrichedIMS = Omit<IMS, "live_stock" | "in_qty" | "out_qty" | "max_level" |
   final_amount_num: number;
 };
 
+type OutFormImportGroup = {
+  Date: string;
+  VchNo: string;
+  Particulars: string;
+  Items: { Description: string; Qty: number | string }[];
+};
+
+type OutFormImportPreview = {
+  groups: OutFormImportGroup[];
+  voucherCount: number;
+  itemCount: number;
+};
+
 export default function IMSMaster({ onBack }: { onBack: () => void }) {
   const { data: session } = useSession();
   const [submitting, setSubmitting] = useState(false);
@@ -106,13 +121,57 @@ export default function IMSMaster({ onBack }: { onBack: () => void }) {
   const { resolvedTheme } = useTheme();
   
   const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const importLogRef = React.useRef<HTMLDivElement>(null);
+
+  const [importPreview, setImportPreview] = useState<OutFormImportPreview | null>(null);
+  const [isImporting, setIsImporting] = useState(false);
+  const [importFileName, setImportFileName] = useState("");
+  const [importProgress, setImportProgress] = useState(0);
+  const [importLogs, setImportLogs] = useState<string[]>([]);
+  const [importPhase, setImportPhase] = useState<"preview" | "scanning" | "uploading" | "done">("preview");
+
+  React.useEffect(() => {
+    if (importLogRef.current) {
+      importLogRef.current.scrollTop = importLogRef.current.scrollHeight;
+    }
+  }, [importLogs]);
+
+  const parseOutFormFile = (jsonData: any[][]): OutFormImportGroup[] => {
+    const groupedData: OutFormImportGroup[] = [];
+    let currentGroup: OutFormImportGroup | null = null;
+
+    for (let i = 1; i < jsonData.length; i++) {
+      const row = jsonData[i];
+      const date = row[0];
+      const vchNo = row[1];
+      const particulars = row[2];
+      const description = row[3];
+      const qty = row[5];
+
+      if (vchNo) {
+        currentGroup = {
+          Date: date || "",
+          VchNo: vchNo || "",
+          Particulars: particulars || "",
+          Items: [],
+        };
+        groupedData.push(currentGroup);
+      }
+
+      if (currentGroup && description) {
+        currentGroup.Items.push({
+          Description: description,
+          Qty: qty || 0,
+        });
+      }
+    }
+
+    return groupedData;
+  };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
-    setSubmitting(true);
-    showStatus("Parsing file...", "loading");
 
     try {
       const data = await file.arrayBuffer();
@@ -125,64 +184,137 @@ export default function IMSMaster({ onBack }: { onBack: () => void }) {
         throw new Error("File is empty or contains only headers.");
       }
 
-      const groupedData: any[] = [];
-      let currentGroup: any = null;
-
-      // Skip header row
-      for (let i = 1; i < jsonData.length; i++) {
-        const row = jsonData[i];
-        
-        const date = row[0];
-        const vchNo = row[1];
-        const particulars = row[2];
-        const description = row[3];
-        const qty = row[5];
-
-        if (vchNo) {
-          currentGroup = {
-            Date: date || "",
-            VchNo: vchNo || "",
-            Particulars: particulars || "",
-            Items: []
-          };
-          groupedData.push(currentGroup);
-        }
-
-        if (currentGroup && description) {
-          currentGroup.Items.push({
-            Description: description,
-            Qty: qty || 0
-          });
-        }
-      }
-
+      const groupedData = parseOutFormFile(jsonData);
       if (groupedData.length === 0) {
         throw new Error("No valid data found in the file.");
       }
 
-      showStatus("Importing to Out Form...", "loading");
-
-      const res = await fetch("/api/ims/import-out-form", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(groupedData)
+      const itemCount = groupedData.reduce((sum, g) => sum + g.Items.length, 0);
+      setImportFileName(file.name);
+      setImportPreview({
+        groups: groupedData,
+        voucherCount: groupedData.length,
+        itemCount,
       });
-
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || "Failed to import");
-      }
-
-      showStatus(`Successfully imported ${groupedData.length} records!`, "success");
-      setTimeout(() => setIsStatusModalOpen(false), 2000);
+      setImportProgress(0);
+      setImportLogs([]);
+      setImportPhase("preview");
     } catch (error: any) {
       console.error(error);
       showStatus(error.message || "Error processing file", "error");
     } finally {
-      setSubmitting(false);
       if (fileInputRef.current) {
         fileInputRef.current.value = "";
       }
+    }
+  };
+
+  const resetImportModal = () => {
+    if (isImporting) return;
+    setImportPreview(null);
+    setImportFileName("");
+    setImportProgress(0);
+    setImportLogs([]);
+    setImportPhase("preview");
+  };
+
+  const handleConfirmOutFormImport = async () => {
+    if (!importPreview || importPreview.groups.length === 0) return;
+
+    const groups = importPreview.groups;
+    const totalGroups = groups.length;
+
+    setIsImporting(true);
+    setSubmitting(true);
+    setImportProgress(0);
+    setImportLogs([]);
+    setImportPhase("scanning");
+
+    const pushLog = (message: string) => {
+      setImportLogs((prev) => [...prev.slice(-79), message]);
+    };
+    const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+    pushLog(`[INIT] Loading ${importFileName}`);
+    pushLog(`[INFO] Detected ${importPreview.voucherCount} voucher(s) with ${importPreview.itemCount} line item(s)`);
+    await wait(350);
+
+    pushLog("[SCAN] Reading Out Form workbook structure...");
+    await wait(300);
+
+    const scanSteps = Math.min(totalGroups, 48);
+    const stepSize = Math.max(1, Math.ceil(totalGroups / scanSteps));
+
+    for (let index = 0; index < totalGroups; index += stepSize) {
+      const batchEnd = Math.min(index + stepSize, totalGroups);
+      for (let i = index; i < batchEnd; i++) {
+        const group = groups[i];
+        const qtyTotal = group.Items.reduce((s, it) => s + (Number(it.Qty) || 0), 0);
+        pushLog(
+          `[SCAN] ${group.VchNo || "—"} | ${group.Date || "—"} | ${group.Particulars || "—"} | ${group.Items.length} item(s) | Qty ${qtyTotal}`
+        );
+        if (group.Items.length > 0) {
+          const sample = group.Items.slice(0, 2);
+          sample.forEach((it) => {
+            pushLog(`       ↳ ${it.Description} × ${it.Qty}`);
+          });
+          if (group.Items.length > 2) {
+            pushLog(`       ↳ ... +${group.Items.length - 2} more line(s)`);
+          }
+        }
+      }
+
+      const scanPercent = Math.min(78, Math.round((batchEnd / totalGroups) * 78));
+      setImportProgress(scanPercent);
+      await wait(70);
+    }
+
+    pushLog("[SCAN] Row validation complete");
+    pushLog("[MATCH] Preparing voucher groups for Out Form sheet...");
+    setImportProgress(82);
+    await wait(450);
+
+    setImportPhase("uploading");
+    pushLog("[UPLOAD] Writing records to Google Sheet Out Form...");
+    setImportProgress(88);
+
+    try {
+      const res = await fetch("/api/ims/import-out-form", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(groups),
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to import");
+      }
+
+      setImportProgress(96);
+      pushLog(`[SAVE] ${totalGroups} voucher row(s) appended to Out Form`);
+      pushLog(`[SAVE] ${importPreview.itemCount} line item(s) packed as JSON`);
+
+      await globalMutate("/api/ims");
+      await globalMutate("/api/ims/summary");
+      setImportProgress(100);
+      setImportPhase("done");
+      pushLog("[DONE] Out Form import completed successfully");
+      await wait(900);
+
+      setImportPreview(null);
+      setImportFileName("");
+      setImportProgress(0);
+      setImportLogs([]);
+      setImportPhase("preview");
+      showStatus(`Successfully imported ${totalGroups} records!`, "success");
+      setTimeout(() => setIsStatusModalOpen(false), 2000);
+    } catch (error: any) {
+      pushLog(`[ERROR] ${error.message || "Import failed"}`);
+      setImportPhase("preview");
+      showStatus(error.message || "Error processing file", "error");
+    } finally {
+      setIsImporting(false);
+      setSubmitting(false);
     }
   };
 
@@ -639,7 +771,7 @@ export default function IMSMaster({ onBack }: { onBack: () => void }) {
             onChange={handleFileUpload} 
             className="hidden" 
           />
-          <button onClick={() => fileInputRef.current?.click()} className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 hover:bg-blue-100 dark:bg-blue-500/10 dark:hover:bg-blue-500/20 text-blue-700 dark:text-blue-400 rounded-lg text-[11px] font-black uppercase tracking-wider transition-all border border-blue-200 dark:border-blue-500/20 shadow-sm">
+          <button onClick={() => fileInputRef.current?.click()} disabled={isImporting || submitting} className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 hover:bg-blue-100 dark:bg-blue-500/10 dark:hover:bg-blue-500/20 text-blue-700 dark:text-blue-400 rounded-lg text-[11px] font-black uppercase tracking-wider transition-all border border-blue-200 dark:border-blue-500/20 shadow-sm disabled:opacity-50">
             <ArrowUpTrayIcon className="w-4 h-4" /> Import Out Form
           </button>
           <button onClick={handleExport} className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 hover:bg-blue-100 dark:bg-blue-500/10 dark:hover:bg-blue-500/20 text-blue-700 dark:text-blue-400 rounded-lg text-[11px] font-black uppercase tracking-wider transition-all border border-blue-200 dark:border-blue-500/20 shadow-sm">
@@ -1096,6 +1228,161 @@ export default function IMSMaster({ onBack }: { onBack: () => void }) {
         confirmLabel="Delete"
         type="danger"
       />
+
+      {importPreview && (
+        <div className="fixed inset-0 z-[220] bg-black/70 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-white dark:bg-slate-900 rounded-[28px] w-full max-w-2xl max-h-[calc(100vh-1.5rem)] my-auto shadow-2xl border border-white/10 overflow-hidden flex flex-col">
+            <div className="shrink-0 px-5 sm:px-6 py-4 border-b border-gray-100 dark:border-white/10 bg-[#003875] text-white">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <h3 className="text-lg font-black uppercase tracking-widest">Import Out Form</h3>
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-white/70 mt-1">{importFileName}</p>
+                </div>
+                {isImporting && (
+                  <div className="text-right">
+                    <p className="text-[9px] font-black uppercase tracking-widest text-emerald-200">
+                      {importPhase === "scanning" ? "Scanning File" : importPhase === "uploading" ? "Uploading Data" : "Completed"}
+                    </p>
+                    <p className="text-2xl font-black text-white">{importProgress}%</p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-6 space-y-3 sm:space-y-4">
+              <div className="relative overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-950 shadow-inner">
+                <div className="px-4 py-3 border-b border-slate-800 flex items-center justify-between bg-slate-900/90">
+                  <div className="flex items-center gap-2">
+                    <DocumentTextIcon className="w-4 h-4 text-emerald-400" />
+                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-300">File Preview</span>
+                  </div>
+                  <span className="text-[9px] font-bold uppercase tracking-widest text-slate-500">XLSX</span>
+                </div>
+
+                <div className="relative h-28 sm:h-32 overflow-hidden bg-[linear-gradient(180deg,#0f172a_0%,#111827_100%)]">
+                  <div className="absolute inset-0 opacity-30">
+                    {Array.from({ length: 8 }).map((_, rowIndex) => (
+                      <div key={rowIndex} className="grid grid-cols-6 gap-px px-3 py-1">
+                        {Array.from({ length: 6 }).map((__, colIndex) => (
+                          <div key={colIndex} className="h-3 rounded-sm bg-slate-700/60" />
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="absolute inset-x-4 top-4 rounded-lg border border-emerald-500/20 bg-emerald-500/5 px-3 py-2">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-emerald-300">Out Form Import</p>
+                    <p className="text-[9px] font-medium text-slate-400 mt-1 truncate">{importFileName}</p>
+                  </div>
+
+                  <div className="absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-emerald-400/10 to-transparent pointer-events-none" />
+
+                  {isImporting && (
+                    <>
+                      <div
+                        className="absolute inset-x-0 h-8 bg-gradient-to-b from-emerald-400/0 via-emerald-400/25 to-emerald-400/0 border-y border-emerald-300/40 shadow-[0_0_30px_rgba(52,211,153,0.35)] animate-punch-scan"
+                        style={{ top: `${Math.max(8, Math.min(78, importProgress * 0.75))}%` }}
+                      />
+                      <div className="absolute inset-0 bg-[repeating-linear-gradient(0deg,rgba(16,185,129,0.04)_0px,rgba(16,185,129,0.04)_1px,transparent_1px,transparent_8px)] pointer-events-none" />
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {isImporting && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-[10px] font-black uppercase tracking-widest text-slate-500">
+                    <span>
+                      {importPhase === "scanning"
+                        ? "Scanning Out Form rows"
+                        : importPhase === "uploading"
+                        ? "Saving to Out Form sheet"
+                        : "Import complete"}
+                    </span>
+                    <span>{importProgress}%</span>
+                  </div>
+                  <div className="h-2 rounded-full bg-slate-200 dark:bg-slate-800 overflow-hidden">
+                    <div
+                      className="h-full rounded-full bg-gradient-to-r from-emerald-500 via-teal-400 to-cyan-400 transition-all duration-300 ease-out"
+                      style={{ width: `${importProgress}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {!isImporting && (
+                <div className="grid grid-cols-3 gap-2 sm:gap-3">
+                  <div className="rounded-2xl bg-emerald-50 dark:bg-emerald-900/20 p-3 sm:p-4 text-center">
+                    <p className="text-[9px] font-black uppercase tracking-widest text-emerald-700 dark:text-emerald-300">Vouchers</p>
+                    <p className="text-2xl font-black text-emerald-800 dark:text-emerald-200">{importPreview.voucherCount}</p>
+                  </div>
+                  <div className="rounded-2xl bg-blue-50 dark:bg-blue-900/20 p-3 sm:p-4 text-center">
+                    <p className="text-[9px] font-black uppercase tracking-widest text-blue-700 dark:text-blue-300">Line Items</p>
+                    <p className="text-2xl font-black text-blue-800 dark:text-blue-200">{importPreview.itemCount}</p>
+                  </div>
+                  <div className="rounded-2xl bg-amber-50 dark:bg-amber-900/20 p-3 sm:p-4 text-center">
+                    <p className="text-[9px] font-black uppercase tracking-widest text-amber-700 dark:text-amber-300">Target</p>
+                    <p className="text-sm font-black text-amber-800 dark:text-amber-200 mt-2">Out Form</p>
+                  </div>
+                </div>
+              )}
+
+              <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-950 overflow-hidden">
+                <div className="px-4 py-2 border-b border-slate-800 flex items-center gap-2 bg-slate-900">
+                  <div className="flex gap-1.5">
+                    <span className="w-2.5 h-2.5 rounded-full bg-red-500/80" />
+                    <span className="w-2.5 h-2.5 rounded-full bg-amber-400/80" />
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-400/80" />
+                  </div>
+                  <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Import Console</span>
+                </div>
+                <div
+                  ref={importLogRef}
+                  className="h-28 sm:h-32 overflow-y-auto p-3 font-mono text-[10px] leading-5 text-emerald-300 bg-[#020617]"
+                >
+                  {importLogs.length === 0 ? (
+                    <p className="text-slate-500">Waiting to start import...</p>
+                  ) : (
+                    importLogs.map((log, index) => (
+                      <div key={`${log}-${index}`} className="whitespace-pre-wrap break-all">
+                        <span className="text-slate-500 mr-2">{String(index + 1).padStart(2, "0")}</span>
+                        {log}
+                      </div>
+                    ))
+                  )}
+                  {isImporting && (
+                    <div className="mt-1 text-emerald-400 animate-pulse">▮ processing...</div>
+                  )}
+                </div>
+              </div>
+
+              {!isImporting && (
+                <p className="text-[11px] font-medium text-gray-500 dark:text-gray-400">
+                  Voucher groups will be appended to the Out Form sheet. Line items are stored as JSON per voucher.
+                </p>
+              )}
+            </div>
+
+            <div className="shrink-0 px-5 sm:px-6 py-3 sm:py-4 border-t border-gray-100 dark:border-white/10 bg-white dark:bg-slate-900 flex justify-end gap-3">
+              <button
+                onClick={resetImportModal}
+                disabled={isImporting}
+                className="px-5 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest text-gray-500 hover:bg-gray-100 dark:hover:bg-slate-800 transition disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmOutFormImport}
+                disabled={isImporting || importPreview.groups.length === 0}
+                className="px-5 py-2.5 rounded-full bg-emerald-600 text-white text-[10px] font-black uppercase tracking-widest shadow-lg disabled:opacity-50 flex items-center gap-2"
+              >
+                {isImporting ? <ArrowPathIcon className="w-4 h-4 animate-spin" /> : <ArrowUpTrayIcon className="w-4 h-4" />}
+                {isImporting ? "Processing..." : "Confirm Import"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

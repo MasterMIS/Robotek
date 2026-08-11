@@ -1,12 +1,14 @@
 import { sendWhatsAppMessage } from "@/lib/maytapi";
 import { getUsers } from "@/lib/google-sheets";
 import { LeaveRequest } from "@/lib/leave-sheets";
+import { getLeaveUrl } from "@/lib/app-url";
 
 const HR_NUMBERS = ["9873441531", "8368998535"];  
 
 export async function sendLeaveNotification(action: string, leave: LeaveRequest, extraData?: any) {
   try {
     const allUsers = await getUsers();
+    const leaveUrl = leave?.id ? getLeaveUrl(leave.id) : null;
 
     // Helpers
     const getPhone = (idOrName: string) => {
@@ -31,9 +33,14 @@ export async function sendLeaveNotification(action: string, leave: LeaveRequest,
       return `${day} ${month} ${year}`;
     };
 
+    const withErpLink = (customMsg: string) => {
+      if (!leaveUrl) return customMsg;
+      return `${customMsg}\n\n👉 *Open in ERP:*\n${leaveUrl}`;
+    };
+
     const sendTo = async (phone: string | null, customMsg: string) => {
       if (phone) {
-        await sendWhatsAppMessage(phone, customMsg).catch(err => console.error(`WhatsApp error for ${phone}:`, err));
+        await sendWhatsAppMessage(phone, withErpLink(customMsg)).catch(err => console.error(`WhatsApp error for ${phone}:`, err));
       }
     };
 

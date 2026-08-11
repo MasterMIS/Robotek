@@ -391,6 +391,8 @@ export default function ReplacePage() {
     if (!isAdmin && viewMode === "active") {
       list = list.filter(item => {
         const step = getActiveStep(item);
+        // Completed items are visible to all users (read-only actions handled in UI)
+        if (step === 0) return true;
         if (step > 0) {
           const cfg = globalConfigs[step - 1];
           return cfg?.responsible_person?.split(",").map(s => s.trim()).includes(currentUser);
@@ -777,14 +779,18 @@ export default function ReplacePage() {
                             )}
                             <div className="flex items-center gap-1 px-2 py-1 bg-white dark:bg-navy-800 rounded-full border border-slate-100 dark:border-navy-700 shadow-lg">
                               <button onClick={e => { e.stopPropagation(); setExpandedTiles(p => ({ ...p, [item.id]: !exp })); }} className={`p-1.5 rounded-full transition-all ${exp ? "bg-[#003875] text-[#FFD500]" : "text-[#003875] dark:text-[#FFD500] hover:bg-yellow-50"}`}><ChevronDownIcon className={`w-3.5 h-3.5 stroke-[3] transition-transform ${exp ? "rotate-180" : ""}`} /></button>
-                              <button onClick={e => { e.stopPropagation(); openEditModal(item); }} className="p-1.5 text-blue-500 hover:bg-blue-50 rounded-full transition-all" title="Edit"><PencilSquareIcon className="w-3.5 h-3.5" /></button>
-                              <button onClick={e => { e.stopPropagation(); openRemoveFollowUpModal(item); }} className="p-1.5 text-purple-500 hover:bg-purple-50 rounded-full transition-all" title="Remove Follow Up"><ArrowUturnLeftIcon className="w-3.5 h-3.5" /></button>
-                              {item.cancelled ? (
-                                <button onClick={e => { e.stopPropagation(); setRestoreTargetId(item.id); }} className="p-1.5 text-emerald-500 hover:bg-emerald-50 rounded-full transition-all" title="Restore Process"><ArrowPathIcon className="w-3.5 h-3.5" /></button>
-                              ) : (
-                                <button onClick={e => { e.stopPropagation(); setCancelTargetId(item.id); }} className="p-1.5 text-orange-500 hover:bg-orange-50 rounded-full transition-all" title="Cancel Process"><NoSymbolIcon className="w-3.5 h-3.5" /></button>
+                              {(isAdmin || step > 0) && (
+                                <>
+                                  <button onClick={e => { e.stopPropagation(); openEditModal(item); }} className="p-1.5 text-blue-500 hover:bg-blue-50 rounded-full transition-all" title="Edit"><PencilSquareIcon className="w-3.5 h-3.5" /></button>
+                                  <button onClick={e => { e.stopPropagation(); openRemoveFollowUpModal(item); }} className="p-1.5 text-purple-500 hover:bg-purple-50 rounded-full transition-all" title="Remove Follow Up"><ArrowUturnLeftIcon className="w-3.5 h-3.5" /></button>
+                                  {item.cancelled ? (
+                                    <button onClick={e => { e.stopPropagation(); setRestoreTargetId(item.id); }} className="p-1.5 text-emerald-500 hover:bg-emerald-50 rounded-full transition-all" title="Restore Process"><ArrowPathIcon className="w-3.5 h-3.5" /></button>
+                                  ) : (
+                                    <button onClick={e => { e.stopPropagation(); setCancelTargetId(item.id); }} className="p-1.5 text-orange-500 hover:bg-orange-50 rounded-full transition-all" title="Cancel Process"><NoSymbolIcon className="w-3.5 h-3.5" /></button>
+                                  )}
+                                  <button onClick={e => { e.stopPropagation(); handleDeleteClick(item.id); }} className="p-1.5 text-red-500 hover:bg-red-50 rounded-full transition-all" title="Delete"><TrashIcon className="w-3.5 h-3.5" /></button>
+                                </>
                               )}
-                              <button onClick={e => { e.stopPropagation(); handleDeleteClick(item.id); }} className="p-1.5 text-red-500 hover:bg-red-50 rounded-full transition-all" title="Delete"><TrashIcon className="w-3.5 h-3.5" /></button>
                             </div>
                           </div>
                         </div>
@@ -905,16 +911,20 @@ export default function ReplacePage() {
                       <tr key={it.id} className="hover:bg-slate-50/50 dark:hover:bg-navy-900/30 transition-all font-bold">
                         <td className="p-3 sticky left-0 z-10 bg-white dark:bg-navy-800"><input type="checkbox" checked={selectedIds.has(it.id)} onChange={() => { const n = new Set(selectedIds); if (n.has(it.id)) n.delete(it.id); else n.add(it.id); setSelectedIds(n); }} className="rounded border-slate-300 text-[#003875] dark:text-[#FFD500]" /></td>
                         <td className="p-3 sticky left-10 z-10 bg-white dark:bg-navy-800">
-                          <div className="flex items-center gap-1">
-                            <button onClick={() => openEditModal(it)} className="p-1 text-blue-500 hover:bg-blue-50 rounded" title="Edit"><PencilSquareIcon className="w-3.5 h-3.5" /></button>
-                            <button onClick={() => openRemoveFollowUpModal(it)} className="p-1 text-purple-500 hover:bg-purple-50 rounded" title="Remove Follow Up"><ArrowUturnLeftIcon className="w-3.5 h-3.5" /></button>
-                            {it.cancelled ? (
-                              <button onClick={() => setRestoreTargetId(it.id)} className="p-1 text-emerald-500 hover:bg-emerald-50 rounded" title="Restore"><ArrowPathIcon className="w-3.5 h-3.5" /></button>
-                            ) : (
-                              <button onClick={() => setCancelTargetId(it.id)} className="p-1 text-orange-500 hover:bg-orange-50 rounded" title="Cancel"><NoSymbolIcon className="w-3.5 h-3.5" /></button>
-                            )}
-                            <button onClick={() => handleDeleteClick(it.id)} className="p-1 text-red-500 hover:bg-red-50 rounded" title="Delete"><TrashIcon className="w-3.5 h-3.5" /></button>
-                          </div>
+                          {(isAdmin || getActiveStep(it) > 0) ? (
+                            <div className="flex items-center gap-1">
+                              <button onClick={() => openEditModal(it)} className="p-1 text-blue-500 hover:bg-blue-50 rounded" title="Edit"><PencilSquareIcon className="w-3.5 h-3.5" /></button>
+                              <button onClick={() => openRemoveFollowUpModal(it)} className="p-1 text-purple-500 hover:bg-purple-50 rounded" title="Remove Follow Up"><ArrowUturnLeftIcon className="w-3.5 h-3.5" /></button>
+                              {it.cancelled ? (
+                                <button onClick={() => setRestoreTargetId(it.id)} className="p-1 text-emerald-500 hover:bg-emerald-50 rounded" title="Restore"><ArrowPathIcon className="w-3.5 h-3.5" /></button>
+                              ) : (
+                                <button onClick={() => setCancelTargetId(it.id)} className="p-1 text-orange-500 hover:bg-orange-50 rounded" title="Cancel"><NoSymbolIcon className="w-3.5 h-3.5" /></button>
+                              )}
+                              <button onClick={() => handleDeleteClick(it.id)} className="p-1 text-red-500 hover:bg-red-50 rounded" title="Delete"><TrashIcon className="w-3.5 h-3.5" /></button>
+                            </div>
+                          ) : (
+                            <span className="text-[9px] font-black text-slate-300 dark:text-navy-600 uppercase">View only</span>
+                          )}
                         </td>
                         <td className="p-3 sticky left-24 z-10 bg-white dark:bg-navy-800">
                           <div className="flex flex-col">
