@@ -313,9 +313,14 @@ export default function PaymentVendorApprovalPage() {
       {/* ─── Header Section ─── */}
       <div className="px-4 py-3 bg-[#FEFBF0] dark:bg-navy-900 border-b border-slate-100 dark:border-navy-800 shrink-0">
         <div className="flex flex-wrap md:flex-nowrap items-center justify-between gap-4">
-          <div>
-            <h1 className="text-xl font-black text-[#003875] dark:text-[#FFD500] tracking-tight uppercase leading-none">Payment Vendor Approval</h1>
-            <p className="text-[10px] font-bold text-gray-400 dark:text-slate-400 uppercase tracking-widest mt-1.5">Manage Vendor Payments</p>
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 bg-[#003875] dark:bg-[#FFD500] rounded-2xl flex items-center justify-center shadow-lg shadow-[#003875]/10 dark:shadow-[#FFD500]/20 text-white dark:text-black shrink-0">
+              <BanknotesIcon className="w-6 h-6" />
+            </div>
+            <div>
+              <h1 className="text-xl font-black text-[#003875] dark:text-[#FFD500] tracking-tight uppercase leading-none">Payment Vendor Approval</h1>
+              <p className="text-[10px] font-bold text-gray-400 dark:text-slate-400 uppercase tracking-widest mt-1.5">Manage Vendor Payments</p>
+            </div>
           </div>
 
           <div className="flex items-center gap-3 w-full md:w-auto">

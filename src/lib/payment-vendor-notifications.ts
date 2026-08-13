@@ -14,6 +14,8 @@ type PaymentVendorNotifyDetails = {
   qty?: string | number;
   paymentTermsDays?: string | number;
   plannedPaymentDate?: string;
+  quantityChecked?: boolean;
+  qualityChecked?: boolean;
 };
 
 function formatPaymentDueLines(details: PaymentVendorNotifyDetails): string {
@@ -24,6 +26,13 @@ function formatPaymentDueLines(details: PaymentVendorNotifyDetails): string {
 
   return `*Payment Terms:* ${terms}
 *Payment Due Date:* ${details.plannedPaymentDate || "—"}`;
+}
+
+function formatCheckLines(details: PaymentVendorNotifyDetails): string {
+  const qtyLine = details.quantityChecked ? "✅ Done" : "⏳ Pending";
+  const qualityLine = details.qualityChecked ? "✅ Done" : "⏳ Pending";
+  return `*Quantity check (Step 1):* ${qtyLine}
+*Quality check (Step 3):* ${qualityLine}`;
 }
 
 async function sendPaymentVendorNotification(
@@ -45,38 +54,51 @@ ${entryUrl}`;
   return sendWhatsAppMessage(phone, fullMessage);
 }
 
-export async function notifyMdNewGrnEntry(details: PaymentVendorNotifyDetails) {
-  const message = `Dear Sir,
+function buildMdApprovalBody(details: PaymentVendorNotifyDetails, intro: string): string {
+  return `Dear Sir,
 
-A new GRN entry has been created and requires your approval before payment can be processed.
+${intro}
 
 *GRN No:* ${details.grnNo}
 *PO Number:* ${details.poNumber || "—"}
 *Item:* ${details.itemName || "—"}
 *Qty:* ${details.qty ?? "—"}
+${formatCheckLines(details)}
 ${formatPaymentDueLines(details)}
 
 Thank you.`;
+}
 
-  return sendPaymentVendorNotification(PAYMENT_VENDOR_PHONES.MD, {
-    title: "📌 *New GRN — Payment Approval Required*",
+/** Sent when GRN Step 3 (Quality check) is completed — after Quantity check (Step 1). */
+export async function notifyMdGrnReadyForApproval(
+  details: PaymentVendorNotifyDetails,
+  phone: string = PAYMENT_VENDOR_PHONES.MD
+) {
+  const message = buildMdApprovalBody(
+    {
+      ...details,
+      quantityChecked: details.quantityChecked ?? true,
+      qualityChecked: details.qualityChecked ?? true,
+    },
+    "Quantity check (Step 1) and Quality check (Step 3) have been completed.\nThis GRN now requires your approval before payment can be processed."
+  );
+
+  return sendPaymentVendorNotification(phone, {
+    title: "📌 *GRN Ready for Payment Approval*",
     message,
     grnNo: details.grnNo,
   });
 }
 
+export async function notifyMdNewGrnEntry(details: PaymentVendorNotifyDetails) {
+  return notifyMdGrnReadyForApproval(details);
+}
+
 export async function notifyMdGrnUpdated(details: PaymentVendorNotifyDetails) {
-  const message = `Dear Sir,
-
-A GRN entry has been updated and may require your review before payment can be processed.
-
-*GRN No:* ${details.grnNo}
-*PO Number:* ${details.poNumber || "—"}
-*Item:* ${details.itemName || "—"}
-*Qty:* ${details.qty ?? "—"}
-${formatPaymentDueLines(details)}
-
-Thank you.`;
+  const message = buildMdApprovalBody(
+    details,
+    "A GRN entry has been updated and may require your review before payment can be processed."
+  );
 
   return sendPaymentVendorNotification(PAYMENT_VENDOR_PHONES.MD, {
     title: "📌 *GRN Updated — Payment Approval Required*",

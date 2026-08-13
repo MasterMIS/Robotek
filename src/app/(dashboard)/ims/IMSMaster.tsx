@@ -38,7 +38,7 @@ import * as XLSX from "xlsx";
 import TimeSeriesTable, { TimeBucket, Transaction } from "@/components/TimeSeriesTable";
 import DateFilterBar, { FilterPeriod } from "@/components/DateFilterBar";
 import SearchableMultiSelect from "@/components/SearchableMultiSelect";
-import { matchesCategoryItemFilters } from "@/lib/ims-filters";
+import { matchesCategoryItemFilters, matchesOptionSearch, normalizeFilterKey } from "@/lib/ims-filters";
 import { startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfQuarter, endOfQuarter, startOfYear, endOfYear, isWithinInterval } from "date-fns";
 
 const fetcher = (url: string) => fetch(url).then(res => res.json());
@@ -349,7 +349,7 @@ export default function IMSMaster({ onBack }: { onBack: () => void }) {
   }, [filterPeriod]);
 
   const { data: timeSeriesData = [], isValidating: isTimeSeriesLoading } = useSWR<Transaction[]>(
-    viewMode === 'timeseries' || viewMode === 'datewise' ? '/api/ims/time-series' : null,
+    "/api/ims/time-series",
     fetcher
   );
 
@@ -460,10 +460,12 @@ export default function IMSMaster({ onBack }: { onBack: () => void }) {
   }, [items]);
 
   const uniqueCategories = useMemo(() => {
-    return Array.from(
-      new Set(items.map((i) => (i.category ?? "").trim()).filter(Boolean))
-    ).sort();
-  }, [items]);
+    const cats = [
+      ...items.map((i) => (i.category ?? "").trim()),
+      ...timeSeriesData.map((i) => (i.category ?? "").trim()),
+    ].filter(Boolean);
+    return Array.from(new Set(cats)).sort();
+  }, [items, timeSeriesData]);
 
   const categoryOptions = useMemo(
     () => uniqueCategories.map((cat) => ({ id: cat, label: cat })),
@@ -471,27 +473,93 @@ export default function IMSMaster({ onBack }: { onBack: () => void }) {
   );
 
   const uniqueItemNames = useMemo(() => {
-    const source =
+    const byKey = new Map<string, string>();
+    const addName = (name?: string) => {
+      const trimmed = (name ?? "").trim();
+      if (!trimmed) return;
+      const key = normalizeFilterKey(trimmed);
+      if (!key || byKey.has(key)) return;
+      byKey.set(key, trimmed);
+    };
+
+    const catalogSource =
       categoryFilters.length > 0
         ? items.filter((i) => matchesCategoryItemFilters(i, categoryFilters, []))
         : items;
-    return Array.from(new Set(source.map((i) => i.item_name))).filter(Boolean).sort();
-  }, [items, categoryFilters]);
+    catalogSource.forEach((i) => addName(i.item_name));
+
+    const txSource =
+      categoryFilters.length > 0
+        ? timeSeriesData.filter((i) => matchesCategoryItemFilters(i, categoryFilters, []))
+        : timeSeriesData;
+    txSource.forEach((i) => addName(i.item_name));
+
+    return Array.from(byKey.values()).sort((a, b) => a.localeCompare(b));
+  }, [items, categoryFilters, timeSeriesData]);
 
   const itemNameOptions = useMemo(
     () => uniqueItemNames.map((name) => ({ id: name, label: name })),
     [uniqueItemNames]
   );
 
+  const catalogNameKeys = useMemo(
+    () => new Set(items.map((i) => normalizeFilterKey(i.item_name)).filter(Boolean)),
+    [items]
+  );
+
+  const movementOnlyItems = useMemo(() => {
+    const map = new Map<string, EnrichedIMS>();
+    for (const t of timeSeriesData) {
+      const key = normalizeFilterKey(t.item_name);
+      if (!key || catalogNameKeys.has(key)) continue;
+      const inQty = t.in_qty || 0;
+      const outQty = t.out_qty || 0;
+      const existing = map.get(key);
+      if (existing) {
+        existing.in_qty += inQty;
+        existing.out_qty += outQty;
+        existing.live_stock = existing.in_qty - existing.out_qty;
+      } else {
+        map.set(key, {
+          id: `tx-${key}`,
+          item_name: (t.item_name ?? "").trim(),
+          category: (t.category ?? "GENERAL").trim() || "GENERAL",
+          est_amount_item: "",
+          gst: "",
+          final_amount: "0",
+          in_qty: inQty,
+          out_qty: outQty,
+          live_stock: inQty - outQty,
+          max_level: 0,
+          sale_percent: 0,
+          avg_daily_con: 0,
+          lead_time: 30,
+          safety_factor: 1,
+          final_amount_num: 0,
+        });
+      }
+    }
+    return Array.from(map.values());
+  }, [timeSeriesData, catalogNameKeys]);
+
   const filteredItems = useMemo(() => {
+    const matchesText = (item: { item_name?: string; id?: string }) =>
+      !searchQuery ||
+      matchesOptionSearch(item.item_name || "", searchQuery) ||
+      String(item.id || "").toLowerCase().includes(searchQuery.toLowerCase());
+
     let result = items.filter((item) => {
-      const matchesSearch =
-        !searchQuery ||
-        item.item_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        item.id?.toString().includes(searchQuery.toLowerCase());
-      if (!matchesSearch) return false;
+      if (!matchesText(item)) return false;
       return matchesCategoryItemFilters(item, categoryFilters, itemNameFilters);
     });
+
+    if (searchQuery || itemNameFilters.length > 0) {
+      const extras = movementOnlyItems.filter((item) => {
+        if (!matchesText(item)) return false;
+        return matchesCategoryItemFilters(item, categoryFilters, itemNameFilters);
+      });
+      result = [...result, ...extras];
+    }
 
     if (legendFilter !== null) {
       result = result.filter(
@@ -500,7 +568,7 @@ export default function IMSMaster({ onBack }: { onBack: () => void }) {
     }
 
     return result;
-  }, [items, searchQuery, legendFilter, categoryFilters, itemNameFilters]);
+  }, [items, searchQuery, legendFilter, categoryFilters, itemNameFilters, movementOnlyItems]);
 
   const totalPages = Math.ceil(filteredItems.length / itemsPerPage);
   const paginatedItems = useMemo(() => {
@@ -521,8 +589,8 @@ export default function IMSMaster({ onBack }: { onBack: () => void }) {
   React.useEffect(() => {
     setItemNameFilters((prev) => {
       if (prev.length === 0) return prev;
-      const valid = new Set(uniqueItemNames);
-      const next = prev.filter((name) => valid.has(name));
+      const valid = new Set(uniqueItemNames.map(normalizeFilterKey));
+      const next = prev.filter((name) => valid.has(normalizeFilterKey(name)));
       return next.length === prev.length ? prev : next;
     });
   }, [categoryFilters, uniqueItemNames]);
@@ -1042,12 +1110,16 @@ export default function IMSMaster({ onBack }: { onBack: () => void }) {
                                 <button onClick={() => { setLogsItem(item); setLogsModalOpen(true); }} className="text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:scale-110 transition-all" title="View Transaction Logs">
                                   <EyeIcon className="w-4 h-4" />
                                 </button>
-                                <button onClick={() => { setEditingItem(item); setItemForm(item); setItemModalOpen(true); }} className="text-[#003875] dark:text-[#FFD500] hover:scale-110 transition-transform" title="Edit">
-                                  <PencilSquareIcon className="w-4 h-4" />
-                                </button>
-                                <button onClick={() => { confirmDelete(item.id.toString()); }} className="text-rose-500 hover:scale-110 transition-transform" title="Delete">
-                                  <TrashIcon className="w-4 h-4" />
-                                </button>
+                                {!String(item.id).startsWith("tx-") && (
+                                  <>
+                                    <button onClick={() => { setEditingItem(item); setItemForm(item); setItemModalOpen(true); }} className="text-[#003875] dark:text-[#FFD500] hover:scale-110 transition-transform" title="Edit">
+                                      <PencilSquareIcon className="w-4 h-4" />
+                                    </button>
+                                    <button onClick={() => { confirmDelete(item.id.toString()); }} className="text-rose-500 hover:scale-110 transition-transform" title="Delete">
+                                      <TrashIcon className="w-4 h-4" />
+                                    </button>
+                                  </>
+                                )}
                               </div>
                             </td>
                             <td className="py-2 px-3 text-[11px] font-black text-[#003875] dark:text-[#FFD500] whitespace-nowrap">{item.id}</td>

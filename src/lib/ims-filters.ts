@@ -1,6 +1,10 @@
 export const normalizeFilterKey = (value: string | undefined | null) =>
   (value ?? "").trim().toLowerCase();
 
+/** Collapse punctuation/spaces so "RBK Fury" matches "RBK FURY" and "RBK-FURY". */
+export const compactSearchText = (value: string | undefined | null) =>
+  (value ?? "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+
 /** Strict exact match — "ANS DC" does NOT match "ANS DC W". */
 export const matchesExactFilterValue = (
   value: string | undefined | null,
@@ -22,8 +26,12 @@ export const matchesCategoryItemFilters = (
   return true;
 };
 
+/** Type-ahead in the dropdown — every typed word must appear in the item name. */
 export const matchesOptionSearch = (label: string, searchTerm: string) => {
-  const term = searchTerm.trim().toLowerCase();
+  const term = compactSearchText(searchTerm);
   if (!term) return true;
-  return (label ?? "").trim().toLowerCase() === term;
+  const hay = compactSearchText(label);
+  if (hay.includes(term)) return true;
+  const tokens = term.split(/\s+/).filter(Boolean);
+  return tokens.length > 0 && tokens.every((t) => hay.includes(t));
 };
