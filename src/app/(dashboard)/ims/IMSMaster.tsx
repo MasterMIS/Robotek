@@ -90,7 +90,103 @@ type OutFormImportGroup = {
   Date: string;
   VchNo: string;
   Particulars: string;
-  Items: { Description: string; Qty: number | string }[];
+  Items: { Description: string; Qty: number }[];
+};
+
+type OutFormColumnMap = {
+  date: number;
+  vch: number;
+  particulars: number;
+  item: number;
+  qty: number;
+};
+
+const cellText = (val: any): string => {
+  if (val === null || val === undefined) return "";
+  if (val instanceof Date) return "";
+  return String(val).trim();
+};
+
+const pad2 = (n: number | string) => String(n).padStart(2, "0");
+
+const excelSerialToYMD = (serial: number): string => {
+  const parsed = (XLSX.SSF as any)?.parse_date_code?.(serial);
+  if (!parsed?.y) return "";
+  return `${parsed.y}-${pad2(parsed.m)}-${pad2(parsed.d)}`;
+};
+
+const formatOutFormDate = (val: any): string => {
+  if (val === null || val === undefined || val === "") return "";
+
+  // Excel serials are calendar days, not timezones. Never convert them through JS Date.
+  if (typeof val === "number" && Number.isFinite(val)) {
+    if (val > 20000 && val < 90000) return excelSerialToYMD(val);
+    return "";
+  }
+
+  if (val instanceof Date && !isNaN(val.getTime())) {
+    return `${val.getUTCFullYear()}-${pad2(val.getUTCMonth() + 1)}-${pad2(val.getUTCDate())}`;
+  }
+
+  const s = String(val).trim();
+  if (/^\d{4}-\d{1,2}-\d{1,2}/.test(s)) {
+    const [y, m, d] = s.slice(0, 10).split("-");
+    return `${y}-${pad2(m)}-${pad2(d)}`;
+  }
+
+  const dmy = s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})/);
+  if (dmy) {
+    return `${dmy[3]}-${pad2(dmy[2])}-${pad2(dmy[1])}`;
+  }
+
+  return s;
+};
+
+const parseQtyValue = (val: any): number => {
+  if (typeof val === "number" && Number.isFinite(val)) return val;
+  const s = String(val ?? "").replace(/,/g, "").trim();
+  if (!s) return 0;
+  const n = parseFloat(s);
+  return Number.isFinite(n) ? n : 0;
+};
+
+const findOutFormHeaderIndex = (jsonData: any[][]): number => {
+  const max = Math.min(jsonData.length, 20);
+  for (let i = 0; i < max; i++) {
+    const cells = (jsonData[i] || []).map((c) => cellText(c).toLowerCase());
+    const hasVch = cells.some((c) => c.includes("vch") || c.includes("bill"));
+    const hasItem = cells.some((c) => c.includes("item") || c.includes("description"));
+    const hasQty = cells.some((c) => c.includes("qty") || c.includes("quantity"));
+    if (hasVch && (hasItem || hasQty)) return i;
+  }
+  return 0;
+};
+
+const mapOutFormColumns = (headerRow: any[]): OutFormColumnMap => {
+  const fallback: OutFormColumnMap = { date: 0, vch: 1, particulars: 2, item: 3, qty: 4 };
+  const cols: OutFormColumnMap = { date: -1, vch: -1, particulars: -1, item: -1, qty: -1 };
+
+  (headerRow || []).forEach((cell, idx) => {
+    const t = cellText(cell).toLowerCase();
+    if (t.includes("date") && cols.date < 0) cols.date = idx;
+    if ((t.includes("vch") || t.includes("bill")) && cols.vch < 0) cols.vch = idx;
+    if (t.includes("particular") && !t.includes("item") && cols.particulars < 0) cols.particulars = idx;
+    if ((t.includes("item") || t.includes("description") || t.includes("details")) && cols.item < 0) cols.item = idx;
+    if ((t.includes("qty") || t.includes("quantity")) && !t.includes("unit") && cols.qty < 0) cols.qty = idx;
+  });
+
+  return {
+    date: cols.date >= 0 ? cols.date : fallback.date,
+    vch: cols.vch >= 0 ? cols.vch : fallback.vch,
+    particulars: cols.particulars >= 0 ? cols.particulars : fallback.particulars,
+    item: cols.item >= 0 ? cols.item : fallback.item,
+    qty: cols.qty >= 0 ? cols.qty : fallback.qty,
+  };
+};
+
+const isOutFormHeaderLike = (val: any): boolean => {
+  const t = cellText(val).toLowerCase();
+  return ["date", "vch/bill no", "vch no", "particulars", "item details", "qty", "qty.", "unit"].includes(t);
 };
 
 type OutFormImportPreview = {
@@ -137,22 +233,38 @@ export default function IMSMaster({ onBack }: { onBack: () => void }) {
   }, [importLogs]);
 
   const parseOutFormFile = (jsonData: any[][]): OutFormImportGroup[] => {
+    let headerIndex = findOutFormHeaderIndex(jsonData);
+    const headerRow = jsonData[headerIndex] || [];
+    const headerLooksLikeHeader =
+      cellText(headerRow[0]).toLowerCase().includes("date") ||
+      cellText(headerRow[1]).toLowerCase().includes("vch") ||
+      cellText(headerRow[1]).toLowerCase().includes("bill") ||
+      cellText(headerRow[3]).toLowerCase().includes("item");
+
+    const cols = headerLooksLikeHeader
+      ? mapOutFormColumns(headerRow)
+      : { date: 0, vch: 1, particulars: 2, item: 3, qty: 4 };
+    if (!headerLooksLikeHeader) headerIndex = -1;
+
     const groupedData: OutFormImportGroup[] = [];
     let currentGroup: OutFormImportGroup | null = null;
 
-    for (let i = 1; i < jsonData.length; i++) {
-      const row = jsonData[i];
-      const date = row[0];
-      const vchNo = row[1];
-      const particulars = row[2];
-      const description = row[3];
-      const qty = row[5];
+    for (let i = headerIndex + 1; i < jsonData.length; i++) {
+      const row = jsonData[i] || [];
+      const date = formatOutFormDate(row[cols.date]);
+      const vchNo = cellText(row[cols.vch]);
+      const particulars = cellText(row[cols.particulars]);
+      const description = cellText(row[cols.item]);
+      const qty = parseQtyValue(row[cols.qty]);
 
-      if (vchNo) {
+      if (!vchNo && !description) continue;
+      if (isOutFormHeaderLike(vchNo) || isOutFormHeaderLike(description)) continue;
+
+      if (vchNo && (!currentGroup || String(currentGroup.VchNo) !== vchNo)) {
         currentGroup = {
-          Date: date || "",
-          VchNo: vchNo || "",
-          Particulars: particulars || "",
+          Date: date,
+          VchNo: vchNo,
+          Particulars: particulars,
           Items: [],
         };
         groupedData.push(currentGroup);
@@ -161,12 +273,12 @@ export default function IMSMaster({ onBack }: { onBack: () => void }) {
       if (currentGroup && description) {
         currentGroup.Items.push({
           Description: description,
-          Qty: qty || 0,
+          Qty: qty,
         });
       }
     }
 
-    return groupedData;
+    return groupedData.filter((group) => group.Items.length > 0);
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -175,10 +287,10 @@ export default function IMSMaster({ onBack }: { onBack: () => void }) {
 
     try {
       const data = await file.arrayBuffer();
-      const workbook = XLSX.read(data, { type: "array" });
+      const workbook = XLSX.read(data, { type: "array", cellDates: false });
       const firstSheetName = workbook.SheetNames[0];
       const worksheet = workbook.Sheets[firstSheetName];
-      const jsonData = XLSX.utils.sheet_to_json<any[][]>(worksheet, { header: 1 });
+      const jsonData = XLSX.utils.sheet_to_json<any[][]>(worksheet, { header: 1, defval: "", raw: true });
 
       if (jsonData.length <= 1) {
         throw new Error("File is empty or contains only headers.");

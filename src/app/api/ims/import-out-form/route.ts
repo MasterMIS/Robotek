@@ -16,7 +16,12 @@ export async function POST(req: NextRequest) {
       item.Date || "",
       item.VchNo || "",
       item.Particulars || "",
-      JSON.stringify(item.Items || [])
+      JSON.stringify(
+        (item.Items || []).map((line: any) => ({
+          Description: String(line.Description || line.description || "").trim(),
+          Qty: Number(line.Qty ?? line.qty) || 0,
+        }))
+      ),
     ]);
 
     const oauth2Client = new google.auth.OAuth2(
@@ -33,7 +38,7 @@ export async function POST(req: NextRequest) {
     await sheets.spreadsheets.values.append({
       spreadsheetId: GOOGLE_SHEET_ID,
       range: "Out Form!A:D",
-      valueInputOption: "USER_ENTERED",
+      valueInputOption: "RAW",
       requestBody: {
         values: rows,
       },
