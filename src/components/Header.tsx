@@ -41,7 +41,7 @@ export default function Header({ onMenuClick }: HeaderProps) {
   }, []);
 
   const filteredNavigation = navigation.filter(item => {
-    if (item.id === 'dashboard' || item.id === 'chat' || item.id === 'scheduler' || item.id === 'grn' || item.id === 'field-driver' || item.id === 'stationary') return true;
+    if (item.id === 'dashboard' || item.id === 'chat' || item.id === 'scheduler' || item.id === 'grn' || item.id === 'field-driver' || item.id === 'stationary' || item.id === 'customer-target') return true;
     if (userPermissions.length > 0) {
       return userPermissions.some((p: string) => p.toLowerCase() === item.id.toLowerCase());
     }

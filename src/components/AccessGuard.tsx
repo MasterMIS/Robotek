@@ -31,7 +31,7 @@ export default function AccessGuard({ children }: { children: React.ReactNode })
     }
 
     // Skip check for universally accessible core features
-    if (pathname === "/login" || pathname === "/" || pathname.startsWith("/chat") || pathname.startsWith("/grn") || pathname.startsWith("/scheduler") || pathname.startsWith("/field-driver") || pathname.startsWith("/inventory/stationary") || pathname.startsWith("/attendance") || pathname.startsWith("/leave")) {
+    if (pathname === "/login" || pathname === "/" || pathname.startsWith("/chat") || pathname.startsWith("/grn") || pathname.startsWith("/scheduler") || pathname.startsWith("/field-driver") || pathname.startsWith("/inventory/stationary") || pathname.startsWith("/attendance") || pathname.startsWith("/leave") || pathname.startsWith("/customer-target")) {
       setIsAuthorized(true);
       return;
     }

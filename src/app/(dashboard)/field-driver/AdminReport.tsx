@@ -65,7 +65,9 @@ export default function AdminReport() {
                 if (isSunday) {
                     cellValue = 'SUN';
                 } else if (record?.inTime) {
-                    cellValue = 'P';
+                    const inPart = `IN ${formatTime(record.inTime)}`;
+                    const outPart = record.outTime ? ` OUT ${formatTime(record.outTime)}` : '';
+                    cellValue = `${inPart}${outPart}`;
                 } else if (dateStr < todayStr) {
                     cellValue = 'A';
                 }

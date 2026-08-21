@@ -17,7 +17,8 @@ import {
   CurrencyDollarIcon,
   MapPinIcon,
   ComputerDesktopIcon,
-  UserPlusIcon
+  UserPlusIcon,
+  FlagIcon
 } from "@heroicons/react/24/outline";
 
 export const navigation = [
@@ -45,6 +46,7 @@ export const navigation = [
 
   // Sales & Field Section
   { name: 'Sales', id: 'sales', href: '/sales', icon: CurrencyDollarIcon, section: 'Sales & Field' },
+  { name: 'Customer Target', id: 'customer-target', href: '/customer-target', icon: FlagIcon, section: 'Sales & Field' },
   { name: 'Field Tracking', id: 'field-driver', href: '/field-driver', icon: MapPinIcon, section: 'Sales & Field' },
   { name: 'Scot', id: 'scot', href: '/scot', icon: PhoneIcon, section: 'Sales & Field' },
   { name: 'Scot KB', id: 'scot-kb', href: '/scot-kb', icon: PhoneIcon, section: 'Sales & Field' },
